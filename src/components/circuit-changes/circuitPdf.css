@@ -215,3 +215,22 @@
   .circuit-pdf-actions > button { flex: 1 1 30%; height: 44px; }
   .circuit-pdf-actions > button[aria-label="取消框選"] { flex: none; width: 44px; }
 }
+
+/* AI 比對 (2026-11-10): old (official) → new, then the one AI button. */
+.circuit-pdf-ai-bar { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--primary) / .05); }
+.circuit-pdf-ai-side { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.circuit-pdf-ai-side > small { flex: none; color: hsl(var(--muted-foreground)); font-size: 12px; }
+.circuit-pdf-ai-side > strong { display: inline-flex; min-width: 0; align-items: center; gap: 6px; overflow: hidden; font-size: 14px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.circuit-pdf-ai-side > strong > svg { flex: none; width: 16px; height: 16px; color: hsl(var(--warning)); }
+.circuit-pdf-ai-side > select { width: 300px; max-width: 100%; height: 36px; }
+.circuit-pdf-ai-arrow { flex: none; width: 16px; height: 16px; color: hsl(var(--muted-foreground)); }
+.circuit-pdf-ai-bar > button { height: 36px; gap: 6px; margin-left: auto; }
+@media (max-width: 1023px) {
+  .circuit-pdf-ai-bar { padding: 8px 16px; }
+  .circuit-pdf-ai-side[data-side="new"] { flex: 1; }
+  .circuit-pdf-ai-side > select { width: auto; flex: 1; height: 44px; }
+  .circuit-pdf-ai-bar > button { flex: 1 0 100%; height: 44px; margin-left: 0; }
+}
+
+/* A tool group the current task does not use. */
+.circuit-pdf-tool-group[hidden] { display: none; }

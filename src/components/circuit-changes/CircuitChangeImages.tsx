@@ -35,18 +35,18 @@ export function CircuitChangeImages({ images, urls, side, dragSide, readOnly, bu
     </header>
     <div className="circuit-image-controls">
       <div role="group" aria-label="圖片用途">
-        {sides.map(key => <button type="button" key={key} aria-pressed={side === key} onClick={() => actions.onSide(key)}>{CIRCUIT_IMAGE_SIDE_LABELS[key]} <span>{images.filter(image => image.side === key).length}</span></button>)}
+        {sides.map(key => <button title={`切換到${CIRCUIT_IMAGE_SIDE_LABELS[key]}`} type="button" key={key} aria-pressed={side === key} onClick={() => actions.onSide(key)}>{CIRCUIT_IMAGE_SIDE_LABELS[key]} <span>{images.filter(image => image.side === key).length}</span></button>)}
       </div>
     </div>
     {uploading && <p className="circuit-upload-progress" role="status">正在上傳 {progress.completed} / {progress.total} 張，已成功的圖片會保留</p>}
-    {removed && !readOnly && <p className="circuit-upload-undo" role="status"><span>已移除 {removed.name}</span><Button type="button" variant="outline" onClick={onRestore}>復原</Button></p>}
+    {removed && !readOnly && <p className="circuit-upload-undo" role="status"><span>已移除 {removed.name}</span><Button title="把剛移除的圖片放回來" type="button" variant="outline" onClick={onRestore}>復原</Button></p>}
     {warnings.length > 0 && <div className="circuit-upload-warning" role="status">{warnings.map((warning, index) => <p key={index}>{warning}</p>)}</div>}
     {failures.length > 0 && <div className="circuit-upload-failures" role="alert">
       <p>以下檔案沒有加入，已成功的圖片保留：</p>
       <ul>{failures.map((failure, index) => <li key={index}>{failure.file.name}：{failure.error}</li>)}</ul>
       <div>
-        {retryable && <Button type="button" variant="outline" disabled={busy || readOnly} onClick={onRetry}>重試失敗圖片</Button>}
-        <Button type="button" variant="ghost" onClick={onDismiss}>{retryable ? "不重試" : "知道了"}</Button>
+        {retryable && <Button title="重新上傳失敗的圖片" type="button" variant="outline" disabled={busy || readOnly} onClick={onRetry}>重試失敗圖片</Button>}
+        <Button title="關閉這則訊息" type="button" variant="ghost" onClick={onDismiss}>{retryable ? "不重試" : "知道了"}</Button>
       </div>
     </div>}
     <div className="circuit-image-columns" data-mobile-side={side}>
@@ -77,7 +77,7 @@ function Pane({ side, images, urls, active, dropping, readOnly, busy, onSide, on
     <Button type="button" variant="ghost" aria-label={`下載原圖 ${image.name}`} title="下載原圖" onClick={() => onDownload(image)}><Download aria-hidden="true" /></Button>
     {!readOnly && <Button type="button" variant="ghost" aria-label={`移除圖片 ${image.name}`} title="移除這張圖（可復原）" disabled={busy} onClick={() => onRemove(image)}><Trash2 aria-hidden="true" /></Button>}
   </div>;
-  const empty = <button type="button" className="circuit-image-empty" aria-label={`加入${label}圖片`} disabled={readOnly || busy} onFocus={() => onSide(side)} onClick={() => onPick(side)}>
+  const empty = <button title={`加入${label}的圖：點這裡選檔，也可以貼上（Ctrl+V）或拖進來`} type="button" className="circuit-image-empty" aria-label={`加入${label}圖片`} disabled={readOnly || busy} onFocus={() => onSide(side)} onClick={() => onPick(side)}>
     <ImagePlus aria-hidden="true" />
     {readOnly ? <span>未提供圖片</span> : <>
       <span className="circuit-wide-copy">{compact ? "補充圖：規格書、量測波形等，貼上或點這裡選取" : "貼上（Ctrl+V）、拖入或點這裡選取"}</span>
@@ -92,11 +92,11 @@ function Pane({ side, images, urls, active, dropping, readOnly, busy, onSide, on
       <h4>{label}</h4>
       <span className="circuit-image-count">{images.length} 張</span>
       {!readOnly && active && <span className="circuit-paste-target">{dropping ? "放開以加入這裡" : "貼上會加到這裡"}</span>}
-      {!readOnly && images.length > 0 && <Button type="button" variant="outline" aria-label={`加入${label}圖片`} disabled={busy} onFocus={() => onSide(side)} onClick={() => onPick(side)}><Upload aria-hidden="true" />加入圖片</Button>}
+      {!readOnly && images.length > 0 && <Button title={`再加一張${label}的圖`} type="button" variant="outline" aria-label={`加入${label}圖片`} disabled={busy} onFocus={() => onSide(side)} onClick={() => onPick(side)}><Upload aria-hidden="true" />加入圖片</Button>}
     </header>
     {compact
       ? images.length > 0 ? <div className="circuit-image-grid">{images.map(image => <figure key={image.id}>
-        <button type="button" className="circuit-image-preview" aria-label={`放大圖片 ${image.name}`} onClick={() => onOpen(image)}>
+        <button title="放大查看，可以加位置標記或框選" type="button" className="circuit-image-preview" aria-label={`放大圖片 ${image.name}`} onClick={() => onOpen(image)}>
           {urls[image.id] ? <img src={urls[image.id].thumbnail} alt={image.caption || image.name} loading="lazy" /> : <span>載入圖片…</span>}
           {image.marks.length > 0 && <span className="circuit-mark-count">{image.marks.length} 個標記</span>}
         </button>
@@ -117,7 +117,7 @@ function Pane({ side, images, urls, active, dropping, readOnly, busy, onSide, on
           {actions(shown)}
         </div>
         {images.length > 1 && <div className="circuit-image-strip" role="group" aria-label={`${label}的所有圖片`}>
-          {images.map(image => <button type="button" key={image.id} className="circuit-image-preview" aria-label={`顯示圖片 ${image.name}`} aria-pressed={image.id === shown.id} onClick={() => setShownId(image.id)}>
+          {images.map(image => <button title={`顯示 ${image.name}`} type="button" key={image.id} className="circuit-image-preview" aria-label={`顯示圖片 ${image.name}`} aria-pressed={image.id === shown.id} onClick={() => setShownId(image.id)}>
             {urls[image.id] ? <img src={urls[image.id].thumbnail} alt="" loading="lazy" /> : <span>…</span>}
           </button>)}
         </div>}

@@ -69,7 +69,7 @@ test("official baseline loads its canonical document snapshot without consulting
 test("official baseline rejects an absent, mismatched, local-only or incomplete document snapshot", async () => {
   for (const invalid of [null, document({ id: "other-pdf" }), document({ localOnly: true }), document({ path: "" }), document({ pages: 0 })]) {
     const supabase = fakeSupabase(() => ({ data: officialRow({ document: invalid }), error: null }));
-    await assert.rejects(load("officialPdfStorage", supabase).loadCircuitPdfOfficial("series-1"), /官方基準原檔資訊不完整/);
+    await assert.rejects(load("officialPdfStorage", supabase).loadCircuitPdfOfficial("series-1"), /官方版本原檔資訊不完整/);
   }
   const absent = fakeSupabase(() => ({ data: null, error: null }));
   assert.equal(await load("officialPdfStorage", absent).loadCircuitPdfOfficial("series-1"), null);
@@ -92,7 +92,7 @@ test("setting an official baseline sends the observed revision to the authoritat
 test("official baseline CAS conflicts are surfaced without retrying or overwriting", async () => {
   for (const failure of [{ error: { code: "PT409", message: "stale" } }, { error: { message: "stale" }, status: 409 }]) {
     const supabase = fakeSupabase(call => call.rpc ? failure : { data: officialRow(), error: null });
-    await assert.rejects(load("officialPdfStorage", supabase).saveCircuitPdfOfficial("series-1", "replacement"), /官方基準已由其他人更新/);
+    await assert.rejects(load("officialPdfStorage", supabase).saveCircuitPdfOfficial("series-1", "replacement"), /官方版本已由其他人更新/);
     assert.equal(supabase.calls.filter(call => call.rpc).length, 1);
   }
 });

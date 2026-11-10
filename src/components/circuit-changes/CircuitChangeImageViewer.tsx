@@ -69,14 +69,14 @@ export function CircuitChangeImageViewer({ image, src, onChange, readOnly = fals
         <Button type="button" variant="outline" aria-label="下一張圖片" title="下一張（→）" disabled={!onNext} onClick={onNext}><ChevronRight /></Button>
       </span>}
       <span className="circuit-image-toolbar-group">
-        <Button type="button" variant="outline" aria-label="縮小圖片" onClick={() => setZoom(value => Math.max(.5, value - .5))} disabled={zoom <= .5}><Minus /></Button>
+        <Button title="縮小圖片" type="button" variant="outline" aria-label="縮小圖片" onClick={() => setZoom(value => Math.max(.5, value - .5))} disabled={zoom <= .5}><Minus /></Button>
         <span>{Math.round(zoom * 100)}%</span>
-        <Button type="button" variant="outline" aria-label="放大圖片" onClick={() => setZoom(value => Math.min(4, value + .5))} disabled={zoom >= 4}><Plus /></Button>
+        <Button title="放大圖片" type="button" variant="outline" aria-label="放大圖片" onClick={() => setZoom(value => Math.min(4, value + .5))} disabled={zoom >= 4}><Plus /></Button>
         <Button type="button" variant="outline" aria-label="圖片符合視窗" title="符合視窗" onClick={() => setZoom(1)}><Maximize /></Button>
       </span>
       {editable && <span className="circuit-image-toolbar-group">
-        <Button type="button" variant={tool === "pin" ? "default" : "outline"} aria-pressed={tool === "pin"} onClick={() => setTool(value => value === "pin" ? "view" : "pin")}><MapPin />位置標記</Button>
-        <Button type="button" variant={tool === "box" ? "default" : "outline"} aria-pressed={tool === "box"} onClick={() => setTool(value => value === "box" ? "view" : "box")}><Square />框選</Button>
+        <Button title="點圖片加一個位置標記，再寫說明" type="button" variant={tool === "pin" ? "default" : "outline"} aria-pressed={tool === "pin"} onClick={() => setTool(value => value === "pin" ? "view" : "pin")}><MapPin />位置標記</Button>
+        <Button title="在圖片上拖曳框出範圍，再寫說明" type="button" variant={tool === "box" ? "default" : "outline"} aria-pressed={tool === "box"} onClick={() => setTool(value => value === "box" ? "view" : "box")}><Square />框選</Button>
       </span>}
       <p className="circuit-image-hint">{tool === "pin" ? "點圖片上的修改位置即可加上標記，可連續點；再按一次「位置標記」結束。" : tool === "box" ? "在圖片上拖曳框出修改範圍，可連續框；再按一次「框選」結束。" : editable ? "選「位置標記」或「框選」標出改了哪裡；標記另外保存，原圖不變。" : "原圖與此修訂的標記。"}</p>
     </div>
@@ -99,7 +99,7 @@ export function CircuitChangeImageViewer({ image, src, onChange, readOnly = fals
           ? <ol className="circuit-image-mark-list">{image.marks.map((mark, index) => <li key={mark.id}>
             <span>{index + 1}</span>
             <Input ref={(node: HTMLInputElement | null) => { if (node) notes.current.set(mark.id, node); else notes.current.delete(mark.id); }} aria-label={`標記 ${index + 1} 說明`} value={mark.text} maxLength={200} readOnly={!editable} placeholder={editable ? "這裡改了什麼" : ""} onChange={event => onChange?.({ ...image, marks: image.marks.map(value => value.id === mark.id ? { ...value, text: event.target.value } : value) })} />
-            {editable && <Button type="button" variant="ghost" aria-label={`刪除標記 ${index + 1}`} onClick={() => onChange?.({ ...image, marks: image.marks.filter(value => value.id !== mark.id) })}><Trash2 /></Button>}
+            {editable && <Button title="刪除這個標記" type="button" variant="ghost" aria-label={`刪除標記 ${index + 1}`} onClick={() => onChange?.({ ...image, marks: image.marks.filter(value => value.id !== mark.id) })}><Trash2 /></Button>}
           </li>)}</ol>
           : <p className="circuit-image-mark-empty">{editable ? "還沒有標記。" : "這張圖沒有標記。"}</p>}
       </aside>

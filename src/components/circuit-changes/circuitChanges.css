@@ -382,3 +382,83 @@
   .circuit-guide-footer { padding: 10px 16px max(10px, env(safe-area-inset-bottom)); }
   .workspace-dialog-surface.circuit-image-viewer-dialog[data-ui="dialog"] { top: var(--circuit-viewport-top, 0px); left: 0; width: 100vw; height: var(--circuit-viewport-height, 100dvh); max-height: var(--circuit-viewport-height, 100dvh); transform: none; gap: 8px; border: 0; border-radius: 0; padding: 10px 12px 12px 16px; }
 }
+
+/* Four task tabs (2026-11-10): 線路 Review, AI 比對, 改善追蹤, 官方版本 replace the batch picker, the PDF toggle and the
+   官方基準 button in the header. One row on a wide screen; on a phone the tabs are a full-width second row. */
+.circuit-tasks { display: flex; flex: none; align-items: center; gap: 2px; padding: 3px; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--secondary) / .3); }
+.circuit-header .circuit-task { display: inline-flex; align-items: center; height: 36px; gap: 6px; padding-inline: 14px; border: 0; border-radius: 7px; background: transparent; color: hsl(var(--muted-foreground)); font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer; }
+.circuit-header .circuit-task:hover { background: hsl(var(--secondary) / .8); color: hsl(var(--foreground)); }
+.circuit-header .circuit-task[aria-selected="true"] { background: hsl(var(--primary) / .14); box-shadow: inset 0 0 0 1px hsl(var(--primary) / .5); color: hsl(var(--primary)); }
+.circuit-task > small { display: inline-flex; min-width: 18px; height: 18px; align-items: center; justify-content: center; padding-inline: 5px; border-radius: 9px; background: hsl(var(--warning) / .16); color: hsl(var(--warning)); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.circuit-header-actions > .circuit-action-more { width: 40px; padding: 0; }
+.circuit-more-menu { min-width: 180px; }
+.circuit-more-menu [role="menuitem"] { gap: 8px; }
+.circuit-more-menu [role="menuitem"] > svg { width: 16px; height: 16px; color: hsl(var(--muted-foreground)); }
+.circuit-list-panel > .circuit-set-picker { display: flex; flex: none; align-items: center; gap: 8px; margin: 12px 12px 0; }
+.circuit-list-panel > .circuit-set-picker > span { flex: none; color: hsl(var(--muted-foreground)); font-size: 13px; }
+.circuit-task-panel { display: flex; flex: 1; min-height: 0; }
+
+/* 官方版本: the current official PDF, how to change it, and every change so far. */
+.circuit-official { display: flex; flex: 1; min-height: 0; }
+.circuit-official-scroll { display: flex; flex: 1; flex-direction: column; gap: 16px; width: 100%; max-width: 1040px; margin: 0 auto; overflow: auto; padding: 24px; }
+.circuit-official-current { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 16px 20px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--secondary) / .25); }
+.circuit-official-current[data-configured="true"] { border-color: hsl(var(--warning) / .4); }
+.circuit-official-current > svg { width: 28px; height: 28px; color: hsl(var(--warning)); }
+.circuit-official-current > div:not(.circuit-official-actions) { display: grid; min-width: 0; gap: 2px; }
+.circuit-official-current span { color: hsl(var(--muted-foreground)); font-size: 13px; }
+.circuit-official-current strong { overflow: hidden; font-size: 17px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.circuit-official-current small { overflow: hidden; color: hsl(var(--muted-foreground)); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.circuit-official-actions { display: flex; gap: 8px; }
+.circuit-official-actions > button { height: 40px; gap: 6px; }
+.circuit-official-note, .circuit-official-error { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.circuit-official-note { color: hsl(var(--primary)); }
+.circuit-official-error { color: hsl(var(--destructive)); }
+.circuit-official-choose, .circuit-official-history { display: grid; gap: 10px; padding: 16px 20px; border: 1px solid hsl(var(--border)); border-radius: 12px; }
+.circuit-official-choose > header, .circuit-official-history > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.circuit-official-choose h3, .circuit-official-history h3 { font-size: 15px; font-weight: 600; }
+.circuit-official-history > header > span { color: hsl(var(--muted-foreground)); font-size: 13px; font-variant-numeric: tabular-nums; }
+.circuit-official-choose ul { display: grid; }
+.circuit-official-choose li { display: flex; min-height: 56px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid hsl(var(--border)); }
+.circuit-official-choose li[data-candidate="true"] { background: hsl(var(--primary) / .06); }
+.circuit-official-choose li > div { display: grid; min-width: 0; gap: 2px; }
+.circuit-official-choose li strong { overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.circuit-official-choose li small { color: hsl(var(--muted-foreground)); font-size: 13px; }
+.circuit-official-choose button { flex: none; height: 36px; gap: 6px; }
+.circuit-official-confirm { display: flex; flex: none; align-items: center; gap: 8px; font-size: 14px; }
+.circuit-official-hint { color: hsl(var(--muted-foreground)); font-size: 13px; }
+.circuit-official-empty { color: hsl(var(--muted-foreground)); font-size: 14px; text-align: center; }
+.circuit-official-history table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
+.circuit-official-history th { padding: 8px 12px; border-bottom: 1px solid hsl(var(--border)); color: hsl(var(--muted-foreground)); font-size: 13px; font-weight: 500; text-align: left; }
+.circuit-official-history th:nth-child(1) { width: 190px; }
+.circuit-official-history th:nth-child(3) { width: 130px; }
+.circuit-official-history th:nth-child(4) { width: 160px; }
+.circuit-official-history td { height: 44px; padding: 0 12px; border-bottom: 1px solid hsl(var(--border) / .6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.circuit-official-history td > span { overflow: hidden; text-overflow: ellipsis; }
+.circuit-official-history td > em { margin-left: 8px; padding: 1px 6px; border-radius: 4px; background: hsl(var(--warning) / .14); color: hsl(var(--warning)); font-size: 12px; font-style: normal; }
+.circuit-official-history td.circuit-official-empty { height: 64px; }
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .circuit-header .circuit-task { padding-inline: 10px; }
+  .circuit-header .circuit-task > svg { display: none; }
+}
+@media (max-width: 1023px) {
+  .circuit-tasks { order: 3; flex: 1 0 100%; }
+  .circuit-header .circuit-task { flex: 1; justify-content: center; height: 44px; padding-inline: 4px; font-size: 13px; }
+  .circuit-header .circuit-task > svg { display: none; }
+  .circuit-header-actions > .circuit-action-more { width: 44px; height: 44px; }
+  .circuit-list-panel > .circuit-set-picker { margin: 10px 16px 0; }
+  .circuit-official-scroll { padding: 16px; }
+  .circuit-official-current { grid-template-columns: auto minmax(0, 1fr); }
+  .circuit-official-actions { grid-column: 1 / -1; }
+  .circuit-official-actions > button { flex: 1; height: 44px; }
+  .circuit-official-choose li { flex-wrap: wrap; }
+  .circuit-official-choose button { height: 44px; }
+  .circuit-official-history th:nth-child(3), .circuit-official-history td:nth-child(3) { display: none; }
+  .circuit-official-history th:nth-child(1) { width: 120px; }
+  .circuit-official-history th:nth-child(4) { width: 96px; }
+}
+
+/* Beside the drawing the form column is narrow: the tracking button reads 紀錄 N there. */
+@media (min-width: 1024px) { .circuit-workspace[data-pdf-open="true"] .circuit-history-word { display: none; } }
+
+@media (max-width: 1023px) { .circuit-changes-dialog .circuit-mobile-pdf { width: 44px; height: 44px; padding: 0; color: hsl(var(--primary)); } }

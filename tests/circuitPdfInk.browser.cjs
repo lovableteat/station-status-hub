@@ -114,7 +114,9 @@ async function managerFits(page) {
       await page.goto(origin+'/?qaMainRows&qaPages&qaUser='+account);await page.getByTestId('material-table-card').waitFor();
       if(width<1024)await page.getByRole('button',{name:'排序與工具',exact:true}).click();
       await page.getByTestId('material-circuit-changes').filter({visible:true}).click();await dialog(page).waitFor();
-      if(width<1024)await dialog(page).getByRole('button',{name:'PDF 圖面',exact:true}).click();
+      if(width<1024)await dialog(page).getByRole('button',{name:'看圖面',exact:true}).filter({visible:true}).first().click();
+      const official=fixture.state.pdfOfficials.get('series:qa')?.documentId;
+      if(official){await rendered(page);await panel(page).getByRole('combobox',{name:'對照較早的 PDF 版本',exact:true}).selectOption(official);}
     };
     const open=async(width,account='A')=>{const context=await browser.newContext({viewport:{width,height:884},hasTouch:width<1024,isMobile:width<1024,reducedMotion:'reduce',locale:'zh-TW',timezoneId:'Asia/Taipei'});contexts.push(context);await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));page.setDefaultTimeout(25000);await reopen(page,width,account);return{page,errors,context};};
     const desktop=await open(1543),p=desktop.page;
@@ -122,14 +124,15 @@ async function managerFits(page) {
       if(index){const chooser=p.waitForEvent('filechooser');await panel(p).getByRole('button',{name:'上傳新 PDF',exact:true}).click();await(await chooser).setFiles(file);}
       else await panel(p).locator('input[aria-label="選擇原理圖 PDF"]').setInputFiles(file);
       await rendered(p);
-      if(!index){await panel(p).getByRole('button',{name:'選擇 PDF 版本',exact:true}).click();await panel(p).getByRole('button',{name:'設為官方基準：Official_20261101.pdf',exact:true}).click();await panel(p).getByRole('button',{name:'確認設為官方基準：Official_20261101.pdf',exact:true}).click();await eventually(()=>fixture.state.pdfOfficials.size===1,'Official pointer saves');await p.keyboard.press('Escape');}
+      if(!index){await panel(p).getByRole('button',{name:'選擇 PDF 版本',exact:true}).click();await panel(p).getByRole('button',{name:'設為官方版本：Official_20261101.pdf',exact:true}).click();await panel(p).getByRole('button',{name:'確認設為官方版本：Official_20261101.pdf',exact:true}).click();await eventually(()=>fixture.state.pdfOfficials.size===1,'Official pointer saves');await p.keyboard.press('Escape');}
     }
+    await panel(p).getByRole('combobox',{name:'對照較早的 PDF 版本',exact:true}).selectOption(fixture.state.pdfOfficials.get('series:qa').documentId);
     await p.waitForFunction(()=>document.querySelectorAll('.circuit-pdf-surface').length===2);await rendered(p);
     const registry=fixture.state.pdfRegistries.get('series:qa'),officialId=fixture.state.pdfOfficials.get('series:qa').documentId,workingId=registry.documents.find(row=>row.name==='Working_20261110.pdf').id;
     report.geometry.push({width:1543,...await toolbarFits(p,1543)});await managerFits(p);
-    const hints=await dialog(p).getByRole('textbox',{name:'修改標題',exact:true}).evaluate(node=>({hint:getComputedStyle(node,'::placeholder').color,value:getComputedStyle(node).color}));
+    const hints=await dialog(p).getByRole('textbox',{name:'標題',exact:true}).evaluate(node=>({hint:getComputedStyle(node,'::placeholder').color,value:getComputedStyle(node).color}));
     assert.notEqual(hints.hint,hints.value);assert.match(hints.hint,/14[0-9]|15[0-9]/);report.placeholder=hints;
-    await dialog(p).getByRole('textbox',{name:'修改標題',exact:true}).fill('電源訊號調整');await eventually(()=>fixture.state.items.size===1,'The entered title still saves');
+    await dialog(p).getByRole('textbox',{name:'標題',exact:true}).fill('電源訊號調整');await eventually(()=>fixture.state.items.size===1,'The entered title still saves');
     check('1543px one-row compact toolbar, dim hints, version manager visible and upload button opens a real picker');
 
     const writes=fixture.state.inkWrites;
@@ -141,7 +144,8 @@ async function managerFits(page) {
     assert.equal(await strokeCount(p,'active'),1);assert.equal(await strokeCount(p,'compare'),1);check('Official and working PDFs retain independent page annotations');
     await tool(p,'放大');await rendered(p);assert.equal(await strokeCount(p,'active'),1);await tool(p,'縮小');await rendered(p);assert.equal(await strokeCount(p,'active'),1);
     for(let step=0;step<4;step++)await tool(p,'放大');await rendered(p);await tool(p,'移動');
-    const stage=panel(p).locator('.circuit-pdf-stage');await stage.evaluate(node=>{node.scrollLeft=0;node.scrollTop=0});const stageBox=await stage.boundingBox(),beforePanWrites=fixture.state.inkWrites;
+    // Beside a comparison each page scrolls in its own viewport (linked pan, b875962a), not the stage.
+    const stage=panel(p).locator('.circuit-pdf-page[data-pane="active"] .circuit-pdf-viewport');await stage.evaluate(node=>{node.scrollLeft=0;node.scrollTop=0});const stageBox=await stage.boundingBox(),beforePanWrites=fixture.state.inkWrites;
     await p.mouse.move(stageBox.x+stageBox.width*.7,stageBox.y+180);await p.mouse.down();await p.mouse.move(stageBox.x+stageBox.width*.4,stageBox.y+140,{steps:8});await p.mouse.up();
     assert.ok(await stage.evaluate(node=>node.scrollLeft)>10,'The hand tool actually pans the PDF');assert.equal(fixture.state.inkWrites,beforePanWrites,'Panning does not write ink');
     await tool(p,'符合寬度');await rendered(p);
@@ -185,8 +189,8 @@ async function managerFits(page) {
     await tool(mobile.page,'撤回最後一筆畫筆');await eventually(()=>activeRows(fixture,workingId).length===2,'Phone undo saves');
     await managerFits(mobile.page);await panel(mobile.page).locator('.circuit-pdf-row').evaluate(node=>node.scrollLeft=0);
     await panel(mobile.page).getByRole('button',{name:'返回修改內容',exact:true}).click();await panel(mobile.page).waitFor({state:'hidden'});await dialog(mobile.page).locator('.circuit-item-list').waitFor();
-    await dialog(mobile.page).getByTestId('circuit-change-item').first().click();assert.ok(await dialog(mobile.page).getByRole('textbox',{name:'修改標題',exact:true}).isVisible());
-    await dialog(mobile.page).getByRole('button',{name:'PDF 圖面',exact:true}).click();await rendered(mobile.page);await panel(mobile.page).locator('.circuit-pdf-row').evaluate(node=>node.scrollLeft=0);await mobile.page.screenshot({path:path.join(evidence,'mobile-390-tools.png')});
+    await dialog(mobile.page).getByTestId('circuit-change-item').first().click();assert.ok(await dialog(mobile.page).getByRole('textbox',{name:'標題',exact:true}).isVisible());
+    await dialog(mobile.page).getByRole('button',{name:'看圖面',exact:true}).filter({visible:true}).first().click();await rendered(mobile.page);await panel(mobile.page).locator('.circuit-pdf-row').evaluate(node=>node.scrollLeft=0);await mobile.page.screenshot({path:path.join(evidence,'mobile-390-tools.png')});
     check('390px phone emulation has visible 44px drawing tools, one toolbar row, usable pen/undo and version manager');
     assert.deepEqual(desktop.errors,[]);assert.deepEqual(viewer.errors,[]);assert.deepEqual(mobile.errors,[]);report.result='passed';report.inkWrites=fixture.state.inkWrites;
     console.log(JSON.stringify({result:report.result,checks:report.checks.length,evidence},null,2));

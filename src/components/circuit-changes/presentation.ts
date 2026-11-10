@@ -1,8 +1,8 @@
 import type { CircuitChangeEvent, CircuitChangeSet } from "./types";
 
 export const CIRCUIT_EVENT_LABELS: Record<string, string> = {
-  created: "建立項目", edited: "更新內容", submit: "送出 Review", submitted: "送出 Review", approve: "確認", approved: "確認",
-  request_changes: "退回補充", changes_requested: "退回補充", comment: "留言", removed: "移除項目", restored: "還原項目",
+  created: "建立項目", edited: "更新內容", submit: "回報改善", submitted: "回報改善", approve: "確認結案", approved: "確認結案",
+  request_changes: "退回重改", changes_requested: "退回重改", comment: "留言", removed: "移除項目", restored: "還原項目",
 };
 const RETURN_EVENTS = new Set(["request_changes", "changes_requested"]);
 

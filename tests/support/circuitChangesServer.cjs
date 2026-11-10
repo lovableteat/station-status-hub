@@ -1,7 +1,7 @@
 const { randomUUID } = require('node:crypto');
 
 function createCircuitChangesServer() {
-  const state = { sets: new Map(), items: new Map(), events: new Map(), files: new Map(), failedNames: new Set(), calls: [], conflictItem: null, sseDelivered: 0, pdfRegistries: new Map(), pdfVersions: new Map(), pdfOfficials: new Map(), pdfs: new Map(), pdfWrites: 0, pdfConflicts: 0, pdfWriteDelay: 0 };
+  const state = { sets: new Map(), items: new Map(), events: new Map(), files: new Map(), failedNames: new Set(), calls: [], conflictItem: null, sseDelivered: 0, pdfRegistries: new Map(), pdfVersions: new Map(), pdfOfficials: new Map(), pdfOfficialHistory: new Map(), pdfs: new Map(), pdfWrites: 0, pdfConflicts: 0, pdfWriteDelay: 0 };
   Object.assign(state, { inkRows: new Map(), inkCalls: [], inkWrites: 0, inkFailWrites: false, inkWriteDelay: 0 });
   const clients = new Set();
   let lastStamp = Date.now();
@@ -128,7 +128,7 @@ function createCircuitChangesServer() {
       if (url.pathname === '/__circuit/state') return json(res, 200, { sets:[...state.sets.values()], items:[...state.items.values()], events:[...state.events.values()], files:[...state.files.keys()],pdfRegistries:Object.fromEntries(state.pdfRegistries),pdfOfficials:Object.fromEntries(state.pdfOfficials),pdfs:[...state.pdfs.keys()],pdfWrites:state.pdfWrites,pdfConflicts:state.pdfConflicts, objects:[...state.files].map(([path,file])=>({path,size:file.bytes.length,type:file.mime})), calls:state.calls, sseDelivered:state.sseDelivered });
       if (url.pathname === '/__circuit/control') {
         const input = JSON.parse((await body(req)).toString() || '{}');
-        if (input.action === 'reset') { for (const key of ['sets','items','events','files','pdfRegistries','pdfVersions','pdfOfficials','pdfs']) state[key].clear(); state.pdfWrites = 0; state.pdfConflicts = 0; state.pdfWriteDelay = 0; state.failedNames.clear(); state.calls.length = 0; state.conflictItem = null; state.sseDelivered = 0; }
+        if (input.action === 'reset') { for (const key of ['sets','items','events','files','pdfRegistries','pdfVersions','pdfOfficials','pdfOfficialHistory','pdfs']) state[key].clear(); state.pdfWrites = 0; state.pdfConflicts = 0; state.pdfWriteDelay = 0; state.failedNames.clear(); state.calls.length = 0; state.conflictItem = null; state.sseDelivered = 0; }
         if (input.action === 'conflict_next_save') state.conflictItem = input.itemId || true;
         if (input.action === 'reset') { state.inkRows.clear(); state.inkCalls.length=0; state.inkWrites=0; state.inkFailWrites=false; state.inkWriteDelay=0; }
         if (input.action === 'pdf_write_delay') state.pdfWriteDelay = Number(input.ms) || 0;
@@ -137,6 +137,7 @@ function createCircuitChangesServer() {
         if (input.action === 'bump') { const item = getItem(input.itemId); item.content = {...item.content, ...(input.patch || {})}; item.revision++; item.updatedAt=stamp(); record(item,'edited','B'); }
         return json(res, 200, {ok:true});
       }
+      if (url.pathname === '/__circuit/pdf-official-history') return json(res, 200, { data: clone(state.pdfOfficialHistory.get(url.searchParams.get('seriesId') || '') || []) });
       if (url.pathname === '/__circuit/pdf-official') {
         const seriesId = url.searchParams.get('seriesId') || '';
         if (req.method === 'PUT') {
@@ -145,7 +146,9 @@ function createCircuitChangesServer() {
           const document = state.pdfRegistries.get(seriesId)?.documents?.find(row => row.id === documentId && !row.removedAt && !row.localOnly && row.path);
           if (!document) fail(400, '官方基準必須是這塊板子已儲存的 PDF');
           const who = actor(account), official = { documentId, document: clone(document), at: stamp(), by: who.id, byName: who.name, revision: (state.pdfOfficials.get(seriesId)?.revision || 0) + 1 };
-          state.pdfOfficials.set(seriesId, official); return json(res, 200, { data: official });
+          state.pdfOfficials.set(seriesId, official);
+          state.pdfOfficialHistory.set(seriesId, [{ revision: official.revision, documentId, document: clone(document), at: official.at, byName: who.name }, ...(state.pdfOfficialHistory.get(seriesId) || [])]);
+          return json(res, 200, { data: official });
         }
         return json(res, 200, { data: clone(state.pdfOfficials.get(seriesId) || null) });
       }
