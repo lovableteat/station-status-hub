@@ -167,6 +167,7 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
 
   const setActiveProjectId = useCallback((projectId: string) => {
     if (activeProjectIdRef.current === projectId) return;
+    if (typeof window !== 'undefined' && !window.dispatchEvent(new Event('workspace-before-navigate', { cancelable: true }))) return;
     selectionRevisionRef.current += 1;
     activeProjectIdRef.current = projectId;
     setIsSwitchingProject(true);
@@ -285,13 +286,10 @@ export function TestProjectProvider({ children }: { children: ReactNode }) {
       if (!isCurrent()) return;
 
       const normalizedProjects = (data ?? []).map(normalizeProject);
-      const activeProjects = normalizedProjects.filter(
-        (project) => project.status !== "archived" && !project.is_archived
-      );
       setAllProjects(normalizedProjects);
 
       const preferredProjectId = resolvePreferredProjectId(
-        activeProjects,
+        normalizedProjects,
         activeProjectIdRef.current
       );
       // A snapshot started before a user selection/create may not contain it yet.
