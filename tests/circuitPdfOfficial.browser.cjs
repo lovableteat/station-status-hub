@@ -91,7 +91,7 @@ async function managerFits(page, label) {
       await page.goto(origin + '/?qaMainRows&qaPages&qaUser=' + account); await page.getByTestId('material-table-card').waitFor();
       if (width < 1024) await page.getByRole('button', { name: '排序與工具', exact: true }).click();
       await page.getByTestId('material-circuit-changes').filter({ visible: true }).click(); await dialog(page).waitFor();
-      if (width < 1024) await dialog(page).getByRole('button', { name: '看圖面', exact: true }).filter({ visible: true }).first().click();
+      if (width < 1024) { await page.waitForFunction(()=>{const list=document.querySelector('[data-testid="circuit-changes-dialog"] .circuit-item-list');return list&&list.getAttribute('aria-busy')!=='true';});await page.waitForTimeout(300); await dialog(page).getByRole('button', { name: '看圖面', exact: true }).filter({ visible: true }).first().click(); }
       return { page, errors };
     };
     const desktop = await open(1440), page = desktop.page;
