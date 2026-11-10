@@ -10,7 +10,7 @@ test("AI data assistant exposes one consolidated selector with three Gemini targ
     read("../src/components/api-management/ApiChatConsole.tsx"),
   ]);
 
-  assert.match(workspace, /buildApiKeyModelTargets/);
+  assert.match(workspace, /loadApiKeyModelTargets/);
   assert.match(workspace, /GEMINI_FREE_MODEL_PROFILES\.map/);
   assert.match(workspace, /selectedApiKeyTargetId/);
   assert.match(workspace, /selectedTarget\?\.model/);

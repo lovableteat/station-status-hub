@@ -13,10 +13,11 @@ const rows = [record("openai", "openai", "gpt-5.4", "https://api.openai.com/v1")
 const mapping = { headerRow: 1, partNumber: 1, mpn: 2, manufacturer: 3, description: 4, qty: 5, refs: 6 };
 const before = { name: "Old", rows: [["NV PN", "MPN", "Maker", "Part", "Qty", "Refs"], ["001", "KEEP", "Maker", "Part", "1", "R1"], ["002", "OLD", "Maker", "Part", "1", "R2"]] };
 const after = { name: "New", rows: [before.rows[0], ["001", "KEEP", "Maker", "Part", "2", "R1,R3"], ["003", "NEW", "Maker", "Part", "1", "R4"]] };
-function load({ queryError = null, transport = async () => { throw new Error("Unexpected provider call"); } } = {}) {
+function load({ queryError = null, discoveredModels = ["gpt-5.4", "gpt-6.1-sol"], transport = async () => { throw new Error("Unexpected provider call"); } } = {}) {
   return loader({ globals: { Response, Headers, TextEncoder, TextDecoder }, mocks: {
     "@/integrations/supabase/client": { supabase: database(() => ({ data: rows, error: queryError })) },
     "../api-management/aiUsageTelemetry": { trackedProviderFetch: transport },
+    "./aiProviderTransport": { fetchAiProvider: async () => new Response(JSON.stringify({ data: discoveredModels.map(id => ({ id })) })) },
   } })("src/components/material-requests/nvBomCompareAi.ts");
 }
 function requestInput(call) {
@@ -52,6 +53,13 @@ test("NV model choices expand chat targets while retaining key identity, permiss
 
 test("NV model load failure remains explicit instead of returning an empty success", async () => {
   await assert.rejects(load({ queryError: new Error("QA denied") }).loadNvBomModels(), /無法讀取可用的 AI 服務/);
+});
+
+test("NV comparison keeps all saved providers while omitting an unverified synthetic Sol choice", async () => {
+  const models = await load({ discoveredModels: ["gpt-5.4"] }).loadNvBomModels();
+  assert.equal(models.length, 6);
+  assert.equal(models.some(item => item.label.endsWith("gpt-6.1-sol")), false);
+  assert.deepEqual(Array.from(new Set(models.map(item => item.record.id))), ["openai", "gemini", "claude", "custom"]);
 });
 
 test("every NV choice sends its own model with the original key id through mapping and difference review", async () => {

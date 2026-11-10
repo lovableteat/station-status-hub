@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { withReadDeadline } from "@/lib/readDeadline";
-import { buildApiKeyModelTargets, buildApiKeyPermissions, normalizeApiKeyPermissions, type ApiKeyRecord } from "../api-management/apiKeyHelpers";
+import { buildApiKeyPermissions, normalizeApiKeyPermissions, type ApiKeyRecord } from "../api-management/apiKeyHelpers";
+import { loadApiKeyModelTargets } from "../api-management/apiKeyModelTargets";
 import { GEMINI_FREE_MODEL_PROFILES, buildProviderChatRequest, parseProviderChatResponse, redactSensitiveText, resolveAiProviderPreset } from "../api-management/aiProviderCatalog";
 import { trackedProviderFetch } from "../api-management/aiUsageTelemetry";
 import { classifyAiFailure } from "../api-management/aiRequestRecovery";
@@ -14,16 +15,16 @@ export interface NvBomAiResult {
 export async function loadNvBomModels(): Promise<NvBomModel[]> {
   const { data, error } = await withReadDeadline(signal => supabase.from("api_keys").select("*").eq("is_active", true).order("created_at", { ascending: false }).abortSignal(signal), 15_000);
   if (error) throw new Error("無法讀取可用的 AI 服務，請稍後重試。");
-  return (data ?? []).flatMap(record => {
+  return (await Promise.all((data ?? []).map(async record => {
     const { read, write, metadata } = normalizeApiKeyPermissions(record.permissions);
     if (!read || !record.is_active || record.expires_at && !(Date.parse(record.expires_at) > Date.now()) || !metadata.model.trim() || !metadata.provider.trim() || !metadata.baseUrl.trim()) return [];
     // Workbook cells are sent as text, so configured text-compatible models can be used too.
-    return buildApiKeyModelTargets([record], [metadata.model, ...GEMINI_FREE_MODEL_PROFILES.map(item => item.id)]).map(target => ({
+    return (await loadApiKeyModelTargets([record], [metadata.model, ...GEMINI_FREE_MODEL_PROFILES.map(item => item.id)])).map(target => ({
       id: target.model === metadata.model.trim() ? record.id : target.id,
       label: `${record.key_name} · ${target.model}`,
       record: target.model === metadata.model ? record : { ...record, permissions: buildApiKeyPermissions({ read, write, metadata: { ...metadata, model: target.model } }, record.permissions) },
     }));
-  });
+  }))).flat();
 }
 
 async function ask(model: NvBomModel, instruction: string, input: unknown, signal: AbortSignal) {

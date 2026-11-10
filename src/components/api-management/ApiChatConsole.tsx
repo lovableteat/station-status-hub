@@ -928,7 +928,7 @@ function MessageCard({ message, materialSpecsAllowed, compact, priorQuestion, ca
         ) : null}
         {!isUser && message.siteKnowledge && <SiteKnowledgeSources report={message.siteKnowledge} />}
         {!isUser && message.materialSpecs && <MaterialSpecCitationList report={message.materialSpecs} allowed={materialSpecsAllowed} />}
-        {compact && !isUser && (
+        {!isUser && (compact || message.state === "error") && (
           <div data-ai-reply-actions className="flex items-center text-muted-foreground">
             {replyText && <Button
               type="button" variant="ghost" className="h-11 w-11 shrink-0 p-0" aria-label="複製回覆" title="複製回覆"
@@ -942,7 +942,7 @@ function MessageCard({ message, materialSpecsAllowed, compact, priorQuestion, ca
               title={canReuseQuestion ? "將問題帶回輸入框，再按送出使用目前選擇的模型" : "輸入列可用且沒有草稿時才能重填"}
               disabled={!canReuseQuestion} onClick={() => onReuseQuestion(priorQuestion)}
             ><RotateCcw className="h-4 w-4" />{message.state === "error" && "重填問題"}</Button>}
-            <span className="ml-auto whitespace-nowrap text-xs tabular-nums">{formatMessageTime(message.createdAt)}</span>
+            {compact && <span className="ml-auto whitespace-nowrap text-xs tabular-nums">{formatMessageTime(message.createdAt)}</span>}
           </div>
         )}
       </div>
@@ -1177,7 +1177,7 @@ export function ApiChatConsole({
     previousSelectedApiKeyTargetIdRef.current = nextTargetId;
 
     if (!switchedTarget || conversationHydratingRef.current) return;
-    if (sameKeyModeSwitch) return;
+    if (sameKeyModeSwitch) { setConnectionState(null); return; }
 
     invalidateConversationRequest();
     setConnectionState(null);
@@ -1603,6 +1603,7 @@ export function ApiChatConsole({
   const canReuseQuestion = Boolean(conversationRemoteReadyRef.current && !composerText && !uploadedAttachments.length && !loading && !readingAttachments);
   const reuseQuestion = (question: string) => {
     if (!canReuseQuestion) return;
+    setConnectionState(null);
     setDraftMessage(question);
     setSlashMenuDismissed(true);
     composerTextareaRef.current?.focus({ preventScroll: true });
@@ -2000,7 +2001,7 @@ export function ApiChatConsole({
     } catch (error) {
       if (requestGenerationRef.current !== requestGeneration) return;
       const errorMessage = error instanceof Error ? error.message : "資料查詢失敗";
-      const queryError = compactChat && model === OPENAI_ON_DEMAND_MODEL && error instanceof AiRequestFailure && error.kind === "model-access"
+      const queryError = model === OPENAI_ON_DEMAND_MODEL && onSelectApiKeyTarget && availableApiKeyTargets.some(target => target.model === OPENAI_STANDARD_CHAT_MODEL) && error instanceof AiRequestFailure && error.kind === "model-access"
         ? `${model}：此 API Key 尚未開通模型權限。\n\n本次單次使用已結束。重新提問會使用上方目前選擇的模型。`
         : `API 呼叫失敗：${errorMessage}`;
       if (retrievingMaintenance) {
@@ -2019,8 +2020,7 @@ export function ApiChatConsole({
           "error",
         ), materialSpecs },
       ]);
-      if (compactChat) setConnectionState(null);
-      else toast.error(retrievingMaintenance ? "維修資料檢索失敗" : "資料查詢失敗");
+      setConnectionState(null);
     } finally {
       if (requestGenerationRef.current === requestGeneration) {
         if (specReadController.current === specController) specReadController.current = null;
@@ -3287,7 +3287,7 @@ export function ApiChatConsole({
                   const previous = messages[index - 1];
                   return <MessageCard
                     key={message.id} message={message} materialSpecsAllowed={materialSpecsAllowed} compact={compactChat}
-                    priorQuestion={compactChat && previous?.role === "user" ? stripAttachmentMarkers(previous.content).trim() : undefined}
+                    priorQuestion={previous?.role === "user" ? stripAttachmentMarkers(previous.content).trim() : undefined}
                     canReuseQuestion={canReuseQuestion} onReuseQuestion={reuseQuestion}
                   />;
                 })
