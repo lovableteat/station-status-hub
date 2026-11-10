@@ -1,0 +1,82 @@
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import test from "node:test";
+const { loader, database } = createRequire(import.meta.url)("./support/renderHarness.cjs");
+
+const record = (id, provider, model, baseUrl, patch = {}) => ({ id, key_name: id, api_key: `qa-secret-${id}`, is_active: true, expires_at: null,
+  permissions: { read: true, write: true, extra: "keep", metadata: { provider, model, baseUrl, editable: false, extra: "keep" } }, ...patch });
+const rows = [record("openai", "openai", "gpt-5.4", "https://api.openai.com/v1"), record("gemini", "gemini", "gemini-2.5-flash", "https://generativelanguage.googleapis.com/v1beta"),
+  record("claude", "anthropic", "qa-claude", "https://api.anthropic.com/v1"), record("custom", "openai-compatible", "qa-custom", "https://example.invalid/v1"),
+  record("off", "openai", "qa", "https://example.invalid", { is_active: false }), record("expired", "openai", "qa", "https://example.invalid", { expires_at: "2000-01-01" }),
+  record("bad-date", "openai", "qa", "https://example.invalid", { expires_at: "invalid" }), record("denied", "openai", "qa", "https://example.invalid", { permissions: { read: false } }),
+  record("empty", "openai", "", "https://example.invalid"), record("no-provider", "", "qa", "https://example.invalid"), record("no-route", "openai", "qa", "")];
+const mapping = { headerRow: 1, partNumber: 1, mpn: 2, manufacturer: 3, description: 4, qty: 5, refs: 6 };
+const before = { name: "Old", rows: [["NV PN", "MPN", "Maker", "Part", "Qty", "Refs"], ["001", "KEEP", "Maker", "Part", "1", "R1"], ["002", "OLD", "Maker", "Part", "1", "R2"]] };
+const after = { name: "New", rows: [before.rows[0], ["001", "KEEP", "Maker", "Part", "2", "R1,R3"], ["003", "NEW", "Maker", "Part", "1", "R4"]] };
+function load({ queryError = null, transport = async () => { throw new Error("Unexpected provider call"); } } = {}) {
+  return loader({ globals: { Response, Headers, TextEncoder, TextDecoder }, mocks: {
+    "@/integrations/supabase/client": { supabase: database(() => ({ data: rows, error: queryError })) },
+    "../api-management/aiUsageTelemetry": { trackedProviderFetch: transport },
+  } })("src/components/material-requests/nvBomCompareAi.ts");
+}
+function requestInput(call) {
+  const body = JSON.parse(call.init.body);
+  return JSON.parse(call.provider === "gemini" ? body.contents.at(-1).parts[0].text : body.messages.at(-1).content);
+}
+function response(provider, content) {
+  const text = JSON.stringify(content);
+  const payload = provider === "gemini" ? { candidates: [{ content: { parts: [{ text }] }, finishReason: "STOP" }] }
+    : provider === "anthropic" ? { content: [{ type: "text", text }], stop_reason: "end_turn" }
+    : { choices: [{ message: { content: text }, finish_reason: "stop" }] };
+  return new Response(JSON.stringify(payload), { status: 200 });
+}
+
+test("NV model choices expand chat targets while retaining key identity, permissions and saved choices", async () => {
+  const original = JSON.stringify(rows);
+  const models = await load().loadNvBomModels();
+  assert.equal(models.length, 7);
+  assert.equal(new Set(models.map(item => item.id)).size, 7);
+  assert.deepEqual(Array.from(new Set(models.map(item => item.record.id))), ["openai", "gemini", "claude", "custom"]);
+  for (const saved of rows.slice(0, 4)) assert.ok(models.some(item => item.id === saved.id && item.record.permissions.metadata.model === saved.permissions.metadata.model));
+  for (const model of models) {
+    assert.equal(model.record.permissions.read, true); assert.equal(model.record.permissions.write, true);
+    assert.equal(model.record.permissions.extra, "keep"); assert.equal(model.record.permissions.metadata.extra, "keep");
+    assert.equal(model.record.permissions.metadata.editable, false);
+    assert.ok(model.label.endsWith(model.record.permissions.metadata.model));
+  }
+  assert.ok(models.some(item => item.record.permissions.metadata.model === "gpt-6.1-sol"));
+  assert.ok(models.some(item => item.record.permissions.metadata.model === "gemini-3.8-flash"));
+  assert.equal(models.filter(item => item.record.permissions.metadata.model === "gemini-2.5-flash").length, 1);
+  assert.equal(JSON.stringify(rows), original, "adding choices must not rewrite saved key settings");
+});
+
+test("NV model load failure remains explicit instead of returning an empty success", async () => {
+  await assert.rejects(load({ queryError: new Error("QA denied") }).loadNvBomModels(), /無法讀取可用的 AI 服務/);
+});
+
+test("every NV choice sends its own model with the original key id through mapping and difference review", async () => {
+  const calls = [];
+  const service = load({ transport: async call => {
+    calls.push(call);
+    const body = JSON.parse(call.init.body), input = requestInput(call);
+    if (call.provider === "gemini") assert.ok(call.url.includes(`/models/${call.model}:generateContent`));
+    else assert.equal(body.model, call.model);
+    return response(call.provider, input.items ? { items: input.items.map(item => ({ id: item.id, action: `核對 ${item.kind}`, note: "來源列核對" })) } : { before: mapping, after: mapping, warnings: [] });
+  } });
+  const models = await service.loadNvBomModels();
+  assert.equal(models.length, 7);
+  for (const model of models) {
+    const start = calls.length, partial = [];
+    const result = await service.runNvBomComparison({ before, after, model, signal: new AbortController().signal, onProgress() {}, onResult: value => partial.push(value) });
+    assert.equal(calls.length - start, 2);
+    for (const call of calls.slice(start)) {
+      assert.equal(call.apiKeyId, model.record.id); assert.equal(call.model, model.record.permissions.metadata.model);
+      assert.equal(call.source, "ai-chat");
+    }
+    assert.equal(result.modelId, model.id); assert.equal(result.modelLabel, model.label);
+    assert.equal(result.reviewed, 3); assert.equal(partial.length, 2);
+    assert.deepEqual(Array.from(result.diff.changes, item => item.kind).sort(), ["added", "changed", "removed"]);
+    assert.ok(result.diff.changes.every(item => item.advice && item.aiNote));
+    assert.equal(result.diff.changes.find(item => item.kind === "added").after.partNumber, "003");
+  }
+});
