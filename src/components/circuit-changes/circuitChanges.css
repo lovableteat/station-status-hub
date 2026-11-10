@@ -530,8 +530,8 @@
 /* 官方版本 cards share the frame. */
 .circuit-official-current[data-configured="true"], .circuit-official-choose, .circuit-official-history { border-color: var(--circuit-frame); background: hsl(var(--card)); }
 .circuit-official-current { background: hsl(var(--card)); }
-/* Framed panels need their gaps: below 1600px the form column is 400px so 1440 keeps the drawings side by side. */
-@media (min-width: 1024px) and (max-width: 1599px) { .circuit-workspace { --circuit-detail-width: minmax(360px, 400px); } }
+/* Framed panels need their gaps: below 1600px the form column is 390px (the dialog is 34px narrower than the window since a3c5dacd) so 1440 keeps the drawings side by side. */
+@media (min-width: 1024px) and (max-width: 1599px) { .circuit-workspace { --circuit-detail-width: minmax(360px, 390px); } }
 .circuit-item-navigation > button:has(> .circuit-history-word) { gap: 0; }
 
 /* Problem form in two numbered steps (2026-11-11): ① 標記問題 by the reviewer, ② 回報改善 by the person who draws.

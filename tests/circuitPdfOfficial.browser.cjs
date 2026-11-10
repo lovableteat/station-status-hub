@@ -32,7 +32,7 @@ async function headerFits(page, width) {
   await page.waitForFunction(() => {
     const frame = document.querySelector('[data-testid="circuit-changes-dialog"]')?.getBoundingClientRect();
     const actions = document.querySelector('.circuit-header-actions')?.getBoundingClientRect();
-    return frame && actions && Math.abs(frame.width - (innerWidth - (innerWidth >= 1024 ? 24 : 0))) <= 1 && frame.left >= 0 && frame.right <= innerWidth + 1 && actions.left >= 0 && actions.right <= innerWidth + 1;
+    return frame && actions && Math.abs(frame.width - (innerWidth - (innerWidth >= 1024 ? 34 : 0))) <= 1 && frame.left >= 0 && frame.right <= innerWidth + 1 && actions.left >= 0 && actions.right <= innerWidth + 1;
   }, undefined, { timeout: 3000 });
   const geometry = await dialog(page).locator('.circuit-header-actions').evaluate(node => {
     const r = node.getBoundingClientRect();
