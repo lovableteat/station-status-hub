@@ -23,6 +23,9 @@ const cloud = new Map([
   [account, [row('conversation-active-workspace', '帳號 A 目前對話', '帳號 A 的既有問題'), row('history-a', '帳號 A 歷史對話', '歷史 A 問題')]],
   [secondAccount, [row('conversation-active-workspace', '帳號 B 目前對話', '帳號 B 的既有問題'), row('history-b', '帳號 B 歷史對話', '歷史 B 問題')]],
 ]);
+if (new URLSearchParams(location.search).has('qaModelError')) {
+  cloud.set(account, [{ ...row('conversation-active-workspace', '模型錯誤回復驗證', ''), messages: [], provider: 'openai', model: 'gpt-5.4', key_label: '隔離測試 OpenAI' }]);
+}
 if(contextQa) {
   const saved=row('conversation-active-workspace','PDF 與上文接續驗證','最初指定的料件是 QA-731，額定電流請見 PDF');
   saved.messages[0].attachments=[{id:'qa-pdf',name:'QA-731.pdf',kind:'file',mimeType:'application/pdf',size:historyPdf.length,storagePath:historyPath}];
@@ -53,8 +56,22 @@ function query(run) {
   return { abortSignal: () => promise, then: promise.then.bind(promise) };
 }
 export const supabase = {
+  functions: { async invoke(name, {body}) {
+    if (!new URLSearchParams(location.search).has('qaModelError') || name !== 'openai-proxy') throw new Error('Only isolated OpenAI proxy requests are allowed');
+    const request = body.request;
+    window.__aiModelErrorQA.requests.push(structuredClone(request));
+    await new Promise(resolve => setTimeout(resolve,100));
+    const denied = request.model === 'gpt-6.1-sol';
+    const data = denied
+      ? { error: { code: 'model_not_found', message: 'The model `gpt-6.1-sol` does not exist or you do not have access to it.' } }
+      : { choices: [{ message: { role: 'assistant', content: '1 × 1 = 1（隔離測試成功）' } }] };
+    return {data,error:denied?new Error('Fixture model access denied'):null,response:new Response(JSON.stringify(data),{status:denied?403:200,headers:{'Content-Type':'application/json'}})};
+  } },
   storage:{from:()=>({
-    async upload(path,blob){if(!path.startsWith(`${account}/`))return {error:new Error('wrong owner')};attachmentFiles.set(path,blob);return {error:null};},
+    async upload(path,blob){
+      if (new URLSearchParams(location.search).has('qaModelError') && window.__aiModelErrorQA.failAttachmentUpload) return {error:new Error('Fixture attachment upload failed')};
+      if(!path.startsWith(`${account}/`))return {error:new Error('wrong owner')};attachmentFiles.set(path,blob);return {error:null};
+    },
     async download(path){return path.startsWith(`${account}/`)&&attachmentFiles.has(path)?{data:attachmentFiles.get(path),error:null}:{data:null,error:new Error('missing private attachment')};},
     async remove(paths){paths.filter(path=>path.startsWith(`${account}/`)).forEach(path=>attachmentFiles.delete(path));return {error:null};},
   })},

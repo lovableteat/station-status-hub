@@ -215,3 +215,46 @@ test('PDF finishing after a model target starts a new conversation cannot attach
     assert.doesNotMatch(text(f.root),/舊對話.pdf/);
   } finally {await act(async()=>f.root.unmount());}
 });
+
+test('selected GPT-5.4 sends GPT-5.4 even when the same key also offers Sol',async()=>{
+  const key={...record,key_name:'Test OpenAI',permissions:{metadata:{provider:'openai',model:'gpt-5.4',baseUrl:'https://api.openai.com/v1'}}};
+  const openaiTargets=['gpt-5.4','gpt-6.1-sol'].map(model=>target(model,key));
+  const requests=[];
+  const fetch=async(url,init)=>{
+    requests.push({url,body:JSON.parse(init.body)});
+    return new Response(JSON.stringify({choices:[{message:{content:'GPT-5.4 answer'}}]}),{status:200});
+  };
+  const f=await fixture(fetch,openaiTargets,browser(),{props:{selectedApiKey:key,selectedModel:'gpt-5.4',selectedApiKeyTargetId:openaiTargets[0].id},mocks:{'./aiProviderTransport':{fetchAiProvider:(_provider,url,init)=>fetch(url,init)}}});
+  try{
+    await f.draft('1*1');await act(async()=>f.send().props.onClick());await flush();
+    assert.equal(requests.length,1);
+    assert.equal(requests[0].url,'https://api.openai.com/v1/chat/completions');
+    assert.equal(requests[0].body.model,'gpt-5.4');
+    assert.match(text(f.root),/GPT-5.4 answer/);
+  }finally{await act(async()=>f.root.unmount());}
+});
+
+test('an explicitly selected Sol entitlement rejection stops after one real request body',async()=>{
+  const key={...record,key_name:'Test OpenAI',permissions:{metadata:{provider:'openai',model:'gpt-5.4',baseUrl:'https://api.openai.com/v1'}}};
+  const openaiTargets=['gpt-5.4','gpt-6.1-sol'].map(model=>target(model,key));
+  const requests=[], selections=[];
+  const fetch=async(url,init)=>{
+    requests.push(JSON.parse(init.body));
+    return new Response(JSON.stringify({error:{code:'model_not_found',message:'Project `proj_private` does not have access to model `gpt-6.1-sol`'}}),{status:403});
+  };
+  const f=await fixture(fetch,openaiTargets,browser(),{props:{selectedApiKey:key,selectedModel:'gpt-6.1-sol',selectedApiKeyTargetId:openaiTargets[1].id,onSelectApiKeyTarget:id=>selections.push(id)},mocks:{'./aiProviderTransport':{fetchAiProvider:(_provider,url,init)=>fetch(url,init)}}});
+  try{
+    await f.draft('1*1');await act(async()=>f.send().props.onClick());await flush();
+    assert.deepEqual(requests.map(request=>request.model),['gpt-6.1-sol']);
+    assert.match(text(f.root),/gpt-6.1-sol.*尚未開通/);
+    assert.doesNotMatch(text(f.root),/proj_private/);
+    assert.deepEqual(selections,[openaiTargets[0].id],'Sol remains a single-use choice');
+    assert.equal(f.root.root.findAll(node=>typeof node.type==='function'&&node.type.name==='ConnectionBanner').length,0,'mobile errors appear only inside the conversation');
+    assert.match(text(f.root),/重新提問會使用上方目前選擇的模型/);
+    const reuse=f.root.root.find(node=>node.type==='stub'&&node.props['aria-label']==='重填這個問題');
+    assert.match(text(f.root),/重填問題/);
+    await act(async()=>reuse.props.onClick());
+    assert.equal(f.root.root.find(node=>node.props['aria-label']==='輸入查詢內容').props.value,'1*1');
+    assert.equal(requests.length,1,'refilling never sends or charges another request');
+  }finally{await act(async()=>f.root.unmount());}
+});
