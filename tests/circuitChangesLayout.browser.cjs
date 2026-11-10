@@ -26,10 +26,12 @@ async function compareDrawings(page, dialog) {
     const file = path.join(evidence, name); fs.writeFileSync(file, Buffer.from(pdf.output('arraybuffer')));
     await panel.locator('input[aria-label="選擇原理圖 PDF"]').setInputFiles(file); await rendered();
     if (name.startsWith('Official')) {
-      await panel.getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
-      await panel.getByRole('button', { name: `設為官方版本：${name}`, exact: true }).click();
-      await panel.getByRole('button', { name: `確認設為官方版本：${name}`, exact: true }).click();
-      await page.keyboard.press('Escape');
+      await dialog.getByRole('tab', { name: /^官方版本/ }).click();
+      await dialog.getByRole('button', { name: /^(設定|更換)官方版本$/ }).click();
+      await dialog.getByRole('button', { name: `設為官方版本：${name}`, exact: true }).click();
+      await dialog.getByRole('button', { name: '確定更換', exact: true }).click();
+      await dialog.locator('.circuit-official-history tbody tr').first().waitFor();
+      await dialog.getByRole('tab', { name: /^線路 Review/ }).click();
     }
   }
   // AI 比對 puts the official version beside the working one.
