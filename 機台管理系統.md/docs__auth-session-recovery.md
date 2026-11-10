@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/auth-session-recovery.md`；程式參考基準：`d749e1bbbe536e75901441a542e6e85eafcbdff6`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/auth-session-recovery.md`；程式參考基準：`3397ccb7b2aceb7b0347feb0f36cca840fab7c99`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 登入狀態恢復
 
