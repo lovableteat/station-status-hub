@@ -6,6 +6,12 @@ permissions:
   contents: read
   pages: write
   id-token: write
+# One Pages deployment at a time. A push that lands while another deploy is running waits for it
+# instead of failing with "in progress deployment"; a running deploy is never cancelled, and when
+# several pushes queue up only the newest one is deployed.
+concurrency:
+  group: pages
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
