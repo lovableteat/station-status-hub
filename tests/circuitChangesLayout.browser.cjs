@@ -27,14 +27,13 @@ async function compareDrawings(page, dialog) {
     await panel.locator('input[aria-label="選擇原理圖 PDF"]').setInputFiles(file); await rendered();
     if (name.startsWith('Official')) {
       await panel.getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
-      await panel.getByRole('button', { name: `設為官方基準：${name}`, exact: true }).click();
-      await panel.getByRole('button', { name: `確認設為官方基準：${name}`, exact: true }).click();
+      await panel.getByRole('button', { name: `設為官方版本：${name}`, exact: true }).click();
+      await panel.getByRole('button', { name: `確認設為官方版本：${name}`, exact: true }).click();
       await page.keyboard.press('Escape');
     }
   }
-  const compare = panel.getByRole('button', { name: '對照官方基準', exact: true });
-  await compare.waitFor();
-  if (await compare.getAttribute('aria-pressed') !== 'true') await compare.click();
+  // AI 比對 puts the official version beside the working one.
+  await dialog.getByRole('tab', { name: /^AI 比對/ }).click();
   await page.waitForFunction(() => document.querySelectorAll('.circuit-pdf-surface').length === 2); await rendered();
 }
 
@@ -89,10 +88,10 @@ async function geometry(page, dialog, width, height) {
         await page.getByTestId('material-circuit-changes').filter({ visible: true }).tap();
         const dialog = page.getByTestId('circuit-changes-dialog'); await dialog.waitFor();
         if (width === 1920) await compareDrawings(page, dialog);
-        await dialog.getByRole('textbox', { name: '修改標題', exact: true }).fill('QA 窄欄 Review ' + width);
-        await dialog.getByRole('textbox', { name: '修改說明', exact: true }).fill('把 R2301 改為 4.7K，保留原本 Net 名稱。');
-        await dialog.getByRole('button', { name: '送出 Review', exact: true }).tap();
-        const note = dialog.getByRole('textbox', { name: 'Review 意見或退回原因', exact: true }); await note.waitFor();
+        await dialog.getByRole('textbox', { name: '標題', exact: true }).fill('QA 窄欄 Review ' + width);
+        await dialog.getByRole('textbox', { name: '改善說明', exact: true }).fill('把 R2301 改為 4.7K，保留原本 Net 名稱。');
+        await dialog.getByRole('button', { name: '回報改善', exact: true }).tap();
+        const note = dialog.getByRole('textbox', { name: '主管意見或退回原因', exact: true }); await note.waitFor();
         await note.fill('請補上修改後的接線位置，並核對訊號名稱。'.repeat(8));
         let collapse;
         if (width >= 1024) {
@@ -100,7 +99,7 @@ async function geometry(page, dialog, width, height) {
           const pdf = dialog.getByTestId('circuit-pdf-panel');
           const beforeWidth = await pdf.evaluate(node => node.getBoundingClientRect().width);
           const noteText = await note.inputValue();
-          const titleText = await detail.getByRole('textbox', { name: '修改標題', exact: true }).inputValue();
+          const titleText = await detail.getByRole('textbox', { name: '標題', exact: true }).inputValue();
           const scroll = detail.locator('.circuit-detail-scroll');
           const scrollTop = await scroll.evaluate(node => { node.scrollTop = Math.min(140, node.scrollHeight - node.clientHeight); return node.scrollTop; });
           const originalListCollapsed = await dialog.locator('.circuit-workspace').getAttribute('data-list-collapsed') === 'true';
@@ -136,7 +135,7 @@ async function geometry(page, dialog, width, height) {
             const restoredScrollTop = await scroll.evaluate(node => node.scrollTop);
             assert.ok(Math.abs(restoredScrollTop - scrollTop) <= 1, `Detail scroll position must be restored: ${scrollTop} -> ${restoredScrollTop} (cycle ${cycle})`);
             assert.equal(await note.inputValue(), noteText);
-            assert.equal(await detail.getByRole('textbox', { name: '修改標題', exact: true }).inputValue(), titleText);
+            assert.equal(await detail.getByRole('textbox', { name: '標題', exact: true }).inputValue(), titleText);
             assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('circuit-changes-layout:v1')).detail), true);
           }
           if (width === 1920) {
@@ -147,6 +146,8 @@ async function geometry(page, dialog, width, height) {
             assert.equal(await detail.isVisible(), false, 'The saved desktop collapse survives a full reload');
             await page.setViewportSize({ width: 390, height: 884 });
             await page.waitForFunction(() => !document.querySelector('[data-testid="circuit-change-detail"]').hidden);
+            // The window remembers AI 比對, which opens on the comparison on a phone; its back arrow shows the list.
+            if (await dialog.getByTestId('circuit-pdf-panel').isVisible()) await dialog.getByRole('button', { name: '返回修改內容', exact: true }).tap();
             await dialog.getByTestId('circuit-change-item').first().tap();
             await detail.waitFor({ state: 'visible' });
             assert.equal(await dialog.getByRole('button', { name: '收合修改內容', exact: true }).count(), 0);
@@ -164,7 +165,7 @@ async function geometry(page, dialog, width, height) {
         await page.waitForFunction(() => document.querySelector('[data-testid="circuit-changes-dialog"]').getBoundingClientRect().bottom <= innerHeight + 1);
         const short = await geometry(page, dialog, width, 500);
         await page.screenshot({ path: path.join(evidence, `short-${width}.png`) });
-        await dialog.getByRole('button', { name: '退回補充', exact: true }).tap();
+        await dialog.getByRole('button', { name: '退回重改', exact: true }).tap();
         await dialog.locator('.circuit-returned').waitFor();
         assert.ok((await dialog.locator('.circuit-returned').innerText()).includes('請補上修改後的接線位置'));
         if (width < 1024) {

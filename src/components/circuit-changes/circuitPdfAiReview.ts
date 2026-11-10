@@ -96,7 +96,7 @@ async function readReviewPage(input: CircuitPdfReviewPage, signal: AbortSignal) 
 
 export async function runCircuitPdfAiReview({ official, working, model, userName, signal }: { official: CircuitPdfReviewPage; working: CircuitPdfReviewPage; model: SpecFillModel; userName: string; signal: AbortSignal }): Promise<CircuitPdfAiReviewReport> {
   const target = { officialVersionId: official.id, workingVersionId: working.id, officialPage: official.page, workingPage: working.page };
-  if (!validTarget(target)) throw new Error("請選擇不同的官方基準與工作版本，以及有效的對應頁碼。");
+  if (!validTarget(target)) throw new Error("請選擇不同的官方版本與工作版本，以及有效的對應頁碼。");
   const [{ normalizeApiKeyPermissions }, { buildProviderChatRequest, parseProviderChatResponse, redactSensitiveText }, { trackedProviderFetch }, { classifyAiFailure }] = await Promise.all([
     import("../api-management/apiKeyHelpers"), import("../api-management/aiProviderCatalog"), import("../api-management/aiUsageTelemetry"), import("../api-management/aiRequestRecovery"),
   ]);

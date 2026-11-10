@@ -48,7 +48,7 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       const dialog=page.getByTestId('circuit-changes-dialog'), guide=page.getByTestId('circuit-usage-guide');
       await dialog.waitFor();
       // 1. The form and a place for pictures are on screen straight away; none of this has written anything.
-      const title=dialog.getByRole('textbox',{name:'修改標題',exact:true}); await title.waitFor();
+      const title=dialog.getByRole('textbox',{name:'標題',exact:true}); await title.waitFor();
       const addBefore=dialog.getByRole('button',{name:'加入修改前圖片',exact:true});
       await addBefore.scrollIntoViewIfNeeded();
       const target=await addBefore.boundingBox();
@@ -56,21 +56,21 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       if(!phone) assert.ok(await dialog.getByRole('button',{name:'加入修改後圖片',exact:true}).isVisible(), 'before and after sit side by side');
       assert.ok((await dialog.locator('.circuit-image-column[data-side="before"]').innerText()).includes('貼上會加到這裡'));
       assert.equal((await addBefore.innerText()).includes('Ctrl+V'), !phone, 'a phone is not told to press Ctrl+V or drag');
-      assert.equal(await dialog.getByRole('button',{name:/開始另一次改版|新增修改/}).filter({visible:true}).count(), phone ? 0 : 2, 'one button per action, not several names for the same form');
+      assert.equal(await dialog.getByRole('button',{name:/新增改版清單|新增問題/}).filter({visible:true}).count(), phone ? 0 : 1, 'one button per action: 新增問題 here, 新增改版清單 in the 更多 menu');
       const initialState=await state(origin);
       assert.equal(initialState.sets.length+initialState.items.length, 0);
       await page.screenshot({path:path.join(evidence,`first-open-${width}.png`)});
       // 2. The guide opens and closes without creating data.
-      await dialog.getByRole('button',{name:'使用說明',exact:true}).tap();
+      await dialog.getByRole('button',{name:'更多',exact:true}).tap();await dialog.page().getByRole('menuitem',{name:'使用說明',exact:true}).tap();
       await guide.getByRole('heading',{name:'線路修改怎麼用',exact:true}).waitFor();
       assert.ok((await guide.innerText()).includes('Review'));
       await page.screenshot({path:path.join(evidence,`guide-${width}.png`)});
       await guide.getByRole('button',{name:'關閉使用說明',exact:true}).tap(); await guide.waitFor({state:'hidden'});
       assert.equal((await state(origin)).sets.length, 0); assert.equal((await state(origin)).items.length, 0);
-      const batch=page.getByRole('dialog').filter({has:page.getByRole('heading',{name:'建立改版紀錄',exact:true})});
-      if(phone) { await dialog.getByRole('button',{name:'返回修改清單',exact:true}).tap(); await dialog.getByText('還沒有修改；在右邊填寫就會建立第一項',{exact:true}).waitFor(); assert.equal(await dialog.getByTestId('circuit-change-unsaved').count(),0); }
+      const batch=page.getByRole('dialog').filter({has:page.getByRole('heading',{name:'新增改版清單',exact:true})});
+      if(phone) { await dialog.getByRole('button',{name:'返回問題清單',exact:true}).tap(); await dialog.getByText('還沒有問題；在右邊填寫就會建立第一項',{exact:true}).waitFor(); assert.equal(await dialog.getByTestId('circuit-change-unsaved').count(),0); }
       // 3. Naming a batch is optional: the form can be cancelled, or submitted with Enter.
-      await dialog.getByRole('button',{name:'開始另一次改版',exact:true}).tap();
+      await dialog.getByRole('button',{name:'更多',exact:true}).tap();await dialog.page().getByRole('menuitem',{name:'新增改版清單',exact:true}).tap();
       await batch.waitFor();
       const batchName=batch.getByRole('textbox',{name:'改版紀錄名稱',exact:true});
       assert.equal(await batchName.inputValue(),'V2 → V3 線路修改','the batch name is filled in from the version on screen');
@@ -80,8 +80,8 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
         await page.setViewportSize({width,height:500});
         await batchName.focus();
         assert.ok(await batchName.evaluate(input=>document.activeElement===input && parseFloat(getComputedStyle(input).fontSize)>=16));
-        await batch.getByRole('button',{name:'建立改版紀錄',exact:true}).scrollIntoViewIfNeeded();
-        const createBox=await batch.getByRole('button',{name:'建立改版紀錄',exact:true}).boundingBox();
+        await batch.getByRole('button',{name:'建立清單',exact:true}).scrollIntoViewIfNeeded();
+        const createBox=await batch.getByRole('button',{name:'建立清單',exact:true}).boundingBox();
         assert.ok(createBox && createBox.height>=40 && createBox.y+createBox.height<=501);
         await page.setViewportSize({width,height:884});
       }
@@ -93,7 +93,7 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
         await batch.getByRole('button',{name:'取消',exact:true}).tap(); await batch.waitFor({state:'hidden'});
         assert.equal((await state(origin)).sets.length,0);
       }
-      if(phone) await dialog.getByRole('button',{name:'新增修改',exact:true}).tap();
+      if(phone) await dialog.getByRole('button',{name:'新增問題',exact:true}).tap();
       // 4. Typing is all it takes: the change is created, and so is its batch when the user did not make one.
       await title.fill('QA 這筆草稿不因操作說明消失');
       await page.waitForFunction(()=>document.querySelector('.circuit-detail-footer [role="status"]')?.textContent==='已儲存');
@@ -101,10 +101,10 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       assert.equal(created.sets.length,1); assert.equal(created.items.length,1);
       assert.equal(created.sets[0].title, ownBatch ? 'QA 自訂批次 ' + width : 'V2 → V3 線路修改');
       assert.equal(created.items[0].setId, created.sets[0].id); assert.equal(created.items[0].number,1);
-      assert.ok((await dialog.locator('.circuit-next-step').innerText()).includes('修改說明或修改後圖片'), 'what is still missing before review is spelled out');
-      assert.equal(await dialog.getByRole('button',{name:'送出 Review',exact:true}).isDisabled(), true);
+      assert.ok((await dialog.locator('.circuit-next-step').innerText()).includes('改善說明或修改後圖片'), 'what is still missing before review is spelled out');
+      assert.equal(await dialog.getByRole('button',{name:'回報改善',exact:true}).isDisabled(), true);
       // 5. The guide keeps the draft, and its last section and button stay reachable on a short screen.
-      await dialog.getByRole('button',{name:'使用說明',exact:true}).tap(); await guide.waitFor();
+      await dialog.getByRole('button',{name:'更多',exact:true}).tap();await dialog.page().getByRole('menuitem',{name:'使用說明',exact:true}).tap(); await guide.waitFor();
       if(phone) await page.setViewportSize({width,height:500});
       const lastSection=guide.locator('.circuit-guide-scroll > section').last();
       await lastSection.scrollIntoViewIfNeeded();
@@ -126,9 +126,9 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
         await page.setViewportSize({width,height:884});
       }
       // 6. Once the description is there the change can be sent, and nothing overflows sideways.
-      await dialog.getByRole('textbox',{name:'修改說明',exact:true}).fill('上拉電阻改為 4.7K');
+      await dialog.getByRole('textbox',{name:'改善說明',exact:true}).fill('上拉電阻改為 4.7K');
       await page.waitForFunction(()=>document.querySelector('.circuit-detail-footer [role="status"]')?.textContent==='已儲存');
-      assert.equal(await dialog.getByRole('button',{name:'送出 Review',exact:true}).isEnabled(), true);
+      assert.equal(await dialog.getByRole('button',{name:'回報改善',exact:true}).isEnabled(), true);
       assert.equal((await state(origin)).items.length,1);
       // 7. Pictures: two pasted screenshots become before and after without choosing anything; a phone picks files into the open tab.
       const paneCount=(side,count)=>page.waitForFunction(({side,count})=>document.querySelector(`.circuit-image-column[data-side="${side}"]`)?.dataset.imageCount===String(count),{side,count});
@@ -153,7 +153,7 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       assert.deepEqual((await state(origin)).items[0].content.images.map(image=>[image.name,image.side]), phone ? [['phone-before.png','before']] : [['before-shot.png','before'],['after-shot.png','after']]);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),width);
       await page.screenshot({path:path.join(evidence,`first-item-${width}.png`)});
-      if(phone) { await dialog.getByRole('button',{name:'返回修改清單',exact:true}).tap(); await dialog.getByTestId('circuit-change-item').waitFor(); }
+      if(phone) { await dialog.getByRole('button',{name:'返回問題清單',exact:true}).tap(); await dialog.getByTestId('circuit-change-item').waitFor(); }
       await dialog.getByRole('button',{name:'關閉線路修改',exact:true}).tap(); await dialog.waitFor({state:'hidden'});
       assert.deepEqual(errors,[]);
       report.checks.push({width,result:'passed',checks:['first open shows the form and a large picture target without writing','one button per action','help opens/closes without creating data','batch form is prefilled and optional', ownBatch ? 'Enter creates the custom batch and the first change goes into it' : 'typing creates the change and its default batch','missing content is named and review stays disabled until it is there', phone ? 'a picked file lands in the open tab and stays on screen' : 'two pasted screenshots become before and after without choosing a target','help preserves draft','guide last section and footer reachable',...(phone ? ['short viewport form focus and create reachable','short viewport guide scroll and footer reachable','focused editor keeps footer visible'] : []),'no horizontal overflow','return and close work']});

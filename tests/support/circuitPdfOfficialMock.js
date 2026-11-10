@@ -11,3 +11,9 @@ async function officialRequest(seriesId, documentId) {
 }
 export const loadCircuitPdfOfficial = seriesId => officialRequest(seriesId);
 export const saveCircuitPdfOfficial = (seriesId, documentId) => officialRequest(seriesId, documentId);
+export async function loadCircuitPdfOfficialHistory(seriesId) {
+  const response = await fetch(`/__circuit/pdf-official-history?${new URLSearchParams({ seriesId })}`, { headers: { 'x-qa-account': account() } });
+  const result = await response.json();
+  if (!response.ok) throw Error(result.error || '官方版本紀錄讀取失敗');
+  return result.data;
+}

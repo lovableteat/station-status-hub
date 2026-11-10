@@ -41,7 +41,11 @@ function remember(path: string, bytes: ArrayBuffer) {
 const localFiles = new Map<string, File>();
 const positionKey = (userId: string, seriesId: string) => `circuit-pdf-position:v1:${userId}:${seriesId}`;
 
-export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName }: { open: boolean; seriesId: string; canEdit: boolean; userId: string; userName: string }): CircuitPdfModel {
+/**
+ * `autoCompareOfficial` puts the official version beside every working version that opens. The 線路修改 window turns it on
+ * only in its AI 比對 task; checking a drawing in 線路 Review shows the drawing alone unless the user picks a comparison.
+ */
+export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, autoCompareOfficial = true }: { open: boolean; seriesId: string; canEdit: boolean; userId: string; userName: string; autoCompareOfficial?: boolean }): CircuitPdfModel {
   const [registry, setRegistry] = useState<CircuitPdfRegistry>(empty);
   const [officialSelection, setOfficialSelection] = useState<CircuitPdfOfficial | null>(null);
   const [loading, setLoading] = useState(false);
@@ -174,9 +178,9 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName }: { 
   }, []);
 
   useEffect(() => {
-    if (!official || !active || official.id === active.id) return;
+    if (!autoCompareOfficial || !official || !active || official.id === active.id) return;
     setCompareId(official.id); setCompareOffset(0);
-  }, [official?.id, active?.id]);
+  }, [official?.id, active?.id, autoCompareOfficial]);
 
   useEffect(() => {
     if (!open) return;
@@ -302,10 +306,10 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName }: { 
   }, [canEdit, queue]);
 
   const setOfficial = useCallback(async (id: string) => {
-    if (!canEdit) throw new Error("目前為檢視權限，無法設定官方基準。");
+    if (!canEdit) throw new Error("目前為檢視權限，無法設定官方版本。");
     const row = registryRef.current.documents.find(item => item.id === id && !item.removedAt);
     if (!row) throw new Error("這個 PDF 版本已不在清單中，請重新載入。");
-    if (row.localOnly || !row.path) throw new Error("官方基準須使用已存到雲端的 PDF；本機 PDF 仍可作為工作版本。");
+    if (row.localOnly || !row.path) throw new Error("官方版本須使用已存到雲端的 PDF；本機 PDF 仍可作為工作版本。");
     const captured = scopeRef.current;
     const selection = await saveCircuitPdfOfficial(seriesId, id);
     if (scopeRef.current === captured) { setOfficialSelection(selection); setError(""); }
@@ -314,7 +318,7 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName }: { 
   const removeDocument = useCallback(async (id: string) => {
     const row = registryRef.current.documents.find(item => item.id === id);
     if (!row || !canEdit) return;
-    if (officialRef.current?.id === id) throw new Error("官方基準不能刪除。請先把另一份 PDF 設為官方基準。");
+    if (officialRef.current?.id === id) throw new Error("官方版本不能刪除。請先把另一份 PDF 設為官方版本。");
     const at = now();
     await queue({ documents: [{ ...row, removedAt: at, updatedAt: at }] }, true);
     if (activeId === id) { placed.current = ""; setActiveId(""); }

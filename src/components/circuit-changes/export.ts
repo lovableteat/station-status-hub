@@ -3,7 +3,7 @@ import { createCircuitImageUrls } from "./files";
 import { loadCircuitChangeEventsForExport, loadCircuitChangeItemsForExport } from "./storage";
 
 const date = (value: string) => new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
-const EVENT_LABELS: Record<string, string> = { created: "建立", edited: "修改", submit: "送出 Review", approve: "確認", request_changes: "退回補充", comment: "留言" };
+const EVENT_LABELS: Record<string, string> = { created: "建立", edited: "修改", submit: "回報改善", approve: "確認結案", request_changes: "退回重改", comment: "留言" };
 
 export function circuitChangeExportRows(items: CircuitChangeItem[], events: CircuitChangeEvent[] = []) {
   const creators = new Map(events.filter(event => event.type === "created").map(event => [event.itemId, event.actorName || event.actorId]));
@@ -41,7 +41,7 @@ async function imagePreview(image: CircuitImage, url: string) {
 }
 
 export async function exportCircuitChangeList(set: CircuitChangeSet, source: CircuitChangeItem[], suppliedEvents?: CircuitChangeEvent[]): Promise<void> {
-  if (!source.length) throw new Error("目前範圍沒有可匯出的修改項目。");
+  if (!source.length) throw new Error("目前範圍沒有可匯出的問題。");
   const ids = source.map(item => item.id);
   const loaded = await loadCircuitChangeItemsForExport(ids);
   const [events, { default: ExcelJS }] = await Promise.all([
@@ -52,11 +52,11 @@ export async function exportCircuitChangeList(set: CircuitChangeSet, source: Cir
   const images = items.flatMap(item => item.content.images), urls = await createCircuitImageUrls(images);
   const workbook = new ExcelJS.Workbook(); workbook.creator = "工作平台"; workbook.created = new Date();
   const summary = workbook.addWorksheet("Change List", { views: [{ state: "frozen", ySplit: 4 }] });
-  summary.addRow([set.title]); summary.addRow(["來源版次", set.fromLabel, "目標版次", set.toLabel]); summary.addRow(["匯出範圍", `${items.length} 項修改／${images.length} 張圖片`, "修改批次 ID", set.id]);
-  summary.addRow(["項目", "修改標題", "狀態", "修訂", "負責人", "修改原因", "修改說明", "Ref", "Net", "頁碼", "圖片數", "建立人", "建立時間（台北）", "最後更新人", "更新時間（台北）"]);
+  summary.addRow([set.title]); summary.addRow(["來源版次", set.fromLabel, "目標版次", set.toLabel]); summary.addRow(["匯出範圍", `${items.length} 個問題／${images.length} 張圖片`, "修改批次 ID", set.id]);
+  summary.addRow(["項目", "標題", "狀態", "修訂", "負責人", "問題說明", "改善說明", "Ref", "Net", "頁碼", "圖片數", "建立人", "建立時間（台北）", "最後更新人", "更新時間（台北）"]);
   summary.addRows(circuitChangeExportRows(items, events)); summary.columns.forEach((column, index) => { column.width = [8, 32, 16, 8, 20, 40, 60, 24, 24, 14, 10, 26, 23, 26, 23][index]; });
   summary.autoFilter = { from: "A4", to: { row: Math.max(4, summary.rowCount), column: 15 } };
-  const history = workbook.addWorksheet("Review 與修改歷史", { views: [{ state: "frozen", ySplit: 1 }] });
+  const history = workbook.addWorksheet("追蹤紀錄", { views: [{ state: "frozen", ySplit: 1 }] });
   history.columns = [{ header: "項目", width: 9 }, { header: "修訂", width: 9 }, { header: "操作", width: 20 }, { header: "操作者", width: 26 }, { header: "時間（台北）", width: 24 }, { header: "意見", width: 70 }];
   const numbers = new Map(items.map(item => [item.id, item.number]));
   events.filter(event => numbers.has(event.itemId) && event.revision <= byId.get(event.itemId)!.revision).forEach(event => history.addRow([numbers.get(event.itemId), event.revision, EVENT_LABELS[event.type] || event.type, event.actorName || event.actorId, date(event.createdAt), event.note]));

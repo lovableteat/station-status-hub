@@ -104,8 +104,8 @@ async function eventually(check, message, timeout = 8000) {
     const a = await createPage(browser, origin, 'A'); sessions.push(a);
     const p = a.page;
     await panel(p).getByRole('button', {name:/上傳原理圖 PDF/}).waitFor();
-    assert.ok(await dialog(p).getByRole('textbox', {name:'修改標題', exact:true}).isVisible(), 'the form stays on screen beside the PDF');
-    assert.equal(await dialog(p).getByRole('button', {name:'PDF 圖面', exact:true}).getAttribute('aria-pressed'), 'true');
+    assert.ok(await dialog(p).getByRole('textbox', {name:'標題', exact:true}).isVisible(), 'the form stays on screen beside the PDF');
+    assert.equal(await dialog(p).getByRole('tab', {name:/^線路 Review/}).getAttribute('aria-selected'), 'true', '線路 Review is the first task');
     await dialog(p).getByRole('button', {name:'展開修改清單', exact:true}).click();
     await dialog(p).locator('.circuit-item-list').waitFor();
     await dialog(p).getByRole('button', {name:'收合修改清單', exact:true}).click();
@@ -189,7 +189,7 @@ async function eventually(check, message, timeout = 8000) {
     assert.equal(await panel(p).locator('.circuit-pdf-offset > span').innerText(), '第 5 頁');
     await panel(p).getByRole('button', {name:'對照頁往前一頁', exact:true}).click();
     assert.equal(await panel(p).locator('.circuit-pdf-offset > span').innerText(), '第 4 頁');
-    await dialog(p).getByRole('button', {name:'新增修改', exact:true}).click();
+    await dialog(p).getByRole('button', {name:'新增問題', exact:true}).click();
     await dialog(p).getByText('填寫後自動建立', {exact:true}).waitFor();
     await panel(p).getByRole('button', {name:'下一頁', exact:true}).click(); await onPage(p, 5); await rendered(p);
     assert.equal(await panel(p).locator('figure[data-pane="compare"] figcaption').innerText(), '自選對照 · 11/07 版 第1天 第 5 頁');
@@ -315,17 +315,17 @@ async function eventually(check, message, timeout = 8000) {
     await dialog(p).locator('.circuit-image-column[data-side="after"]').getByRole('button', {name:/到 PDF 第 5 頁（2026-11-09）/}).click();
     await onPage(p, 5);
     assert.equal(await versionLabel(p), '11/09 版');
-    await dialog(p).getByRole('button', {name:'PDF 圖面', exact:true}).click();
+    await dialog(p).getByRole('tab', {name:/^改善追蹤/}).click();
     await panel(p).waitFor({state:'hidden'});
     assert.equal(await dialog(p).locator('.circuit-workspace').evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length), 2, 'without the PDF the dialog is list | form as before');
-    await dialog(p).getByRole('button', {name:'PDF 圖面', exact:true}).click();
+    await dialog(p).getByRole('tab', {name:/^線路 Review/}).click();
     await panel(p).waitFor();
-    check('P5 opens the picture\'s page; PDF 圖面 closes the pane back to list | form and opens it again');
+    check('P5 opens the picture\'s page; 改善追蹤 shows list | form without the drawing and 線路 Review brings it back');
 
     // --- Phone: the PDF is a pane of its own, framing and finishing are within thumb reach.
     const phone = await createPage(browser, origin, 'A', 390, 844); sessions.push(phone);
     const q = phone.page;
-    await dialog(q).getByRole('button', {name:'PDF 圖面', exact:true}).tap();
+    await dialog(q).getByRole('button', {name:'看圖面', exact:true}).filter({visible:true}).first().tap();
     // This browser has no copy of the 51 MB PDF last opened on the laptop, so it offers the file picker; the phone switches to 11/09.
     await panel(q).getByRole('button', {name:'選擇 PDF 版本', exact:true}).tap();
     await panel(q).getByRole('button', {name:'開啟 11/09 版 Vera_SCH_20261109.pdf', exact:true}).tap();

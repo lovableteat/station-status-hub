@@ -59,7 +59,7 @@ export function CircuitPdfAiReviewSession({ open, onOpenChange, seriesId, userId
     rowsRef.current = next; setRows(next); loadedPages.current.add(target);
   };
   if (!open) return null;
-  if (!validSources || loaded !== scope) return <Dialog open onOpenChange={onOpenChange}><DialogContent><DialogTitle>AI 逐頁初審</DialogTitle><DialogDescription>{!validSources ? "先指定官方基準與另一份工作 PDF。" : error || "正在讀取這兩個版本的初審紀錄…"}</DialogDescription>{error && <Button type="button" onClick={() => setRetry(value => value + 1)}>重試讀取</Button>}</DialogContent></Dialog>;
+  if (!validSources || loaded !== scope) return <Dialog open onOpenChange={onOpenChange}><DialogContent><DialogTitle>AI 比對新舊版</DialogTitle><DialogDescription>{!validSources ? "先指定官方版本與另一份工作 PDF。" : error || "正在讀取這兩個版本的初審紀錄…"}</DialogDescription>{error && <Button type="button" onClick={() => setRetry(value => value + 1)}>重試讀取</Button>}</DialogContent></Dialog>;
   return <CircuitPdfAiReview open onOpenChange={onOpenChange} official={official} working={working} userName={userName} disabled={!canEdit}
     savedReport={rows.find(row => row.report.key === key)?.report} previousReports={rows.map(row => row.report)} onSave={save}
     allPages={{ officialOffset, onLoadPage: loadPage, onSave: savePage }} />;
