@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { withReadDeadline } from "@/lib/readDeadline";
 import { buildApiKeyModelTargets, buildApiKeyPermissions, normalizeApiKeyPermissions, type ApiKeyRecord } from "../api-management/apiKeyHelpers";
-import { GEMINI_FREE_MODEL_PROFILES, buildProviderChatRequest, parseProviderChatResponse, redactSensitiveText } from "../api-management/aiProviderCatalog";
+import { GEMINI_FREE_MODEL_PROFILES, buildProviderChatRequest, parseProviderChatResponse, redactSensitiveText, resolveAiProviderPreset } from "../api-management/aiProviderCatalog";
 import { trackedProviderFetch } from "../api-management/aiUsageTelemetry";
 import { classifyAiFailure } from "../api-management/aiRequestRecovery";
 import { compareNvBomSheets, validateNvBomMapping, type NvBomDiff, type NvBomMapping, type NvBomSheet } from "./nvBomCompare";
@@ -32,6 +32,7 @@ async function ask(model: NvBomModel, instruction: string, input: unknown, signa
   if (!read || !model.record.is_active || model.record.expires_at && !(Date.parse(model.record.expires_at) > Date.now())) throw new Error("這項 AI 服務已停用、到期或沒有使用權限。");
   const request = buildProviderChatRequest({ provider: metadata.provider, baseUrl: metadata.baseUrl, apiKey: model.record.api_key, model: metadata.model,
     messages: [{ role: "system", text: instruction }, { role: "user", text: JSON.stringify(input) }] });
+  if (resolveAiProviderPreset(metadata.provider).protocol === "gemini") Object.assign(request.body!, { generationConfig: { responseMimeType: "application/json" } });
   const response = await trackedProviderFetch({ apiKeyId: model.record.id, provider: metadata.provider, model: metadata.model, source: "ai-chat", attemptNumber: 1,
     url: request.url, init: { method: request.method, headers: request.headers, body: JSON.stringify(request.body), signal }, timeoutMs: 120_000 });
   const payload = await response.json(); signal.throwIfAborted();
