@@ -975,12 +975,13 @@ All colors MUST be HSL for proper theming support.
 .pending-row-mark { grid-area: mark; }
 .pending-row-reference { grid-area: reference; width: auto; }
 .pending-row-category { grid-area: category; width: 100%; }
+.pending-row-category > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pending-row-name { grid-area: name; overflow-wrap: anywhere; }
 .pending-row-mpn { grid-area: mpn; display: block; }
 .pending-row-manufacturer { grid-area: manufacturer; display: none; border: 1px solid hsl(var(--primary) / .3); border-radius: 5px; padding: 4px 6px; background: hsl(var(--primary) / .12); color: hsl(var(--primary)); }
 .pending-material-row [data-testid="pending-owner-picker"] { grid-area: owner; width: 100%; }
 .pending-row-timing { grid-area: timing; display: flex; align-items: center; gap: 4px; min-height: 40px; }
-.pending-application-elapsed { flex: 1; min-width: 0; text-align: center; white-space: nowrap; }
+.pending-application-elapsed { flex: 1; min-width: 0; overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 .pending-row-warning { flex: 0 0 24px; width: 24px; }
 .pending-stale-badge { display: flex; height: 32px; align-items: center; justify-content: center; gap: 4px; border: 1px solid hsl(var(--destructive) / 0.4); border-radius: 6px; background: hsl(var(--destructive) / 0.12); color: hsl(var(--destructive)); }
 .pending-stale-label { display: none; white-space: nowrap; font-size: 11px; }
@@ -1006,11 +1007,11 @@ All colors MUST be HSL for proper theming support.
   .pending-row-note input { height: 40px; }
 }
 @media (min-width: 1280px) {
-  .pending-material-row { min-width: 1120px; grid-template-columns: 28px 96px 88px minmax(100px, 1fr) 112px 72px 128px 72px 156px 176px; }
+  .pending-material-row { min-width: 1136px; grid-template-columns: 28px 96px 104px minmax(100px, 1fr) 112px 72px 128px 72px 156px 176px; }
   .pending-row-status { width: 156px; }
 }
 @media (min-width: 1600px) {
-  .pending-material-row { min-width: 1360px; grid-template-columns: 32px 120px 96px minmax(140px, 1fr) 144px 88px 144px 152px 168px minmax(180px, 1fr); }
+  .pending-material-row { min-width: 1400px; grid-template-columns: 32px 112px 120px minmax(140px, 1fr) 144px 88px 144px 192px 168px minmax(180px, 1fr); }
   .pending-row-status { width: 168px; }
   .pending-row-warning { flex-basis: 112px; width: 112px; }
   .pending-stale-label { display: inline; }
@@ -1034,14 +1035,15 @@ All colors MUST be HSL for proper theming support.
 
 .material-record-dialog .material-tracking-fields :is([data-ui="input"], [data-ui="textarea"], [data-ui="select-trigger"]) {
   background-color: var(--material-tracking-field-bg, hsl(var(--secondary))) !important;
-  border-color: color-mix(in srgb, hsl(var(--primary)) 28%, hsl(var(--border))) !important;
+  border-color: hsl(var(--input)) !important;
   box-shadow:
     inset 0 0 0 1000px var(--material-tracking-field-bg, hsl(var(--secondary))),
     inset 0 1px 0 hsl(0 0% 100% / 0.05) !important;
   color: hsl(var(--foreground));
 }
 .material-record-dialog .material-tracking-fields :is(input, textarea)::placeholder {
-  color: hsl(var(--muted-foreground));
+  color: color-mix(in srgb, hsl(var(--muted-foreground)) 88%, black) !important;
+  -webkit-text-fill-color: color-mix(in srgb, hsl(var(--muted-foreground)) 88%, black) !important;
   opacity: 1;
 }
 .material-record-dialog .material-tracking-fields :is([data-ui="input"], [data-ui="textarea"], [data-ui="select-trigger"]):not(:disabled):hover {
@@ -1311,6 +1313,7 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
 .material-ce-form > div { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
 .material-ce-form > div > :first-child { min-height: 30px; align-items: flex-end; font-size: 12px; }
 .material-record-dialog .material-ce-form .material-ce-control { height: 44px; min-height: 44px; padding: 4px 8px; line-height: 18px; }
+.material-record-dialog .material-ce-form input.material-ce-control { padding-bottom: 22px; }
 @media (min-width: 640px) {
   .material-ce-form { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .material-ce-form > [data-ce-key="name"] { grid-column: span 2; }
@@ -1340,7 +1343,6 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
   color: color-mix(in srgb, hsl(var(--muted-foreground)) 88%, black) !important;
   -webkit-text-fill-color: color-mix(in srgb, hsl(var(--muted-foreground)) 88%, black) !important;
   font-weight: 400;
-  font-style: italic;
   opacity: 1;
 }
 .material-record-dialog textarea.material-ce-control { field-sizing: fixed; overflow-y: auto; overflow-wrap: anywhere; resize: vertical; }
@@ -1853,7 +1855,7 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
   }
 
   @media (pointer: coarse) {
-    :is(button, [role="button"], a, input, textarea, select, [role="combobox"]) {
+    :is(button, [role="button"], a, input, textarea, select, [role="combobox"]):not([role="checkbox"], [role="switch"], [role="radio"], [type="checkbox"], [type="radio"]) {
       min-height: 44px;
     }
   }
@@ -2112,7 +2114,7 @@ html { color-scheme: dark; }
 .material-table-crosshair :is(td, th)[data-crosshair-active] { box-shadow: inset 0 0 0 9999px var(--material-crosshair-active, hsl(var(--primary) / .25)); outline: 2px solid var(--material-crosshair-color, hsl(var(--primary))); outline-offset: -2px; }
 .material-table-crosshair > tbody > tr[data-material-kind],
 .material-table-crosshair > tbody > tr[data-material-kind] > td {
-  height: 64px;
+  height: 52px;
 }
 .material-table-crosshair > tbody > tr[data-material-kind] > td { vertical-align: middle; }
 .material-table-crosshair [data-testid="material-identity-trigger"] {
@@ -2728,3 +2730,30 @@ body {
 @media (max-width: 359px) {
   .workspace-entrance-mobile-list .workspace-entrance-mobile-row > span:nth-child(2) > span:first-child { font-size: 13px; white-space: normal; overflow: visible; }
 }
+
+/* 料號申請 aesthetic pass (2026-11-10). */
+/* 1. The filtered-zero message is centred in the visible part of a horizontally scrolled table. */
+.material-table-empty { position: sticky; left: 0; box-sizing: border-box; width: var(--material-scroll-width, 100%); }
+/* 14. Personal marks: a quiet square until the row is hovered or the box is focused. */
+.material-table-crosshair .material-mark-checkbox { border-radius: 4px; }
+.material-table-crosshair .material-mark-checkbox[data-state="unchecked"] { border-color: hsl(var(--muted-foreground) / .45); }
+.material-table-crosshair tbody tr:hover .material-mark-checkbox[data-state="unchecked"],
+.material-table-crosshair .material-mark-checkbox:focus-visible { border-color: hsl(var(--primary)); }
+/* 16. The row's 編輯 keeps the teal identity as an outline instead of a solid button in every row. */
+.material-table-crosshair .material-row-edit { border: 1px solid hsl(var(--primary) / .5); background: transparent; color: hsl(var(--primary)); box-shadow: none; }
+.material-table-crosshair .material-row-edit:hover:not(:disabled) { background: hsl(var(--primary) / .14); color: hsl(var(--primary)); }
+@media (min-width: 1024px) {
+  /* 16. Name stays on screen while the table scrolls sideways. */
+  .material-table-crosshair :is(th[data-material-column="name"], td.material-sticky-name) { position: sticky; left: 0; z-index: 4; background-color: inherit; }
+  .material-table-crosshair thead th[data-material-column="name"] { z-index: 6; }
+  /* 25. Active filter chips sit right after the search box on the same line, so adding a filter does not push the table down. */
+  [data-testid="material-table-toolbar"] > div:first-child > [data-testid="material-active-filters"] { flex: 0 1 auto; min-width: 0; margin-top: 0; }
+  .material-toolbar-count { flex: none; margin-left: auto; color: hsl(var(--muted-foreground)); font-size: 12px; }
+  .material-toolbar-count > strong { color: hsl(var(--foreground) / .85); font-weight: 500; }
+}
+@media (hover: hover) and (min-width: 1024px) {
+  /* 13. Copy and identity icons appear on the row being pointed at or focused, not on all 40 rows. */
+  .material-table-crosshair tbody tr:not(:hover):not(:focus-within) :is(.material-copy-icon, .material-help-icon) { opacity: 0; }
+}
+/* 28. 待處理料: the title and its actions share one row. */
+.pending-materials-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 16px; padding-right: 40px; }

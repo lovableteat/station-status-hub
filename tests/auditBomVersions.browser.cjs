@@ -76,7 +76,8 @@ function startHarness() {
     await table.waitFor();
     const versionRows = await table.locator('tr[data-version-id]').allTextContents();
     assert.equal(versionRows.length, 3);
-    assert.match(versionRows[0], /V3.*EVT rev C.*QA_主板_v3\.xlsx.*帶入 11.*目前版本/s, 'V3 carried all eleven tracked lines by content and is current');
+    // 狀態 sits right after 版本 (2026-11-10), so the sticky 操作 column never hides it.
+    assert.match(versionRows[0], /V3.*目前版本.*EVT rev C.*QA_主板_v3\.xlsx.*帶入 11/s, 'V3 carried all eleven tracked lines by content and is current');
     assert.match(versionRows[1], /V2.*歷史/s);
 
     await page.getByTestId('bom-series-detail').getByRole('button', { name: '比對版本' }).click();

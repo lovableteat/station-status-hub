@@ -58,7 +58,7 @@
   .material-mobile-list-number-label { flex: 0 0 26px; color: hsl(var(--muted-foreground)); font-size: 11px; line-height: 21px; }
   .material-mobile-list-number-value { overflow: hidden; color: hsl(var(--foreground)); font-size: 16px; font-weight: 500; line-height: 21px; letter-spacing: .005em; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
   .material-mobile-list-number.is-virtual .material-mobile-list-number-value { color: hsl(var(--primary)); }
-  .material-mobile-list-number.is-physical .material-mobile-list-number-value { color: hsl(var(--info)); }
+  .material-mobile-list-number.is-physical .material-mobile-list-number-value { color: hsl(var(--foreground)); }
   .material-mobile-list-number .material-mobile-list-number-value.is-empty { color: hsl(var(--warning)); font-size: 14px; font-weight: 400; }
   .material-mobile-list-fallback { color: hsl(var(--foreground)); font-size: 16px; line-height: 24px; }
   .material-mobile-list-name { width: 100%; min-width: 0; height: 14px; overflow: hidden; color: hsl(var(--muted-foreground)); font-size: 11px; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }

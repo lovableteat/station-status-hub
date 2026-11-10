@@ -313,12 +313,12 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
           <thead className="sticky top-0 z-10 bg-card text-left text-xs text-muted-foreground">
             <tr>
               <th className="whitespace-nowrap px-2 py-2 font-semibold">版本</th>
+              <th className="whitespace-nowrap px-2 py-2 font-semibold">狀態</th>
               <th className="whitespace-nowrap px-2 py-2 font-semibold">標籤／說明</th>
               <th className="whitespace-nowrap px-2 py-2 font-semibold">來源檔</th>
               <th className="whitespace-nowrap px-2 py-2 font-semibold">筆數</th>
               <th className="whitespace-nowrap px-2 py-2 font-semibold">上傳時間</th>
               <th className="whitespace-nowrap px-2 py-2 font-semibold">追蹤帶入</th>
-              <th className="whitespace-nowrap px-2 py-2 font-semibold">狀態</th>
               <th className="whitespace-nowrap px-2 py-2 font-semibold">操作</th>
             </tr>
           </thead>
@@ -333,6 +333,13 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
               return [
                 <tr key={item.workspace.id} data-version-id={item.workspace.id} className={cn("border-t border-border/60 align-top", item.isCurrent && "bg-primary/5")}>
                   <td className="px-2 py-2 whitespace-nowrap"><span className={cn("inline-flex h-9 min-w-14 items-center justify-center rounded-md border px-2 font-mono text-base font-bold tabular-nums", item.isCurrent ? "border-primary bg-primary text-primary-foreground" : "border-primary/40 bg-primary/10 text-foreground")}>{item.displayNumber}</span></td>
+                  <td className="px-2 py-2 text-xs">
+                    <span className="bom-version-chip-row flex gap-1">
+                      {item.isCurrent ? <span className={cn(CHIP, CHIP_TONE.success)}>目前版本</span> : <span className={cn(CHIP, CHIP_TONE.neutral)}>歷史</span>}
+                      {isActive && <span className={cn(CHIP, CHIP_TONE.warning)}>畫面中</span>}
+                      {item.version.source ? null : <span className={cn(CHIP, CHIP_TONE.neutral)} title="這個版本沒有保存原始 Excel">無原檔</span>}
+                    </span>
+                  </td>
                   <td className="px-2 py-2 text-xs">
                     <span className="bom-version-label-note" title={[item.version.label || "未設定標籤", item.version.note, !item.stored ? "版本化前上傳的 BOM" : ""].filter(Boolean).join(" · ")}>
                       <strong className={cn("font-semibold", item.version.label ? "text-foreground" : "font-normal text-muted-foreground")}>{item.version.label || "未設定標籤"}</strong>
@@ -351,13 +358,6 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
                         {carry.manual > 0 && <span className={cn(CHIP, CHIP_TONE.neutral)}>手動 {carry.manual}</span>}
                       </span>
                     ) : <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="px-2 py-2 text-xs">
-                    <span className="bom-version-chip-row flex gap-1">
-                      {item.isCurrent ? <span className={cn(CHIP, CHIP_TONE.success)}>目前版本</span> : <span className={cn(CHIP, CHIP_TONE.neutral)}>歷史</span>}
-                      {isActive && <span className={cn(CHIP, CHIP_TONE.warning)}>畫面中</span>}
-                      {item.version.source ? null : <span className={cn(CHIP, CHIP_TONE.neutral)} title="這個版本沒有保存原始 Excel">無原檔</span>}
-                    </span>
                   </td>
                   <td className="px-2 py-1.5">
                     <div className="bom-version-row-actions flex items-center gap-1">

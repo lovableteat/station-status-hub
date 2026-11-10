@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 export function MaterialTableScroll({ children }: { children: ReactNode }) {
   const tableScrollId = useId();
@@ -64,7 +64,7 @@ export function MaterialTableScroll({ children }: { children: ReactNode }) {
       ref={tableScroll}
       id={tableScrollId}
       className="relative max-h-[72vh] overflow-auto"
-      style={{ maxHeight: widths.maxHeight }}
+      style={{ maxHeight: widths.maxHeight, "--material-scroll-width": widths.viewport ? `${widths.viewport}px` : "100%" } as CSSProperties}
       data-testid="material-table-scroll"
       onScroll={event => {
         const left = event.currentTarget.scrollLeft;
