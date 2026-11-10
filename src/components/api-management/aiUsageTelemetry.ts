@@ -80,7 +80,7 @@ export async function trackedProviderFetch({ apiKeyId, provider, model, source, 
         timer = globalThis.setTimeout(() => {
             timedOut = true;
             controller.abort();
-            reject(new AiRequestFailure('AI 回應逾時，正在嘗試其他可用模型。', 'timeout'));
+            reject(new AiRequestFailure('AI 回應逾時，請重試或切換其他模型。', 'timeout'));
         }, Math.max(1, timeoutMs - (Date.now() - requestedAt)));
     });
     try {
