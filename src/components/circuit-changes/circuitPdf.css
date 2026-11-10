@@ -293,3 +293,17 @@
   .circuit-pdf-ai-guide { margin: 16px auto; padding: 18px; }
   .circuit-pdf-ai-guide-action > button { width: 100%; height: 44px; }
 }
+
+/* AutoCheck look (2026-11-11): inside the framed drawing panel the bars sit on the card, the page area stays black so
+   the white sheet stands out; AI 比對 steps use 比對檢查's colours (done = solid teal, next = amber ring). */
+.circuit-pdf-panel { background: hsl(var(--card)); }
+.circuit-pdf-toolbar, .circuit-pdf-overview, .circuit-pdf-link-bar, .circuit-pdf-ai-bar { background: hsl(var(--card)); border-color: hsl(var(--foreground) / .1); }
+.circuit-pdf-stage { background: hsl(var(--background)); }
+.circuit-pdf-strip > [data-current] { box-shadow: 0 0 0 2px hsl(var(--card)); }
+.circuit-pdf-ai-steps > li[data-state="done"] > b, .circuit-pdf-ai-guide li[data-state="done"] > b { border-color: transparent; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+.circuit-pdf-ai-steps > li[data-state="current"] > b, .circuit-pdf-ai-guide li[data-state="current"] > b { border-color: hsl(var(--warning)); background: transparent; color: hsl(var(--warning)); }
+.circuit-pdf-ai-steps > li[data-state="current"] > span > strong { color: hsl(var(--warning)); }
+.circuit-pdf-ai-guide { border-color: hsl(var(--primary) / .45); background: hsl(var(--card)); }
+.circuit-pdf-ai-guide li[data-state="current"] > div > strong { color: hsl(var(--warning)); }
+.circuit-pdf-ai-steps > li > .circuit-pdf-ai-run { height: 34px; gap: 6px; }
+@media (min-width: 1024px) and (max-width: 1439px) { .circuit-pdf-ai-steps > li > span > small { display: none; } .circuit-pdf-ai-steps > li > span > select { width: 200px; } .circuit-pdf-ai-steps { gap: 6px 12px; } }

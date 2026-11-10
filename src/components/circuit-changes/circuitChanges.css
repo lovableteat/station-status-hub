@@ -498,3 +498,65 @@
 .circuit-changes-dialog .circuit-search input:focus-visible { border-color: hsl(var(--primary) / .6); }
 /* Beside the drawing the heading keeps 編號, 狀態 and the buttons on one line; 修訂 · 操作者 stays in the hover text and 紀錄. */
 @container circuit-detail (max-width: 520px) { .circuit-detail-heading > div:first-of-type > span[data-revision] { display: none; } }
+
+/* AutoCheck look (2026-11-11). The user found the grey columns uncomfortable and pointed at 比對檢查 as the scheme they
+   like: a black page, the work areas as rounded card panels framed by a teal hairline with black gaps between them,
+   teal outline buttons for secondary actions, solid teal only for the finishing actions, amber for the next step. */
+.circuit-changes-dialog { --circuit-l1: hsl(var(--background)); --circuit-frame: hsl(var(--primary) / .45); --circuit-hairline: hsl(var(--foreground) / .1); }
+.circuit-header { background: hsl(var(--background)); border-bottom-color: transparent; box-shadow: none; }
+@media (min-width: 1024px) {
+  .circuit-workspace { gap: 8px; padding: 0 8px 8px; background: hsl(var(--background)); }
+  .circuit-task-panel { padding: 0 8px 8px; }
+  .circuit-workspace > :is(.circuit-list-panel, .circuit-pdf-panel, .circuit-detail, .circuit-list-rail) { min-height: 0; overflow: hidden; border: 1px solid var(--circuit-frame); border-radius: 12px; background: hsl(var(--card)); }
+  .circuit-workspace[data-pdf-open="true"] .circuit-detail { border-left: 1px solid var(--circuit-frame); }
+  .circuit-workspace > .circuit-detail[hidden] { display: none; }
+}
+.circuit-list-panel, .circuit-detail, .circuit-detail-footer, .circuit-list-rail { background: hsl(var(--card)); }
+.circuit-detail-footer { background: transparent; }
+
+/* Secondary actions: teal outline, as 選擇資料夾 on 比對檢查. */
+.circuit-changes-dialog .circuit-new-item, .circuit-changes-dialog .circuit-panel-toggle { border: 1px solid hsl(var(--primary) / .4); background: hsl(var(--primary) / .08); color: hsl(var(--primary)); box-shadow: none; }
+.circuit-changes-dialog .circuit-new-item:hover:not(:disabled), .circuit-changes-dialog .circuit-panel-toggle:hover:not(:disabled) { border-color: hsl(var(--primary) / .7); background: hsl(var(--primary) / .15); color: hsl(var(--primary)); }
+.circuit-changes-dialog .circuit-panel-toggle > svg, .circuit-changes-dialog .circuit-new-item > svg, .circuit-changes-dialog .circuit-rail-new > svg { color: hsl(var(--primary)); }
+
+/* Fields on the panels: dark wells; placeholders lighter than what is typed. */
+.circuit-changes-dialog .circuit-filter-bar .circuit-filter-select select, .circuit-changes-dialog .circuit-search input { background: hsl(var(--background)) !important; }
+.circuit-changes-dialog :is(.circuit-list-panel, .circuit-detail, .circuit-pdf-panel, .circuit-official) :is(input, textarea)::placeholder { color: hsl(var(--muted-foreground) / .62); font-weight: 400; opacity: 1; -webkit-text-fill-color: hsl(var(--muted-foreground) / .62); }
+
+/* Picture drop areas read like the 比對檢查 drop zone. */
+.circuit-image-empty { border-color: hsl(var(--primary) / .4); background: hsl(var(--primary) / .04); }
+.circuit-image-column[data-active="true"] { border-color: hsl(var(--primary) / .6); }
+
+/* 官方版本 cards share the frame. */
+.circuit-official-current[data-configured="true"], .circuit-official-choose, .circuit-official-history { border-color: var(--circuit-frame); background: hsl(var(--card)); }
+.circuit-official-current { background: hsl(var(--card)); }
+/* Framed panels need their gaps: below 1600px the form column is 400px so 1440 keeps the drawings side by side. */
+@media (min-width: 1024px) and (max-width: 1599px) { .circuit-workspace { --circuit-detail-width: minmax(360px, 400px); } }
+.circuit-item-navigation > button:has(> .circuit-history-word) { gap: 0; }
+
+/* Problem form in two numbered steps (2026-11-11): ① 標記問題 by the reviewer, ② 回報改善 by the person who draws.
+   Colours as on 比對檢查: done = solid teal number, current = amber ring, waiting = muted. Side by side when the form is
+   wide (改善追蹤), one above the other beside the drawing. */
+.circuit-detail { container: circuit-detail / inline-size; }
+.circuit-form-steps { display: grid; gap: 12px; }
+.circuit-form-step { display: grid; align-content: start; gap: 10px; padding: 12px 14px 14px; border: 1px solid hsl(var(--foreground) / .1); border-radius: 10px; background: hsl(var(--background) / .35); }
+.circuit-form-step[data-state="current"] { border-color: hsl(var(--warning) / .45); }
+.circuit-form-step-title { display: flex; min-width: 0; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.circuit-form-step-title > b { display: inline-grid; flex: none; width: 22px; height: 22px; place-items: center; border: 1px solid hsl(var(--muted-foreground) / .6); border-radius: 999px; color: hsl(var(--muted-foreground)); font-size: 12px; font-weight: 700; }
+.circuit-form-step-title > b > svg { width: 13px; height: 13px; }
+.circuit-form-step-title > small { min-width: 0; overflow: hidden; color: hsl(var(--muted-foreground)); font-size: 12px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.circuit-form-step[data-state="done"] .circuit-form-step-title > b { border-color: transparent; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+.circuit-form-step[data-state="current"] .circuit-form-step-title > b { border-color: hsl(var(--warning)); color: hsl(var(--warning)); }
+.circuit-form-step[data-state="waiting"] .circuit-form-step-title > span { color: hsl(var(--muted-foreground)); }
+@container circuit-detail (min-width: 900px) { .circuit-form-steps { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); } }
+.circuit-image-column h4 > .circuit-image-purpose { margin-left: 6px; color: hsl(var(--muted-foreground)); font-size: 12px; font-weight: 400; }
+.circuit-image-section { margin-top: 14px; }
+/* The heading keeps the problem's number and state first; 收合內容 sits at the end with the item buttons. */
+.circuit-item-navigation { margin-left: auto; }
+@media (max-width: 1023px) {
+  /* On a phone the steps join the column so the pictures come right after the problem and before the fix. */
+  .circuit-detail-scroll > .circuit-form-steps { display: contents; }
+  .circuit-detail-scroll > .circuit-form-steps > .circuit-form-step:first-child { order: 0; }
+  .circuit-detail-scroll > .circuit-form-steps > .circuit-form-step:last-child { order: 2; margin-top: 14px; }
+  .circuit-form-step { padding: 12px; }
+}

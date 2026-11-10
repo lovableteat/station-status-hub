@@ -190,7 +190,7 @@ async function eventually(check, message, timeout = 8000) {
     await panel(p).getByRole('button', {name:'對照頁往前一頁', exact:true}).click();
     assert.equal(await panel(p).locator('.circuit-pdf-offset > span').innerText(), '第 4 頁');
     await dialog(p).getByRole('button', {name:'新增問題', exact:true}).click();
-    await dialog(p).getByText('填寫後自動建立', {exact:true}).waitFor();
+    await dialog(p).getByText('檢查的人填；寫好標題就會自動存', {exact:true}).waitFor();
     await panel(p).getByRole('button', {name:'下一頁', exact:true}).click(); await onPage(p, 5); await rendered(p);
     assert.equal(await panel(p).locator('figure[data-pane="compare"] figcaption').innerText(), '自選對照 · 11/07 版 第1天 第 5 頁');
     await frame(p, 0);
@@ -218,8 +218,10 @@ async function eventually(check, message, timeout = 8000) {
     await panel(p).getByRole('button', {name:'看完，下一頁', exact:true}).click(); await onPage(p, 6);
     await panel(p).getByRole('button', {name:'看完，下一頁', exact:true}).click(); await onPage(p, 7);
     await panel(p).getByRole('button', {name:'上一頁', exact:true}).click(); await onPage(p, 6);
-    assert.equal(await panel(p).getByRole('checkbox', {name:'本頁看過', exact:true}).isChecked(), true);
-    await panel(p).getByRole('checkbox', {name:'本頁看過', exact:true}).uncheck();
+    const seen = panel(p).getByRole('button', {name:'已看過', exact:true}).first();
+    assert.equal(await seen.getAttribute('aria-pressed'), 'true', 'a page marked 看過 shows 已看過');
+    await seen.click();
+    await panel(p).getByRole('button', {name:'看完，下一頁', exact:true}).first().waitFor();
     assert.equal(await panel(p).locator('[data-strip-page="5"]').getAttribute('data-state'), 'here');
     assert.equal(await panel(p).locator('[data-strip-page="6"]').getAttribute('data-state'), 'none');
     await eventually(async () => { const pages = (await registryOf(origin)).pages; return pages[5]?.checked === true && pages[6]?.checked === false; }, 'page marks are saved');
@@ -274,9 +276,12 @@ async function eventually(check, message, timeout = 8000) {
     check('a 51 MB PDF opens locally without uploading; a colleague is asked for the file and opens it');
 
     // --- Archiving a version: it leaves the main list while its original and pictures stay.
+    // One way to delete: open the version, then 刪除這份 PDF beside the version picker.
     await panel(p).getByRole('button', {name:'選擇 PDF 版本', exact:true}).click();
-    await panel(p).getByRole('button', {name:'刪除 PDF：Vera_SCH_20261108.pdf', exact:true}).click();
-    await panel(p).getByRole('button', {name:'確認刪除 11/07 版 第1天', exact:true}).click();
+    await panel(p).getByRole('button', {name:'開啟 11/07 版 第1天 Vera_SCH_20261108.pdf', exact:true}).click();
+    await rendered(p);
+    await panel(p).getByRole('button', {name:'刪除這份 PDF', exact:true}).click();
+    await panel(p).getByRole('button', {name:'確認刪除 Vera_SCH_20261108.pdf', exact:true}).click();
     await eventually(async () => (await registryOf(origin)).documents.find(row => row.date === '2026-11-07')?.removedAt, 'the version is marked removed');
     await eventually(async () => (await stateOf(origin)).pdfs.every(name => !name.includes(big.id)) && (await stateOf(origin)).pdfs.length === objectsBefore, 'archiving keeps the original PDF file');
     await p.keyboard.press('Escape');

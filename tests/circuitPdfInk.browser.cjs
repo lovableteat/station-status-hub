@@ -124,14 +124,21 @@ async function managerFits(page) {
       if(index){const chooser=p.waitForEvent('filechooser');await panel(p).getByRole('button',{name:'上傳新 PDF',exact:true}).click();await(await chooser).setFiles(file);}
       else await panel(p).locator('input[aria-label="選擇原理圖 PDF"]').setInputFiles(file);
       await rendered(p);
-      if(!index){await panel(p).getByRole('button',{name:'選擇 PDF 版本',exact:true}).click();await panel(p).getByRole('button',{name:'設為官方版本：Official_20261101.pdf',exact:true}).click();await panel(p).getByRole('button',{name:'確認設為官方版本：Official_20261101.pdf',exact:true}).click();await eventually(()=>fixture.state.pdfOfficials.size===1,'Official pointer saves');await p.keyboard.press('Escape');}
+      if(!index){
+        await dialog(p).getByRole('tab', { name: /^官方版本/ }).click();
+        await dialog(p).getByRole('button', { name: /^(設定|更換)官方版本$/ }).click();
+        await dialog(p).getByRole('button', { name: `設為官方版本：Official_20261101.pdf`, exact: true }).click();
+        await dialog(p).getByRole('button', { name: '確定更換', exact: true }).click();
+        await dialog(p).locator('.circuit-official-history tbody tr').first().waitFor();
+        await dialog(p).getByRole('tab', { name: /^線路 Review/ }).click();
+        await eventually(()=>fixture.state.pdfOfficials.size===1,'Official pointer saves');await rendered(p);}
     }
     await panel(p).getByRole('combobox',{name:'對照較早的 PDF 版本',exact:true}).selectOption(fixture.state.pdfOfficials.get('series:qa').documentId);
     await p.waitForFunction(()=>document.querySelectorAll('.circuit-pdf-surface').length===2);await rendered(p);
     const registry=fixture.state.pdfRegistries.get('series:qa'),officialId=fixture.state.pdfOfficials.get('series:qa').documentId,workingId=registry.documents.find(row=>row.name==='Working_20261110.pdf').id;
     report.geometry.push({width:1543,...await toolbarFits(p,1543)});await managerFits(p);
     const hints=await dialog(p).getByRole('textbox',{name:'標題',exact:true}).evaluate(node=>({hint:getComputedStyle(node,'::placeholder').color,value:getComputedStyle(node).color}));
-    assert.notEqual(hints.hint,hints.value);assert.match(hints.hint,/14[0-9]|15[0-9]/);report.placeholder=hints;
+    assert.notEqual(hints.hint,hints.value);const tone=color=>{const n=color.match(/[0-9.]+/g).map(Number);return (n[0]+n[1]+n[2])/3*(n.length>3?n[3]:1);};assert.ok(tone(hints.hint)<tone(hints.value),'placeholders are lighter (dimmer) than typed text: '+JSON.stringify(hints));report.placeholder=hints;
     await dialog(p).getByRole('textbox',{name:'標題',exact:true}).fill('電源訊號調整');await eventually(()=>fixture.state.items.size===1,'The entered title still saves');
     check('1543px one-row compact toolbar, dim hints, version manager visible and upload button opens a real picker');
 

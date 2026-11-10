@@ -244,10 +244,9 @@ export function CircuitPdfPanel({ mode = "review", onAiReview, onSetupOfficial, 
           <option value="" disabled>選擇新版</option>
           {workingVersions.map(row => <option key={row.id} value={row.id}>{circuitPdfVersionLabel(row)} · {row.name}</option>)}
         </select> : <strong>上傳新版 PDF</strong>}</span></li>
-      <li data-state={aiState(3)}><b aria-hidden="true">3</b><span><small>比對</small><strong>AI 比對新舊版</strong></span></li>
+      <li data-state={aiState(3)}><b aria-hidden="true">3</b>{aiStep === 3 ? aiAction : <span><small>比對</small><strong>AI 比對新舊版</strong></span>}</li>
       <li data-state="waiting"><b aria-hidden="true">4</b><span><small>確認</small><strong>逐項確認差異</strong></span></li>
     </ol>
-    {aiStep === 3 && aiAction}
   </div> : null;
   const back = <Button title="回到問題內容" type="button" variant="ghost" className="circuit-pdf-back" aria-label="返回修改內容" onClick={onBack}><ArrowLeft aria-hidden="true" /></Button>;
 
@@ -273,8 +272,10 @@ export function CircuitPdfPanel({ mode = "review", onAiReview, onSetupOfficial, 
   const compareChoices = documents.filter(row => row.id !== active?.id);
   const deletingRow = documents.find(row => row.id === deleting && row.id !== official?.id) || null;
   const finish = (className: string) => canEdit && active && mode !== "ai" ? <div className={className}>
-    <label className="circuit-pdf-checked"><input type="checkbox" title="勾選表示這一頁已經看完" aria-label="本頁看過" checked={pageState !== "none"} onChange={event => pdfs.setChecked(page, event.target.checked)} /><span>{pageState === "older" ? "舊版看過" : "本頁看過"}</span></label>
-    <Button type="button" onClick={finishPage} title="標記本頁看過並翻到下一頁"><Check aria-hidden="true" />{page < active.pages ? "看完，下一頁" : "看完本頁"}</Button>
+    {pageState === "here"
+      ? <><Button type="button" variant="outline" className="circuit-pdf-seen" aria-pressed="true" title="這一頁已標記看過；按一下取消" onClick={() => pdfs.setChecked(page, false)}><Check aria-hidden="true" />已看過</Button>
+        {page < active.pages && <Button type="button" title="翻到下一頁（→）" onClick={() => pdfs.goTo(page + 1)}>下一頁<ChevronRight aria-hidden="true" /></Button>}</>
+      : <Button type="button" onClick={finishPage} title={pageState === "older" ? "這頁在較早的版本看過；標記這一版也看過並翻到下一頁" : "標記本頁看過並翻到下一頁"}><Check aria-hidden="true" />{page < active.pages ? "看完，下一頁" : "看完本頁"}</Button>}
   </div> : null;
   if (mode === "ai" && aiStep < 3) {
     return <section className="circuit-pdf-panel" aria-label="PDF 圖面" data-testid="circuit-pdf-panel" data-dropping={dropping}
@@ -323,16 +324,16 @@ export function CircuitPdfPanel({ mode = "review", onAiReview, onSetupOfficial, 
               <section className="circuit-pdf-baseline-section" aria-label="官方版本版本">
                 <h3><ShieldCheck aria-hidden="true" />官方版本<span>固定比對原圖</span></h3>
                 {official ? <><ul><VersionRow row={official} active={official.id === active?.id} official canEdit={false} removing={false} confirmingOfficial={false} settingOfficial={false}
-                  onOpen={() => { pdfs.select(official.id); closeVersions(); }} onUpdate={() => {}} onAskRemove={() => {}} onRemove={() => {}} onAskOfficial={() => {}} onSetOfficial={() => {}} /></ul><p>上傳工作版本不會替換這份原圖。</p></>
-                  : <p>尚未指定。從下方選一份原廠 PDF，按「設為官方版本」。</p>}
+                  onOpen={() => { pdfs.select(official.id); closeVersions(); }} onUpdate={() => {}} onAskRemove={() => {}} onRemove={() => {}} onAskOfficial={() => {}} onSetOfficial={() => {}} /></ul><p>要更換官方版本，到上方的「官方版本」分頁。</p></>
+                  : <p>尚未指定。{onSetupOfficial && <Button type="button" variant="outline" title="到「官方版本」分頁選一份 PDF 當比對的舊版" onClick={() => { closeVersions(); onSetupOfficial(); }}><ShieldCheck aria-hidden="true" />到官方版本設定</Button>}</p>}
               </section>
               <section className="circuit-pdf-working-section" aria-label="工作版本">
-                <header><h3>工作版本<span>{workingVersions.length}</span></h3>{canEdit && <Button title="上傳新的 PDF 版本；舊版都會保留" type="button" disabled={Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><Plus aria-hidden="true" />{pdfs.uploading ? "上傳中…" : "新增工作版本"}</Button>}</header>
+                <header><h3>工作版本<span>{workingVersions.length}</span></h3></header>
                 {workingVersions.length ? <ul>{workingVersions.map(row => <VersionRow key={row.id} row={row} active={row.id === active?.id} canEdit={canEdit} removing={removing === row.id}
                   onOpen={() => { pdfs.select(row.id); closeVersions(); }} onUpdate={patch => pdfs.updateDocument(row.id, patch)} onAskRemove={value => setRemoving(value ? row.id : "")}
                   official={false} confirmingOfficial={officialCandidate === row.id} settingOfficial={settingOfficial} onAskOfficial={value => setOfficialCandidate(value ? row.id : "")} onSetOfficial={() => void pinOfficial(row.id)}
                   onRemove={() => removePdf(row.id)} />)}</ul>
-                  : <div className="circuit-pdf-working-empty"><FileUp aria-hidden="true" /><strong>目前沒有工作版本</strong><p>新增修改後的 PDF，或還原下方已刪除的版本，即可與官方版本比對。</p></div>}
+                  : <div className="circuit-pdf-working-empty"><FileUp aria-hidden="true" /><strong>目前沒有工作版本</strong><p>用工具列的「上傳新 PDF」加入畫好的新版，或還原下方已刪除的版本。</p></div>}
               </section>
               {archived.length > 0 && <section className="circuit-pdf-archived-section"><button type="button" title="顯示或收起可以還原的已刪除 PDF" className="circuit-pdf-archived-toggle" aria-expanded={showArchived} onClick={() => setShowArchived(value => !value)}><span>已刪除的 PDF<span>{archived.length}</span></span><ChevronDown aria-hidden="true" /></button>{showArchived && <><p>還原後會回到工作版本，不會切換目前開啟的圖面。</p><ul>{archived.map(row => <li key={row.id}><div><strong title={row.name}>{row.name}</strong><small>{circuitPdfVersionLabel(row)} · {row.pages} 頁</small></div>{canEdit && <Button type="button" title="把這份 PDF 放回工作版本" variant="outline" disabled={Boolean(restoring)} aria-label={`還原 PDF：${row.name}`} onClick={() => void restorePdf(row)}><RotateCcw aria-hidden="true" />{restoring === row.id ? "還原中…" : "還原到工作版本"}</Button>}</li>)}</ul></>}</section>}
             </div>
@@ -388,7 +389,6 @@ export function CircuitPdfPanel({ mode = "review", onAiReview, onSetupOfficial, 
     </div>}
     {active && <div className="circuit-pdf-overview">
       {progress && <span className="circuit-pdf-progress" title={`這版看過 ${progress.here} 頁；較早版本看過 ${progress.older} 頁`}>
-        <span className="circuit-pdf-progress-bar" aria-hidden="true"><span style={{ width: `${progress.total ? progress.checked / progress.total * 100 : 0}%` }} /></span>
         已看 {progress.checked} / {progress.total} 頁
       </span>}
       <PageStrip registry={registry} documentId={active.id} pages={active.pages} current={page} pageChanges={pageChanges} onPage={pdfs.goTo} />
@@ -467,12 +467,8 @@ function VersionRow({ row, active, canEdit, removing, official, confirmingOffici
         onChange={event => { setDate(event.target.value); if (/^\d{4}-\d{2}-\d{2}$/.test(event.target.value)) onUpdate({ date: event.target.value }); }} /></label>
       <label><span>備註</span><input aria-label={`${row.name} 的版本備註`} value={label} maxLength={60} placeholder="例如 V2、第 3 天" disabled={official}
         onChange={event => setLabel(event.target.value)} onBlur={() => onUpdate({ label })} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); onUpdate({ label }); } }} /></label>
-      <small>日期選定、備註離開欄位後自動儲存。</small></div>}
-      {!row.localOnly && <Button title="把這份設為官方版本（AI 比對的舊版）；每次更換都會記錄" type="button" variant="ghost" className="circuit-pdf-pin-official" disabled={settingOfficial} aria-label={`設為官方版本：${row.name}`} onClick={() => onAskOfficial(true)}><ShieldCheck aria-hidden="true" />設為官方版本</Button>}
-      {confirmingOfficial && <span className="circuit-pdf-official-confirm">固定以這份 PDF 為官方版本；原基準與所有工作版本都保留。<Button type="button" title="不更換官方版本" variant="outline" disabled={settingOfficial} onClick={() => onAskOfficial(false)}>取消</Button><Button type="button" title="改用這份當官方版本，並記入更換紀錄" disabled={settingOfficial} aria-label={`確認設為官方版本：${row.name}`} onClick={onSetOfficial}>{settingOfficial ? "儲存中…" : "確認設為基準"}</Button></span>}
-      {!official && (removing
-        ? <span className="circuit-pdf-remove-confirm">已加入的截圖保留，可從「已刪除的 PDF」還原。<Button title="不刪除" type="button" variant="outline" onClick={() => onAskRemove(false)}>取消</Button><Button type="button" title="刪除這份 PDF；可從「已刪除的 PDF」還原" variant="destructive" onClick={onRemove}>確認刪除 {circuitPdfVersionLabel(row)}</Button></span>
-        : <Button type="button" variant="ghost" className="circuit-pdf-version-delete" aria-label={`刪除 PDF：${row.name}`} title="刪除這個版本（可還原）" onClick={() => onAskRemove(true)}><Trash2 aria-hidden="true" />刪除</Button>)}
+      <small>日期選定、備註離開欄位後自動儲存。</small>
+      <Button type="button" variant="outline" title="收起版本資訊；內容已自動儲存" onClick={() => { onUpdate({ label }); setEditing(false); }}>完成</Button></div>}
     </div>}
   </li>;
 }
@@ -498,13 +494,21 @@ const PageStrip = memo(function PageStrip({ registry, documentId, pages, current
   };
   const shown = scrub ?? current, labelled = scrub ?? hover;
   const move = (target: number) => { const page = Math.min(pages, Math.max(1, target)); if (page !== current) onPage(page); };
+  // While dragging, the page on screen follows the marker live: at most one change per frame, the latest page wins.
+  const sent = useRef(current), frame = useRef(0), pending = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+  const follow = (page: number) => {
+    pending.current = page;
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => { frame.current = 0; if (pending.current !== sent.current) { sent.current = pending.current; onPage(pending.current); } });
+  };
   return <div ref={strip} className="circuit-pdf-strip" role="slider" tabIndex={0} aria-label="頁面總覽" aria-orientation="horizontal"
     aria-valuemin={1} aria-valuemax={pages} aria-valuenow={current} aria-valuetext={`第 ${current} 頁，共 ${pages} 頁`}
-    title="拖曳白色標記或點一格跳頁；也可以按方向鍵換頁" data-dense={pages > 120} data-dragging={scrub !== null}
-    onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); event.currentTarget.focus({ preventScroll: true }); event.currentTarget.setPointerCapture(event.pointerId); dragging.current = true; setHover(null); setScrub(pageAt(event.clientX)); }}
-    onPointerMove={event => { const page = pageAt(event.clientX); if (dragging.current) setScrub(page); else if (event.pointerType === "mouse") setHover(page); }}
-    onPointerUp={event => { if (!dragging.current) return; dragging.current = false; const page = pageAt(event.clientX); setScrub(null); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); move(page); }}
-    onPointerCancel={() => { dragging.current = false; setScrub(null); }}
+    title="拖曳白色標記，圖面會即時跟著換頁；點一格直接跳頁，也可以按方向鍵換頁" data-dense={pages > 120} data-dragging={scrub !== null}
+    onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); event.currentTarget.focus({ preventScroll: true }); event.currentTarget.setPointerCapture(event.pointerId); dragging.current = true; sent.current = current; setHover(null); const page = pageAt(event.clientX); setScrub(page); follow(page); }}
+    onPointerMove={event => { const page = pageAt(event.clientX); if (dragging.current) { setScrub(page); follow(page); } else if (event.pointerType === "mouse") setHover(page); }}
+    onPointerUp={event => { if (!dragging.current) return; dragging.current = false; cancelAnimationFrame(frame.current); frame.current = 0; const page = pageAt(event.clientX); setScrub(null); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); if (page !== sent.current) { sent.current = page; onPage(page); } }}
+    onPointerCancel={() => { dragging.current = false; cancelAnimationFrame(frame.current); frame.current = 0; setScrub(null); }}
     onPointerLeave={() => { if (!dragging.current) setHover(null); }}
     onKeyDown={event => {
       const target = event.key === "ArrowRight" || event.key === "ArrowUp" ? current + 1 : event.key === "ArrowLeft" || event.key === "ArrowDown" ? current - 1

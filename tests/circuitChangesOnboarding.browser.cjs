@@ -101,7 +101,7 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       assert.equal(created.sets.length,1); assert.equal(created.items.length,1);
       assert.equal(created.sets[0].title, ownBatch ? 'QA 自訂批次 ' + width : 'V2 → V3 線路修改');
       assert.equal(created.items[0].setId, created.sets[0].id); assert.equal(created.items[0].number,1);
-      assert.ok((await dialog.locator('.circuit-next-step').innerText()).includes('改善說明或修改後圖片'), 'what is still missing before review is spelled out');
+      assert.ok((await dialog.locator('.circuit-next-step').innerText()).includes('第 2 步'), 'what is still missing before review is spelled out');
       assert.equal(await dialog.getByRole('button',{name:'回報改善',exact:true}).isDisabled(), true);
       // 5. The guide keeps the draft, and its last section and button stay reachable on a short screen.
       await dialog.getByRole('button',{name:'更多',exact:true}).tap();await dialog.page().getByRole('menuitem',{name:'使用說明',exact:true}).tap(); await guide.waitFor();

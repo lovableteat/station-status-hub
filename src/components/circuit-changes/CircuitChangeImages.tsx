@@ -89,7 +89,7 @@ function Pane({ side, images, urls, active, dropping, readOnly, busy, onSide, on
     onDragOver={event => { if (readOnly || !carriesFiles(event)) return; event.preventDefault(); event.stopPropagation(); onDragSide(side); }}
     onDrop={event => { if (readOnly || !carriesFiles(event)) return; event.preventDefault(); event.stopPropagation(); onDragSide(null); onFiles(Array.from(event.dataTransfer.files), side); }}>
     <header>
-      <h4>{label}</h4>
+      <h4 title={side === "before" ? "問題的截圖：在 PDF 上框選，或貼上、拖入" : side === "after" ? "改好後的截圖：畫線路的人改完後加入" : "規格書、量測波形等參考資料"}>{label}<small className="circuit-image-purpose">{side === "before" ? "問題截圖" : side === "after" ? "改好後" : "參考資料"}</small></h4>
       <span className="circuit-image-count">{images.length} 張</span>
       {!readOnly && active && <span className="circuit-paste-target">{dropping ? "放開以加入這裡" : "貼上會加到這裡"}</span>}
       {!readOnly && images.length > 0 && <Button title={`再加一張${label}的圖`} type="button" variant="outline" aria-label={`加入${label}圖片`} disabled={busy} onFocus={() => onSide(side)} onClick={() => onPick(side)}><Upload aria-hidden="true" />加入圖片</Button>}
