@@ -2,11 +2,35 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import ts from 'typescript';
+import postcss from 'postcss';
 
 const source = await readFile(new URL('../src/components/maintenance/maintenanceModel.ts', import.meta.url), 'utf8');
 const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const model = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
 const issue = (id, extra = {}) => ({ id, title: '無法開機', description: '', status: 'open', assigned_to: null, assignee_user_ids: [], asset_identifier: 'GB300-021', system_id: null, category: null, created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-10T00:00:00Z', ...extra });
+
+test('compact fault lists release the panel scroll trap while desktop results keep their own scroller', async () => {
+  const layout = postcss.parse(await readFile(new URL('../src/components/maintenance/maintenanceFaultLayout.css', import.meta.url), 'utf8'));
+  const base = postcss.parse(await readFile(new URL('../src/components/maintenance/maintenance.css', import.meta.url), 'utf8'));
+  const declarations = (parent, selector) => {
+    const rule = parent.nodes.find(node => node.type === 'rule' && node.selector === selector);
+    assert.ok(rule, `Missing ${selector}`);
+    return Object.fromEntries(rule.nodes.filter(node => node.type === 'decl').map(node => [node.prop, node.value]));
+  };
+  const compact = layout.nodes.find(node => node.type === 'atrule' && node.name === 'container' && node.params === '(max-width: 850px)');
+  assert.ok(compact, 'The touch-scroll fix must be limited to the existing compact container breakpoint');
+  const defaultPanel = layout.nodes.find(node => node.type === 'rule' && node.selector === '.maintenance-fault-center .mf-list-panel');
+  assert.ok(layout.nodes.indexOf(compact) > layout.nodes.indexOf(defaultPanel), 'The equally specific compact override must follow the default panel rule');
+  const mobilePanel = declarations(compact, '.maintenance-fault-center .mf-list-panel');
+  assert.equal(mobilePanel.overflow, 'visible');
+  assert.equal(mobilePanel['overscroll-behavior'], 'auto');
+  assert.equal(declarations(compact, '.maintenance-fault-center .mf-result-list').overflow, 'visible');
+  assert.equal(declarations(layout, '.maintenance-fault-center .mf-list-panel').overflow, 'hidden');
+  const desktopResults = declarations(layout, '.maintenance-fault-center .mf-result-list');
+  assert.equal(desktopResults['overflow-y'], 'auto');
+  assert.equal(desktopResults['overscroll-behavior'], 'contain');
+  assert.equal(declarations(base, '.mf-layout').overflow, 'hidden', 'The outer panel still clips its rounded corners');
+});
 
 test('controlled report closure returns focus to its real opener without moving the page', async () => {
   const report = await readFile(new URL('../src/components/maintenance/MaintenanceReport.tsx', import.meta.url), 'utf8');
