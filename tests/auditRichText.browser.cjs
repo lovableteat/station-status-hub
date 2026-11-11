@@ -16,9 +16,10 @@ const lightboxCss = fs.readFileSync(require.resolve('yet-another-react-lightbox/
       import { RichTextEditor } from './src/components/ui/rich-text-editor';
       const initial = '<p><strong>原始段落</strong></p><table><tbody><tr><td><p>保留表格</p></td></tr></tbody></table><img src="https://fixture.supabase.invalid/storage/v1/object/public/issue-attachments/fixture/old.png" alt="原圖">';
       window.changes = [];
+      window.fixtureContent = initial;
       function Fixture() {
         const [content, setContent] = useState(initial);
-        return <RichTextEditor content={content} disableImageUpload onChange={value => { window.changes.push(value); setContent(value); }} />;
+        return <RichTextEditor content={content} disableImageUpload onChange={value => { window.changes.push(value); window.fixtureContent = value; setContent(value); }} />;
       }
       createRoot(document.getElementById('root')).render(<Fixture />);
     `, resolveDir: process.cwd(), loader: 'jsx' },
@@ -67,7 +68,7 @@ const lightboxCss = fs.readFileSync(require.resolve('yet-another-react-lightbox/
     assert.equal(await editor.locator('table').count(), 1);
     assert.equal(await editor.locator(':scope > p').count(), 1, 'no trailing paragraph is added to an existing document');
     assert.equal(await page.evaluate(() => window.changes.length), 0, 'opening the editor does not rewrite saved content');
-    const before = await editor.innerHTML();
+    const before = await page.evaluate(() => window.fixtureContent);
     await editor.locator('img').click();
     await page.locator('.yarl__slide img').waitFor();
     assert.match(await page.locator('.yarl__slide img').getAttribute('src'), /signed-fixture/);
@@ -75,6 +76,8 @@ const lightboxCss = fs.readFileSync(require.resolve('yet-another-react-lightbox/
     await page.waitForFunction(() => !document.querySelector('.yarl__slide img'));
     await page.evaluate(() => window.fixtureSignIn());
     await page.locator('.yarl__slide img').waitFor();
+    await page.waitForFunction(() => { const img = document.querySelector('.yarl__slide img'); return img?.complete && img.naturalWidth > 0; });
+    await page.waitForTimeout(400); // Allow the real lightbox's opening transition to finish.
     const closePreview = page.getByRole('button', { name: '關閉圖片預覽', exact: true });
     assert.equal(await closePreview.evaluate(button => button.closest('[inert]') === null), true, 'preview close remains in the interactive modal');
     if (process.env.AUDIT_SCREENSHOT_PATH) await page.screenshot({ path: process.env.AUDIT_SCREENSHOT_PATH.replace(/\.png$/, '-preview.png') });
@@ -85,7 +88,10 @@ const lightboxCss = fs.readFileSync(require.resolve('yet-another-react-lightbox/
       await page.getByLabel('連結文字', { exact: true }).fill('未儲存內容');
       await page.getByLabel('連結網址', { exact: true }).fill('https://example.invalid');
       await page.getByRole('button', { name: '取消', exact: true }).click();
-      assert.equal(await editor.innerHTML(), before, 'cancelling repeated link dialogs retains content');
+      // Selection classes and signed preview URLs are transient view state.
+      // Compare the actual controlled document and persistence callbacks.
+      assert.equal(await page.evaluate(() => window.fixtureContent), before, 'cancelling repeated link dialogs retains saved content');
+      assert.equal(await page.evaluate(() => window.changes.length), 0, 'preview and cancelled dialogs never write document content');
     }
     await editor.locator('strong').click();
     await page.keyboard.press('End');
@@ -105,6 +111,8 @@ const lightboxCss = fs.readFileSync(require.resolve('yet-another-react-lightbox/
     await page.setViewportSize({ width: 390, height: 844 });
     await editor.locator('img').click();
     await page.locator('.yarl__slide img').waitFor();
+    await page.waitForFunction(() => { const img = document.querySelector('.yarl__slide img'); return img?.complete && img.naturalWidth > 0; });
+    await page.waitForTimeout(400);
     assert.equal(await closePreview.evaluate(button => button.closest('[inert]') === null), true);
     if (process.env.AUDIT_SCREENSHOT_PATH) await page.screenshot({ path: process.env.AUDIT_SCREENSHOT_PATH.replace(/\.png$/, '-mobile-preview.png') });
     await closePreview.click();

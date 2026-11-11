@@ -68,4 +68,6 @@ test('draft-PR checks remain isolated from production deployment and credentials
   assert.match(regression, /node tests\/auditRichText\.browser\.cjs/);
   assert.match(regression, /node tests\/materialSeedRemoval\.browser\.cjs/);
   assert.match(regression, /curl --fail --silent http:\/\/127\.0\.0\.1:8106\//);
+  assert.doesNotMatch(regression, /continue-on-error:/);
+  assert.equal((regression.match(/!cancelled\(\) && steps\.install-browser\.outcome == 'success'/g) || []).length, 7, 'independent browser checks continue after earlier failures without hiding the failed job');
 });
