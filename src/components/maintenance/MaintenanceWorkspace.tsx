@@ -7,6 +7,7 @@ import { useTestProject } from '@/components/test-projects/TestProjectProvider';
 import { pushWorkspaceHistory, replaceWorkspaceHistory, WORKSPACE_HISTORY_NAVIGATED } from '@/lib/workspaceHistory';
 import { FAULT_STATUSES, assetLabel, faultStatusLabel, filterFaults, getFaultStatus, ownerLabel, ownerNames, plainIssueText, readFaultFilters, writeFaultFilters, type FaultFilters } from './maintenanceModel';
 import { useMaintenanceData } from './useMaintenanceData';
+import { MaintenanceLoading, MaintenanceSpinner, showMaintenanceSuccess } from './MaintenanceFeedback';
 import { MaintenanceDetail } from './MaintenanceDetail';
 import { MaintenanceReport } from './MaintenanceReport';
 import './maintenance.css';
@@ -19,7 +20,8 @@ export function MaintenanceWorkspace() {
   const { data, loading, error, refresh } = useMaintenanceData(activeProjectId, user?.userId);
   const [filters, setFilters] = useState(() => readFaultFilters(window.location.search));
   const [selectedId, setSelectedId] = useState(() => new URLSearchParams(window.location.search).get('openIssue'));
-  const [reporting, setReporting] = useState(false), [limit, setLimit] = useState(75);
+  const [report, setReport] = useState({ open: false, session: 0 });
+  const [limit, setLimit] = useState(75), [retrying, setRetrying] = useState(false);
   const [assignmentRequest, setAssignmentRequest] = useState<{ issueId: string }>();
   const canEdit = canEditModule('issues') && !activeProject?.is_archived;
   useEffect(() => {
@@ -47,6 +49,12 @@ export function MaintenanceWorkspace() {
   };
   const filtered = useMemo(() => filterFaults(data.issues, filters, user || undefined), [data.issues, filters, user]);
   const selected = data.issues.find(issue => issue.id === selectedId);
+  const closeReport = () => setReport(previous => ({ ...previous, open: false }));
+  const retry = async () => {
+    setRetrying(true);
+    try { await refresh(); }
+    finally { setRetrying(false); }
+  };
   const ownerOptions = [...data.people.map(person => ({ value: person.id, label: person.name })), ...[...new Set(data.issues.filter(issue => !issue.assignee_user_ids?.length && issue.assigned_to).map(issue => issue.assigned_to!))].map(value => ({ value, label: `${value}（原紀錄）` }))];
   const ownerName = filters.owner === 'me' ? '我負責' : filters.owner === 'unassigned' ? '未分派' : ownerOptions.find(item => item.value === filters.owner)?.label || filters.owner;
   const chips = [
@@ -58,7 +66,7 @@ export function MaintenanceWorkspace() {
   ];
   if (!activeProjectId) return <div className="maintenance-center mf-empty">請先選擇或建立專案，再開始記錄維修問題。</div>;
   return <div className="maintenance-center maintenance-fault-center" data-detail-open={!!selected}>
-    <header className="mf-page-head"><div><p className="mf-eyebrow">{activeProject?.name}{activeProject?.is_archived && ' · 已封存，僅供查閱'}</p><h1>故障清單 <span>{data.issues.filter(issue => getFaultStatus(issue) !== 'resolved').length} 件未解決</span></h1></div>{canEdit && <Button onClick={() => setReporting(true)}><Plus size={17}/>快速報修</Button>}</header>
+    <header className="mf-page-head"><div><p className="mf-eyebrow">{activeProject?.name}{activeProject?.is_archived && ' · 已封存，僅供查閱'}</p><h1>故障清單 <span>{loading || error ? '—' : `${data.issues.filter(issue => getFaultStatus(issue) !== 'resolved').length} 件未解決`}</span></h1></div>{canEdit && <Button onClick={() => setReport(previous => ({ open: true, session: previous.session + 1 }))}><Plus size={17}/>快速報修</Button>}</header>
     <div className="mf-layout" data-selected={!!selected}>
       <section className="mf-list-panel" aria-label="故障清單">
         <div className="mf-filter-bar"><label className="mf-search"><Search size={17}/><input aria-label="搜尋機台或故障" value={filters.query} placeholder="搜尋序號、資產編號或故障" onChange={event => setFilter({ ...filters, query: event.target.value })}/>{filters.query && <button aria-label="清除搜尋" onClick={() => setFilter({ ...filters, query: '' })}><X size={15}/></button>}</label>
@@ -69,8 +77,8 @@ export function MaintenanceWorkspace() {
           </div>
           {!!chips.length && <div className="mf-chips" aria-label="目前篩選條件">{chips.map(chip => <button key={chip.key} onClick={() => setFilter({ ...filters, [chip.key]: chip.clear })}>{chip.label}<X size={13}/><span className="sr-only">清除條件</span></button>)}<button className="mf-clear" onClick={() => setFilter({ query: '', status: 'all', owner: 'all', category: '', machine: '' })}>全部清除</button></div>}
         </div>
-        <div className="mf-list-heading"><span>機台／故障 <small>{filtered.length} 件</small></span><span>狀態</span><span>負責人</span><span/></div>
-        <div className="mf-result-list">{loading ? <p className="mf-empty" role="status">讀取原有故障紀錄…</p> : error ? <div className="mf-empty mf-error" role="alert">{error}<Button variant="outline" onClick={() => void refresh()}>重新載入</Button></div> : !filtered.length ? <p className="mf-empty">目前篩選條件沒有符合的故障</p> : <>{filtered.slice(0, limit).map(issue => {
+        <div className="mf-list-heading"><span>機台／故障 <small>{loading || error ? '—' : `${filtered.length} 件`}</small></span><span>狀態</span><span>負責人</span><span/></div>
+        <div className="mf-result-list" data-ready={!loading && !error}>{loading ? <div className="mf-empty"><MaintenanceLoading label="讀取故障清單…" /></div> : error ? <div className="mf-empty mf-error"><span role="alert">{error}</span><Button variant="outline" disabled={retrying} aria-busy={retrying || undefined} onClick={() => void retry()}>{retrying && <MaintenanceSpinner />}{retrying ? '載入中…' : '重新載入'}</Button></div> : !filtered.length ? <p className="mf-empty">目前篩選條件沒有符合的故障</p> : <>{filtered.slice(0, limit).map(issue => {
           const status = getFaultStatus(issue), owner = ownerLabel(issue, data.people);
           const unassigned = owner === '未分派';
           return <article className="mf-fault-row" data-active={selectedId === issue.id} key={issue.id}>
@@ -83,6 +91,6 @@ export function MaintenanceWorkspace() {
       </section>
       {selected ? <MaintenanceDetail key={selected.id} issue={selected} data={data} canEdit={canEdit} onBack={() => selectIssue(null)} refresh={refresh} assignmentRequest={assignmentRequest} onAssignmentHandled={() => setAssignmentRequest(undefined)}/> : <section className="mf-detail-placeholder"><ClipboardList size={24} aria-hidden="true"/><h2>選擇故障查看詳情</h2><p>可在這裡查看處理紀錄、照片與交接重點。</p></section>}
     </div>
-    {reporting && <MaintenanceReport projectId={activeProjectId} systems={data.systems} assetSuggestions={[...new Set(data.issues.map(assetLabel).filter(value => value !== '未記錄機台'))]} onClose={() => { setReporting(false); void refresh(); }} onCreated={id => { setReporting(false); selectIssue(id); void refresh(); }}/ >}
+    {report.session > 0 && <MaintenanceReport key={report.session} open={report.open} projectId={activeProjectId} systems={data.systems} assetSuggestions={[...new Set(data.issues.map(assetLabel).filter(value => value !== '未記錄機台'))]} onClose={() => { closeReport(); void refresh(); }} onExited={() => setReport(previous => previous.session === report.session && !previous.open ? { open: false, session: 0 } : previous)} onCreated={id => { closeReport(); selectIssue(id); void refresh(); showMaintenanceSuccess('報修已建立'); }}/ >}
   </div>;
 }

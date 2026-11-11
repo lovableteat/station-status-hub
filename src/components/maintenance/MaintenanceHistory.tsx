@@ -4,6 +4,7 @@ import { ChevronDown, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
 import { useTestProject } from '@/components/test-projects/TestProjectProvider';
+import { MaintenanceLoading } from './MaintenanceFeedback';
 import { maintenanceError } from './useMaintenanceData';
 import './maintenance.css';
 import './maintenanceOverviewLayout.css';
@@ -126,9 +127,13 @@ export function MaintenanceHistory() {
       <div className="mf-archive mf-history-table">
         <table>
           <thead><tr><th scope="col">機台／序號</th><th scope="col">原狀態</th><th scope="col" className="mf-history-engineer">原工程師</th><th scope="col">歷史資料</th></tr></thead>
-          <tbody>
+          <tbody className={loading ? undefined : 'mf-results-ready'}>
             {visible.map(system => <HistorySystemRow key={system.id} system={system} entries={progressBySystem.get(system.id) ?? []}/>)}
-            {!visible.length && <tr><td colSpan={4} className="mf-history-empty">{loading ? '讀取舊紀錄…' : '目前篩選條件沒有符合的機台'}</td></tr>}
+            {!visible.length && (
+              <tr><td colSpan={4} className="mf-history-empty">
+                {loading ? <MaintenanceLoading label="載入舊測試紀錄中…"/> : error ? '暫時無法顯示紀錄' : '目前篩選條件沒有符合的機台'}
+              </td></tr>
+            )}
           </tbody>
         </table>
       </div>

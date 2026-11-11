@@ -7,7 +7,6 @@ import {
   File,
   Files,
   Library,
-  Loader2,
   Plus,
   Terminal,
   Trash2,
@@ -15,6 +14,7 @@ import {
   Wrench,
 } from "lucide-react";
 
+import { MaintenanceLoading, MaintenanceSpinner, showMaintenanceSuccess } from "@/components/maintenance/MaintenanceFeedback";
 import { MaintenancePageHeader } from "@/components/maintenance/MaintenancePageHeader";
 import { MobileFilterBar } from "@/components/layout/mobile/MobileFilterBar";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
@@ -481,6 +481,7 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
         setSaving(false);
         return;
       }
+      showMaintenanceSuccess(`${toolDraft.category === GENERAL_ASSET_CATEGORY ? "檔案資訊" : "工具"}已更新`);
     } else {
       const { data, error } = await supabase
         .from("tools_management")
@@ -493,17 +494,18 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
         return;
       }
       if (activeProjectId && assignmentsReady && !activeProject?.is_archived) {
-        await supabase.from("test_project_tool_assignments").insert({
+        const { error: assignmentError } = await supabase.from("test_project_tool_assignments").insert({
           is_required: toolDraft.is_required,
           pinned_version: toolDraft.version.trim() || null,
           project_id: activeProjectId,
           tool_id: data.id,
         });
-      }
+        if (assignmentError) {
+          toast({ title: "工具已建立，套用專案失敗", description: assignmentError.message, variant: "destructive" });
+        } else showMaintenanceSuccess("工具已建立並套用");
+      } else showMaintenanceSuccess("工具已建立");
     }
 
-    const savedAsGeneralAsset = toolDraft.category === GENERAL_ASSET_CATEGORY;
-    toast({ title: editingTool ? `${savedAsGeneralAsset ? "檔案資訊" : "工具"}已更新` : "工具已建立並套用" });
     setSaving(false);
     setToolSheetOpen(false);
     setRefreshKey((value) => value + 1);
@@ -584,6 +586,7 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
         else next[asset.kind].add(asset.id);
         return next;
       });
+      showMaintenanceSuccess(assigned ? "已從目前專案移出" : "已套用到目前專案");
     }
     setAssigningKey(null);
   };
@@ -597,19 +600,14 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
       return;
     }
     const storagePath = getStoragePath(tool.file_path);
-    if (storagePath) {
-      const { error: storageError } = await supabase.storage.from("task-attachments").remove([storagePath]);
-      if (storageError) {
-        toast({
-          title: "資料已刪除，但儲存檔案清理失敗",
-          description: storageError.message,
-          variant: "destructive",
-        });
-      }
-    }
+    const { error: storageError } = storagePath
+      ? await supabase.storage.from("task-attachments").remove([storagePath])
+      : { error: null };
     setSelectedAsset(null);
     setRefreshKey((value) => value + 1);
-    toast({ title: `${isGeneralAsset ? "檔案" : "工具"}已刪除` });
+    if (storageError) {
+      toast({ title: "資料已刪除，但儲存檔案清理失敗", description: storageError.message, variant: "destructive" });
+    } else showMaintenanceSuccess(`${isGeneralAsset ? "檔案" : "工具"}已刪除`);
   };
 
   const downloadTool = async (tool: ToolRow) => {
@@ -683,13 +681,13 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
       )}
 
       <Tabs value={tab} onValueChange={(value) => handleWorkspaceTabChange(value as WorkspaceTab)}>
-        <div data-testid="asset-workspace-navigation">
+        <div data-testid="asset-workspace-navigation" aria-busy={loading}>
           <TabsList aria-label="資產工作區" className="ma-tabs">
-            <TabsTrigger value="applied" aria-label={`專案已套用 ${appliedCount}`}>已套用 <span>{appliedCount}</span></TabsTrigger>
-            <TabsTrigger value="tools" ref={toolsTabRef}>工具 <span>{classCounts.tool}</span></TabsTrigger>
-            <TabsTrigger value="code">程式碼 <span>{snippets.length}</span></TabsTrigger>
-            <TabsTrigger value="commands">指令 <span>{commands.length}</span></TabsTrigger>
-            <TabsTrigger value="files">不特定檔案 <span>{classCounts.general}</span></TabsTrigger>
+            <TabsTrigger value="applied" aria-label={loading ? "專案已套用" : `專案已套用 ${appliedCount}`}>已套用 <span>{loading ? '—' : appliedCount}</span></TabsTrigger>
+            <TabsTrigger value="tools" ref={toolsTabRef}>工具 <span>{loading ? '—' : classCounts.tool}</span></TabsTrigger>
+            <TabsTrigger value="code">程式碼 <span>{loading ? '—' : snippets.length}</span></TabsTrigger>
+            <TabsTrigger value="commands">指令 <span>{loading ? '—' : commands.length}</span></TabsTrigger>
+            <TabsTrigger value="files">不特定檔案 <span>{loading ? '—' : classCounts.general}</span></TabsTrigger>
           </TabsList>
         </div>
         {showAssetList && (
@@ -726,11 +724,12 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
       </Tabs>
 
       <Dialog open={Boolean(selectedAsset)} onOpenChange={(open) => !open && setSelectedAsset(null)}>
-        <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-5xl overflow-y-auto border-[#38d7ff]/55 bg-gradient-to-br from-[#09253a] via-[#071522] to-[#06111f] p-0 shadow-[0_0_42px_rgba(56,215,255,0.18)]">
+        <DialogContent className="mf-tool-dialog max-h-[90vh] w-[calc(100vw-2rem)] max-w-5xl overflow-y-auto border-[#38d7ff]/55 bg-gradient-to-br from-[#09253a] via-[#071522] to-[#06111f] p-0 shadow-[0_0_42px_rgba(56,215,255,0.18)]">
           {selectedAsset && (
             <AssetDetails
               asset={selectedAsset}
               assigned={assignments[selectedAsset.kind].has(selectedAsset.id)}
+              assigning={assigningKey === `${selectedAsset.kind}:${selectedAsset.id}`}
               onDeleteTool={deleteTool}
               onDownloadTool={downloadTool}
               onEditTool={openEditTool}
@@ -741,7 +740,7 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
       </Dialog>
 
       <Sheet open={toolSheetOpen} onOpenChange={setToolSheetOpen}>
-        <SheetContent className="w-full overflow-y-auto border-[#2a526f] bg-[#071522] sm:max-w-[540px]">
+        <SheetContent className="mf-tool-dialog w-full overflow-y-auto border-[#2a526f] bg-[#071522] sm:max-w-[540px]">
           <SheetHeader className="text-left">
             <SheetTitle className="text-xl text-[#f3f8fc]">{editingGeneralAsset ? "編輯檔案資訊" : editingTool ? "編輯工具" : "新增工具"}</SheetTitle>
             <SheetDescription className="text-[#a9c0d1]">
@@ -794,8 +793,8 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
           </div>
           <SheetFooter className="mt-6 flex-row justify-end gap-2">
             <Button variant="outline" onClick={() => setToolSheetOpen(false)}>取消</Button>
-            <Button onClick={saveTool} disabled={saving}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{editingTool ? "儲存變更" : "建立工具"}
+            <Button onClick={saveTool} disabled={saving} aria-busy={saving}>
+              {saving ? <><MaintenanceSpinner/>儲存中…</> : editingTool ? "儲存變更" : "建立工具"}
             </Button>
           </SheetFooter>
         </SheetContent>
@@ -833,7 +832,7 @@ function AssetList({
   onToggle: (asset: Asset) => void;
 }) {
   return (
-    <div className="ma-asset-list" role="table" aria-label="資產清單" aria-busy={loading}>
+    <div className="ma-asset-list" role="table" aria-label="資產清單">
       <div className="ma-asset-row ma-asset-heading" role="row">
         <div role="columnheader">資產 {!loading && <span className="ma-asset-count">{assets.length} 筆</span>}</div>
         <div role="columnheader" className="ma-asset-category">類型／範圍</div>
@@ -841,9 +840,9 @@ function AssetList({
         <div role="columnheader" className="ma-asset-date">更新時間</div>
         <div role="columnheader" className="ma-asset-actions">專案操作</div>
       </div>
-      <div role="rowgroup">
+      <div role="rowgroup" className={loading ? undefined : 'mf-results-ready'}>
         {loading ? (
-          <div role="row"><div role="cell" aria-colspan={5} className="ma-asset-empty"><span role="status"><Loader2 className="animate-spin" aria-hidden="true" />載入資產中…</span></div></div>
+          <div role="row"><div role="cell" aria-colspan={5} className="ma-asset-empty"><MaintenanceLoading label="載入工具與資產中…"/></div></div>
         ) : !assets.length ? (
           <div role="row"><div role="cell" aria-colspan={5} className="ma-asset-empty"><Library aria-hidden="true" /><strong>{emptyTitle}</strong>{emptyAction}</div></div>
         ) : assets.map((asset) => {
@@ -871,7 +870,7 @@ function AssetList({
               <div className="ma-asset-date" role="cell">{formatDate(asset.updatedAt)}</div>
               <div className="ma-asset-actions" role="cell">
                 <Button variant="ghost" size="icon" onClick={() => onPreview(asset)} aria-label={`查看 ${asset.name}`}><Eye className="h-4 w-4" /></Button>
-                <Button variant="outline" size="sm" data-assigned={assigned} disabled={assigning} onClick={() => onToggle(asset)}>{assigning ? <Loader2 className="h-4 w-4 animate-spin" /> : assigned ? "移出專案" : "套用專案"}</Button>
+                <Button variant="outline" size="sm" data-assigned={assigned} disabled={assigning} aria-busy={assigning} onClick={() => onToggle(asset)}>{assigning ? <><MaintenanceSpinner/>處理中</> : assigned ? "移出專案" : "套用專案"}</Button>
               </div>
             </div>
           );
@@ -884,6 +883,7 @@ function AssetList({
 function AssetDetails({
   asset,
   assigned,
+  assigning,
   onDeleteTool,
   onDownloadTool,
   onEditTool,
@@ -891,6 +891,7 @@ function AssetDetails({
 }: {
   asset: Asset;
   assigned: boolean;
+  assigning: boolean;
   onDeleteTool: (tool: ToolRow) => void;
   onDownloadTool: (tool: ToolRow) => void;
   onEditTool: (tool: ToolRow) => void;
@@ -933,7 +934,9 @@ function AssetDetails({
         {asset.kind === "tool" && asset.raw.file_path && <Button variant="outline" onClick={() => onDownloadTool(asset.raw)}><Download className="mr-2 h-4 w-4" />下載</Button>}
         {asset.kind === "tool" && <Button variant="outline" onClick={() => onEditTool(asset.raw)}>{isGeneralAsset ? "編輯檔案資訊" : "編輯工具"}</Button>}
         {asset.kind === "tool" && <Button variant="destructive" onClick={() => onDeleteTool(asset.raw)}><Trash2 className="mr-2 h-4 w-4" />{isGeneralAsset ? "刪除檔案" : "刪除"}</Button>}
-        <Button onClick={() => onToggle(asset)}>{assigned ? "移出目前專案" : "套用到目前專案"}</Button>
+        <Button onClick={() => onToggle(asset)} disabled={assigning} aria-busy={assigning}>
+          {assigning ? <><MaintenanceSpinner/>處理中…</> : assigned ? "移出目前專案" : "套用到目前專案"}
+        </Button>
       </DialogFooter>
     </>
   );
