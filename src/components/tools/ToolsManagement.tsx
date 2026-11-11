@@ -695,7 +695,7 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
         {showAssetList && (
           <MobileFilterBar
             className="ma-asset-filter"
-            search={{ value: search, onChange: (value) => setSearch(value.slice(0, 120)), placeholder: "搜尋名稱、分類、版本或說明", label: "搜尋資產" }}
+            search={{ value: search, onChange: (value) => setSearch(value.slice(0, 120)), placeholder: "搜尋名稱、版本或說明", label: "搜尋資產" }}
             chips={assetChips}
             onClearAll={clearAssetFilters}
             controls={
