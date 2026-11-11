@@ -63,6 +63,8 @@
 .bom-tracker-status { display: inline-grid; grid-auto-columns: auto; grid-auto-flow: column; gap: 2px; border: 1px solid hsl(var(--border)); border-radius: 7px; padding: 2px; background: hsl(var(--secondary)); }
 .bom-tracker-status > button { height: 34px; border-radius: 5px; padding: 0 10px; background: hsl(var(--bom-status-color) / .08); box-shadow: inset 0 0 0 1px hsl(var(--bom-status-color) / .2); color: hsl(var(--bom-status-color)); font-size: 13px; font-weight: 600; white-space: nowrap; }
 .bom-tracker-status > button:hover:not(:disabled) { background: hsl(var(--bom-status-color) / .2); }
+.bom-tracker-status > button[aria-pressed="false"] { background: hsl(var(--foreground) / .04); box-shadow: inset 0 0 0 1px hsl(var(--border)); color: hsl(var(--muted-foreground)); }
+.bom-tracker-status > button[aria-pressed="false"]:hover:not(:disabled) { background: hsl(var(--foreground) / .09); }
 .bom-tracker-status > button:disabled { cursor: default; }
 .bom-tracker-status > button[aria-pressed="true"] { background: hsl(var(--bom-status-color) / .24); box-shadow: inset 0 0 0 1px hsl(var(--bom-status-color) / .65); color: hsl(var(--foreground)); }
 
