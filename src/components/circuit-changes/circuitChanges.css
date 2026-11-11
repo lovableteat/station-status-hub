@@ -668,3 +668,6 @@
 .circuit-form-step, .circuit-form-step .circuit-content-fields, .circuit-form-step .circuit-image-section { min-width: 0; grid-template-columns: minmax(0, 1fr); }
 .circuit-form-step .circuit-image-strip { max-width: 100%; overflow-x: auto; }
 .circuit-problem-read .circuit-image-stage { height: clamp(140px, 22vh, 260px); }
+
+/* 回報改善 can always be pressed; until the fix is written it reads as not ready and says what is missing when pressed. */
+.circuit-changes-dialog .circuit-submit[data-ready="false"]:not(:disabled) { border: 1px solid hsl(var(--primary) / .4); background: hsl(var(--primary) / .08); color: hsl(var(--primary)); box-shadow: none; }

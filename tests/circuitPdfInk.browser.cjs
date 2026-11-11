@@ -57,11 +57,11 @@ async function erase(page,pane='active',point=[.35,.443]) {
   await page.mouse.click(box.x+box.width*point[0],box.y+box.height*point[1]);
 }
 async function frame(page,pane='active') {
-  await tool(page,'框選'); const surface=panel(page).locator(`.circuit-pdf-page[data-pane="${pane}"] .circuit-pdf-surface`);
+  await tool(page,'截圖'); const surface=panel(page).locator(`.circuit-pdf-page[data-pane="${pane}"] .circuit-pdf-surface`);
   await surface.scrollIntoViewIfNeeded(); const box=await surface.boundingBox();
   await page.mouse.move(box.x+box.width*.12,box.y+box.height*.32); await page.mouse.down();
   await page.mouse.move(box.x+box.width*.7,box.y+box.height*.65,{steps:5}); await page.mouse.up();
-  await panel(page).getByRole('group',{name:'加入框選區域'}).waitFor();
+  await panel(page).getByRole('group',{name:'加入截圖'}).waitFor();
 }
 async function redPixels(page, bytes) {
   return page.evaluate(async data=>{
@@ -82,15 +82,15 @@ async function toolbarFits(page,width) {
   assert.ok(geometry.buttons.every(b=>b.height>=(width<1024?44:32)&&Math.abs(b.top-geometry.buttons[0].top)<=1),JSON.stringify(geometry));
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
   if(width<1024)assert.ok(geometry.draw.every(b=>b.left>=-1&&b.right<=width+1),'Phone drawing tools are visible before scrolling');
-  if(width<1024){const back=await panel(page).getByRole('button',{name:'返回修改內容',exact:true}).boundingBox();assert.ok(back.width>=44&&back.height>=44,'Phone return button must not shrink: '+JSON.stringify(back));}
+  if(width<1024){const back=await panel(page).getByRole('button',{name:'返回表單',exact:true}).boundingBox();assert.ok(back.width>=44&&back.height>=44,'Phone return button must not shrink: '+JSON.stringify(back));}
   return geometry;
 }
 async function managerFits(page) {
-  await panel(page).getByRole('button',{name:'選擇 PDF 版本',exact:true}).click();
-  const manager=panel(page).getByRole('group',{name:'PDF 版本（依圖面日期）'});await manager.waitFor();
+  await panel(page).getByRole('button',{name:'選擇 PDF',exact:true}).click();
+  const manager=panel(page).getByRole('group',{name:'PDF 清單（依圖面日期）'});await manager.waitFor();
   const visible=await manager.evaluate(node=>{const r=node.getBoundingClientRect();const x=Math.round(r.left+r.width/2),y=Math.round(r.top+r.height/2);return {width:r.width,height:r.height,hit:node.contains(document.elementFromPoint(x,y))};});
   assert.ok(visible.width>250&&visible.height>300&&visible.hit,JSON.stringify(visible));
-  await manager.getByRole('button',{name:'關閉 PDF 版本管理',exact:true}).click(); await manager.waitFor({state:'hidden'});
+  await manager.getByRole('button',{name:'關閉 PDF 清單',exact:true}).click(); await manager.waitFor({state:'hidden'});
 }
 
 (async()=>{
@@ -172,7 +172,7 @@ async function managerFits(page) {
     await dialog(p).getByRole('tab',{name:/^線路 Review/}).click();await rendered(p);
     await frame(p);await panel(p).getByRole('button',{name:'加到問題截圖',exact:true}).click();
     await eventually(()=>[...fixture.state.items.values()][0]?.content.images.length===1,'The working capture saves');
-    await panel(p).getByRole('button',{name:'選擇 PDF 版本',exact:true}).click();
+    await panel(p).getByRole('button',{name:'選擇 PDF',exact:true}).click();
     await panel(p).getByRole('button',{name:/^開啟 .* Official_20261101[.]pdf$/}).click();await rendered(p);await gotoPage(p,1);
     await frame(p);await panel(p).getByRole('button',{name:'加到問題截圖',exact:true}).click();
     await eventually(()=>[...fixture.state.items.values()][0]?.content.images.length===2,'Both captured change images save');
@@ -194,7 +194,7 @@ async function managerFits(page) {
 
     const viewer=await open(1173,'view');await rendered(viewer.page);await gotoPage(viewer.page,1);
     assert.equal(await strokeCount(viewer.page),2);for(const name of ['畫筆','橡皮擦','撤回最後一筆畫筆'])assert.equal(await panel(viewer.page).getByRole('button',{name,exact:true}).count(),0,name+' is not offered to a viewer');
-    const beforeViewWrites=fixture.state.inkWrites;await tool(viewer.page,'框選');await tool(viewer.page,'移動');assert.equal(fixture.state.inkWrites,beforeViewWrites);
+    const beforeViewWrites=fixture.state.inkWrites;await tool(viewer.page,'截圖');await tool(viewer.page,'移動');assert.equal(fixture.state.inkWrites,beforeViewWrites);
     report.geometry.push({width:1173,...await toolbarFits(viewer.page,1173)});await managerFits(viewer.page);await viewer.page.screenshot({path:path.join(evidence,'compact-1173-readonly.png')});check('1173px readonly account sees saved ink and can navigate without gaining edit controls');
 
     const mobile=await open(390);await rendered(mobile.page);await gotoPage(mobile.page,1);
@@ -203,7 +203,7 @@ async function managerFits(page) {
     await draw(mobile.page,'active',[.24,.65],[.6,.7]);await eventually(()=>activeRows(fixture,workingId).length===3,'Phone pen saves');
     await tool(mobile.page,'撤回最後一筆畫筆');await eventually(()=>activeRows(fixture,workingId).length===2,'Phone undo saves');
     await managerFits(mobile.page);await panel(mobile.page).locator('.circuit-pdf-row').evaluate(node=>node.scrollLeft=0);
-    await panel(mobile.page).getByRole('button',{name:'返回修改內容',exact:true}).click();await panel(mobile.page).waitFor({state:'hidden'});await dialog(mobile.page).locator('.circuit-item-list').waitFor();
+    await panel(mobile.page).getByRole('button',{name:'返回表單',exact:true}).click();await panel(mobile.page).waitFor({state:'hidden'});await dialog(mobile.page).locator('.circuit-item-list').waitFor();
     await dialog(mobile.page).getByTestId('circuit-change-item').first().click();assert.ok(await dialog(mobile.page).getByRole('textbox',{name:'標題',exact:true}).isVisible());
     await dialog(mobile.page).getByRole('button',{name:'看圖面',exact:true}).filter({visible:true}).first().click();await rendered(mobile.page);await panel(mobile.page).locator('.circuit-pdf-row').evaluate(node=>node.scrollLeft=0);await mobile.page.screenshot({path:path.join(evidence,'mobile-390-tools.png')});
     check('390px phone emulation has visible 44px drawing tools, one toolbar row, usable pen/undo and version manager');

@@ -340,3 +340,9 @@
 .circuit-pdf-row > .circuit-pdf-tool-group[data-group="draw"] { padding: 1px; }
 .circuit-pdf-tool-group[data-group="draw"] > button { height: 32px; }
 @media (max-width: 1023px) { .circuit-pdf-tool-group[data-group="draw"] > button { height: 44px; } }
+
+/* AI 比對: the two page numbers sit side by side with their names (新版 / 官方對應頁). */
+.circuit-pdf-pager-name { padding-inline: 4px 2px; color: hsl(var(--primary)); font-size: 13px; font-weight: 600; }
+.circuit-pdf-overview > .circuit-pdf-offset { flex: none; padding-inline-start: 10px; border-inline-start: 1px solid hsl(var(--border)); }
+.circuit-pdf-overview > .circuit-pdf-offset > label { color: hsl(var(--warning)); font-weight: 600; }
+.circuit-pdf-overview > .circuit-pdf-page-warning { flex: none; }

@@ -128,7 +128,9 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       }
       // 6. In 改善追蹤, once the description is there the change can be sent, and nothing overflows sideways.
       await tab('改善追蹤');
-      assert.equal(await dialog.getByRole('button',{name:'回報改善',exact:true}).isDisabled(), true);
+      await dialog.getByRole('button',{name:'回報改善',exact:true}).tap();
+      await dialog.getByRole('alert').filter({hasText:'回報改善前還缺：改善說明或改好後截圖'}).waitFor();
+      assert.equal((await state(origin)).items[0].status,'draft','pressing 回報改善 too early says what is missing and sends nothing');
       await dialog.getByRole('textbox',{name:'改善說明',exact:true}).fill('上拉電阻改為 4.7K');
       await page.waitForFunction(()=>document.querySelector('.circuit-detail-footer [role="status"]')?.textContent==='已儲存');
       assert.equal(await dialog.getByRole('button',{name:'回報改善',exact:true}).isEnabled(), true);

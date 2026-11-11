@@ -9,7 +9,7 @@ export const CIRCUIT_CHANGE_STATUS_LABELS: Record<CircuitChangeStatus, string> =
 /** The four jobs of the 線路修改 window, in the order people do them. */
 export type CircuitTask = "review" | "ai" | "track" | "official";
 export const CIRCUIT_TASKS: Array<{ key: CircuitTask; label: string; short: string; hint: string }> = [
-  { key: "review", label: "線路 Review", short: "看圖、標記問題", hint: "看線路圖、框選並標記問題" },
+  { key: "review", label: "線路 Review", short: "看圖、標記問題", hint: "看線路圖、截圖並標記問題" },
   { key: "ai", label: "AI 比對", short: "新舊版差在哪", hint: "官方版本與新版並排，AI 找出新舊差異，逐項確認並保存" },
   { key: "track", label: "改善追蹤", short: "回報改善、確認結案", hint: "畫線路的人回報改善，主管確認結案；每一步都有紀錄" },
   { key: "official", label: "官方版本", short: "換了就記錄", hint: "記錄目前的官方版本與每次更換" },

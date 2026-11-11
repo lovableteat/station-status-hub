@@ -35,7 +35,7 @@ test("a file that can never be accepted is marked so, unlike a transfer that may
   const result = await api.uploadCircuitImages({ setId, itemId, files: [pdf, offline, file(3)], side: "after", actorId: setId });
   assert.equal(result.images.length, 1);
   const rejected = result.failures.find(failure => failure.file === pdf), dropped = result.failures.find(failure => failure.file === offline);
-  assert.equal(rejected.permanent, true); assert.match(rejected.error, /PDF 請上傳到「PDF 圖面」再框選/);
+  assert.equal(rejected.permanent, true); assert.match(rejected.error, /PDF 請上傳到「PDF 圖面」再截圖/);
   assert.equal(dropped.permanent, undefined); assert.match(dropped.error, /network down/);
 });
 test("links signed earlier are handed out again instead of signing every picture on each change", async () => {

@@ -115,7 +115,7 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
     if (next.removedAt) {
       if (isDirty() && current.current?.id === id) {
         remote.current = next; current.current = { ...current.current, removedAt: next.removedAt, removedBy: next.removedBy };
-        setSelectedItem(current.current); setConflict(true); setSaveError("此修改已由其他人移除，草稿仍保留；請從已移除項目還原，或採用最新結果。");
+        setSelectedItem(current.current); setConflict(true); setSaveError("這個問題已被其他人刪除，草稿仍保留；請從「已刪除的問題」還原，或採用最新結果。");
       } else { clearSelection(); offerBlank(); }
       return;
     }
@@ -204,7 +204,7 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
   async function saveDraft(create = false) {
     const captured = scope;
     assertScope(captured, true);
-    if (removalInFlight.current || current.current?.removedAt) throw new Error("此修改已移除或正在移除，請先還原。");
+    if (removalInFlight.current || current.current?.removedAt) throw new Error("這個問題已刪除或正在刪除，請先還原。");
     if (saveInFlight.current) await saveInFlight.current;
     assertScope(captured, true);
     const unsaved = isUnsavedCircuitChange(current.current);
@@ -298,7 +298,7 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
   async function review(action: Parameters<CircuitChangesModel["review"]>[0], note = "") {
     await finishDraft(); assertScope(scope, true);
     if (!current.current) throw new Error("請先選取修改項目。");
-    if (current.current.removedAt) throw new Error("此修改已移除，請先還原。");
+    if (current.current.removedAt) throw new Error("這個問題已刪除，請先還原。");
     if (isUnsavedCircuitChange(current.current)) throw new Error("請先填寫修改內容。");
     const captured = scope, target = current.current, version = localVersion.current;
     setSaving(true);
@@ -347,7 +347,7 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
   }
   async function addImages(files: File[], side: CircuitImageSide) {
     assertScope(scope, true);
-    if (current.current?.removedAt || removalInFlight.current) throw new Error("此修改已移除或正在移除，請先還原。");
+    if (current.current?.removedAt || removalInFlight.current) throw new Error("這個問題已刪除或正在刪除，請先還原。");
     if (!files.length) return;
     if ((draftRef.current?.images.length || 0) + reservedUploads.current + files.length > 200) throw new Error("每個修改項目最多200張圖；請分成另一個修改項目，現有圖片已保留。");
     const captured = scope, setId = selection.current.setId, itemId = selection.current.itemId;
@@ -384,7 +384,7 @@ export function useCircuitChanges({ open, context, canEdit, userId, userName }: 
     try {
       const next = await getCircuitChangeItem(current.current.id);
       assertScope(captured, true);
-      if (next.removedAt) throw new Error("此修改已移除，請先還原後再儲存草稿。");
+      if (next.removedAt) throw new Error("這個問題已刪除，請先還原後再儲存草稿。");
       const value = draftRef.current, version = localVersion.current;
       if (!value) return;
       // This explicit choice keeps the user's content while adopting the latest CAS token.

@@ -31,7 +31,7 @@ export function CircuitChangeImages({ view = "all", heading, hint, images, urls,
   const retryable = failures.some(failure => !failure.permanent);
   const status = <>
     {uploading && <p className="circuit-upload-progress" role="status">正在上傳 {progress.completed} / {progress.total} 張，已成功的圖片會保留</p>}
-    {removed && !readOnly && <p className="circuit-upload-undo" role="status"><span>已移除 {removed.name}</span><Button title="把剛移除的圖片放回來" type="button" variant="outline" onClick={onRestore}>復原</Button></p>}
+    {removed && !readOnly && <p className="circuit-upload-undo" role="status"><span>已刪除 {removed.name}</span><Button title="把剛刪除的圖片放回來" type="button" variant="outline" onClick={onRestore}>還原</Button></p>}
     {warnings.length > 0 && <div className="circuit-upload-warning" role="status">{warnings.map((warning, index) => <p key={index}>{warning}</p>)}</div>}
     {failures.length > 0 && <div className="circuit-upload-failures" role="alert">
       <p>以下檔案沒有加入，已成功的圖片保留：</p>
@@ -60,7 +60,7 @@ export function CircuitChangeImages({ view = "all", heading, hint, images, urls,
       </div>
     </div>
     {uploading && <p className="circuit-upload-progress" role="status">正在上傳 {progress.completed} / {progress.total} 張，已成功的圖片會保留</p>}
-    {removed && !readOnly && <p className="circuit-upload-undo" role="status"><span>已移除 {removed.name}</span><Button title="把剛移除的圖片放回來" type="button" variant="outline" onClick={onRestore}>復原</Button></p>}
+    {removed && !readOnly && <p className="circuit-upload-undo" role="status"><span>已刪除 {removed.name}</span><Button title="把剛刪除的圖片放回來" type="button" variant="outline" onClick={onRestore}>還原</Button></p>}
     {warnings.length > 0 && <div className="circuit-upload-warning" role="status">{warnings.map((warning, index) => <p key={index}>{warning}</p>)}</div>}
     {failures.length > 0 && <div className="circuit-upload-failures" role="alert">
       <p>以下檔案沒有加入，已成功的圖片保留：</p>
@@ -97,9 +97,9 @@ function Pane({ side, images, urls, active, dropping, readOnly, busy, heading, h
   const shown = images[shownIndex];
   const frame = (image: CircuitImage) => ({ "--circuit-image-aspect": image.width / image.height, aspectRatio: `${image.width} / ${image.height}` }) as CSSProperties;
   const actions = (image: CircuitImage) => <div className="circuit-image-actions">
-    {image.source && onShowSource && <Button type="button" variant="ghost" className="circuit-image-source" aria-label={`到 PDF 第 ${image.source.page} 頁（${image.source.date}）`} title={`在 PDF 圖面打開 ${image.source.date} 版第 ${image.source.page} 頁`} onClick={() => onShowSource(image)}><FileText aria-hidden="true" /><span>P{image.source.page}</span></Button>}
+    {image.source && onShowSource && <Button type="button" variant="ghost" className="circuit-image-source" aria-label={`到 PDF 第 ${image.source.page} 頁（${image.source.date}）`} title={`在 PDF 圖面打開 ${image.source.date} 版第 ${image.source.page} 頁`} onClick={() => onShowSource(image)}><FileText aria-hidden="true" /><span>第 {image.source.page} 頁</span></Button>}
     <Button type="button" variant="ghost" aria-label={`下載原圖 ${image.name}`} title="下載原圖" onClick={() => onDownload(image)}><Download aria-hidden="true" /></Button>
-    {!readOnly && <Button type="button" variant="ghost" aria-label={`移除圖片 ${image.name}`} title="移除這張圖（可復原）" disabled={busy} onClick={() => onRemove(image)}><Trash2 aria-hidden="true" /></Button>}
+    {!readOnly && <Button type="button" variant="ghost" aria-label={`刪除圖片 ${image.name}`} title="刪除這張圖（可以還原）" disabled={busy} onClick={() => onRemove(image)}><Trash2 aria-hidden="true" /></Button>}
   </div>;
   const empty = <button title={`${addName}：點這裡選檔，也可以貼上（Ctrl+V）或拖進來`} type="button" className="circuit-image-empty" aria-label={addName} disabled={readOnly || busy} onFocus={() => onSide(side)} onClick={() => onPick(side)}>
     <ImagePlus aria-hidden="true" />
@@ -113,7 +113,7 @@ function Pane({ side, images, urls, active, dropping, readOnly, busy, heading, h
     onDragOver={event => { if (readOnly || !carriesFiles(event)) return; event.preventDefault(); event.stopPropagation(); onDragSide(side); }}
     onDrop={event => { if (readOnly || !carriesFiles(event)) return; event.preventDefault(); event.stopPropagation(); onDragSide(null); onFiles(Array.from(event.dataTransfer.files), side); }}>
     <header>
-      <h4 title={side === "before" ? "哪裡有問題的截圖：在 PDF 上框選，或貼上、拖入" : side === "after" ? "改好後的截圖：畫線路的人改完後加入" : "規格書、量測波形等參考資料"}>{heading || label}{!heading && <small className="circuit-image-purpose">{side === "before" ? "問題截圖" : side === "after" ? "改好後" : "參考資料"}</small>}</h4>
+      <h4 title={side === "before" ? "哪裡有問題的截圖：在圖面上截圖，或貼上、拖入" : side === "after" ? "改好後的截圖：畫線路的人改完後加入" : "規格書、量測波形等參考資料"}>{heading || label}{!heading && <small className="circuit-image-purpose">{side === "before" ? "問題截圖" : side === "after" ? "改好後" : "參考資料"}</small>}</h4>
       {(!heading || images.length > 0) && <span className="circuit-image-count">{images.length} 張</span>}
       {!readOnly && active && <span className="circuit-paste-target">{dropping ? "放開以加入這裡" : "貼上會加到這裡"}</span>}
       {!readOnly && images.length > 0 && <Button title={`再加一張${label}`} type="button" variant="outline" aria-label={addName} disabled={busy} onFocus={() => onSide(side)} onClick={() => onPick(side)}><Upload aria-hidden="true" />加入圖片</Button>}
