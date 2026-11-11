@@ -485,6 +485,22 @@ export function useDirectMessages(threadId: string | null, { isVisible = true }:
     return message;
   }, [isRealtimeAuthenticated, loadLatest, threadId]);
 
+  const loadPinnedMessages = useCallback(async (messageIds: string[]): Promise<DirectMessage[] | null> => {
+    if (!threadId || !isRealtimeAuthenticated) return null;
+    const requests = [];
+    for (let offset = 0; offset < messageIds.length; offset += MESSAGE_PAGE_SIZE) {
+      requests.push(database
+        .from("chat_messages")
+        .select(MESSAGE_SELECT)
+        .eq("thread_id", threadId)
+        .is("deleted_at", null)
+        .in("id", messageIds.slice(offset, offset + MESSAGE_PAGE_SIZE)));
+    }
+    const results = await Promise.all(requests);
+    if (messageScope !== activeScope.current || results.some((result) => result.error)) return null;
+    return resolveSignedAttachmentUrls(results.flatMap((result) => (result.data ?? []).map(mapMessage)));
+  }, [isRealtimeAuthenticated, messageScope, threadId]);
+
   const loadMore = useCallback(async () => {
     const oldest = messages.find((message) => message.delivery === "sent");
     if (!threadId || !oldest || loadingMore || !hasMore) return;
@@ -899,6 +915,7 @@ export function useDirectMessages(threadId: string | null, { isVisible = true }:
     typingUsers,
     readByOtherAt,
     loadMore,
+    loadPinnedMessages,
     sendMessage,
     retryMessage,
     deleteMessage,

@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -98,6 +99,7 @@ interface ReplyTarget {
 
 const QUICK_EMOJI = ["👍", "❤️", "😂", "😮", "🎉", "✅"];
 const CHAT_PREFERENCES_VERSION = "v1";
+const EMPTY_PIN_IDS: string[] = [];
 
 function formatMessageTime(value: string) {
   return new Date(value).toLocaleTimeString("zh-TW", {
@@ -114,20 +116,31 @@ function readChatPreferences(userId: string) {
       pinnedThreadIds: Array.isArray(parsed.pinnedThreadIds)
         ? parsed.pinnedThreadIds.filter((value: unknown): value is string => typeof value === "string")
         : [],
+      pinnedMessages: parsed.pinnedMessages && typeof parsed.pinnedMessages === "object"
+        ? Object.fromEntries(Object.entries(parsed.pinnedMessages).filter(
+          (entry): entry is [string, string[]] => Array.isArray(entry[1]) &&
+            entry[1].every((id: unknown) => typeof id === "string"),
+        ))
+        : {},
       drafts: parsed.drafts && typeof parsed.drafts === "object"
         ? Object.fromEntries(Object.entries(parsed.drafts).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
         : {},
     };
   } catch {
-    return { pinnedThreadIds: [], drafts: {} };
+    return { pinnedThreadIds: [], pinnedMessages: {}, drafts: {} };
   }
 }
 
-function saveChatPreferences(userId: string, pinnedThreadIds: Set<string>, drafts: Record<string, string>) {
+function saveChatPreferences(
+  userId: string,
+  pinnedThreadIds: Set<string>,
+  pinnedMessages: Record<string, string[]>,
+  drafts: Record<string, string>,
+) {
   try {
     window.localStorage.setItem(
       `station-chat-preferences-${CHAT_PREFERENCES_VERSION}:${userId}`,
-      JSON.stringify({ pinnedThreadIds: [...pinnedThreadIds], drafts }),
+      JSON.stringify({ pinnedThreadIds: [...pinnedThreadIds], pinnedMessages, drafts }),
     );
   } catch {
     // Private browsing or a full storage quota should not block messaging.
@@ -263,6 +276,11 @@ export function DirectMessagesPanel({
   const [searchQuery, setSearchQuery] = useState("");
   const [threadFilter, setThreadFilter] = useState<ThreadFilter>("all");
   const [pinnedThreadIds, setPinnedThreadIds] = useState<Set<string>>(() => new Set());
+  const [pinnedMessages, setPinnedMessages] = useState<Record<string, string[]>>({});
+  const [pinsOpen, setPinsOpen] = useState(false);
+  const [pinsResult, setPinsResult] = useState<DirectMessage[] | null>();
+  const [pinnedTarget, setPinnedTarget] = useState<{ message: DirectMessage; outsideHistory: boolean } | null>(null);
+  const messageAnchorPrefix = useId();
   const [threadDrafts, setThreadDrafts] = useState<Record<string, string>>({});
   const [preferencesReadyFor, setPreferencesReadyFor] = useState<string | null>(null);
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
@@ -304,6 +322,7 @@ export function DirectMessagesPanel({
     typingUsers,
     readByOtherAt,
     loadMore,
+    loadPinnedMessages,
     sendMessage,
     retryMessage,
     deleteMessage,
@@ -317,9 +336,19 @@ export function DirectMessagesPanel({
   const selectedOnlineUser = selectedThread
     ? onlineUserById.get(selectedThread.otherUserId)
     : undefined;
+  const pinIds = selectedThreadId && user && preferencesReadyFor === user.userId
+    ? pinnedMessages[selectedThreadId] ?? EMPTY_PIN_IDS
+    : EMPTY_PIN_IDS;
+  const currentPinnedTarget = pinnedTarget && pinnedTarget.message.threadId === selectedThreadId &&
+    pinIds.includes(pinnedTarget.message.id) ? pinnedTarget.message : null;
+  const olderPinnedTarget = currentPinnedTarget && pinnedTarget?.outsideHistory &&
+    !messages.some(({ id }) => id === currentPinnedTarget.id)
+    ? currentPinnedTarget
+    : null;
   const parsedMessages = useMemo(
-    () => messages.map((message) => ({ message, parsed: parseDirectMessageBody(message.body) })),
-    [messages],
+    () => (olderPinnedTarget ? [olderPinnedTarget, ...messages] : messages)
+      .map((message) => ({ message, parsed: parseDirectMessageBody(message.body) })),
+    [messages, olderPinnedTarget],
   );
   const visibleMessages = useMemo(
     () => messageSearchQuery.trim()
@@ -332,6 +361,7 @@ export function DirectMessagesPanel({
     if (!user?.userId) return;
     const preferences = readChatPreferences(user.userId);
     setPinnedThreadIds(new Set(preferences.pinnedThreadIds));
+    setPinnedMessages(preferences.pinnedMessages);
     threadDraftsRef.current = preferences.drafts;
     setThreadDrafts(preferences.drafts);
     setPreferencesReadyFor(user.userId);
@@ -339,8 +369,18 @@ export function DirectMessagesPanel({
 
   useEffect(() => {
     if (!user?.userId || preferencesReadyFor !== user.userId) return;
-    saveChatPreferences(user.userId, pinnedThreadIds, threadDrafts);
-  }, [pinnedThreadIds, preferencesReadyFor, threadDrafts, user?.userId]);
+    saveChatPreferences(user.userId, pinnedThreadIds, pinnedMessages, threadDrafts);
+  }, [pinnedMessages, pinnedThreadIds, preferencesReadyFor, threadDrafts, user?.userId]);
+
+  useEffect(() => {
+    if (!pinsOpen || !pinIds.length) return;
+    let active = true;
+    void loadPinnedMessages(pinIds).then(
+      (result) => { if (active) setPinsResult(result); },
+      () => { if (active) setPinsResult(null); },
+    );
+    return () => { active = false; };
+  }, [loadPinnedMessages, pinIds, pinsOpen]);
 
   useEffect(() => {
     selectedMediaFilesRef.current = selectedMediaFiles;
@@ -374,6 +414,13 @@ export function DirectMessagesPanel({
   }, [messages.length, selectedThreadId]);
 
   useEffect(() => {
+    if (!currentPinnedTarget) return;
+    const anchor = document.getElementById(`${messageAnchorPrefix}-${currentPinnedTarget.id}`);
+    anchor?.focus({ preventScroll: true });
+    anchor?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [currentPinnedTarget, messageAnchorPrefix]);
+
+  useEffect(() => {
     setSelectedMediaFiles((current) => {
       current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
       return [];
@@ -385,8 +432,11 @@ export function DirectMessagesPanel({
     setEmojiPickerOpen(false);
     setMessageSearchOpen(false);
     setMessageSearchQuery("");
+    setPinsOpen(false);
+    setPinsResult(undefined);
+    setPinnedTarget(null);
     setPreviewAttachment(null);
-  }, [selectedThreadId]);
+  }, [selectedThreadId, user?.userId]);
 
   const updateDraft = (value: string) => {
     setDraft(value);
@@ -407,6 +457,19 @@ export function DirectMessagesPanel({
       else next.add(threadId);
       return next;
     });
+  };
+
+  const toggleMessagePin = (messageId: string) => {
+    if (!selectedThreadId || !user || preferencesReadyFor !== user.userId) return;
+    setPinnedMessages((current) => {
+      const ids = current[selectedThreadId] ?? EMPTY_PIN_IDS;
+      const nextIds = ids.includes(messageId) ? ids.filter((id) => id !== messageId) : [messageId, ...ids];
+      const next = { ...current };
+      if (nextIds.length) next[selectedThreadId] = nextIds;
+      else delete next[selectedThreadId];
+      return next;
+    });
+    setPinnedTarget((current) => current?.message.id === messageId ? null : current);
   };
 
   const copyMessage = async (message: DirectMessage) => {
@@ -531,7 +594,14 @@ export function DirectMessagesPanel({
     );
     setDeletingThreadIds(deletingThreadIdsRef.current);
     try {
-      await clearDirectChat(thread.threadId);
+      if (await clearDirectChat(thread.threadId)) {
+        setPinnedMessages((current) => {
+          if (!current[thread.threadId]) return current;
+          const next = { ...current };
+          delete next[thread.threadId];
+          return next;
+        });
+      }
     } finally {
       deletingThreadIdsRef.current = setPendingDirectThread(
         deletingThreadIdsRef.current,
@@ -628,6 +698,68 @@ export function DirectMessagesPanel({
           </div>
         </div>
 
+        <div className="shrink-0 border-b border-white/10">
+          <button
+            type="button"
+            aria-label="已釘選訊息"
+            aria-expanded={pinsOpen}
+            onClick={() => {
+              if (!pinsOpen) setPinsResult(undefined);
+              setPinsOpen(!pinsOpen);
+            }}
+            className={cn(
+              "flex h-11 w-full items-center gap-2 px-3 text-xs font-semibold hover:bg-white/5 sm:h-9 sm:px-4",
+              pinIds.length || pinsOpen ? "text-amber-200" : "text-slate-300",
+            )}
+          >
+            <Pin className="h-3.5 w-3.5" aria-hidden="true" />
+            已釘選訊息
+            <span className="rounded-md bg-white/10 px-1.5 tabular-nums">{pinIds.length}</span>
+          </button>
+          {pinsOpen && (
+            <div className="max-h-36 overflow-y-auto border-t border-white/5 bg-amber-200/[0.04] px-3 py-1">
+              {pinIds.length === 0 && <p className="py-2 text-xs text-slate-300">在訊息下方點「釘選」，即可在這裡回看。</p>}
+              {pinIds.length > 0 && pinsResult === null && <p role="status" className="py-2 text-xs text-amber-200">無法讀取較早的釘選訊息，請關閉清單後重開。</p>}
+              <ul aria-label="釘選訊息清單" className="divide-y divide-white/10">
+                {pinIds.map((id) => {
+                  const loadedMessage = messages.find((item) => item.threadId === selectedThreadId && item.id === id);
+                  const message = loadedMessage ?? pinsResult?.find((item) => item.threadId === selectedThreadId && item.id === id);
+                  return (
+                    <li key={id} className="flex min-w-0 items-center gap-1">
+                      {message && !message.deletedAt ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMessageSearchQuery("");
+                            setPinsOpen(false);
+                            setPinnedTarget({ message: { ...message }, outsideHistory: !loadedMessage });
+                          }}
+                          className="min-w-0 flex-1 truncate rounded-md px-1 py-3 text-left text-xs text-slate-100 hover:bg-white/5"
+                        >
+                          {getDirectMessageDisplayPreview(message.body, message.attachments[0]?.fileName || "附件訊息")}
+                        </button>
+                      ) : (
+                        <span className="min-w-0 flex-1 truncate px-1 text-xs text-slate-400">
+                          {pinsResult === undefined ? "讀取訊息中…" : pinsResult === null ? "暫時無法讀取" : "訊息已移除或無法讀取"}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        aria-label="取消釘選訊息"
+                        title="取消釘選"
+                        onClick={() => toggleMessagePin(id)}
+                        className="grid h-11 w-11 shrink-0 place-items-center rounded-md text-amber-200 hover:bg-white/10 sm:h-9 sm:w-9"
+                      >
+                        <PinOff className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+
         {messageSearchOpen ? (
           <div className="flex items-center gap-2 border-b border-cyan-100/10 bg-cyan-300/[0.04] px-3 py-2">
             <div className="relative min-w-0 flex-1">
@@ -674,7 +806,7 @@ export function DirectMessagesPanel({
               <LoaderCircle className="mr-2 h-5 w-5 animate-spin text-cyan-300" />
               讀取對話中
             </div>
-          ) : messages.length === 0 ? (
+          ) : parsedMessages.length === 0 ? (
             <div className="flex h-48 flex-col items-center justify-center text-center text-slate-500">
               <MessageCircle className="mb-3 h-9 w-9 opacity-50" />
               <p className="font-semibold text-slate-300">這裡還沒有訊息</p>
@@ -691,6 +823,7 @@ export function DirectMessagesPanel({
               <div className="space-y-3 pb-2">
                 {visibleMessages.map(({ message, parsed }, index) => {
                 const own = message.senderId === user?.userId;
+                const pinned = pinIds.includes(message.id);
                 const previousMessage = visibleMessages[index - 1]?.message;
                 const showDay = !previousMessage
                   || new Date(previousMessage.createdAt).toDateString() !== new Date(message.createdAt).toDateString();
@@ -701,6 +834,9 @@ export function DirectMessagesPanel({
                   Date.parse(readByOtherAt) >= Date.parse(message.createdAt);
                 return (
                   <div key={message.id}>
+                    {message.id === olderPinnedTarget?.id && (
+                      <p className="mb-2 text-center text-xs font-semibold text-amber-200">較早的釘選訊息</p>
+                    )}
                     {showDay ? (
                       <div className="my-3 flex items-center gap-2 text-[10px] font-bold text-slate-500" role="separator">
                         <span className="h-px flex-1 bg-white/[0.06]" />
@@ -710,8 +846,21 @@ export function DirectMessagesPanel({
                         <span className="h-px flex-1 bg-white/[0.06]" />
                       </div>
                     ) : null}
-                    <div className={cn("flex", own ? "justify-end" : "justify-start")}>
+                    <div
+                      id={`${messageAnchorPrefix}-${message.id}`}
+                      tabIndex={-1}
+                      className={cn(
+                        "flex rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-amber-300",
+                        own ? "justify-end" : "justify-start",
+                        currentPinnedTarget?.id === message.id && !message.deletedAt && "ring-1 ring-inset ring-amber-300/50",
+                      )}
+                    >
                       <div className="group relative max-w-[88%] sm:max-w-[82%]">
+                        {pinned && !message.deletedAt && (
+                          <div className={cn("mb-1 flex items-center gap-1 text-[11px] font-semibold text-amber-200", own && "justify-end")}>
+                            <Pin className="h-3 w-3" aria-hidden="true" />已釘選
+                          </div>
+                        )}
                         <div
                           className={cn(
                             "rounded-[22px] px-3.5 py-3 text-sm leading-6 shadow-[0_16px_30px_-24px_rgba(0,0,0,0.72)]",
@@ -815,6 +964,20 @@ export function DirectMessagesPanel({
                                 : <ClipboardCopy className="h-3 w-3" />}
                               {copiedMessageId === message.id ? "已複製" : "複製"}
                             </button>
+                            {message.delivery === "sent" && (
+                              <button
+                                type="button"
+                                aria-label={pinned ? "取消釘選訊息" : "釘選訊息"}
+                                onClick={() => toggleMessagePin(message.id)}
+                                className={cn(
+                                  "flex h-11 shrink-0 items-center gap-1 whitespace-nowrap rounded-xl border border-amber-200/15 bg-[#0b1a2a] px-2 text-[11px] font-bold text-amber-100 hover:bg-amber-200/10 sm:h-7 sm:rounded-lg sm:text-[10px]",
+                                  pinned && "bg-amber-200/10",
+                                )}
+                              >
+                                {pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+                                {pinned ? "取消釘選" : "釘選"}
+                              </button>
+                            )}
                             {message.delivery === "sent" &&
                             (own || user?.role === "admin" || user?.role === "super_admin") ? (
                               <button
@@ -825,7 +988,11 @@ export function DirectMessagesPanel({
                                 onClick={() => {
                                   if (!window.confirm("要刪除這則訊息嗎？")) return;
                                   setDeletingMessageId(message.id);
-                                  void deleteMessage(message.id).finally(() => setDeletingMessageId(null));
+                                  void deleteMessage(message.id).then((deleted) => {
+                                    if (!deleted) return;
+                                    setPinnedTarget((current) => current?.message.id === message.id ? null : current);
+                                    setPinsResult((current) => current?.filter(({ id }) => id !== message.id) ?? current);
+                                  }).finally(() => setDeletingMessageId(null));
                                 }}
                                 className="flex h-10 w-10 items-center justify-center rounded-xl border border-rose-200/10 bg-rose-400/[0.05] text-rose-200/70 hover:border-rose-200/30 hover:text-rose-100 disabled:opacity-40 sm:h-7 sm:w-7 sm:rounded-lg"
                               >
