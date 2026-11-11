@@ -240,9 +240,9 @@ export function CircuitPdfPanel({ mode = "review", captureSide = "before", pageR
   const aiStep = !official ? 1 : !workingVersions.length ? 2 : 3;
   const aiState = (step: number) => step < aiStep ? "done" : step === aiStep ? "current" : "waiting";
   const aiAction = !official
-    ? <Button type="button" title="到「官方版本」選一份 PDF 當比對的舊版" onClick={onSetupOfficial}><ShieldCheck aria-hidden="true" />設定官方版本</Button>
-    : !workingVersions.length ? (canEdit ? <Button type="button" title="上傳要跟官方版本比對的新版 PDF（也可以把 PDF 拖進來）" disabled={Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><Upload aria-hidden="true" />{pdfs.uploading ? "上傳中…" : "上傳新版 PDF"}</Button> : null)
-    : <Button type="button" className="circuit-pdf-ai-run" disabled={!aiReady || !onAiReview} title={aiReady ? "逐頁比對官方版本與新版，列出差異讓你確認" : "PDF 開啟後即可比對"} onClick={onAiReview}><Sparkles aria-hidden="true" />AI 比對新舊版</Button>;
+    ? <Button data-circuit-tone="official" data-fill="solid" type="button" title="到「官方版本」選一份 PDF 當比對的舊版" onClick={onSetupOfficial}><ShieldCheck aria-hidden="true" />設定官方版本</Button>
+    : !workingVersions.length ? (canEdit ? <Button data-circuit-tone="add" data-fill="solid" type="button" title="上傳要跟官方版本比對的新版 PDF（也可以把 PDF 拖進來）" disabled={Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><Upload aria-hidden="true" />{pdfs.uploading ? "上傳中…" : "上傳新版 PDF"}</Button> : null)
+    : <Button data-circuit-tone="ai" data-fill="solid" type="button" className="circuit-pdf-ai-run" disabled={!aiReady || !onAiReview} title={aiReady ? "逐頁比對官方版本與新版，列出差異讓你確認" : "PDF 開啟後即可比對"} onClick={onAiReview}><Sparkles aria-hidden="true" />AI 比對新舊版</Button>;
   const aiBar = mode === "ai" ? <div className="circuit-pdf-ai-bar" role="group" aria-label="AI 比對步驟" data-testid="circuit-pdf-ai-bar" data-step={aiStep}>
     <ol className="circuit-pdf-ai-steps">
       <li data-state={aiState(1)} data-side="old"><b aria-hidden="true">{aiStep > 1 ? <Check /> : 1}</b><span><small>舊版</small>{official
@@ -281,9 +281,9 @@ export function CircuitPdfPanel({ mode = "review", captureSide = "before", pageR
   const compareChoices = documents.filter(row => row.id !== active?.id);
   const finish = (className: string) => canEdit && active && pageReview ? <div className={className}>
     {pageState === "here"
-      ? <><Button type="button" variant="outline" className="circuit-pdf-seen" aria-pressed="true" title="這一頁已標記看過；按一下取消" onClick={() => pdfs.setChecked(page, false)}><Check aria-hidden="true" />已看過</Button>
-        {page < active.pages && <Button type="button" title="翻到下一頁（→）" onClick={() => pdfs.goTo(page + 1)}>下一頁<ChevronRight aria-hidden="true" /></Button>}</>
-      : <Button type="button" onClick={finishPage} title={pageState === "older" ? "這頁在較早的版本看過；標記這一版也看過並翻到下一頁" : "標記本頁看過並翻到下一頁"}><Check aria-hidden="true" />{page < active.pages ? "看完，下一頁" : "看完本頁"}</Button>}
+      ? <><Button data-circuit-tone="done" type="button" variant="outline" className="circuit-pdf-seen" aria-pressed="true" title="這一頁已標記看過；按一下取消" onClick={() => pdfs.setChecked(page, false)}><Check aria-hidden="true" />已看過</Button>
+        {page < active.pages && <Button data-circuit-tone="view" data-fill="solid" type="button" title="翻到下一頁（→）" onClick={() => pdfs.goTo(page + 1)}>下一頁<ChevronRight aria-hidden="true" /></Button>}</>
+      : <Button data-circuit-tone="view" data-fill="solid" type="button" onClick={finishPage} title={pageState === "older" ? "這頁在較早的版本看過；標記這一版也看過並翻到下一頁" : "標記本頁看過並翻到下一頁"}><Check aria-hidden="true" />{page < active.pages ? "看完，下一頁" : "看完本頁"}</Button>}
   </div> : null;
   if (mode === "ai" && aiStep < 3) {
     return <section className="circuit-pdf-panel" aria-label="PDF 圖面" data-testid="circuit-pdf-panel" data-dropping={dropping}
@@ -333,7 +333,7 @@ export function CircuitPdfPanel({ mode = "review", captureSide = "before", pageR
                 <h3><ShieldCheck aria-hidden="true" />官方版本<span>AI 比對的舊版</span></h3>
                 {official ? <><ul><VersionRow row={official} active={official.id === active?.id} official canEdit={false} removing={false} confirmingOfficial={false} settingOfficial={false}
                   onOpen={() => { pdfs.select(official.id); closeVersions(); }} onUpdate={() => {}} onAskRemove={() => {}} onRemove={() => {}} onAskOfficial={() => {}} onSetOfficial={() => {}} /></ul><p>要更換官方版本，到上方的「官方版本」分頁。</p></>
-                  : <p>尚未指定。{onSetupOfficial && <Button type="button" variant="outline" title="到「官方版本」分頁選一份 PDF 當比對的舊版" onClick={() => { closeVersions(); onSetupOfficial(); }}><ShieldCheck aria-hidden="true" />到官方版本設定</Button>}</p>}
+                  : <p>尚未指定。{onSetupOfficial && <Button data-circuit-tone="official" type="button" variant="outline" title="到「官方版本」分頁選一份 PDF 當比對的舊版" onClick={() => { closeVersions(); onSetupOfficial(); }}><ShieldCheck aria-hidden="true" />到官方版本設定</Button>}</p>}
               </section>
               <section className="circuit-pdf-working-section" aria-label="其他 PDF">
                 <header><h3>其他 PDF<span>{workingVersions.length}</span></h3></header>
@@ -343,13 +343,13 @@ export function CircuitPdfPanel({ mode = "review", captureSide = "before", pageR
                   onRemove={() => removePdf(row.id)} />)}</ul>
                   : <div className="circuit-pdf-working-empty"><FileUp aria-hidden="true" /><strong>沒有其他 PDF</strong><p>用工具列的「上傳 PDF」加入畫好的新版，或還原下方已刪除的 PDF。</p></div>}
               </section>
-              {archived.length > 0 && <section className="circuit-pdf-archived-section"><button type="button" title="顯示或收起可以還原的已刪除 PDF" className="circuit-pdf-archived-toggle" aria-expanded={showArchived} onClick={() => setShowArchived(value => !value)}><span>已刪除的 PDF<span>{archived.length}</span></span><ChevronDown aria-hidden="true" /></button>{showArchived && <><p>還原後回到上面的「其他 PDF」，不會切換目前開啟的圖面。</p><ul>{archived.map(row => <li key={row.id}><div><strong title={row.name}>{row.name}</strong><small>{circuitPdfVersionLabel(row)} · {row.pages} 頁</small></div>{canEdit && <Button type="button" title="把這份 PDF 放回「其他 PDF」" variant="outline" disabled={Boolean(restoring)} aria-label={`還原 PDF：${row.name}`} onClick={() => void restorePdf(row)}><RotateCcw aria-hidden="true" />{restoring === row.id ? "還原中…" : "還原"}</Button>}</li>)}</ul></>}</section>}
+              {archived.length > 0 && <section className="circuit-pdf-archived-section"><button type="button" title="顯示或收起可以還原的已刪除 PDF" className="circuit-pdf-archived-toggle" aria-expanded={showArchived} onClick={() => setShowArchived(value => !value)}><span>已刪除的 PDF<span>{archived.length}</span></span><ChevronDown aria-hidden="true" /></button>{showArchived && <><p>還原後回到上面的「其他 PDF」，不會切換目前開啟的圖面。</p><ul>{archived.map(row => <li key={row.id}><div><strong title={row.name}>{row.name}</strong><small>{circuitPdfVersionLabel(row)} · {row.pages} 頁</small></div>{canEdit && <Button data-circuit-tone="done" type="button" title="把這份 PDF 放回「其他 PDF」" variant="outline" disabled={Boolean(restoring)} aria-label={`還原 PDF：${row.name}`} onClick={() => void restorePdf(row)}><RotateCcw aria-hidden="true" />{restoring === row.id ? "還原中…" : "還原"}</Button>}</li>)}</ul></>}</section>}
             </div>
           </div>}
         </div>
         </div>
         {canEdit && mode !== "ai" && <div className="circuit-pdf-tool-group" data-group="files">
-        <Button type="button" variant="outline" aria-label="上傳 PDF" title={pdfs.uploading ? `正在上傳 ${pdfs.uploading}` : "上傳一份新的 PDF；舊的 PDF 與官方版本都保留"} disabled={Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><Upload aria-hidden="true" /><span className="circuit-pdf-tool-text">上傳 PDF</span></Button>
+        <Button data-circuit-tone="add" type="button" variant="outline" aria-label="上傳 PDF" title={pdfs.uploading ? `正在上傳 ${pdfs.uploading}` : "上傳一份新的 PDF；舊的 PDF 與官方版本都保留"} disabled={Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><Upload aria-hidden="true" /><span className="circuit-pdf-tool-text">上傳 PDF</span></Button>
         </div>}
         {active && <><div className="circuit-pdf-tool-group" data-group="draw" role="group" aria-label="標註工具">
           <Button type="button" variant="ghost" aria-label="移動" title="移動圖面；也可按住空白鍵拖曳" aria-pressed={tool === "pan"} onClick={() => chooseTool("pan")}><Hand aria-hidden="true" /><span className="circuit-pdf-tool-text">移動</span></Button>
@@ -364,7 +364,7 @@ export function CircuitPdfPanel({ mode = "review", captureSide = "before", pageR
           <Button title="放大（也可以按住 Ctrl 滾滑鼠滾輪）" type="button" variant="ghost" aria-label="放大" onClick={() => changeZoom(step(scale, 1))}><Plus aria-hidden="true" /></Button>
           <Button type="button" variant={zoom === "fit" ? "secondary" : "ghost"} aria-label="符合寬度" title="縮放到剛好符合面板寬度" aria-pressed={zoom === "fit"} onClick={() => changeZoom("fit")}><MoveHorizontal aria-hidden="true" /></Button>
         </div></div></>}
-        {compare && <div className="circuit-pdf-tool-group" data-group="link"><Button type="button" variant="outline" className="circuit-pdf-link-toggle" aria-label="連動檢視" aria-pressed={linkedViews.linked} disabled={!compareReady}
+        {compare && <div className="circuit-pdf-tool-group" data-group="link"><Button data-circuit-tone="view" type="button" variant="outline" className="circuit-pdf-link-toggle" aria-label="連動檢視" aria-pressed={linkedViews.linked} disabled={!compareReady}
         title={linkedViews.linked ? "移動任一圖面，另一邊跟隨。需要重新對齊時，先關閉連動。" : "各自移到對應位置，再開啟連動，即可保留目前對齊位置。"} onClick={linkedViews.toggleLinked}>
         {linkedViews.linked ? <Link2 aria-hidden="true" /> : <Unlink aria-hidden="true" />}<span>{linkedViews.linked ? "連動中" : "各自移動"}</span>
       </Button></div>}
@@ -421,8 +421,8 @@ export function CircuitPdfPanel({ mode = "review", captureSide = "before", pageR
     {(selection || captured) && <div className="circuit-pdf-actions" role={selection ? "group" : "status"} aria-label={selection ? "加入截圖" : undefined}>
       {selection ? <>
         <span className="circuit-pdf-actions-target">{captureBlocked || <>截圖 → <strong>{targetLabel}</strong></>}</span>
-        <Button title={`把框出的範圍加到這個問題的${sideWord}`} type="button" disabled={capturing || Boolean(captureBlocked)} onClick={() => void capture([{ pane: selection.pane, side: captureSide }])}>加到{sideWord}</Button>
-        <Button title="把框出的範圍加到這個問題的補充圖（規格書、量測波形等參考）" type="button" variant="outline" disabled={capturing || Boolean(captureBlocked)} onClick={() => void capture([{ pane: selection.pane, side: "reference" }])}>加到補充圖</Button>
+        <Button data-circuit-tone="add" data-fill="solid" title={`把框出的範圍加到這個問題的${sideWord}`} type="button" disabled={capturing || Boolean(captureBlocked)} onClick={() => void capture([{ pane: selection.pane, side: captureSide }])}>加到{sideWord}</Button>
+        <Button data-circuit-tone="add" title="把框出的範圍加到這個問題的補充圖（規格書、量測波形等參考）" type="button" variant="outline" disabled={capturing || Boolean(captureBlocked)} onClick={() => void capture([{ pane: selection.pane, side: "reference" }])}>加到補充圖</Button>
         <Button type="button" variant="ghost" aria-label="取消截圖" title="取消（Esc）" onClick={() => setSelection(null)}><X aria-hidden="true" /></Button>
         {capturing && <span className="circuit-pdf-actions-busy">正在加入…</span>}
       </> : <span>{captured}</span>}
@@ -448,19 +448,19 @@ function VersionRow({ row, active, canEdit, removing, official, confirmingOffici
       <span className="circuit-pdf-open-label">{active ? "目前顯示" : official ? "開啟原圖" : "開啟"}<ChevronRight aria-hidden="true" /></span>
     </button>
     {canEdit && !official && <div className="circuit-pdf-version-actions">
-      <Button title="修改這份 PDF 的圖面日期與備註" type="button" variant="ghost" aria-label={`改日期與備註：${row.name}`} aria-expanded={editing} onClick={() => setEditing(value => !value)}><Pencil aria-hidden="true" />{editing ? "收起" : "改日期與備註"}</Button>
+      <Button data-circuit-tone="edit" data-fill="ghost" title="修改這份 PDF 的圖面日期與備註" type="button" variant="ghost" aria-label={`改日期與備註：${row.name}`} aria-expanded={editing} onClick={() => setEditing(value => !value)}><Pencil aria-hidden="true" />{editing ? "收起" : "改日期與備註"}</Button>
       {editing && <div className="circuit-pdf-version-edit">
       <label><span>圖面日期</span><input type="date" aria-label={`${row.name} 的圖面日期`} value={date} required disabled={official}
         onChange={event => { setDate(event.target.value); if (/^\d{4}-\d{2}-\d{2}$/.test(event.target.value)) onUpdate({ date: event.target.value }); }} /></label>
       <label><span>備註</span><input aria-label={`${row.name} 的備註`} value={label} maxLength={60} placeholder="例如 V2、第 3 天" disabled={official}
         onChange={event => setLabel(event.target.value)} onBlur={() => onUpdate({ label })} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); onUpdate({ label }); } }} /></label>
       <small>日期選定、備註離開欄位後自動儲存。</small>
-      <Button type="button" variant="outline" title="收起；內容已自動儲存" onClick={() => { onUpdate({ label }); setEditing(false); }}>完成</Button></div>}
-      <Button title="刪除這份 PDF；已加入的截圖保留，可在下方「已刪除的 PDF」還原" type="button" variant="ghost" className="circuit-pdf-version-delete" aria-label={`刪除 PDF：${row.name}`} aria-expanded={removing} onClick={() => onAskRemove(!removing)}><Trash2 aria-hidden="true" />刪除</Button>
+      <Button data-circuit-tone="done" type="button" variant="outline" title="收起；內容已自動儲存" onClick={() => { onUpdate({ label }); setEditing(false); }}>完成</Button></div>}
+      <Button data-circuit-tone="delete" data-fill="ghost" title="刪除這份 PDF；已加入的截圖保留，可在下方「已刪除的 PDF」還原" type="button" variant="ghost" className="circuit-pdf-version-delete" aria-label={`刪除 PDF：${row.name}`} aria-expanded={removing} onClick={() => onAskRemove(!removing)}><Trash2 aria-hidden="true" />刪除</Button>
       {removing && <div className="circuit-pdf-confirm" role="group" aria-label="確認刪除 PDF">
         <span>刪除「{row.name}」？已加入的截圖保留，可在下方「已刪除的 PDF」還原。</span>
         <Button title="不刪除" type="button" variant="outline" onClick={() => onAskRemove(false)}>取消</Button>
-        <Button title="刪除這份 PDF；可在下方「已刪除的 PDF」還原" type="button" variant="destructive" aria-label={`確認刪除 ${row.name}`} onClick={onRemove}><Trash2 aria-hidden="true" />刪除</Button>
+        <Button data-circuit-tone="delete" data-fill="solid" title="刪除這份 PDF；可在下方「已刪除的 PDF」還原" type="button" variant="destructive" aria-label={`確認刪除 ${row.name}`} onClick={onRemove}><Trash2 aria-hidden="true" />刪除</Button>
       </div>}
     </div>}
   </li>;

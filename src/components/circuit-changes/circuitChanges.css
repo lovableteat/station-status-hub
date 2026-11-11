@@ -671,3 +671,73 @@
 
 /* 回報改善 can always be pressed; until the fix is written it reads as not ready and says what is missing when pressed. */
 .circuit-changes-dialog .circuit-submit[data-ready="false"]:not(:disabled) { border: 1px solid hsl(var(--primary) / .4); background: hsl(var(--primary) / .08); color: hsl(var(--primary)); box-shadow: none; }
+
+/* Colour = kind of function (2026-11-11). The user: 「顏色沒處理ㄟ」 — almost everything was teal, so different kinds of
+   buttons looked alike. One hue per kind, the same in every tab and pop-up, with the recipe accepted on 料號申請 (dark fill,
+   mid border and light text of one hue; the finishing action of a kind is filled):
+     view 170 青綠 看圖、翻頁、目前位置    add 202 藍 加入、上傳、送出      edit 225 靛 修改、收合
+     todo 28 橘 待改善、必填               done 144 綠 完成、還原、匯出     delete 353 紅 刪除、退回
+     ai 266 紫 AI 比對                     official 43 金 官方版本 */
+[data-circuit-tone="view"] { --tone: 170; }
+[data-circuit-tone="add"] { --tone: 202; }
+[data-circuit-tone="edit"] { --tone: 225; }
+[data-circuit-tone="todo"] { --tone: 28; }
+[data-circuit-tone="done"] { --tone: 144; }
+[data-circuit-tone="delete"] { --tone: 353; }
+[data-circuit-tone="ai"] { --tone: 266; }
+[data-circuit-tone="official"] { --tone: 43; }
+[data-circuit-tone] { border: 1px solid hsl(var(--tone) 32% 39%) !important; background: hsl(var(--tone) 30% 17%) !important; color: hsl(var(--tone) 64% 83%) !important; box-shadow: none !important; }
+[data-circuit-tone] > svg, [data-circuit-tone] > span > svg { color: currentColor !important; }
+button[data-circuit-tone]:hover:not(:disabled) { border-color: hsl(var(--tone) 44% 55%) !important; background: hsl(var(--tone) 32% 23%) !important; color: hsl(var(--tone) 78% 90%) !important; }
+button[data-circuit-tone][aria-pressed="true"] { border-color: hsl(var(--tone) 58% 64%) !important; background: hsl(var(--tone) 35% 27%) !important; color: hsl(var(--tone) 80% 91%) !important; }
+[data-circuit-tone][data-fill="solid"] { border-color: hsl(var(--tone) 46% 58%) !important; background: hsl(var(--tone) 46% 58%) !important; color: hsl(var(--tone) 40% 8%) !important; font-weight: 600; }
+button[data-circuit-tone][data-fill="solid"]:hover:not(:disabled) { border-color: hsl(var(--tone) 54% 65%) !important; background: hsl(var(--tone) 54% 65%) !important; color: hsl(var(--tone) 40% 8%) !important; }
+[data-circuit-tone][data-fill="ghost"] { border-color: transparent !important; background: transparent !important; color: hsl(var(--tone) 60% 78%) !important; }
+button[data-circuit-tone][data-fill="ghost"]:hover:not(:disabled) { border-color: hsl(var(--tone) 32% 39%) !important; background: hsl(var(--tone) 30% 17%) !important; }
+button[data-circuit-tone]:disabled { opacity: .45 !important; }
+/* 回報改善 before the fix is written: same blue, not yet filled. */
+button[data-circuit-tone][data-fill="solid"][data-ready="false"]:not(:disabled) { border-color: hsl(var(--tone) 32% 39%) !important; background: hsl(var(--tone) 30% 17%) !important; color: hsl(var(--tone) 64% 83%) !important; }
+
+/* The four tabs each keep their own colour: 線路 Review 青綠, AI 比對 紫, 改善追蹤 綠, 官方版本 金. */
+.circuit-changes-dialog > .circuit-tasks > .circuit-task[data-task="review"] { --tone: 170; }
+.circuit-changes-dialog > .circuit-tasks > .circuit-task[data-task="ai"] { --tone: 266; }
+.circuit-changes-dialog > .circuit-tasks > .circuit-task[data-task="track"] { --tone: 144; }
+.circuit-changes-dialog > .circuit-tasks > .circuit-task[data-task="official"] { --tone: 43; }
+.circuit-changes-dialog > .circuit-tasks > .circuit-task { border-color: hsl(var(--tone) 32% 39%); background: hsl(var(--tone) 30% 14%); color: hsl(var(--tone) 64% 88%); }
+.circuit-changes-dialog > .circuit-tasks > .circuit-task:hover { border-color: hsl(var(--tone) 44% 55%); background: hsl(var(--tone) 32% 21%); }
+.circuit-changes-dialog > .circuit-tasks > .circuit-task > svg { color: hsl(var(--tone) 60% 70%); }
+.circuit-changes-dialog > .circuit-tasks > .circuit-task .circuit-task-number { border-color: hsl(var(--tone) 50% 62%); color: hsl(var(--tone) 60% 74%); }
+.circuit-changes-dialog > .circuit-tasks > .circuit-task .circuit-task-short { color: hsl(var(--tone) 22% 68%); }
+.circuit-changes-dialog > .circuit-tasks > .circuit-task[aria-selected="true"] { border-color: hsl(var(--tone) 46% 58%); background: hsl(var(--tone) 46% 58%); color: hsl(var(--tone) 40% 8%); }
+.circuit-changes-dialog > .circuit-tasks > .circuit-task[aria-selected="true"] > svg { color: hsl(var(--tone) 40% 8%); }
+.circuit-changes-dialog > .circuit-tasks > .circuit-task[aria-selected="true"] .circuit-task-short { color: hsl(var(--tone) 40% 8% / .8); }
+.circuit-changes-dialog > .circuit-tasks > .circuit-task[aria-selected="true"] .circuit-task-number { border-color: hsl(var(--tone) 40% 8%); background: hsl(var(--tone) 40% 8%); color: hsl(var(--tone) 60% 70%); }
+.circuit-changes-dialog > .circuit-tasks > .circuit-task > small { background: hsl(28 70% 58%); color: hsl(28 40% 8%); font-weight: 700; }
+.circuit-changes-dialog > .circuit-tasks > .circuit-task[aria-selected="true"] > small { background: hsl(28 70% 58%); color: hsl(28 40% 8%); }
+
+/* Problem states, each its own hue: 待改善 橘, 待確認 藍, 退回重改 紅, 已結案 綠. */
+.circuit-list-status, .circuit-list-status[data-status="draft"] { --circuit-status: 28 80% 72%; }
+.circuit-list-status[data-status="in_review"] { --circuit-status: 202 80% 74%; }
+.circuit-list-status[data-status="needs_changes"] { --circuit-status: 353 78% 78%; }
+.circuit-list-status[data-status="approved"] { --circuit-status: 144 52% 68%; }
+.circuit-list-status:not([data-status="unsaved"]) { border: 1px solid hsl(var(--circuit-status) / .4); background: hsl(var(--circuit-status) / .16); font-weight: 600; }
+
+/* The form: the problem is orange (還要處理), its fix is green (完成). */
+.circuit-form-step:is(.circuit-problem-form, .circuit-problem-summary) { --tone: 28; }
+.circuit-form-steps[data-task="track"] > .circuit-form-step:last-child { --tone: 144; }
+.circuit-form-step:is(.circuit-problem-form, .circuit-problem-summary), .circuit-form-steps[data-task="track"] > .circuit-form-step:last-child { border-color: hsl(var(--tone) 32% 39%); border-left: 3px solid hsl(var(--tone) 46% 58%); }
+.circuit-form-step:is(.circuit-problem-form, .circuit-problem-summary) > .circuit-form-step-title > span, .circuit-form-steps[data-task="track"] > .circuit-form-step:last-child > .circuit-form-step-title > span { color: hsl(var(--tone) 64% 80%); }
+.circuit-field-mark { background: hsl(28 70% 58% / .2); color: hsl(28 80% 72%); }
+/* Places where a picture or a PDF is added are blue, like the other 加入 actions. */
+.circuit-changes-dialog .circuit-image-empty { border-color: hsl(202 34% 44%); background: hsl(202 30% 14% / .7); color: hsl(202 30% 80%); }
+.circuit-changes-dialog .circuit-image-empty:hover:not(:disabled) { border-color: hsl(202 50% 60%); color: hsl(202 78% 90%); }
+.circuit-changes-dialog .circuit-image-empty > svg { color: hsl(202 64% 72%); }
+.circuit-changes-dialog .circuit-form-step .circuit-image-column[data-active="true"] .circuit-image-empty { border-color: hsl(202 58% 64%); }
+.circuit-changes-dialog .circuit-paste-target { background: hsl(202 30% 20%); color: hsl(202 64% 83%); }
+/* 已刪除 N 個問題: red row, green 還原. */
+.circuit-changes-dialog .circuit-list-panel > .circuit-removed-trigger > b { background: hsl(144 46% 58%); color: hsl(144 40% 8%); }
+.circuit-changes-dialog .circuit-save-button:disabled > svg { color: hsl(144 46% 62%); }
+/* Guide: what each colour means. */
+.circuit-tone-legend { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 14px; line-height: 22px; }
+.circuit-tone-legend > li { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; gap: 10px; }
+.circuit-tone-legend > li > span { display: inline-flex; height: 26px; align-items: center; justify-content: center; border-radius: 6px; font-size: 13px; }

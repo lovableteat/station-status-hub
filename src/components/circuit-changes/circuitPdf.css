@@ -346,3 +346,19 @@
 .circuit-pdf-overview > .circuit-pdf-offset { flex: none; padding-inline-start: 10px; border-inline-start: 1px solid hsl(var(--border)); }
 .circuit-pdf-overview > .circuit-pdf-offset > label { color: hsl(var(--warning)); font-weight: 600; }
 .circuit-pdf-overview > .circuit-pdf-page-warning { flex: none; }
+
+/* Colour = kind of function (2026-11-11), PDF side: adding a PDF is blue, AI is violet, the official version is gold. */
+.circuit-pdf-panel .circuit-pdf-empty { border-color: hsl(202 34% 44%); background: hsl(202 30% 14% / .7); }
+.circuit-pdf-panel .circuit-pdf-empty:hover { border-color: hsl(202 50% 60%); }
+.circuit-pdf-panel .circuit-pdf-empty > svg { color: hsl(202 64% 72%); }
+.circuit-pdf-ai-steps > li[data-side="old"] strong { color: hsl(43 70% 70%); }
+.circuit-pdf-ai-steps > li[data-state="done"] > b { border-color: transparent; background: hsl(144 46% 58%); color: hsl(144 40% 8%); }
+.circuit-pdf-overview > .circuit-pdf-offset > label { color: hsl(43 70% 70%); }
+.circuit-pdf-pager-name { color: hsl(170 60% 70%); }
+
+/* Phone, AI 比對: the two page numbers share the first line; the page strip takes the next one instead of being pushed off screen. */
+@media (max-width: 1023px) {
+  .circuit-pdf-panel:has(> .circuit-pdf-ai-bar) .circuit-pdf-overview { flex-wrap: wrap; row-gap: 0; }
+  .circuit-pdf-panel:has(> .circuit-pdf-ai-bar) .circuit-pdf-overview > .circuit-pdf-strip { flex: 1 0 100%; }
+  .circuit-pdf-overview > .circuit-pdf-offset { padding-inline-start: 6px; }
+}

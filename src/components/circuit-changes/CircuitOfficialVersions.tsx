@@ -74,19 +74,19 @@ export function CircuitOfficialVersions({ seriesId, pdfs, canEdit, onOpen }: {
           <small>選一份原廠或已發行的 PDF 當官方版本，AI 比對會拿新版跟它比。</small>
         </div>}
         <div className="circuit-official-actions">
-          {official && <Button title="在線路 Review 打開這份官方版本" type="button" variant="outline" onClick={() => onOpen(official.id)}>開啟這份<ArrowRight aria-hidden="true" /></Button>}
-          {canEdit && <Button title="從已上傳的 PDF 選一份，或上傳一份 PDF 當官方版本" type="button" aria-expanded={choosing} onClick={() => { setChoosing(value => !value); setCandidate(""); setFailure(""); }}>{official ? "更換官方版本" : "設定官方版本"}</Button>}
+          {official && <Button data-circuit-tone="view" title="在線路 Review 打開這份官方版本" type="button" variant="outline" onClick={() => onOpen(official.id)}>開啟這份<ArrowRight aria-hidden="true" /></Button>}
+          {canEdit && <Button data-circuit-tone="official" data-fill="solid" title="從已上傳的 PDF 選一份，或上傳一份 PDF 當官方版本" type="button" aria-expanded={choosing} onClick={() => { setChoosing(value => !value); setCandidate(""); setFailure(""); }}>{official ? "更換官方版本" : "設定官方版本"}</Button>}
         </div>
       </div>
       {saved && <p className="circuit-official-note" role="status">{saved}</p>}
       {failure && <p className="circuit-official-error" role="alert">{failure}</p>}
       {pdfs.uploading && <p className="circuit-official-note" role="status">正在上傳「{pdfs.uploading}」…上傳完成後確認即可設為官方版本。</p>}
       {choosing && canEdit && <section className="circuit-official-choose" aria-label="選擇新的官方版本">
-        <header><h3>選一份 PDF 當官方版本</h3><Button title="上傳一份 PDF，傳完再確認是否設為官方版本" type="button" variant="outline" disabled={Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><FileUp aria-hidden="true" />上傳 PDF</Button></header>
+        <header><h3>選一份 PDF 當官方版本</h3><Button data-circuit-tone="add" title="上傳一份 PDF，傳完再確認是否設為官方版本" type="button" variant="outline" disabled={Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><FileUp aria-hidden="true" />上傳 PDF</Button></header>
         {choices.length ? <ul>{choices.map(row => <li key={row.id} data-candidate={candidate === row.id}>
           <div><strong title={row.name}>{row.name}</strong><small>{circuitPdfVersionLabel(row)} · {row.pages} 頁 · {row.uploadedByName || "同仁"} 上傳{row.localOnly ? " · 只在上傳者電腦，不能當官方版本" : ""}</small></div>
           {candidate === row.id
-            ? <span className="circuit-official-confirm">確定改用這份？<Button title="不更換" type="button" variant="outline" disabled={saving} onClick={() => setCandidate("")}>取消</Button><Button title="改用這份當官方版本，並記入更換紀錄" type="button" disabled={saving} onClick={() => void confirm(row)}>{saving ? "儲存中…" : "確定更換"}</Button></span>
+            ? <span className="circuit-official-confirm">確定改用這份？<Button title="不更換" type="button" variant="outline" disabled={saving} onClick={() => setCandidate("")}>取消</Button><Button data-circuit-tone="official" data-fill="solid" title="改用這份當官方版本，並記入更換紀錄" type="button" disabled={saving} onClick={() => void confirm(row)}>{saving ? "儲存中…" : "確定更換"}</Button></span>
             : <Button title={row.localOnly || !row.path ? "只存在上傳者電腦的 PDF 不能當官方版本" : `改用「${row.name}」當官方版本`} type="button" variant="outline" disabled={saving || row.localOnly || !row.path} aria-label={`設為官方版本：${row.name}`} onClick={() => setCandidate(row.id)}>設為官方版本</Button>}
         </li>)}</ul> : <p className="circuit-official-empty">還沒有其他 PDF。按「上傳 PDF」加入一份。</p>}
         <p className="circuit-official-hint">更換只會改用新的參考原檔；舊的 PDF、問題紀錄與 AI 比對結果都保留。</p>
