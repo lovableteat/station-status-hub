@@ -193,4 +193,5 @@
 @container (min-width: 330px) and (max-width: 695px) {
   .ma-asset-filter:has(.mobile-filter-bar__controls > :only-child) .mobile-filter-bar__search { flex-basis: 0; }
   .ma-asset-filter .mobile-filter-bar__controls:has(> :only-child) { width: 112px; }
+  .ma-asset-filter .mobile-filter-bar__controls > [role="combobox"]:only-child { padding-inline: 10px; font-size: 14px; }
 }
