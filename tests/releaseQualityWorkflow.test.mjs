@@ -48,6 +48,12 @@ test('browser regression uses a runner supported by its pinned Playwright releas
   assert.match(regression, /runs-on: ubuntu-24\.04/);
   assert.match(regression, /playwright@1\.58\.2/);
   assert.doesNotMatch(regression, /runs-on: ubuntu-latest/);
+  assert.match(regression, /AUDIT_SCREENSHOT_PATH: \$\{\{ runner\.temp \}\}\/private-richtext\.png/);
+  assert.match(regression, /name: isolated-browser-evidence/);
+  assert.match(regression, /retention-days: 3/);
+  assert.match(regression, /tests\/edge\/dailyStats\.synthetic\.ts/);
+  assert.match(regression, /deno run --cached-only --frozen/);
+  assert.match(regression, /--allow-net=127\.0\.0\.1:54322,127\.0\.0\.1:8000/);
 });
 
 test('draft-PR checks remain isolated from production deployment and credentials', () => {

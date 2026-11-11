@@ -111,4 +111,6 @@ test("rich text controls are named, non-submitting, and reusable", async () => {
   assert.match(editor, /文字顏色：\$\{color\.label\}/);
   assert.match(editor, /StarterKit\.configure\(\{[\s\S]*?link: false/);
   assert.match(editor, /aria-label="關閉圖片預覽"/);
+  assert.match(editor, /render=\{\{[\s\S]*?buttonClose: \(\) => \([\s\S]*?aria-label="關閉圖片預覽"/);
+  assert.equal((editor.match(/aria-label="關閉圖片預覽"/g) || []).length, 1, 'close control lives only inside the interactive lightbox portal');
 });
