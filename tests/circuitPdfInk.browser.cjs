@@ -81,10 +81,19 @@ async function toolbarFits(page,width) {
   assert.ok(geometry.overflowY<=1,'The toolbar must not acquire a second row');
   assert.ok(geometry.buttons.every(b=>b.height>=(width<1024?44:32)&&Math.abs(b.top-geometry.buttons[0].top)<=1),JSON.stringify(geometry));
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
-  if(width<1024)assert.ok(geometry.draw.every(b=>b.left>=-1&&b.right<=width+1),'Phone drawing tools are visible before scrolling');
-  if(width<1024){const back=await panel(page).getByRole('button',{name:'返回表單',exact:true}).boundingBox();assert.ok(back.width>=44&&back.height>=44,'Phone return button must not shrink: '+JSON.stringify(back));}
+  if(width<1024){
+    // Phone: the drawing tools are one row at the bottom, each with its word; the way back is in the window's top bar.
+    const tools=await panel(page).locator('.circuit-pdf-phone-row > button').evaluateAll(nodes=>nodes.map(node=>{const r=node.getBoundingClientRect();return{text:node.innerText.trim(),left:r.left,right:r.right,top:r.top,bottom:r.bottom,height:r.height};}));
+    assert.deepEqual(tools.map(b=>b.text),['上一頁','截圖','畫筆','看完，下一頁'],'Phone bottom row: '+JSON.stringify(tools));
+    assert.ok(tools.every(b=>b.height>=48&&b.left>=-1&&b.right<=width+1&&b.bottom<=innerHeightOf(page)+1&&Math.abs(b.top-tools[0].top)<=1),'Phone tools are one row of 48px buttons on screen: '+JSON.stringify(tools));
+    assert.equal(geometry.draw.length,0,'the toolbar on top keeps only the PDF and the zoom');
+    const back=dialog(page).getByRole('button',{name:'返回問題清單',exact:true}),box=await back.boundingBox();
+    assert.ok(box.width>=44&&box.height>=44&&(await back.innerText()).includes('問題清單'),'Phone way back is a worded 44px button: '+JSON.stringify(box));
+    geometry.phoneTools=tools;
+  }
   return geometry;
 }
+const innerHeightOf=page=>page.viewportSize().height;
 async function managerFits(page) {
   await panel(page).getByRole('button',{name:'選擇 PDF',exact:true}).click();
   const manager=panel(page).getByRole('group',{name:'PDF 清單（依圖面日期）'});await manager.waitFor();
@@ -130,7 +139,7 @@ async function managerFits(page) {
         await dialog(p).getByRole('button', { name: /^(設定|更換)官方版本$/ }).click();
         await dialog(p).getByRole('button', { name: `設為官方版本：Official_20261101.pdf`, exact: true }).click();
         await dialog(p).getByRole('button', { name: '確定更換', exact: true }).click();
-        await dialog(p).locator('.circuit-official-history tbody tr').first().waitFor();
+        await dialog(p).locator('.circuit-official-timeline > li').first().waitFor();
         await dialog(p).getByRole('tab', { name: /^線路 Review/ }).click();
         await eventually(()=>fixture.state.pdfOfficials.size===1,'Official pointer saves');await rendered(p);}
     }
@@ -203,10 +212,14 @@ async function managerFits(page) {
     await draw(mobile.page,'active',[.24,.65],[.6,.7]);await eventually(()=>activeRows(fixture,workingId).length===3,'Phone pen saves');
     await tool(mobile.page,'撤回最後一筆畫筆');await eventually(()=>activeRows(fixture,workingId).length===2,'Phone undo saves');
     await managerFits(mobile.page);await panel(mobile.page).locator('.circuit-pdf-row').evaluate(node=>node.scrollLeft=0);
-    await panel(mobile.page).getByRole('button',{name:'返回表單',exact:true}).click();await panel(mobile.page).waitFor({state:'hidden'});await dialog(mobile.page).locator('.circuit-item-list').waitFor();
+    assert.deepEqual(await panel(mobile.page).locator('.circuit-pdf-phone-row > button').evaluateAll(nodes=>nodes.map(node=>node.innerText.trim())),['橡皮擦','撤回','畫完了'],'while drawing the bottom row holds the pen actions');
+    await panel(mobile.page).getByRole('button',{name:'畫完了',exact:true}).click();await panel(mobile.page).getByRole('button',{name:'畫筆',exact:true}).waitFor();
+    await dialog(mobile.page).getByRole('button',{name:'返回問題清單',exact:true}).click();await panel(mobile.page).waitFor({state:'hidden'});await dialog(mobile.page).locator('.circuit-item-list').waitFor();
     await dialog(mobile.page).getByTestId('circuit-change-item').first().click();assert.ok(await dialog(mobile.page).getByRole('textbox',{name:'標題',exact:true}).isVisible());
-    await dialog(mobile.page).getByRole('button',{name:'看圖面',exact:true}).filter({visible:true}).first().click();await rendered(mobile.page);await panel(mobile.page).locator('.circuit-pdf-row').evaluate(node=>node.scrollLeft=0);await mobile.page.screenshot({path:path.join(evidence,'mobile-390-tools.png')});
-    check('390px phone emulation has visible 44px drawing tools, one toolbar row, usable pen/undo and version manager');
+    await dialog(mobile.page).getByRole('button',{name:'從圖面截圖',exact:true}).click();await rendered(mobile.page);
+    assert.ok(await dialog(mobile.page).getByRole('button',{name:'返回問題',exact:true}).isVisible(),'from a problem the way back returns to that problem');
+    await mobile.page.screenshot({path:path.join(evidence,'mobile-390-tools.png')});
+    check('390px phone emulation has one bottom row of worded 48px drawing tools, usable pen/undo and PDF list, and a worded way back');
     assert.deepEqual(desktop.errors,[]);assert.deepEqual(viewer.errors,[]);assert.deepEqual(mobile.errors,[]);report.result='passed';report.inkWrites=fixture.state.inkWrites;
     console.log(JSON.stringify({result:report.result,checks:report.checks.length,evidence},null,2));
   }catch(error){report.result='failed';report.error=error.stack;console.error(error);process.exitCode=1;for(const context of contexts)for(const page of context.pages())await page.screenshot({path:path.join(evidence,'failure-'+contexts.indexOf(context)+'.png')}).catch(()=>{});}

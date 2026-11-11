@@ -38,11 +38,19 @@ async function headerFits(page, width) {
     const r = node.getBoundingClientRect();
     return { left: r.left, right: r.right, overflow: node.scrollWidth - node.clientWidth, buttons: [...node.querySelectorAll('button')].map(button => { const b = button.getBoundingClientRect(); return { label: button.getAttribute('aria-label'), top: b.top, left: b.left, right: b.right, height: b.height }; }), labels: [...node.querySelectorAll('button')].map(button => button.getAttribute('aria-label')) };
   });
-  // 匯出問題清單 is shown where there is a problem list (線路 Review, 改善追蹤), not in AI 比對 or 官方版本.
-  const listTask = await dialog(page).locator('[role="tab"][aria-selected="true"]').evaluate(node => ['review', 'track'].includes(node.dataset.task));
-  assert.deepEqual(geometry.labels, listTask ? ['匯出問題清單', '更多', '關閉線路修改'] : ['更多', '關閉線路修改']);
-  const tasks = await dialog(page).locator('.circuit-tasks').boundingBox();
-  assert.ok(tasks && tasks.x >= 0 && tasks.x + tasks.width <= width + 1, 'the four task tabs fit: ' + JSON.stringify(tasks));
+  // 匯出問題清單 is shown where there is a problem list (線路 Review, 改善追蹤), not in AI 比對 or 官方版本. On a phone it is inside 更多.
+  const listTask = await dialog(page).locator('.circuit-task[aria-selected="true"]').evaluate(node => ['review', 'track'].includes(node.dataset.task));
+  assert.deepEqual(geometry.labels, listTask && width >= 1024 ? ['匯出問題清單', '更多', '關閉線路修改'] : ['更多', '關閉線路修改']);
+  if (width >= 1024) {
+    const tasks = await dialog(page).locator('.circuit-tasks').boundingBox();
+    assert.ok(tasks && tasks.x >= 0 && tasks.x + tasks.width <= width + 1, 'the four task tabs fit: ' + JSON.stringify(tasks));
+  } else {
+    // Phone, in the drawing: the top bar is one row with a worded way back, and the drawing's own actions replace the tabs.
+    const header = await dialog(page).locator('.circuit-header').boundingBox();
+    assert.ok(header && header.height <= 60, 'the phone top bar is one row: ' + JSON.stringify(header));
+    assert.ok((await dialog(page).getByRole('button', { name: /^返回/ }).innerText()).trim().length >= 2, 'the way back carries its word');
+    assert.equal(await dialog(page).getByRole('tab').count(), 0, 'a pushed screen does not stack the tabs under its own actions');
+  }
   assert.ok(geometry.left >= 0 && geometry.right <= width + 1 && geometry.overflow <= 1, JSON.stringify(geometry));
   assert.ok(geometry.buttons.every(button => Math.abs(button.top - geometry.buttons[0].top) <= 1 && button.height >= (width < 1024 ? 44 : 40)), JSON.stringify(geometry));
   assert.equal(await panel(page).locator('.circuit-pdf-official').count(), 0, 'The baseline banner no longer takes a PDF row');
@@ -339,8 +347,11 @@ async function managerFits(page, label) {
     assert.ok(await dialog(recovery.page).isVisible());
     const mobileFile = path.join(evidence, 'Mobile_Working_20261110.pdf'); fs.copyFileSync(files[2], mobileFile);
     const mobileChooser = recovery.page.waitForEvent('filechooser');
-    await panel(recovery.page).getByRole('button', { name: '上傳 PDF', exact: true }).click();
+    // On a phone 上傳 PDF is at the top of the PDF list.
+    await panel(recovery.page).getByRole('button', { name: '選擇 PDF', exact: true }).click();
+    await recoveryManager.getByRole('button', { name: '上傳 PDF', exact: true }).click();
     await (await mobileChooser).setFiles(mobileFile);
+    await recoveryManager.waitFor({ state: 'hidden' });
     await eventually(() => registry().documents.some(row => row.name === 'Mobile_Working_20261110.pdf'), 'Phone new-work button opens a file chooser and uploads its PDF');
     await rendered(recovery.page);
     report.checks.push('a board with no official baseline and every PDF archived can still open the manager and restore a working PDF');

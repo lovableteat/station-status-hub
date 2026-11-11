@@ -198,7 +198,7 @@ async function eventually(check, message, timeout = 8000) {
     await frame(p, 0, [100 / 1190, 80 / 842], [300 / 1190, 160 / 842]);
     await panel(p).getByRole('button', {name:'加到問題截圖', exact:true}).click();
     await imageCount(p, 'before', 2); await saved(p);
-    await panel(p).getByRole('group', {name:'本頁的修改項目'}).getByRole('button', {name:'#002', exact:true}).waitFor();
+    await panel(p).getByRole('group', {name:'本頁的問題'}).getByRole('button', {name:'#002', exact:true}).waitFor();
     await dialog(p).getByRole('tab', {name:/^改善追蹤/}).click();
     await panel(p).waitFor({state:'hidden'});
     await dialog(p).getByRole('button', {name:'從圖面截圖', exact:true}).click();
@@ -335,26 +335,55 @@ async function eventually(check, message, timeout = 8000) {
     const phone = await createPage(browser, origin, 'A', 390, 844); sessions.push(phone);
     const q = phone.page;
     await q.waitForFunction(()=>{const list=document.querySelector('[data-testid="circuit-changes-dialog"] .circuit-item-list');return list&&list.getAttribute('aria-busy')!=='true';});await q.waitForTimeout(300);
-    await dialog(q).getByRole('button', {name:'看圖面', exact:true}).filter({visible:true}).first().tap();
+    await dialog(q).getByRole('button', {name:'看圖面', exact:true}).tap();
     // This browser has no copy of the 51 MB PDF last opened on the laptop, so it offers the file picker; the phone switches to 11/09.
     await panel(q).getByRole('button', {name:'選擇 PDF', exact:true}).tap();
     await panel(q).getByRole('button', {name:'開啟 11/09 版 Vera_SCH_20261109.pdf', exact:true}).tap();
     await rendered(q);
-    assert.equal(await dialog(q).locator('.circuit-detail').isVisible(), false, 'one pane at a time on a phone');
-    const finish = panel(q).locator('.circuit-pdf-finish-bar');
-    const finishBox = await finish.boundingBox();
-    assert.ok(finishBox && finishBox.y + finishBox.height <= 844 + 1, 'the finishing bar is on screen');
-    await panel(q).getByRole('button', {name:'截圖', exact:true}).tap();
+    assert.equal(await dialog(q).locator('.circuit-detail').isVisible(), false, 'one screen at a time on a phone');
+    assert.equal(await dialog(q).getByRole('tab').count(), 0, 'the drawing shows its own actions instead of the four tabs');
+    const bar = panel(q).locator('.circuit-pdf-phone-bar');
+    const barBox = await bar.boundingBox();
+    assert.ok(barBox && barBox.y + barBox.height <= 844 + 1, 'the action row is on screen');
+    const words = await bar.locator('.circuit-pdf-phone-row > button').evaluateAll(nodes => nodes.map(node => ({text:node.innerText.trim(), height:node.getBoundingClientRect().height})));
+    assert.ok(words.length >= 3 && words.every(button => button.text && button.height >= 48), 'every action is a 48px button with its word: ' + JSON.stringify(words));
+    // Opened from the list, a framed area becomes a new problem on the spot: no trip back to a form.
+    const itemsBefore = (await stateOf(origin)).items.length;
+    await bar.getByRole('button', {name:'截圖', exact:true}).tap();
+    assert.deepEqual(await bar.locator('.circuit-pdf-phone-row > button').evaluateAll(nodes => nodes.map(node => node.innerText.trim())), ['取消截圖'], 'while framing the row offers only the way out');
     await frame(q);
     const actionsBox = await panel(q).getByRole('group', {name:'加入截圖'}).boundingBox();
-    assert.ok(actionsBox.y + actionsBox.height <= 844 + 1, 'the add buttons are on screen');
-    await panel(q).getByRole('button', {name:'加到問題截圖', exact:true}).tap();
-    await panel(q).locator('.circuit-pdf-actions[role="status"]').waitFor();
+    assert.ok(actionsBox.y + actionsBox.height <= 844 + 1, 'the title field and its buttons are on screen');
+    await bar.getByRole('button', {name:'記下問題', exact:true}).tap();
+    await bar.getByRole('alert').waitFor();
+    assert.equal((await stateOf(origin)).items.length, itemsBefore, 'without a title nothing is recorded, and the row says so');
+    await bar.getByRole('textbox', {name:'新問題的標題', exact:true}).fill('QA 手機看圖時記下');
+    await bar.getByRole('button', {name:'記下問題', exact:true}).tap();
+    await bar.locator('.circuit-pdf-phone-note').waitFor();
+    const recorded = (await stateOf(origin)).items.find(item => item.content.title === 'QA 手機看圖時記下');
+    assert.ok(recorded && recorded.content.images.length === 1 && recorded.content.images[0].side === 'before' && recorded.content.images[0].source?.page === Number(recorded.content.page), 'the new problem has its title, the screenshot as 問題截圖 and the page: ' + JSON.stringify(recorded?.content));
+    assert.ok(await panel(q).isVisible(), 'the drawing stays on screen to keep reading');
     assert.equal(await q.evaluate(() => document.documentElement.scrollWidth), 390, 'no sideways page scroll');
     await q.screenshot({path:path.join(evidence, '3-phone-390.png')});
-    await panel(q).getByRole('button', {name:'返回表單', exact:true}).first().tap();
+    // 本頁問題 opens that problem on top of the drawing; the way back returns to the page.
+    await panel(q).getByRole('group', {name:'本頁的問題'}).getByRole('button').last().tap();
     await dialog(q).locator('.circuit-detail').waitFor();
-    check('phone 390: PDF pane alone, framing toggle, add buttons and finishing bar on screen, back to the form');
+    assert.equal(await dialog(q).getByRole('textbox', {name:'標題', exact:true}).inputValue(), 'QA 手機看圖時記下');
+    await dialog(q).getByRole('button', {name:'返回圖面', exact:true}).tap();
+    await rendered(q);
+    await dialog(q).getByRole('button', {name:'返回問題清單', exact:true}).tap();
+    // From a problem, a framed area is added to that problem.
+    await dialog(q).getByTestId('circuit-change-item').filter({hasText:'QA 手機看圖時記下'}).tap();
+    await dialog(q).getByRole('button', {name:'從圖面截圖', exact:true}).tap();
+    await rendered(q);
+    await bar.getByRole('button', {name:'截圖', exact:true}).tap();
+    await frame(q, 0, [700 / 1190, 500 / 842], [900 / 1190, 620 / 842]);
+    await bar.getByRole('button', {name:'加到問題截圖', exact:true}).tap();
+    await bar.locator('.circuit-pdf-phone-note').waitFor();
+    assert.equal((await stateOf(origin)).items.find(item => item.content.title === 'QA 手機看圖時記下').content.images.length, 2);
+    await dialog(q).getByRole('button', {name:'返回問題', exact:true}).tap();
+    await dialog(q).locator('.circuit-detail').waitFor();
+    check('phone 390: drawing alone with one worded action row, a framed area recorded as a new problem on the spot, 本頁問題 and back, framing into an open problem');
 
     for (const session of sessions) assert.deepEqual(session.errors, [], 'no page errors');
     report.result = 'passed';

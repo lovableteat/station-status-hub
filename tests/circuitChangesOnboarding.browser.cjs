@@ -48,14 +48,35 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       const dialog=page.getByTestId('circuit-changes-dialog'), guide=page.getByTestId('circuit-usage-guide');
       await dialog.waitFor();
       // 1. The form and a place for pictures are on screen straight away; none of this has written anything.
-      const title=dialog.getByRole('textbox',{name:'標題',exact:true}); await title.waitFor();
-      const tab=async name=>{await dialog.getByRole('tab',{name:new RegExp('^'+name)}).tap();await page.waitForFunction(label=>document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.includes(label),name);};
+      const title=dialog.getByRole('textbox',{name:'標題',exact:true});
+      // On a phone the tabs show on a tab's first screen only and a tab opens on its list: go back, switch, reopen the problem.
+      const tab=async name=>{
+        if(phone) for(let i=0;i<4;i++){const back=dialog.getByRole('button',{name:/^返回(問題清單|問題|圖面)$/});if(!(await back.count()))break;await back.first().tap();}
+        await dialog.getByRole('tab',{name:new RegExp('^'+name)}).tap();await page.waitForFunction(label=>document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.includes(label),name);
+        if(phone){const current=dialog.locator('[data-testid="circuit-change-item"][aria-pressed="true"]');if(await current.waitFor({timeout:3000}).then(()=>true,()=>false))await current.tap();}
+      };
+      if(phone) {
+        // A phone opens on the list: what can be done is one row of large, worded buttons at the bottom, above the four tabs.
+        await page.waitForFunction(()=>document.querySelector('[data-testid="circuit-changes-dialog"] .circuit-item-list')?.getAttribute('aria-busy')!=='true');
+        const actions=dialog.getByRole('group',{name:'線路 Review 可以做的事'});
+        for(const name of ['上傳 PDF','新增問題']){const button=actions.getByRole('button',{name,exact:true});const box=await button.boundingBox();assert.ok(box&&box.height>=48&&box.y+box.height<=884&&(await button.innerText()).includes(name),name+' is a large worded button on the first screen');}
+        assert.equal(await dialog.getByRole('tab').count(),4,'the four tabs are on the first screen');
+        assert.equal(await dialog.getByRole('button',{name:/^返回/}).count(),0,'the first screen has nothing to go back to');
+        assert.equal(await dialog.getByRole('textbox',{name:'搜尋線路修改',exact:true}).count(),0,'nothing to filter yet, so no filter row');
+        assert.ok((await dialog.locator('.circuit-empty').innerText()).startsWith('還沒有問題。打開圖面'));
+        await actions.getByRole('button',{name:'新增問題',exact:true}).tap();
+        await title.waitFor();
+        assert.equal(await dialog.getByRole('tab').count(),0,'a pushed screen shows its own actions instead of the tabs');
+        const back=dialog.getByRole('button',{name:'返回問題清單',exact:true});const backBox=await back.boundingBox();
+        assert.ok(backBox&&backBox.height>=44&&(await back.innerText()).includes('問題清單'),'the way back says where it goes');
+      }
+      await title.waitFor();
       const addBefore=dialog.getByRole('button',{name:'加入問題截圖',exact:true});
       await addBefore.scrollIntoViewIfNeeded();
       const target=await addBefore.boundingBox();
       assert.ok(await addBefore.isVisible() && target && target.height>=100 && target.width>=Math.min(width,320)-80, 'the picture target is a large, visible area');
       assert.equal(await dialog.getByRole('button',{name:'加入改好後截圖',exact:true}).count(), 0, '線路 Review only marks the problem; the fix picture is in 改善追蹤');
-      assert.ok((await dialog.locator('.circuit-image-column[data-side="before"]').innerText()).includes('貼上會加到這裡'));
+      assert.equal((await dialog.locator('.circuit-image-column[data-side="before"]').innerText()).includes('貼上會加到這裡'), !phone, 'the paste hint is for a keyboard, not a phone');
       assert.equal((await addBefore.innerText()).includes('Ctrl+V'), !phone, 'a phone is not told to press Ctrl+V or drag');
       assert.equal(await dialog.getByRole('button',{name:/新增改版清單|新增問題/}).filter({visible:true}).count(), phone ? 0 : 1, 'one button per action: 新增問題 here, 新增改版清單 in the 更多 menu');
       const initialState=await state(origin);
@@ -69,7 +90,7 @@ const state = async origin => (await fetch(origin + '/__circuit/state')).json();
       await guide.getByRole('button',{name:'關閉使用說明',exact:true}).tap(); await guide.waitFor({state:'hidden'});
       assert.equal((await state(origin)).sets.length, 0); assert.equal((await state(origin)).items.length, 0);
       const batch=page.getByRole('dialog').filter({has:page.getByRole('heading',{name:'新增改版清單',exact:true})});
-      if(phone) { await dialog.getByRole('button',{name:'返回問題清單',exact:true}).tap(); await dialog.getByText('還沒有問題；在右邊填寫就會建立第一項',{exact:true}).waitFor(); assert.equal(await dialog.getByTestId('circuit-change-unsaved').count(),0); }
+      if(phone) { await dialog.getByRole('button',{name:'返回問題清單',exact:true}).tap(); await dialog.getByText(/^還沒有問題。打開圖面/).waitFor(); assert.equal(await dialog.getByTestId('circuit-change-unsaved').count(),0); }
       // 3. Naming a batch is optional: the form can be cancelled, or submitted with Enter.
       await dialog.getByRole('button',{name:'更多',exact:true}).tap();await dialog.page().getByRole('menuitem',{name:'新增改版清單',exact:true}).tap();
       await batch.waitFor();

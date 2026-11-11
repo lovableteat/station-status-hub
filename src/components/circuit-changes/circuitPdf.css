@@ -12,7 +12,6 @@
 .circuit-pdf-tool-group > button { flex: none; width: 32px; padding: 0; }
 .circuit-pdf-tool-group[data-group="draw"] > button[aria-pressed="true"] { border-color: hsl(var(--primary) / .5); background: hsl(var(--primary) / .12); color: hsl(var(--primary)); }
 .circuit-pdf-ink-status { display: flex; flex: none; min-height: 32px; align-items: center; gap: 4px; color: hsl(var(--muted-foreground)); font-size: 12px; white-space: nowrap; }
-.circuit-pdf-panel .circuit-pdf-back { display: none; flex: none; width: 40px; padding: 0; }
 .circuit-pdf-row .circuit-pdf-compare-official[aria-pressed="true"] { border-color: hsl(var(--primary) / .5); background: hsl(var(--primary) / .1); color: hsl(var(--primary)); }
 .circuit-pdf-link-bar { display: flex; flex: none; align-items: center; gap: 8px; padding: 4px 12px; border-bottom: 1px solid hsl(var(--border)); }
 .circuit-pdf-link-bar > span { color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 18px; }
@@ -105,7 +104,6 @@
 .circuit-pdf-finish { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
 .circuit-pdf-overview > .circuit-pdf-finish { padding-block: 0; }
 .circuit-pdf-overview > .circuit-pdf-finish > button { height: 32px; gap: 6px; padding-inline: 8px; font-size: 13px; }
-.circuit-pdf-finish-bar { display: none; }
 .circuit-pdf-checked { display: flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; cursor: pointer; }
 .circuit-pdf-checked > input { width: 18px; height: 18px; accent-color: hsl(var(--primary)); }
 
@@ -166,7 +164,6 @@
 .circuit-pdf-actions-busy { color: hsl(var(--muted-foreground)); }
 .circuit-pdf-actions[role="status"] { border-top-color: hsl(var(--border)); color: hsl(var(--primary)); }
 
-.circuit-pdf-empty-heading { display: none; }
 .circuit-pdf-empty { display: flex; flex: 1; min-height: 0; flex-direction: column; align-items: center; justify-content: center; gap: 10px; margin: 16px; border: 1.5px dashed hsl(var(--border)); border-radius: 12px; padding: 24px; background: hsl(var(--background) / .5); color: hsl(var(--foreground)); text-align: center; cursor: pointer; }
 .circuit-pdf-empty:hover, .circuit-pdf-panel[data-dropping="true"] .circuit-pdf-empty { border-color: hsl(var(--primary)); background: hsl(var(--primary) / .06); }
 .circuit-pdf-panel .circuit-pdf-empty > svg { width: 36px; height: 36px; color: hsl(var(--primary)); }
@@ -177,12 +174,9 @@
 
 @media (max-width: 1023px) {
   .circuit-pdf-panel { flex: 1; border-right: 0; }
-  .circuit-pdf-panel .circuit-pdf-back { display: inline-flex; width: 44px; height: 44px; }
   .circuit-pdf-link-bar > .circuit-pdf-link-toggle { height: 44px; }
-  .circuit-pdf-empty-heading { display: flex; flex: none; align-items: center; gap: 4px; padding: 6px 12px; border-bottom: 1px solid hsl(var(--border)); font-size: 16px; }
   .circuit-pdf-toolbar { padding: 4px 8px; }
   .circuit-pdf-row { gap: 6px; }
-  .circuit-pdf-row > .circuit-pdf-back { order: -2; }
   .circuit-pdf-tool-group[data-group="draw"] { order: -1; }
   .circuit-pdf-tool-group[data-group="version"] { flex-basis: 180px; }
   .circuit-pdf-tool-group > button, .circuit-pdf-row .circuit-pdf-delete { width: 44px; height: 44px; }
@@ -202,12 +196,6 @@
   .circuit-pdf-panel .circuit-pdf-compare select { width: 140px; height: 44px; font-size: 14px; }
   .circuit-pdf-pager input { width: 48px; }
   .circuit-pdf-pager > span { padding-inline: 2px; }
-  .circuit-pdf-crop-toggle { width: 44px; padding: 0 !important; }
-  .circuit-pdf-crop-toggle > span { display: none !important; }
-  .circuit-pdf-finish-toolbar { display: none; }
-  .circuit-pdf-finish-bar { display: flex; flex: none; margin: 0; padding: 8px 12px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid hsl(var(--border)); background: hsl(var(--background)); }
-  .circuit-pdf-finish-bar > button { flex: 1; height: 44px; gap: 6px; font-size: 14px; }
-  .circuit-pdf-finish-bar .circuit-pdf-checked { min-height: 44px; padding-right: 4px; font-size: 14px; }
   .circuit-pdf-strip > button { width: 12px; height: 26px; }
   .circuit-pdf-strip > button > span { top: 28px; }
   .circuit-pdf-strip:has(button > span) { padding-bottom: 20px; }
@@ -338,4 +326,74 @@
   .circuit-pdf-panel:has(> .circuit-pdf-ai-bar) .circuit-pdf-overview { flex-wrap: wrap; row-gap: 0; }
   .circuit-pdf-panel:has(> .circuit-pdf-ai-bar) .circuit-pdf-overview > .circuit-pdf-strip { flex: 1 0 100%; }
   .circuit-pdf-overview > .circuit-pdf-offset { padding-inline-start: 6px; }
+}
+
+/* Phone redesign (2026-11-11), the drawing. Top: which PDF and the zoom. Under the drawing: the page row. Bottom: one row
+   of actions with words (上一頁 · 截圖 · 畫筆 · 看完，下一頁) that changes with what the hand is doing. */
+@media (max-width: 1023px) {
+  .circuit-pdf-panel > .circuit-pdf-ai-bar { order: 0; }
+  .circuit-pdf-panel > .circuit-pdf-toolbar { order: 1; }
+  .circuit-pdf-panel > .circuit-pdf-message { order: 2; }
+  .circuit-pdf-panel > .circuit-pdf-stage { order: 3; padding: 8px; }
+  .circuit-pdf-panel > .circuit-pdf-overview { order: 4; }
+  .circuit-pdf-panel > .circuit-pdf-phone-bar { order: 5; }
+
+  .circuit-pdf-panel .circuit-pdf-toolbar { padding: 4px 8px; }
+  .circuit-pdf-panel .circuit-pdf-row { flex-wrap: nowrap; gap: 6px; overflow: visible; }
+  .circuit-pdf-panel .circuit-pdf-tool-group { border: 0; padding: 0; margin: 0; }
+  .circuit-pdf-panel .circuit-pdf-tool-group[data-group="version"] { flex: 1 1 0; min-width: 0; }
+  .circuit-pdf-panel .circuit-pdf-versions { min-width: 0; }
+  .circuit-pdf-panel .circuit-pdf-version-button { width: 100%; min-width: 0; height: 44px; }
+  .circuit-pdf-panel .circuit-pdf-tool-group[data-group="zoom"] { flex: none; margin-left: auto; }
+  .circuit-pdf-panel .circuit-pdf-zoom > .circuit-pdf-zoom-fit { width: auto; min-width: 54px; padding: 0 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .circuit-pdf-panel .circuit-pdf-tool-group[data-group="link"] { flex: 1 1 0; min-width: 0; }
+  .circuit-pdf-panel .circuit-pdf-tool-group[data-group="link"] > button { width: 100%; }
+  .circuit-pdf-panel .circuit-pdf-phone-upload { width: 100%; height: 48px; gap: 8px; font-size: 15px; }
+
+  /* Page row under the drawing: page number, the strip, how many pages are seen. 本頁問題 gets its own line above. */
+  .circuit-pdf-panel .circuit-pdf-overview { flex-wrap: wrap; gap: 0 8px; min-height: 44px; padding: 2px 10px; border-top: 1px solid hsl(var(--foreground) / .12); border-bottom: 0; }
+  .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-page-changes { order: 0; flex: 1 0 100%; min-height: 40px; }
+  .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-page-changes > button { min-width: 56px; height: 36px; }
+  .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-pager { order: 1; gap: 4px; }
+  .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-strip { order: 2; flex: 1 1 90px; }
+  .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-progress { order: 3; flex: none; font-size: 12px; }
+  .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-seen { order: 4; flex: none; height: 32px; gap: 4px; padding: 0 8px; font-size: 12px; }
+  .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-offset { order: 2; margin-left: auto; }
+  .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-page-warning { order: 5; flex: 1 0 100%; }
+  /* AI 比對: the pages are turned with the bottom row, so the strip and the ± of 官方對應頁 are left out here. */
+  .circuit-pdf-panel:has(> .circuit-pdf-ai-bar) .circuit-pdf-overview > .circuit-pdf-strip { display: none; }
+  .circuit-pdf-panel:has(> .circuit-pdf-ai-bar) .circuit-pdf-overview > .circuit-pdf-offset > button { display: none; }
+
+  /* AI 比對: the two PDFs side by side with 交換 between them (the drawings are one above the other on a phone); the AI
+     button is in the bottom row, and 上傳 PDF shows here only while there are fewer than two PDFs. */
+  .circuit-pdf-panel > .circuit-pdf-ai-pair { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px 8px; padding: 6px 10px 8px; }
+  .circuit-pdf-panel .circuit-pdf-ai-pair-actions { grid-column: 1 / -1; }
+  .circuit-pdf-panel .circuit-pdf-ai-pair-actions > button { flex: 1; height: 48px; font-size: 15px; }
+  .circuit-pdf-panel .circuit-pdf-ai-pair select { height: 44px; font-size: 15px; }
+  .circuit-pdf-panel .circuit-pdf-ai-pair .circuit-pdf-swap { width: auto; min-width: 48px; height: 44px; flex-direction: column; gap: 0; padding: 0 6px; font-size: 11px; line-height: 1.2; }
+
+  /* The bottom row. */
+  .circuit-pdf-phone-bar { display: grid; flex: none; gap: 6px; padding: 8px 12px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid hsl(var(--foreground) / .12); background: hsl(var(--card)); }
+  .circuit-pdf-phone-row { display: flex; min-width: 0; gap: 8px; }
+  .circuit-pdf-phone-row > button { flex: 1 1 0; min-width: 0; height: 52px; gap: 6px; padding: 0 8px; font-size: 15px; font-weight: 600; }
+  .circuit-pdf-phone-row > button > svg { flex: none; width: 20px; height: 20px; }
+  .circuit-pdf-phone-row > .circuit-pdf-phone-tool { flex: 1 1 0; flex-direction: column; gap: 2px; padding: 0 2px; font-size: 12px; font-weight: 500; }
+  .circuit-pdf-phone-row > .circuit-pdf-phone-next, .circuit-pdf-phone-row > .circuit-pdf-ai-run { flex: 2 1 0; height: 52px; }
+  .circuit-pdf-phone-hint { margin: 0; color: hsl(var(--foreground) / .82); font-size: 14px; line-height: 20px; text-align: center; overflow-wrap: anywhere; }
+  .circuit-pdf-phone-hint > strong { color: hsl(202 64% 83%); font-weight: 600; }
+  .circuit-pdf-phone-note { display: flex; align-items: center; gap: 6px; margin: 0; color: hsl(144 52% 70%); font-size: 13px; line-height: 20px; }
+  .circuit-pdf-phone-note > svg { flex: none; width: 16px; height: 16px; }
+  .circuit-pdf-phone-new { display: grid; gap: 8px; }
+  .circuit-pdf-phone-new > label { display: grid; gap: 6px; font-size: 14px; font-weight: 500; }
+  .circuit-pdf-phone-new > label em { margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: hsl(28 70% 58% / .2); color: hsl(28 80% 72%); font-size: 11px; font-style: normal; font-weight: 600; }
+  .circuit-pdf-phone-new > label > input { width: 100%; height: 48px; padding: 0 12px; border: 1px solid hsl(var(--foreground) / .22); border-radius: 8px; background: hsl(var(--background)); color: hsl(var(--foreground)); font-size: 16px; }
+  .circuit-pdf-phone-new > label > input:focus-visible { border-color: hsl(202 58% 64%); outline: 2px solid hsl(202 58% 64% / .5); outline-offset: 1px; }
+  .circuit-pdf-phone-new > p[role="alert"] { margin: 0; color: hsl(28 80% 72%); font-size: 13px; line-height: 20px; }
+  /* In 截圖 mode the first finger frames; the page must not scroll under it. */
+  .circuit-pdf-panel .circuit-pdf-pages { transition: none; will-change: auto; }
+}
+@media (max-width: 1023px) {
+  .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-page-changes { max-width: none; font-size: 13px; }
+  .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-seen { margin-left: auto; }
+  .circuit-pdf-phone-row > .circuit-pdf-phone-tool { font-size: 13px; }
 }

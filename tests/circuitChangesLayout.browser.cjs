@@ -30,7 +30,7 @@ async function compareDrawings(page, dialog) {
       await dialog.getByRole('button', { name: /^(設定|更換)官方版本$/ }).click();
       await dialog.getByRole('button', { name: `設為官方版本：${name}`, exact: true }).click();
       await dialog.getByRole('button', { name: '確定更換', exact: true }).click();
-      await dialog.locator('.circuit-official-history tbody tr').first().waitFor();
+      await dialog.locator('.circuit-official-timeline > li').first().waitFor();
       await dialog.getByRole('tab', { name: /^線路 Review/ }).click();
     }
   }
@@ -55,6 +55,28 @@ async function geometry(page, dialog, width, height) {
   assert.ok(values.note.bottom <= values.actions.top + 1, 'Review actions belong below the comment, not squeezed beside it');
   assert.ok(values.buttons.every(box => box.left >= values.panel.left - 1 && box.right <= values.panel.right + 1 && box.bottom <= height + 1));
   assert.ok(values.footer.bottom <= height + 1 && values.note.top >= 0);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+  return values;
+}
+
+// Phone (2026-11-11): the bottom row holds only 退回重改 and 確認結案; 留言 is in the scrolling part, above the record.
+async function phoneGeometry(page, dialog, width, height) {
+  await dialog.getByRole('textbox', { name: '留言', exact: true }).scrollIntoViewIfNeeded();
+  const values = await dialog.evaluate(node => {
+    const rect = element => { const box = element.getBoundingClientRect(); return { left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: box.width, height: box.height }; };
+    const decide = node.querySelector('.circuit-phone-decide'), footer = node.querySelector('.circuit-detail-footer');
+    return { frame: rect(node), overflow: node.scrollWidth - node.clientWidth, panel: rect(node.querySelector('.circuit-detail')), note: rect(node.querySelector('.circuit-comment textarea')), footer: rect(footer),
+      buttons: [...decide.querySelectorAll('button')].map(element => ({ ...rect(element), text: element.innerText.trim() })), reviewBar: node.querySelectorAll('.circuit-review-bar').length, tabs: [...node.querySelectorAll('[role="tab"]')].filter(tab => tab.getBoundingClientRect().height > 0).length };
+  });
+  assert.ok(values.frame.left >= -1 && values.frame.top >= -1 && values.frame.right <= width + 1 && values.frame.bottom <= height + 1, JSON.stringify(values));
+  assert.ok(values.frame.width >= width - 2, 'On a phone the workspace uses the whole width');
+  assert.ok(values.overflow <= 1, 'The dialog must not stretch horizontally');
+  assert.deepEqual(values.buttons.map(button => button.text), ['退回重改', '確認結案'], 'the bottom row holds the two decisions, each with its word');
+  assert.ok(values.buttons.every(box => box.height >= 48 && box.left >= values.panel.left - 1 && box.right <= values.panel.right + 1 && box.bottom <= height + 1), JSON.stringify(values.buttons));
+  assert.equal(values.reviewBar, 0, 'no second block of controls stacked above the decisions');
+  assert.equal(values.tabs, 0, 'a pushed screen shows its own actions instead of the four tabs');
+  assert.ok(values.footer.bottom <= height + 1 && values.footer.height <= 132, 'the bottom row stays small: ' + JSON.stringify(values.footer));
+  assert.ok(values.note.width >= Math.min(280, values.panel.width - 36), 'Review comments must retain a usable full line');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
   return values;
 }
@@ -89,8 +111,14 @@ async function geometry(page, dialog, width, height) {
         if (width < 1024) await page.getByRole('button', { name: '排序與工具', exact: true }).tap();
         await page.getByTestId('material-circuit-changes').filter({ visible: true }).tap();
         const dialog = page.getByTestId('circuit-changes-dialog'); await dialog.waitFor();
-        const task = async name => { await dialog.getByRole('tab', { name: new RegExp('^' + name) }).tap(); await page.waitForFunction(label => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.includes(label), name); };
+        // On a phone the tabs show on a tab's first screen only and a tab opens on its list: go back, switch, reopen the problem.
+        const task = async name => {
+          if (page.viewportSize().width < 1024) for (let i = 0; i < 4; i++) { const back = dialog.getByRole('button', { name: /^返回(問題清單|問題|圖面)$/ }); if (!(await back.count())) break; await back.first().tap(); }
+          await dialog.getByRole('tab', { name: new RegExp('^' + name) }).tap(); await page.waitForFunction(label => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.includes(label), name);
+          if (page.viewportSize().width < 1024) { const current = dialog.locator('[data-testid="circuit-change-item"][aria-pressed="true"]'); if (await current.waitFor({ timeout: 3000 }).then(() => true, () => false)) await current.tap(); }
+        };
         if (width === 1920) { await compareDrawings(page, dialog); await task('線路 Review'); }
+        if (width < 1024) await dialog.getByRole('button', { name: '新增問題', exact: true }).tap();
         await dialog.getByRole('textbox', { name: '標題', exact: true }).fill('QA 窄欄 Review ' + width);
         // Beside the drawing the form is 標記問題; its 問題說明 is what collapsing must keep.
         const note = dialog.getByRole('textbox', { name: '問題說明', exact: true });
@@ -148,9 +176,8 @@ async function geometry(page, dialog, width, height) {
             assert.equal(await detail.isVisible(), false, 'The saved desktop collapse survives a full reload');
             await page.setViewportSize({ width: 390, height: 884 });
             await page.waitForFunction(() => !document.querySelector('[data-testid="circuit-change-detail"]').hidden);
-            // The window remembers 線路 Review; on a phone it opens on the form, and the drawing only on request.
-            if (await dialog.getByTestId('circuit-pdf-panel').isVisible()) await dialog.getByRole('button', { name: '返回表單', exact: true }).tap();
-            if (!(await dialog.getByTestId('circuit-change-item').first().isVisible())) await dialog.getByRole('button', { name: '返回問題清單', exact: true }).tap();
+            // The window remembers 線路 Review; on a phone it opens on the list, and the drawing only on request.
+            for (let i = 0; i < 4 && !(await dialog.getByTestId('circuit-change-item').first().isVisible()); i++) await dialog.getByRole('button', { name: /^返回(問題清單|問題|圖面)$/ }).first().tap();
             await dialog.getByTestId('circuit-change-item').first().tap();
             await detail.waitFor({ state: 'visible' });
             assert.equal(await dialog.getByRole('button', { name: '收合表單', exact: true }).count(), 0);
@@ -168,11 +195,12 @@ async function geometry(page, dialog, width, height) {
         await dialog.getByRole('button', { name: '回報改善', exact: true }).tap();
         const reviewNote = dialog.getByRole('textbox', { name: '留言', exact: true }); await reviewNote.waitFor();
         await reviewNote.fill('請補上修改後的接線位置，並核對訊號名稱。'.repeat(8));
-        const normal = await geometry(page, dialog, width, 884);
+        const measure = width < 1024 ? phoneGeometry : geometry;
+        const normal = await measure(page, dialog, width, 884);
         await page.screenshot({ path: path.join(evidence, `review-${width}.png`) });
         await page.setViewportSize({ width, height: 500 });
         await page.waitForFunction(() => document.querySelector('[data-testid="circuit-changes-dialog"]').getBoundingClientRect().bottom <= innerHeight + 1);
-        const short = await geometry(page, dialog, width, 500);
+        const short = await measure(page, dialog, width, 500);
         await page.screenshot({ path: path.join(evidence, `short-${width}.png`) });
         await dialog.getByRole('button', { name: '退回重改', exact: true }).tap();
         await dialog.locator('.circuit-returned').waitFor();
