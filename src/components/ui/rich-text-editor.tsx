@@ -802,6 +802,36 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         render={{
           buttonPrev: () => null,
           buttonNext: () => null,
+          // Keep the close control inside the portal; outer content is inert.
+          buttonClose: () => (
+            <button
+              type="button"
+              aria-label="關閉圖片預覽"
+              style={{
+                position: 'fixed',
+                top: '20px',
+                right: '20px',
+                zIndex: 10001,
+                background: 'rgba(0, 0, 0, 0.8)',
+                borderRadius: '50%',
+                width: '40px',
+                height: '40px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: 'white',
+                fontSize: '24px',
+                fontWeight: 'bold'
+              }}
+              onClick={() => {
+                setLightboxOpen(false);
+                setLightboxImage('');
+              }}
+            >
+              ×
+            </button>
+          ),
         }}
         carousel={{
           finite: true,
@@ -813,36 +843,6 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         }}
       />
       
-      {/* Custom close button overlay */}
-      {lightboxOpen && (
-        <button
-          type="button"
-          aria-label="關閉圖片預覽"
-          style={{
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
-            zIndex: 10001,
-            background: 'rgba(0, 0, 0, 0.8)',
-            borderRadius: '50%',
-            width: '40px',
-            height: '40px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: 'white',
-            fontSize: '24px',
-            fontWeight: 'bold'
-          }}
-          onClick={() => {
-            setLightboxOpen(false);
-            setLightboxImage('');
-          }}
-        >
-          ×
-        </button>
-      )}
     </div>
   );
 }

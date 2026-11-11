@@ -1,9 +1,11 @@
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const fs = require('node:fs');
 const path = require('node:path');
 const { createRequire } = require('node:module');
 const qa = createRequire(path.resolve(process.env.AUDIT_QA_DIR || '../qa-tools', 'package.json'));
 const { chromium } = qa('playwright');
+const lightboxCss = fs.readFileSync(require.resolve('yet-another-react-lightbox/styles.css'), 'utf8');
 
 (async () => {
   // Actual application editor, only synthetic in-memory text, with no service client.
@@ -47,7 +49,7 @@ const { chromium } = qa('playwright');
     if (req.url === '/fixture.js') { res.setHeader('Content-Type', 'text/javascript'); res.end(bundle.outputFiles[0].text); return; }
     if (req.url.startsWith('/signed-fixture.png')) { res.setHeader('Content-Type', 'image/png'); res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')); return; }
     res.setHeader('Content-Type', 'text/html');
-    res.end('<!doctype html><title>Isolated rich text compatibility</title><style>body{margin:20px}button{padding:8px}svg{width:18px;height:18px}[role=dialog]{background:white;border:1px solid black;padding:20px;position:fixed;top:20px;left:20px;z-index:100}td{border:1px solid gray}</style><div id="root"></div><script src="/fixture.js"></script>');
+    res.end('<!doctype html><title>Isolated rich text compatibility</title><style>' + lightboxCss + 'body{margin:20px}button{padding:8px}svg{width:18px;height:18px}[role=dialog]:not(.yarl__root){background:white;border:1px solid black;padding:20px;position:fixed;top:20px;left:20px;z-index:100}td{border:1px solid gray}</style><div id="root"></div><script src="/fixture.js"></script>');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const executablePath = process.env.AUDIT_CHROMIUM_PATH || (process.platform === 'win32' ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : undefined);
@@ -73,7 +75,10 @@ const { chromium } = qa('playwright');
     await page.waitForFunction(() => !document.querySelector('.yarl__slide img'));
     await page.evaluate(() => window.fixtureSignIn());
     await page.locator('.yarl__slide img').waitFor();
-    await page.getByRole('button', { name: '關閉圖片預覽', exact: true }).click();
+    const closePreview = page.getByRole('button', { name: '關閉圖片預覽', exact: true });
+    assert.equal(await closePreview.evaluate(button => button.closest('[inert]') === null), true, 'preview close remains in the interactive modal');
+    if (process.env.AUDIT_SCREENSHOT_PATH) await page.screenshot({ path: process.env.AUDIT_SCREENSHOT_PATH.replace(/\.png$/, '-preview.png') });
+    await closePreview.click();
     await page.waitForFunction(() => !document.querySelector('.yarl__slide img'));
     for (let i = 0; i < 2; i++) {
       await page.getByRole('button', { name: '插入連結', exact: true }).click();
@@ -97,7 +102,15 @@ const { chromium } = qa('playwright');
     assert.match(await page.evaluate(() => window.changes.at(-1)), /原始段落.*保留表格/);
     assert.deepEqual(errors, []);
     if (process.env.AUDIT_SCREENSHOT_PATH) await page.screenshot({ path: process.env.AUDIT_SCREENSHOT_PATH, fullPage: true });
-    console.log('PASS actual RichTextEditor in Chromium: initial content, no mount write, private preview sign-out/in, repeated cancel, editing, undo/redo, table rows');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await editor.locator('img').click();
+    await page.locator('.yarl__slide img').waitFor();
+    assert.equal(await closePreview.evaluate(button => button.closest('[inert]') === null), true);
+    if (process.env.AUDIT_SCREENSHOT_PATH) await page.screenshot({ path: process.env.AUDIT_SCREENSHOT_PATH.replace(/\.png$/, '-mobile-preview.png') });
+    await closePreview.click();
+    await page.waitForFunction(() => !document.querySelector('.yarl__slide img'));
+    assert.deepEqual(errors, []);
+    console.log('PASS actual RichTextEditor in Chromium: initial content, no mount write, private preview sign-out/in, desktop/mobile accessible close, repeated cancel, editing, undo/redo, table rows');
   } finally {
     await browser?.close();
     await new Promise(resolve => server.close(resolve));

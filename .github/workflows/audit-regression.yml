@@ -41,6 +41,13 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/app" -w /app/supabase/functions/account-admin-sync denoland/deno:2.1.4@sha256:3bf75873714baa410dcf7fabaf76d806d20f0ac8a7579df11577b4ed97416e34 deno check --frozen index.ts
           docker run --rm -v "$PWD:/app" -w /app denoland/deno:2.1.4@sha256:3bf75873714baa410dcf7fabaf76d806d20f0ac8a7579df11577b4ed97416e34 deno run --allow-run --allow-net --allow-read --allow-env tests/edge/accountAdminSync.synthetic.ts
+      - name: Daily statistics service authorization in real Deno
+        run: |
+          docker run --rm -v "$PWD:/app" -w /app denoland/deno:2.1.4@sha256:3bf75873714baa410dcf7fabaf76d806d20f0ac8a7579df11577b4ed97416e34 sh -ec '
+            deno cache --frozen --config=supabase/functions/account-admin-sync/deno.json supabase/functions/daily-stats/index.ts
+            deno check --frozen --config=supabase/functions/account-admin-sync/deno.json supabase/functions/daily-stats/index.ts tests/edge/dailyStats.synthetic.ts
+            deno run --cached-only --frozen --config=supabase/functions/account-admin-sync/deno.json --allow-run --allow-read --allow-env --allow-net=127.0.0.1:54322,127.0.0.1:8000 tests/edge/dailyStats.synthetic.ts
+          '
       - name: PGlite performance workflow and RLS
         run: |
           node tests/performanceOrganization.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
@@ -52,6 +59,8 @@ jobs:
           "$AUDIT_QA_DIR/node_modules/.bin/playwright" install --with-deps chromium
           node tests/auditHistory.browser.cjs
       - name: Private rich-text previews, sign-out and document preservation
+        env:
+          AUDIT_SCREENSHOT_PATH: ${{ runner.temp }}/private-richtext.png
         run: node tests/auditRichText.browser.cjs
       - name: Public seed removal and desktop/mobile BOM data preservation
         run: |
@@ -74,3 +83,13 @@ jobs:
       - name: Short landscape maintenance navigation and touch scrolling
         run: node tests/auditShortLandscape.browser.cjs
       - run: npm run build
+      - name: Preserve synthetic browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-browser-evidence
+          path: |
+            ${{ runner.temp }}/private-richtext*.png
+            ${{ runner.temp }}/material-seed-evidence/
+          if-no-files-found: ignore
+          retention-days: 3
