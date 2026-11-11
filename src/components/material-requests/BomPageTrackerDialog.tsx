@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Flag, Search, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Flag, Search, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ import type { BomPageTracker, BomPageTrackerPage, BomPageTrackerStatus, BomWorks
 import "./bomPageTracker.css";
 
 const EMPTY_DRAFT: BomPageTrackerDraft = { totalPages: 0, currentPage: 0, pages: [] };
-const NO_FILTERS = { query: "", status: "all" as BomPageStatusFilter };
+const NO_FILTERS = { query: "", status: "all" as BomPageStatusFilter, powerOnly: false };
 const savedTime = (value?: string) => value ? new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "";
 const statusCode = (status: BomPageTrackerStatus) => status === "done" ? "d" : status === "done_missing" ? "m" : "p";
 const statusOfCode = (code: string): BomPageTrackerStatus => code === "d" ? "done" : code === "m" ? "done_missing" : "pending";
@@ -100,12 +100,19 @@ export function BomPageTrackerDialog({ workspace, open, onOpenChange, onSave, lo
     return () => clearTimeout(timer);
   }, [flashPage]);
 
-  const counts = useMemo(() => {
-    const result: Record<BomPageTrackerStatus, number> = { done: 0, pending: 0, done_missing: 0 };
-    for (const page of pages) if (page.pageNumber <= totalPages) result[page.status] += 1;
-    return result;
+  const { counts, statusCodes, powerCount } = useMemo(() => {
+    const counts: Record<BomPageTrackerStatus, number> = { done: 0, pending: 0, done_missing: 0 };
+    let statusCodes = "";
+    let powerCount = 0;
+    for (const page of pages) {
+      if (page.pageNumber > totalPages) continue;
+      counts[page.status] += 1;
+      if (page.power) powerCount += 1;
+      const code = statusCode(page.status);
+      statusCodes += page.power ? code.toUpperCase() : code;
+    }
+    return { counts, statusCodes, powerCount };
   }, [pages, totalPages]);
-  const statusCodes = useMemo(() => pages.filter(page => page.pageNumber <= totalPages).map(page => statusCode(page.status)).join(""), [pages, totalPages]);
   const completed = counts.done + counts.done_missing;
   const completionRate = totalPages > 0 ? Math.round((completed / totalPages) * 100) : 0;
   const rawStart = clampBomTrackerPageCount(Number(rangeStartInput || 0)), rawEnd = clampBomTrackerPageCount(Number(rangeEndInput || 0));
@@ -132,6 +139,9 @@ export function BomPageTrackerDialog({ workspace, open, onOpenChange, onSave, lo
     if (field === "note" && value.trim()) reach(pageNumber);
   }, [reach]);
   const setCurrent = useCallback((pageNumber: number) => setCurrentPageInput(String(pageNumber)), []);
+  const togglePower = useCallback((pageNumber: number) => {
+    setPages(current => current.map(row => row.pageNumber === pageNumber ? { ...row, power: !row.power } : row));
+  }, []);
   const applyRangeStatus = (status: BomPageTrackerStatus) => {
     if (!rangeCount) return;
     setPages(current => current.map(row => row.pageNumber >= rangeStart && row.pageNumber <= rangeEnd && row.status !== status ? { ...row, status } : row));
@@ -184,6 +194,7 @@ export function BomPageTrackerDialog({ workspace, open, onOpenChange, onSave, lo
   const activeChips = [
     ...(filters.query ? [{ key: "query" as const, label: `搜尋：${filters.query}`, reset: "" }] : []),
     ...(filters.status !== "all" ? [{ key: "status" as const, label: `狀態：${BOM_PAGE_STATUS_LABELS[filters.status]}`, reset: "all" }] : []),
+    ...(filters.powerOnly ? [{ key: "powerOnly" as const, label: "只看 POWER", reset: false }] : []),
   ];
   const changeLabel = [changes.pages ? `${changes.pages} 頁` : "", changes.settings ? "頁數設定" : ""].filter(Boolean).join("與");
   const statusText = readOnly ? "檢視權限：可以查看，不能修改" : dirty ? `有尚未儲存的修改（${changeLabel}）` : workspace.pageTracker ? `已儲存 · ${savedTime(workspace.pageTracker.updatedAt)}` : "尚未設定頁數";
@@ -235,7 +246,7 @@ export function BomPageTrackerDialog({ workspace, open, onOpenChange, onSave, lo
             <header>
               <h3>頁面總覽</h3>
               <p>{readOnly ? "點頁碼可跳到那一頁。" : <><span className="bom-tracker-wide-copy">點頁碼跳到那一頁；按住 Shift 再點另一頁，可選一段範圍一次設定。</span><span className="bom-tracker-compact-copy">點頁碼跳到那一頁；一次設定多頁請填上方起訖頁。</span></>}</p>
-              <ul aria-hidden="true">{BOM_PAGE_STATUSES.map(status => <li key={status} data-status={status}>{BOM_PAGE_STATUS_LABELS[status]}</li>)}</ul>
+              <ul aria-hidden="true">{BOM_PAGE_STATUSES.map(status => <li key={status} data-status={status}>{BOM_PAGE_STATUS_LABELS[status]}</li>)}{powerCount > 0 && <li className="bom-tracker-power-legend"><Zap />POWER</li>}</ul>
             </header>
             <PageMap codes={statusCodes} currentPage={currentPage} rangeStart={readOnly ? 0 : rangeStart} rangeEnd={readOnly ? 0 : rangeEnd} onPick={onPick} />
           </section>}
@@ -249,9 +260,12 @@ export function BomPageTrackerDialog({ workspace, open, onOpenChange, onSave, lo
           <>
             <div className="bom-tracker-filter" role="group" aria-label="頁面篩選">
               <label className="bom-tracker-search"><Search aria-hidden="true" /><Input aria-label="搜尋頁面" placeholder="搜尋頁碼、標題或備註" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} /></label>
-              <div className="bom-tracker-status-filter" role="group" aria-label="篩選狀態">
-                <button type="button" data-status="all" aria-pressed={filters.status === "all"} onClick={() => setFilters(current => ({ ...current, status: "all" }))}>全部 <span>{totalPages}</span></button>
-                {(["pending", "done", "done_missing"] as const).map(status => <button key={status} type="button" data-status={status} aria-pressed={filters.status === status} onClick={() => setFilters(current => ({ ...current, status }))}>{BOM_PAGE_STATUS_LABELS[status]} <span>{counts[status]}</span></button>)}
+              <div className="bom-tracker-filter-options">
+                <div className="bom-tracker-status-filter" role="group" aria-label="篩選狀態">
+                  <button type="button" data-status="all" aria-pressed={filters.status === "all"} onClick={() => setFilters(current => ({ ...current, status: "all" }))}>全部 <span>{totalPages}</span></button>
+                  {(["pending", "done", "done_missing"] as const).map(status => <button key={status} type="button" data-status={status} aria-pressed={filters.status === status} onClick={() => setFilters(current => ({ ...current, status }))}>{BOM_PAGE_STATUS_LABELS[status]} <span>{counts[status]}</span></button>)}
+                </div>
+                <button type="button" className="bom-tracker-power-filter" aria-label="只看 POWER" aria-pressed={filters.powerOnly} onClick={() => setFilters(current => ({ ...current, powerOnly: !current.powerOnly }))}><Zap aria-hidden="true" />POWER <span>{powerCount}</span></button>
               </div>
               <span className="bom-tracker-count">{shown} / {totalPages} 頁</span>
             </div>
@@ -264,7 +278,7 @@ export function BomPageTrackerDialog({ workspace, open, onOpenChange, onSave, lo
                 <colgroup><col className="bom-tracker-page-col" /><col className="bom-tracker-status-col" /><col /><col /></colgroup>
                 <thead><tr><th scope="col">頁碼</th><th scope="col">狀態</th><th scope="col">頁面標題</th><th scope="col">備註</th></tr></thead>
                 <tbody onKeyDown={moveFocus}>
-                  {filtered.map(page => <PageRow key={page.pageNumber} page={page} current={page.pageNumber === currentPage} flash={page.pageNumber === flashPage} readOnly={readOnly} onStatus={setStatus} onField={setField} onCurrent={setCurrent} />)}
+                  {filtered.map(page => <PageRow key={page.pageNumber} page={page} current={page.pageNumber === currentPage} flash={page.pageNumber === flashPage} readOnly={readOnly} onStatus={setStatus} onField={setField} onCurrent={setCurrent} onTogglePower={togglePower} />)}
                   {shown === 0 && <tr className="bom-tracker-no-match"><td colSpan={4}>目前篩選條件沒有符合的頁面</td></tr>}
                 </tbody>
               </table>
@@ -297,7 +311,7 @@ export function BomPageTrackerDialog({ workspace, open, onOpenChange, onSave, lo
   );
 }
 
-/** Every page as one small numbered cell coloured by its status, so the whole schematic can be read at a glance. */
+/** A numbered cell per page. Uppercase status codes carry the independent POWER marker. */
 const PageMap = memo(function PageMap({ codes, currentPage, rangeStart, rangeEnd, onPick }: {
   codes: string; currentPage: number; rangeStart: number; rangeEnd: number; onPick: (pageNumber: number, extend: boolean) => void;
 }) {
@@ -336,28 +350,33 @@ const PageMap = memo(function PageMap({ codes, currentPage, rangeStart, rangeEnd
     </div>}
     <div ref={grid} className="bom-tracker-map-grid" role="group" aria-label="各頁狀態" onKeyDown={keys}>
     {Array.from(codes.slice(start, end), (code, index) => {
-      const pageNumber = start + index + 1, status = statusOfCode(code);
+      const pageNumber = start + index + 1, status = statusOfCode(code.toLowerCase());
       const selected = pageNumber >= rangeStart && pageNumber <= rangeEnd;
+      const power = code !== code.toLowerCase();
       return <button key={pageNumber} type="button" data-map-page={pageNumber} data-status={status} data-current={pageNumber === currentPage} aria-pressed={selected} tabIndex={pageNumber === (anchor > start && anchor <= end ? anchor : start + 1) ? 0 : -1}
-        aria-label={`第 ${pageNumber} 頁，${BOM_PAGE_STATUS_LABELS[status]}${pageNumber === currentPage ? "，目前頁" : ""}`} title={`第 ${pageNumber} 頁 · ${BOM_PAGE_STATUS_LABELS[status]}`}
-        onClick={(event: MouseEvent) => onPick(pageNumber, event.shiftKey)}>{pageNumber}</button>;
+        aria-label={`第 ${pageNumber} 頁，${BOM_PAGE_STATUS_LABELS[status]}${pageNumber === currentPage ? "，目前頁" : ""}${power ? "，POWER" : ""}`} title={`第 ${pageNumber} 頁 · ${BOM_PAGE_STATUS_LABELS[status]}${power ? " · POWER" : ""}`}
+        onClick={(event: MouseEvent) => onPick(pageNumber, event.shiftKey)}>{pageNumber}{power && <Zap className="bom-tracker-map-power" aria-hidden="true" />}</button>;
     })}
     </div>
   </div>;
 });
 
-const PageRow = memo(function PageRow({ page, current, flash, readOnly, onStatus, onField, onCurrent }: {
+const PageRow = memo(function PageRow({ page, current, flash, readOnly, onStatus, onField, onCurrent, onTogglePower }: {
   page: BomPageTrackerPage; current: boolean; flash: boolean; readOnly: boolean;
   onStatus: (page: BomPageTrackerPage, status: BomPageTrackerStatus) => void;
   onField: (pageNumber: number, field: "title" | "note", value: string) => void;
   onCurrent: (pageNumber: number) => void;
+  onTogglePower: (pageNumber: number) => void;
 }) {
   return (
     <tr data-testid="bom-page-tracker-row" data-page={page.pageNumber} data-status={page.status} data-current={current} data-flash={flash}>
       <th scope="row">
-        <span className="bom-tracker-page-number">第 {page.pageNumber} 頁</span>
-        {current ? <span className="bom-tracker-current-tag">目前頁</span>
-          : !readOnly && <button type="button" className="bom-tracker-set-current" aria-label="設為目前頁" title="設為目前頁：主畫面會顯示做到這一頁" onClick={() => onCurrent(page.pageNumber)}><Flag aria-hidden="true" /></button>}
+        <div className="bom-tracker-page-cell">
+          <span className="bom-tracker-page-number">第 {page.pageNumber} 頁</span>
+          {current ? <span className="bom-tracker-current-tag">目前頁</span>
+            : !readOnly && <button type="button" className="bom-tracker-set-current" aria-label="設為目前頁" title="設為目前頁：主畫面會顯示做到這一頁" onClick={() => onCurrent(page.pageNumber)}><Flag aria-hidden="true" /></button>}
+          {(!readOnly || page.power) && <button type="button" className="bom-tracker-power-mark" aria-label={`第 ${page.pageNumber} 頁 POWER 標記`} aria-pressed={Boolean(page.power)} disabled={readOnly} title="標記需算 POWER 的頁面" onClick={() => onTogglePower(page.pageNumber)}>POWER</button>}
+        </div>
       </th>
       <td>
         <div className="bom-tracker-status" role="group" aria-label={`第 ${page.pageNumber} 頁狀態`}>

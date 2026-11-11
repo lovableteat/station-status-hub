@@ -70,3 +70,34 @@ test("the filter matches status and page number, title or note, and never shows 
   assert.equal(numbers({ query: "POWER", status: "pending" }), "3");
   assert.equal(numbers({ query: "不存在", status: "all" }), "");
 });
+
+test("a POWER marker is saved independently of completion, current page and text filters", () => {
+  const marked = { ...page(3, "pending", "", "CPU"), power: true };
+  const pages = [page(1, "done"), page(2, "pending", "", "POWER"), marked, { ...page(9), power: true }];
+  const summary = tracker.getBomPageTrackerSummary({ totalPages: 3, pages });
+  assert.equal(summary.completedPages, 1);
+  assert.equal(summary.currentPage, 1);
+  assert.equal(summary.pages[2].power, true);
+  assert.equal(summary.pages[3].power, true, "reducing the total does not discard the later page's marker");
+  assert.equal(tracker.filterBomTrackerPages(pages, 3, { query: "cpu", status: "pending", powerOnly: true })[0], marked);
+  assert.equal(tracker.filterBomTrackerPages(pages, 3, { query: "", status: "all", powerOnly: true }).length, 1);
+});
+
+test("POWER additions and removals rebase independently from the same page's progress", () => {
+  const starting = draft(1, 0, [page(1)]);
+  const tagged = draft(1, 0, [{ ...page(1), power: true }]);
+  const completed = draft(1, 1, [page(1, "done", "同事完成", "CPU")]);
+  const latestTagged = tracker.mergeBomPageTracker(starting, tagged, completed);
+  assert.equal(latestTagged.pages[0].power, true);
+  assert.equal(view(latestTagged.pages), view(completed.pages));
+  assert.equal(latestTagged.currentPage, 1);
+  const mergedProgress = tracker.mergeBomPageTracker(starting, completed, tagged);
+  assert.equal(mergedProgress.pages[0].power, true);
+  assert.equal(view(mergedProgress.pages), view(completed.pages));
+  const removed = tracker.mergeBomPageTracker(tagged, starting, latestTagged);
+  assert.equal("power" in removed.pages[0], false);
+  assert.equal(view(removed.pages), view(completed.pages));
+  assert.equal(tracker.countBomPageTrackerChanges(starting, tagged).pages, 1);
+  assert.equal(tracker.countBomPageTrackerChanges(tagged, starting).pages, 1);
+  assert.equal(tracker.countBomPageTrackerChanges(starting, draft(1, 0, [{ ...page(1), power: false }])).pages, 0);
+});

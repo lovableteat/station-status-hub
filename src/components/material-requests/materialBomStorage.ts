@@ -21,6 +21,7 @@ export interface BomPageTrackerPage {
   status: BomPageTrackerStatus;
   completed?: boolean;
   note: string;
+  power?: boolean;
 }
 
 export interface BomPageTracker {
@@ -385,6 +386,7 @@ function normalizePageTracker(raw: unknown, fallbackUpdatedAt: string) {
             : "pending",
         note: typeof candidate.note === "string" ? candidate.note : "",
         ...(typeof candidate.title === "string" ? { title: candidate.title } : {}),
+        ...(candidate.power === true ? { power: true } : {}),
       });
     });
   }
