@@ -95,7 +95,7 @@ const qa = createRequire(path.resolve(process.env.AUDIT_QA_DIR || '../qa-tools',
       res.end(content || 'Missing synthetic release asset'); return;
     }
     res.setHeader('Content-Type', 'text/html'); res.setHeader('Cache-Control', 'no-store');
-    res.end('<!doctype html><title>Synthetic release ' + (deployed ? 'v2' : 'v1') + '</title><style>body{font:16px system-ui;margin:20px}button{min-height:44px;margin:4px}textarea{display:block;min-height:120px;width:90%}section{padding:12px;border:1px solid #888}svg{width:20px}</style><div id="root"></div><script>' + boot + '</script><script src="/fixture-shell.js"></script>');
+    res.end('<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Synthetic release ' + (deployed ? 'v2' : 'v1') + '</title><style>body{font:16px system-ui;margin:20px}button{min-height:44px;margin:4px}textarea{display:block;min-height:120px;width:90%}section{padding:12px;border:1px solid #888}svg{width:20px}</style><div id="root"></div><script>' + boot + '</script><script src="/fixture-shell.js"></script>');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
@@ -112,6 +112,7 @@ const qa = createRequire(path.resolve(process.env.AUDIT_QA_DIR || '../qa-tools',
       page.on('framenavigated', frame => { if (frame === page.mainFrame()) navigations++; });
       try {
         await page.goto(origin); await page.getByRole('heading', { name: 'Isolated deployment recovery' }).waitFor();
+        assert.equal(await page.evaluate(() => window.innerWidth), viewport.width, 'The CSS viewport matches the requested desktop or phone width');
         const draft = page.getByLabel('Unsaved synthetic draft');
         const value = '未儲存的合成草稿\nDo not reload, clear, or claim this was saved.';
         await draft.fill(value);
