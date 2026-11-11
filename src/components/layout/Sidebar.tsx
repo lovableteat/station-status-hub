@@ -63,9 +63,10 @@ export function Sidebar({
   }, [collapsed, isMobile]);
 
   useEffect(() => {
-    if (isMobile) {
-      mobileNavigationRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    }
+    const navigation = mobileNavigationRef.current;
+    if (!isMobile || !navigation || navigation.scrollWidth <= navigation.clientWidth) return;
+    const current = navigation.querySelector<HTMLElement>('[aria-current="page"]');
+    if (current) navigation.scrollLeft += current.getBoundingClientRect().left - navigation.getBoundingClientRect().left;
   }, [activeModule, canViewModule, isMobile]);
 
   const handleToggle = () => {
@@ -97,7 +98,7 @@ export function Sidebar({
                 isActive && "font-black",
               )}
             >
-              <Icon className="h-4.5 w-4.5 shrink-0" />
+              <Icon className="h-4.5 w-4.5 shrink-0" aria-hidden="true" />
               <span>{item.label}</span>
             </button>
           );
@@ -109,6 +110,7 @@ export function Sidebar({
   return (
     <>
       <aside
+        data-collapsed={isCompact}
         aria-hidden={isMobile && !isOpen ? true : undefined}
         {...(isMobile && !isOpen ? ({ inert: "" } as Record<string, unknown>) : {})}
         className={cn(
@@ -135,6 +137,7 @@ export function Sidebar({
                 variant="ghost"
                 size="icon"
                 onClick={handleToggle}
+                aria-expanded={!isCompact}
                 className={cn(
                   "shrink-0 rounded-lg border border-emerald-300/25 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/18 hover:text-emerald-50",
                   isCompact ? "mx-auto grid h-10 w-10 place-items-center p-0" : "h-9 w-9",
@@ -148,7 +151,7 @@ export function Sidebar({
           </Tooltip>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-2">
+        <nav aria-label="維修中心功能" className="flex-1 overflow-y-auto p-2">
           <div className="space-y-1">
             {navigationItems.map((item) => {
               if (!canViewNavigationItem(item.id)) return null;
@@ -158,6 +161,9 @@ export function Sidebar({
                 <Button
                   key={item.id}
                   variant="ghost"
+                  aria-label={item.label}
+                  aria-current={isActive ? "page" : undefined}
+                  data-maintenance-module={item.id}
                   className={cn(
                     "rounded-lg border text-sm font-medium transition-colors",
                     isCompact ? "mx-auto grid h-10 w-10 place-items-center p-0" : "h-11 w-full justify-start px-3",
@@ -168,7 +174,7 @@ export function Sidebar({
                   onClick={() => onModuleChange(item.id)}
                 >
                   <span className={cn("grid place-items-center", !isCompact && "mr-3")}>
-                    <Icon className="h-5 w-5 shrink-0" />
+                    <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
                   </span>
                   {!isCompact && <span className="truncate">{item.label}</span>}
                 </Button>

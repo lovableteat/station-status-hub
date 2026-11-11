@@ -20,6 +20,7 @@ import {
   Trash2,
 } from "lucide-react";
 
+import { MobileFilterBar } from "@/components/layout/mobile/MobileFilterBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -311,6 +312,12 @@ export function CommandLibrary({ workspaceKey = "station-status" }: { workspaceK
       && (scopeFilter === "all" || command.scope === scopeFilter)
       && (!normalizedSearch || searchable.includes(normalizedSearch));
   });
+  const chips = [
+    ...(searchTerm.trim() ? [{ key: "search", label: `搜尋：${searchTerm.trim()}`, onRemove: () => setSearchTerm("") }] : []),
+    ...(categoryFilter !== "all" ? [{ key: "category", label: `分類：${categories.find(({ id }) => id === categoryFilter)?.name ?? categoryFilter}`, onRemove: () => setCategoryFilter("all") }] : []),
+    ...(platformFilter !== "all" ? [{ key: "platform", label: `平台：${platforms.find(({ value }) => value === platformFilter)?.label ?? platformFilter}`, onRemove: () => setPlatformFilter("all") }] : []),
+    ...(scopeFilter !== "all" ? [{ key: "scope", label: `範圍：${scopeFilter === "global" ? "通用" : "工作區專用"}`, onRemove: () => setScopeFilter("all") }] : []),
+  ];
 
   const activeCommand = filteredCommands.find((command) => command.id === selectedCommand?.id)
     || filteredCommands[0]
@@ -357,11 +364,14 @@ export function CommandLibrary({ workspaceKey = "station-status" }: { workspaceK
         </Dialog>
       </div>
 
-      <div className="maintenance-toolbar flex flex-wrap items-center gap-2 p-2">
-        <div className="relative min-w-[240px] flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7699ad]" /><Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))} className="h-9 border-[#2a526f] bg-[#06111f] pl-9" placeholder="搜尋名稱、內容、說明或標籤" /></div>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}><SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">所有分類</SelectItem>{categories.map(({ id, name }) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select>
-        <Select value={platformFilter} onValueChange={setPlatformFilter}><SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">所有平台</SelectItem>{platforms.map((platform) => <SelectItem key={platform.value} value={platform.value}>{platform.label}</SelectItem>)}</SelectContent></Select>
-        <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as AssetScopeFilter)}><SelectTrigger className="h-9 w-[170px]"><SelectValue placeholder="使用範圍" /></SelectTrigger><SelectContent><SelectItem value="all">全部範圍</SelectItem><SelectItem value="global">通用</SelectItem><SelectItem value="workspace">目前 workspace</SelectItem></SelectContent></Select>
+      <div className="ma-library-filters">
+        <div className="ma-library-search"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input type="search" aria-label="搜尋指令" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))} placeholder="搜尋名稱、內容、說明或標籤" /></div>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}><SelectTrigger aria-label="指令分類"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">所有分類</SelectItem>{categories.map(({ id, name }) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select>
+        <Select value={platformFilter} onValueChange={setPlatformFilter}><SelectTrigger aria-label="指令平台"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">所有平台</SelectItem>{platforms.map((platform) => <SelectItem key={platform.value} value={platform.value}>{platform.label}</SelectItem>)}</SelectContent></Select>
+        <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as AssetScopeFilter)}><SelectTrigger aria-label="指令使用範圍"><SelectValue placeholder="使用範圍" /></SelectTrigger><SelectContent><SelectItem value="all">全部範圍</SelectItem><SelectItem value="global">通用</SelectItem><SelectItem value="workspace">目前 workspace</SelectItem></SelectContent></Select>
+        {!!chips.length && <MobileFilterBar chips={chips} onClearAll={() => {
+          setSearchTerm(""); setCategoryFilter("all"); setPlatformFilter("all"); setScopeFilter("all");
+        }} />}
       </div>
 
       <div data-testid="command-library-workspace" className="grid min-h-[520px] overflow-hidden rounded-xl border border-[#2a526f] bg-[#071522] lg:grid-cols-[minmax(280px,0.78fr)_minmax(0,1.55fr)]">

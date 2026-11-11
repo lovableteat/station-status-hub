@@ -299,7 +299,7 @@ export function ProjectScopeBar({ faultMode = false }: { faultMode?: boolean }) 
         value={activeProjectId ?? ""}
         onValueChange={setActiveProjectId}
       >
-        <SelectTrigger aria-label="切換目前專案" className="h-11 min-w-0 w-full flex-1 rounded-md border-border bg-background px-3 shadow-none lg:max-w-[260px]">
+        <SelectTrigger aria-label="切換目前專案" data-maintenance-project-picker={faultMode || undefined} className="h-11 min-w-0 w-full flex-1 rounded-md border-border bg-background px-3 shadow-none lg:max-w-[260px]">
           <div className="min-w-0 text-left">
             <div className="truncate text-sm font-semibold text-foreground">
               {activeProject?.name || "選擇專案"}
@@ -323,7 +323,7 @@ export function ProjectScopeBar({ faultMode = false }: { faultMode?: boolean }) 
           data-ui="project-metadata"
           className="hidden min-w-0 items-center gap-3 lg:flex"
         >
-          <span className="shrink-0 text-xs text-muted-foreground">{activeStatusMeta.label}</span>
+          <span className={cn("shrink-0 text-xs text-muted-foreground", faultMode && "maintenance-project-state", faultMode && activeStatusMeta.className)}>{activeStatusMeta.label}</span>
           <p className="hidden truncate text-xs text-muted-foreground xl:block">
             {activeSummary?.machine_count ?? 0} 台機台 · {activeSummary?.open_issue_count ?? 0} 件未結問題
           </p>
@@ -384,11 +384,12 @@ export function ProjectScopeBar({ faultMode = false }: { faultMode?: boolean }) 
         <SheetTrigger asChild>
           <Button
             aria-label="專案中心"
+            data-maintenance-project-center={faultMode || undefined}
             className="h-11 w-11 shrink-0 rounded-md px-0 sm:w-auto sm:px-3 lg:h-9"
             variant="outline"
           >
             <Layers3 className="h-4 w-4 sm:mr-2" />
-            <span className="hidden text-xs sm:inline sm:text-sm">專案中心</span>
+            <span className={cn("text-xs sm:text-sm", !faultMode && "hidden sm:inline")}>專案中心</span>
           </Button>
         </SheetTrigger>
         <SheetContent className="maintenance-project-sheet w-full gap-0 overflow-hidden border-[#2a526f] bg-[#071522] p-0 sm:max-w-[720px]">
