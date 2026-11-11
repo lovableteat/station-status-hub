@@ -35,6 +35,12 @@ test("the daily-stats handler authenticates before creating a privileged client"
   assert.equal(clients, 0);
   const authorized = await handler(new Request("https://example.invalid", { method: "POST", headers: { Authorization: "Bearer " + serviceKey } }));
   assert.equal(authorized.status, 200);
+  const body = await authorized.json();
+  assert.deepEqual(Object.keys(body).sort(), ["message", "success", "timestamp"]);
+  assert.equal(body.success, true);
+  assert.equal(body.message, "Daily production stats calculated successfully");
+  assert.equal(typeof body.timestamp, "string");
+  assert.equal(new Date(body.timestamp).toISOString(), body.timestamp);
   assert.equal(calls, 1);
 });
 const serviceKey = "fixture-service-key-not-a-real-credential";
@@ -84,6 +90,8 @@ test("daily-stats fails closed on missing configuration and keeps errors and cre
     assert.equal(response.status, scenario.status); assert.equal(clients, scenario.clients);
     assert.equal(response.headers.get("Cache-Control"), "no-store");
     assert.doesNotMatch(body + JSON.stringify(logs), /fixture-private-error|fixture-service-key-not-a-real-credential/);
-    assert.equal(JSON.parse(body).success, scenario.status === 200 ? true : undefined);
+    const payload = JSON.parse(body);
+    assert.equal(payload.success, scenario.status === 200 ? true : undefined);
+    assert.equal(payload.message, scenario.status === 200 ? "Daily production stats calculated successfully" : undefined);
   });
 });

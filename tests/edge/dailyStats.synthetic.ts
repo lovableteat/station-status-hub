@@ -193,7 +193,8 @@ async function assertAuthorizedSuccess(schema: string) {
   const result = await invoke("POST", { authorization: `Bearer ${serviceKey}` });
   const body = assertJson(result, 200);
   assert(body.success === true, "Authorized calculation must report success");
-  assert(Object.keys(body).sort().join(",") === "success,timestamp", "Success must expose only the public receipt");
+  assert(Object.keys(body).sort().join(",") === "message,success,timestamp", "Success must expose only the public receipt");
+  assert(body.message === "Daily production stats calculated successfully", "Success must retain the existing message");
   assert(typeof body.timestamp === "string", "Success must include an ISO timestamp");
   const timestamp = Date.parse(body.timestamp);
   assert(Number.isFinite(timestamp) && new Date(timestamp).toISOString() === body.timestamp, "Expected an ISO timestamp");
