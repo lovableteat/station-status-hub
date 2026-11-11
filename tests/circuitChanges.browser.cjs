@@ -29,8 +29,12 @@ async function createPage(browser, origin, account, width = 1440, height = 960) 
   return {context,page,errors,navigations};
 }
 async function task(page, name) {
+  // On a phone the tabs show on a tab's first screen only and a tab opens on its list: go back, switch, reopen the problem.
+  const phone = page.viewportSize().width < 1024;
+  if (phone) for (let i = 0; i < 4; i++) { const back = dialog(page).getByRole('button', {name:/^返回(問題清單|問題|圖面)$/}); if (!(await back.count())) break; await back.first().click(); }
   await dialog(page).getByRole('tab', {name:new RegExp('^' + name)}).click();
   await page.waitForFunction(label => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.includes(label), name);
+  if (phone) { const current = dialog(page).locator('[data-testid="circuit-change-item"][aria-pressed="true"]'); if (await current.waitFor({timeout:3000}).then(() => true, () => false)) await current.click(); }
 }
 async function saved(page) {
   await page.waitForFunction(() => document.querySelector('.circuit-detail-footer [role="status"]')?.textContent === '已儲存');
@@ -53,7 +57,7 @@ async function checkMobileGeometry(page) {
     const box = element => { const r = element.getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height,bottom:r.bottom}; };
     const panel = document.querySelector('[data-testid="circuit-changes-dialog"]');
     const footer = panel.querySelector('.circuit-detail-footer');
-    return {width:innerWidth,height:innerHeight,pageWidth:document.documentElement.scrollWidth,panel:box(panel),footer:box(footer),buttons:[...footer.querySelectorAll('button')].map(box)};
+    return {width:innerWidth,height:innerHeight,pageWidth:document.documentElement.scrollWidth,panel:box(panel),footer:box(footer),buttons:[...footer.querySelectorAll('button:not(:disabled)')].map(box)};
   });
 }
 

@@ -108,7 +108,6 @@
 .circuit-item-navigation > button { min-width: 40px; height: 40px; padding: 0 10px; font-size: 14px; }
 .circuit-item-navigation > .circuit-remove-item { width: 40px; padding: 0; color: hsl(var(--muted-foreground)); }
 .circuit-item-navigation > .circuit-remove-item:hover:not(:disabled) { color: hsl(var(--destructive)); }
-.circuit-changes-dialog .circuit-mobile-back { display: none; }
 .circuit-detail-scroll { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 16px 20px 20px; overscroll-behavior: contain; overflow-anchor: none; }
 .circuit-changes-dialog .circuit-detail :is(input, textarea)::placeholder { color: hsl(240 4% 57%); opacity: 1; -webkit-text-fill-color: hsl(240 4% 57%); }
 .circuit-snapshot-banner, .circuit-conflict, .circuit-returned { margin-bottom: 14px; border: 1px solid hsl(var(--warning) / .4); border-radius: 8px; padding: 10px 12px; background: hsl(var(--warning) / .08); font-size: 14px; line-height: 22px; }
@@ -323,7 +322,6 @@
   .circuit-changes-dialog[data-mobile-detail="true"] .circuit-detail { display: flex; }
   .circuit-changes-dialog[data-mobile-detail="true"] .circuit-list-panel { display: none; }
   .circuit-detail-heading { min-height: 56px; gap: 4px; padding: 6px 12px; }
-  .circuit-changes-dialog .circuit-mobile-back { display: inline-flex; flex: none; width: 44px; height: 44px; padding: 0; }
   .circuit-detail-heading > div:first-of-type { flex-direction: column; align-items: flex-start; gap: 2px; }
   .circuit-detail-heading strong { gap: 6px; font-size: 14px; }
   .circuit-detail-heading > div > span { max-width: 100%; font-size: 11px; }
@@ -413,7 +411,6 @@
 /* Beside the drawing the form column is narrow: the tracking button reads 紀錄 N there. */
 @media (min-width: 1024px) { .circuit-workspace[data-pdf-open="true"] .circuit-history-word { display: none; } }
 
-@media (max-width: 1023px) { .circuit-changes-dialog .circuit-mobile-pdf { width: 44px; height: 44px; padding: 0; color: hsl(var(--primary)); } }
 
 /* Colour pass (2026-11-10, colour-palette skill: 60-30-10). The drawing stage and empty areas are the canvas (L0);
    the header, the two side columns and the PDF toolbars are one neutral step up (L1) with hairlines; teal is kept for
@@ -690,3 +687,97 @@ button[data-circuit-tone][data-fill="solid"][data-ready="false"]:not(:disabled) 
 .circuit-tone-legend { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 14px; line-height: 22px; }
 .circuit-tone-legend > li { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; gap: 10px; }
 .circuit-tone-legend > li > span { display: inline-flex; height: 26px; align-items: center; justify-content: center; border-radius: 6px; font-size: 13px; }
+
+/* Phone redesign (2026-11-11). The user: 「手機板的太雜亂，根本無法操作」. Three rules, the same on every screen:
+   1. The top bar is one row: on a tab's first screen the window's name; on a pushed screen (a problem, the drawing) a
+      labelled way back (‹ 問題清單) and what this screen is.
+   2. The bottom row holds what this screen can do, every button with its word. The four tabs show only on a tab's first
+      screen, so there is never more than one row of actions above them.
+   3. Rarely used things (匯出, 使用說明, 新增改版清單, 刪除問題) are in 「更多」.
+   Desktop rules are untouched: everything here is inside the phone media query. */
+.circuit-phone-word { display: none; }
+.circuit-more-menu .circuit-menu-danger { color: hsl(353 78% 78%); }
+@media (max-width: 1023px) {
+  .circuit-changes-dialog > .circuit-header { flex-wrap: nowrap; align-items: center; gap: 4px; min-height: 52px; padding: 4px 4px 4px 16px; }
+  .circuit-changes-dialog > .circuit-header[data-phone-pushed] { padding-left: 2px; }
+  .circuit-changes-dialog .circuit-title { display: flex; flex: 1; min-width: 0; max-width: none; flex-direction: row; align-items: baseline; gap: 8px; }
+  .circuit-changes-dialog .circuit-title h2 { flex: none; font-size: 17px; line-height: 24px; }
+  .circuit-changes-dialog .circuit-title p { min-width: 0; overflow: hidden; margin: 0; font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+  .circuit-changes-dialog > .circuit-header[data-phone-pushed] > .circuit-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .circuit-changes-dialog .circuit-phone-back { flex: none; height: 44px; gap: 0; padding: 0 10px 0 4px; color: hsl(170 60% 72%); font-size: 15px; font-weight: 500; }
+  .circuit-changes-dialog .circuit-phone-back > svg { width: 24px; height: 24px; }
+  .circuit-phone-title { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; padding-left: 4px; border-left: 1px solid hsl(var(--foreground) / .12); }
+  .circuit-phone-title > strong { flex: none; padding-left: 8px; font-size: 16px; font-weight: 600; }
+  .circuit-phone-title > small { min-width: 0; overflow: hidden; color: hsl(var(--muted-foreground)); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+  .circuit-phone-title > .circuit-list-status { flex: none; }
+  .circuit-changes-dialog .circuit-header-actions { order: 0; flex: none; gap: 0; }
+  .circuit-changes-dialog .circuit-header-actions > .circuit-action-more { width: auto; height: 44px; gap: 4px; padding: 0 10px; border-color: transparent; background: transparent; color: hsl(var(--foreground) / .86); font-size: 13px; }
+  .circuit-changes-dialog .circuit-header-actions > .circuit-action-more > .circuit-phone-word { display: inline; }
+  .circuit-more-menu [role="menuitem"] { min-height: 44px; font-size: 15px; }
+
+  /* The four tabs: the usual phone tab row, icon over word. Each keeps its colour on the icon; the one you are on is tinted. */
+  .circuit-changes-dialog > .circuit-tasks { order: 3; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; margin: 0; padding: 4px 4px max(4px, env(safe-area-inset-bottom)); border: 0; border-top: 1px solid hsl(var(--foreground) / .12); border-radius: 0; background: hsl(var(--card)); }
+  .circuit-changes-dialog[data-phone-screen="pdf"] > .circuit-tasks, .circuit-changes-dialog[data-phone-screen="detail"] > .circuit-tasks { display: none; }
+  .circuit-changes-dialog > .circuit-tasks > .circuit-task { position: relative; height: 52px; flex-direction: column; justify-content: center; gap: 2px; padding: 0 2px; border: 0; border-radius: 8px; background: transparent; color: hsl(var(--foreground) / .72); font-size: 12px; font-weight: 500; text-align: center; }
+  .circuit-changes-dialog > .circuit-tasks > .circuit-task:hover { background: transparent; }
+  .circuit-changes-dialog > .circuit-tasks > .circuit-task > svg { display: block; width: 22px; height: 22px; color: hsl(var(--tone) 46% 62%); }
+  .circuit-changes-dialog > .circuit-tasks > .circuit-task .circuit-task-text { align-items: center; }
+  .circuit-changes-dialog > .circuit-tasks > .circuit-task[aria-selected="true"] { border: 0; background: hsl(var(--tone) 32% 19%); color: hsl(var(--tone) 72% 86%); font-weight: 600; }
+  .circuit-changes-dialog > .circuit-tasks > .circuit-task[aria-selected="true"] > svg { color: hsl(var(--tone) 64% 74%); }
+  .circuit-changes-dialog > .circuit-tasks > .circuit-task[aria-selected="true"]::before { position: absolute; top: -5px; left: 22%; right: 22%; height: 3px; border-radius: 0 0 3px 3px; background: hsl(var(--tone) 52% 60%); content: ""; }
+  .circuit-changes-dialog > .circuit-tasks > .circuit-task > small, .circuit-changes-dialog > .circuit-tasks > .circuit-task[aria-selected="true"] > small { position: absolute; top: 3px; left: calc(50% + 8px); display: inline-grid; min-width: 18px; height: 18px; margin: 0; padding: 0 4px; place-items: center; border-radius: 9px; font-size: 11px; line-height: 1; }
+
+  /* First screen of 線路 Review and 改善追蹤: the list. What can be done is the row under it. */
+  .circuit-changes-dialog .circuit-list-panel { display: flex; min-height: 0; flex-direction: column; }
+  .circuit-changes-dialog .circuit-list-panel > .circuit-item-list { flex: 1; min-height: 0; }
+  .circuit-changes-dialog .circuit-list-panel .circuit-empty { padding: 28px 24px; font-size: 14px; line-height: 22px; text-align: center; }
+  .circuit-phone-actions { display: flex; flex: none; gap: 8px; padding: 8px 12px; border-top: 1px solid hsl(var(--foreground) / .12); background: hsl(var(--card)); }
+  .circuit-phone-actions > button { flex: 1 1 0; min-width: 0; height: 52px; justify-content: center; gap: 8px; padding: 0 10px; font-size: 15px; font-weight: 600; }
+  .circuit-phone-actions > button > svg { flex: none; width: 20px; height: 20px; }
+  .circuit-phone-actions > button > span { display: grid; min-width: 0; justify-items: start; line-height: 1.25; }
+  .circuit-phone-actions > button > span > small { font-size: 11px; font-weight: 400; opacity: .82; }
+
+  /* A problem (pushed): its number and state are in the top bar, so the form starts right under it. */
+  .circuit-changes-dialog .circuit-detail-scroll { padding: 12px 12px 16px; }
+  .circuit-changes-dialog .circuit-paste-target { display: none; }
+  .circuit-changes-dialog .circuit-detail-footer { padding: 6px 12px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid hsl(var(--foreground) / .12); background: hsl(var(--card)); }
+  .circuit-changes-dialog .circuit-footer-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 8px; min-height: 0; }
+  .circuit-changes-dialog .circuit-footer-row > [role="status"]:not(.sr-only) { grid-column: 1; order: 0; font-size: 12px; }
+  .circuit-changes-dialog .circuit-footer-row > .circuit-save-button { grid-column: 1; order: 0; flex: none; width: auto; height: 28px; min-height: 28px; gap: 4px; padding: 0 2px; font-size: 12px; }
+  .circuit-changes-dialog .circuit-footer-row > .circuit-save-button:not(:disabled) { height: 40px; min-height: 40px; padding: 0 14px; font-size: 14px; }
+  .circuit-changes-dialog .circuit-footer-row > .circuit-next-step { grid-column: 2; order: 0; overflow: hidden; font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+  .circuit-changes-dialog .circuit-footer-row > div { display: flex; grid-column: 1 / -1; order: 0; width: 100%; gap: 8px; margin: 4px 0 0; }
+  .circuit-changes-dialog .circuit-footer-row > div > button { flex: 1 1 0; min-width: 0; height: 52px; min-height: 52px; gap: 8px; padding: 0 10px; font-size: 15px; font-weight: 600; }
+  .circuit-changes-dialog .circuit-footer-row > div > button > svg { width: 20px; height: 20px; }
+  .circuit-changes-dialog .circuit-comment { margin-top: 8px; }
+}
+@media (max-width: 1023px) {
+  /* Words beside the icons that have none on a wide screen. */
+  .circuit-changes-dialog .circuit-phone-word { display: inline; }
+  .circuit-changes-dialog > .circuit-tasks > .circuit-task { color: hsl(var(--foreground) / .82); font-size: 12.5px; }
+  .circuit-changes-dialog .circuit-image-meta { flex-wrap: wrap; gap: 0 8px; }
+  .circuit-changes-dialog .circuit-image-meta > span:first-child { flex: 1 0 100%; min-height: 28px; line-height: 28px; }
+  .circuit-changes-dialog .circuit-image-meta > .circuit-image-actions { margin-left: auto; gap: 4px; }
+  .circuit-changes-dialog .circuit-image-actions > button { width: auto; min-width: 44px; height: 40px; gap: 4px; padding: 0 8px; font-size: 13px; }
+  .circuit-changes-dialog .circuit-message { align-items: flex-start; padding: 8px 8px 8px 16px; }
+  .circuit-changes-dialog .circuit-message > span { padding-top: 10px; }
+}
+@media (max-width: 1023px) {
+  /* Nothing recorded yet: the sentence sits in the middle, right above the two buttons it talks about. */
+  .circuit-changes-dialog .circuit-list-panel > .circuit-item-list:has(> .circuit-empty:only-child) { display: grid; align-content: center; }
+  .circuit-changes-dialog .circuit-list-panel .circuit-empty { color: hsl(var(--foreground) / .86); font-size: 15px; line-height: 24px; }
+}
+@media (max-width: 1023px) {
+  /* 改善追蹤 with many problems opens on the paged list. On a phone its heading is one line and the status counts are one
+     row that scrolls sideways, so more of the screen is left for the problems themselves. */
+  .circuit-changes-dialog .circuit-tracking-list { border: 0; border-radius: 0; }
+  .circuit-changes-dialog .circuit-tracking-list-header { padding: 8px 12px 6px; }
+  .circuit-changes-dialog .circuit-tracking-list-header > div:first-child { display: flex; min-width: 0; align-items: baseline; gap: 8px; }
+  .circuit-changes-dialog .circuit-tracking-list-header h2 { flex: none; font-size: 16px; }
+  .circuit-changes-dialog .circuit-tracking-list-header p { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .circuit-changes-dialog .circuit-tracking-counts { flex-wrap: nowrap; overflow-x: auto; padding: 0 12px 6px; scrollbar-width: none; }
+  .circuit-changes-dialog .circuit-tracking-counts button { flex: none; min-height: 40px; }
+  .circuit-changes-dialog .circuit-tracking-list .circuit-filter-bar { padding: 4px 12px 8px; }
+  .circuit-changes-dialog .circuit-tracking-pagination button { min-width: 44px; height: 44px; }
+  .circuit-changes-dialog .circuit-tracking-pagination select { min-height: 44px; font-size: 15px; }
+}

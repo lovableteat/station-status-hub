@@ -41,7 +41,8 @@ const evidence = path.resolve(process.env.CIRCUIT_CONTROLS_EVIDENCE_DIR || '../c
         if (width >= 1024) { await page.mouse.click(2, 2); assert.equal(await dialog.isVisible(), true); }
         await dialog.getByRole('button',{name:'更多',exact:true}).tap();await dialog.page().getByRole('menuitem',{name:'使用說明',exact:true}).tap(); await page.getByTestId('circuit-usage-guide').waitFor();
         await page.keyboard.press('Escape'); await page.getByTestId('circuit-usage-guide').waitFor({ state: 'hidden' }); assert.equal(await dialog.isVisible(), true);
-        if (width < 1024) await dialog.getByRole('button', { name: '返回問題清單', exact: true }).tap();
+        // A phone opens on the list, so there is nothing to go back from here.
+        if (width < 1024) assert.equal(await dialog.getByRole('button', { name: /^返回/ }).count(), 0);
         await dialog.getByRole('button',{name:'更多',exact:true}).tap();await dialog.page().getByRole('menuitem',{name:'新增改版清單',exact:true}).tap();
         await page.getByRole('heading', { name: '新增改版清單', exact: true }).waitFor(); await page.keyboard.press('Escape');
         await page.getByRole('heading', { name: '新增改版清單', exact: true }).waitFor({ state: 'hidden' }); assert.equal(await dialog.isVisible(), true);
@@ -74,7 +75,9 @@ const evidence = path.resolve(process.env.CIRCUIT_CONTROLS_EVIDENCE_DIR || '../c
         const state = await (await fetch(origin + '/__circuit/state')).json(); assert.ok(state.items.some(item => item.content.title === title), 'explicit close flushes the latest input');
         await open();
         await dialog.getByTestId('circuit-change-item').filter({ hasText: title }).tap();
-        await dialog.getByRole('button', { name: '刪除問題', exact: true }).tap();
+        // On a phone 刪除問題 is in 更多, away from the actions used all the time.
+        if (width < 1024) { await dialog.getByRole('button', { name: '更多', exact: true }).tap(); await page.getByRole('menuitem', { name: '刪除問題', exact: true }).tap(); }
+        else await dialog.getByRole('button', { name: '刪除問題', exact: true }).tap();
         const remove = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: '刪除這個問題？', exact: true }) });
         assert.ok((await remove.innerText()).includes('已儲存的追蹤紀錄與原圖保留'));
         await page.screenshot({ path: path.join(evidence, 'remove-' + width + '.png') });

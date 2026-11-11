@@ -98,8 +98,8 @@ function Pane({ side, images, urls, active, dropping, readOnly, busy, heading, h
   const frame = (image: CircuitImage) => ({ "--circuit-image-aspect": image.width / image.height, aspectRatio: `${image.width} / ${image.height}` }) as CSSProperties;
   const actions = (image: CircuitImage) => <div className="circuit-image-actions">
     {image.source && onShowSource && <Button data-circuit-tone="view" data-fill="ghost" type="button" variant="ghost" className="circuit-image-source" aria-label={`到 PDF 第 ${image.source.page} 頁（${image.source.date}）`} title={`在 PDF 圖面打開 ${image.source.date} 版第 ${image.source.page} 頁`} onClick={() => onShowSource(image)}><FileText aria-hidden="true" /><span>第 {image.source.page} 頁</span></Button>}
-    <Button type="button" variant="ghost" aria-label={`下載原圖 ${image.name}`} title="下載原圖" onClick={() => onDownload(image)}><Download aria-hidden="true" /></Button>
-    {!readOnly && <Button data-circuit-tone="delete" data-fill="ghost" type="button" variant="ghost" aria-label={`刪除圖片 ${image.name}`} title="刪除這張圖（可以還原）" disabled={busy} onClick={() => onRemove(image)}><Trash2 aria-hidden="true" /></Button>}
+    <Button type="button" variant="ghost" aria-label={`下載原圖 ${image.name}`} title="下載原圖" onClick={() => onDownload(image)}><Download aria-hidden="true" /><span className="circuit-phone-word">下載</span></Button>
+    {!readOnly && <Button data-circuit-tone="delete" data-fill="ghost" type="button" variant="ghost" aria-label={`刪除圖片 ${image.name}`} title="刪除這張圖（可以還原）" disabled={busy} onClick={() => onRemove(image)}><Trash2 aria-hidden="true" /><span className="circuit-phone-word">刪除</span></Button>}
   </div>;
   const empty = <button title={`${addName}：點這裡選檔，也可以貼上（Ctrl+V）或拖進來`} type="button" className="circuit-image-empty" aria-label={addName} disabled={readOnly || busy} onFocus={() => onSide(side)} onClick={() => onPick(side)}>
     <ImagePlus aria-hidden="true" />
