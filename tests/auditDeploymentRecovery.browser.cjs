@@ -155,21 +155,21 @@ const qa = createRequire(path.resolve(process.env.AUDIT_QA_DIR || '../qa-tools',
         const historyBefore = await page.evaluate(() => ({ raw: fixtureHistory.raw.length, accepted: fixtureHistory.accepted.length }));
         await page.evaluate(() => { fixtureHistory.mode = 'defer'; history.back(); });
         await page.waitForFunction(() => typeof fixtureHistory.reject === 'function');
-        await page.waitForURL('**/*workspace=current*');
+        await page.waitForFunction(() => new URL(location.href).searchParams.get('workspace') === 'current');
         assert.equal(await page.getByTestId('router-path').innerText(), '/current');
         assert.deepEqual(await page.evaluate(() => ({ raw: fixtureHistory.raw.length, accepted: fixtureHistory.accepted.length })), historyBefore);
         await page.evaluate(() => fixtureHistory.reject(new Error('Synthetic historical module unavailable')));
-        await page.waitForURL('**/*workspace=current*');
+        await page.waitForFunction(() => new URL(location.href).searchParams.get('workspace') === 'current');
         await page.waitForFunction(() => fixtureHistory.failures === 1);
         assert.equal(await page.getByTestId('router-path').innerText(), '/current');
         assert.deepEqual(await page.evaluate(() => ({ raw: fixtureHistory.raw.length, accepted: fixtureHistory.accepted.length })), historyBefore, 'Rejected history and cursor restoration do not reach the old listeners');
         // A draft can become dirty while the target import is pending. Recheck at commit.
         await page.evaluate(() => { fixtureHistory.resolve = null; history.back(); });
         await page.waitForFunction(() => typeof fixtureHistory.resolve === 'function');
-        await page.waitForURL('**/*workspace=current*');
+        await page.waitForFunction(() => new URL(location.href).searchParams.get('workspace') === 'current');
         await page.evaluate(() => { window.allowFixtureLeave = false; fixtureHistory.resolve(); });
         await page.waitForTimeout(150);
-        await page.waitForURL('**/*workspace=current*');
+        await page.waitForFunction(() => new URL(location.href).searchParams.get('workspace') === 'current');
         assert.equal(await page.getByTestId('router-path').innerText(), '/current');
         assert.deepEqual(await page.evaluate(() => ({ raw: fixtureHistory.raw.length, accepted: fixtureHistory.accepted.length })), historyBefore, 'Drafts changed during loading veto the final commit');
         assert.equal(await draft.inputValue(), value);
