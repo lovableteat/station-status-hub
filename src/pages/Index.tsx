@@ -1,3 +1,6 @@
+import { useModuleNavigation } from "@/hooks/useModuleNavigation";
+import { ModuleLoadRecovery } from "@/components/common/ModuleLoadRecovery";
+import { recoverableLazy } from "@/components/common/recoverableLazy";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -44,60 +47,60 @@ import { useUserPresence } from "@/hooks/useUserPresence";
 import { cn } from "@/lib/utils";
 import { MyAssessmentBackupsDialog } from "@/components/performance/MyAssessmentBackupsDialog";
 
-const AdminPanel = React.lazy(() =>
+const AdminPanel = recoverableLazy(() =>
   import("@/components/admin/AdminPanel").then((module) => ({ default: module.AdminPanel }))
 );
-const ApiChatWorkspacePage = React.lazy(() =>
+const ApiChatWorkspacePage = recoverableLazy(() =>
   import("@/components/api-management/ApiChatWorkspacePage").then((module) => ({
     default: module.ApiChatWorkspacePage,
   }))
 );
-const ComparisonWorkspace = React.lazy(() =>
+const ComparisonWorkspace = recoverableLazy(() =>
   import("@/components/comparison/ComparisonWorkspace")
 );
-const DeploymentPlanningCenter = React.lazy(() =>
+const DeploymentPlanningCenter = recoverableLazy(() =>
   import("@/components/data-center/DeploymentPlanningCenter").then((module) => ({
     default: module.DeploymentPlanningCenter,
   }))
 );
-const Dashboard = React.lazy(() =>
+const Dashboard = recoverableLazy(() =>
   import("@/components/maintenance/MaintenanceDashboard").then((module) => ({ default: module.MaintenanceDashboard }))
 );
-const IssueTracker = React.lazy(() =>
+const IssueTracker = recoverableLazy(() =>
   import("@/components/maintenance/MaintenanceWorkspace").then((module) => ({
     default: module.MaintenanceWorkspace,
   }))
 );
 const loadMaterialRequestPage = () => import("@/components/material-requests/MaterialRequestPage");
-const MaterialRequestPage = React.lazy(() =>
+const MaterialRequestPage = recoverableLazy(() =>
   loadMaterialRequestPage().then((module) => ({
     default: module.MaterialRequestPage,
   }))
 );
-const PcbDesignerWorkspace = React.lazy(() =>
+const PcbDesignerWorkspace = recoverableLazy(() =>
   import("@/components/pcb-designer/PcbDesignerWorkspace").then((module) => ({
     default: module.PcbDesignerWorkspace,
   }))
 );
-const PerformanceAppraisalPage = React.lazy(() =>
+const PerformanceAppraisalPage = recoverableLazy(() =>
   import("@/components/performance/PerformanceAppraisalPage").then((module) => ({
     default: module.PerformanceAppraisalPage,
   }))
 );
-const FlowInfo = React.lazy(() =>
+const FlowInfo = recoverableLazy(() =>
   import("@/components/maintenance/MaintenanceHistory").then((module) => ({ default: module.MaintenanceHistory }))
 );
-const TestTracker = React.lazy(() =>
+const TestTracker = recoverableLazy(() =>
   import("@/components/maintenance/MaintenanceHistory").then((module) => ({
     default: module.MaintenanceHistory,
   }))
 );
-const TestPlanWorkspace = React.lazy(() =>
+const TestPlanWorkspace = recoverableLazy(() =>
   import("@/components/test-plan/TestPlanWorkspace").then((module) => ({
     default: module.TestPlanWorkspace,
   }))
 );
-const ToolsManagement = React.lazy(() =>
+const ToolsManagement = recoverableLazy(() =>
   import("@/components/tools/ToolsManagement").then((module) => ({
     default: module.ToolsManagement,
   }))
@@ -229,12 +232,12 @@ function getRoleLabel(role?: string) {
   }
 }
 
-function getInitialWorkspace(): WorkspaceId | null {
+function getInitialWorkspace(search?: string): WorkspaceId | null {
   if (typeof window === "undefined") {
     return null;
   }
 
-  const params = new URLSearchParams(window.location.search);
+  const params = new URLSearchParams(search ?? window.location.search);
   const workspace = params.get("workspace");
   const module = params.get("module");
 
@@ -270,12 +273,12 @@ function getInitialWorkspace(): WorkspaceId | null {
   return null;
 }
 
-function getInitialStationModule(): StationModuleId {
+function getInitialStationModule(search?: string): StationModuleId {
   if (typeof window === "undefined") {
     return "issues";
   }
 
-  const value = new URLSearchParams(window.location.search).get("module");
+  const value = new URLSearchParams(search ?? window.location.search).get("module");
   if (
     value === "dashboard" ||
     value === "test-tracker" ||
@@ -304,6 +307,28 @@ function getInitialAdminModule(): AdminModuleId {
   return "users";
 }
 
+function preloadWorkspace(workspace: WorkspaceId | null, module?: string) {
+  switch (workspace) {
+    case "file-uploads": return TestPlanWorkspace.preload();
+    case "comparison": return ComparisonWorkspace.preload();
+    case "material-requests": return MaterialRequestPage.preload();
+    case "data-center": return DeploymentPlanningCenter.preload();
+    case "pcb-designer": return PcbDesignerWorkspace.preload();
+    case "user-management": return AdminPanel.preload();
+    case "ai-chat": return ApiChatWorkspacePage.preload();
+    case "performance": return PerformanceAppraisalPage.preload();
+    case "station-status":
+      switch (module) {
+        case "dashboard": return Dashboard.preload();
+        case "test-tracker": return TestTracker.preload();
+        case "flow-info": return FlowInfo.preload();
+        case "tools": return ToolsManagement.preload();
+        default: return IssueTracker.preload();
+      }
+    default: return Promise.resolve();
+  }
+}
+
 const Index = () => {
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId | null>(
     getInitialWorkspace
@@ -314,6 +339,8 @@ const Index = () => {
   const [activeAdminModule, setActiveAdminModule] = useState<AdminModuleId>(
     getInitialAdminModule
   );
+  const { navigate: navigateModule, cancel: cancelModuleNavigation, pending: navigationPending, retry: navigationRetry } = useModuleNavigation();
+  const [historyRetry, setHistoryRetry] = useState<(() => void) | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false);
@@ -487,44 +514,29 @@ const Index = () => {
     updateCurrentModule(presenceModule);
   }, [activeAdminModule, activeStationModule, activeWorkspace, updateCurrentModule]);
 
+  const navigateWorkspace = React.useCallback((target: WorkspaceId | null, module?: string, params?: Record<string, string>) => {
+    setHistoryRetry(null);
+    void navigateModule(() => preloadWorkspace(target, module), () => {
+      if (!pushWorkspaceLocation(target, module, params)) return;
+      setActiveWorkspace(target);
+      if (target === "station-status") setActiveStationModule((module ?? "issues") as StationModuleId);
+      if (target === "user-management") setActiveAdminModule((module ?? "users") as AdminModuleId);
+      setSidebarOpen(false);
+    });
+  }, [navigateModule]);
+
   useEffect(() => {
-    const handleNavigationEvent = (
-      event: CustomEvent<{ module: string; params?: Record<string, string> }>
-    ) => {
+    const handleNavigationEvent = (event: CustomEvent<{ module: string; params?: Record<string, string> }>) => {
       const module = event.detail?.module;
-      if (!module) return;
-
-      const targetWorkspace = moduleWorkspaceMap[module];
-      if (!targetWorkspace) return;
-
+      const target = moduleWorkspaceMap[module];
+      if (!target) return;
       const normalizedModule = module === "monitor" ? "test-tracker" : module;
-      const normalizedParams = module === "monitor"
-        ? { ...event.detail?.params, trackerView: "board" }
-        : event.detail?.params;
-
-      if (!pushWorkspaceLocation(targetWorkspace, normalizedModule, normalizedParams)) return;
-
-      setActiveWorkspace(targetWorkspace);
-
-      if (
-        targetWorkspace === "station-status" &&
-        stationModuleItems.some((item) => item.id === normalizedModule)
-      ) {
-        setActiveStationModule(normalizedModule as StationModuleId);
-      }
-
-      if (targetWorkspace === "user-management") {
-        setActiveAdminModule(
-          module === "api-management" || module === "collaboration" ? module : "users",
-        );
-      }
+      const params = module === "monitor" ? { ...event.detail?.params, trackerView: "board" } : event.detail?.params;
+      navigateWorkspace(target, normalizedModule, params);
     };
-
     window.addEventListener("navigate", handleNavigationEvent as EventListener);
-    return () => {
-      window.removeEventListener("navigate", handleNavigationEvent as EventListener);
-    };
-  }, []);
+    return () => window.removeEventListener("navigate", handleNavigationEvent as EventListener);
+  }, [navigateWorkspace]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -555,8 +567,14 @@ const Index = () => {
       setActiveWorkspace(getInitialWorkspace());
       setActiveStationModule(getInitialStationModule());
       setActiveAdminModule(getInitialAdminModule());
+    }, (targetUrl) => preloadWorkspace(getInitialWorkspace(targetUrl.search), getInitialStationModule(targetUrl.search)), (retry) => {
+      cancelModuleNavigation();
+      setHistoryRetry(() => retry);
+    }, () => {
+      cancelModuleNavigation();
+      setHistoryRetry(null);
     });
-  }, []);
+  }, [cancelModuleNavigation]);
 
   useEffect(() => {
     stationMainRef.current?.scrollTo({ top: 0 });
@@ -564,45 +582,19 @@ const Index = () => {
   }, [activeProjectId, activeStationModule]);
 
   const handleWorkspaceChange = (workspace: string) => {
-    if (workspace === "workspace-home") {
-      if (!pushWorkspaceLocation(null)) return;
-      setActiveWorkspace(null);
-      return;
-    }
-
-    const nextWorkspace = workspace as WorkspaceId;
-    const nextModule =
-      nextWorkspace === "station-status"
-        ? activeStationModule
-        : nextWorkspace === "user-management"
-          ? activeAdminModule
-          : nextWorkspace === "ai-chat"
-            ? "ai-chat"
-            : nextWorkspace === "file-uploads"
-              ? "test-plan"
-              : nextWorkspace === "comparison"
-                ? "comparison"
-                : undefined;
-    if (!pushWorkspaceLocation(nextWorkspace, nextModule)) return;
-    setActiveWorkspace(nextWorkspace);
+    const target = workspace === "workspace-home" ? null : workspace as WorkspaceId;
+    const module = target === "station-status" ? activeStationModule
+      : target === "user-management" ? activeAdminModule
+      : target === "file-uploads" ? "test-plan"
+      : target === "ai-chat" || target === "comparison" ? target : undefined;
+    navigateWorkspace(target, module);
   };
 
   const handleStationNavigation = (module: string, params?: Record<string, string>) => {
-    if (module === "test-plan") {
-      if (!pushWorkspaceLocation("file-uploads", "test-plan", params)) return;
-      setActiveWorkspace("file-uploads");
-      return;
-    }
+    if (module === "test-plan") return navigateWorkspace("file-uploads", "test-plan", params);
     const normalizedModule = module === "monitor" ? "test-tracker" : module;
-    const normalizedParams = module === "monitor"
-      ? { ...params, trackerView: "board" }
-      : params;
-    if (!pushWorkspaceLocation("station-status", normalizedModule, normalizedParams)) return;
-    setActiveWorkspace("station-status");
-    setActiveStationModule(normalizedModule as StationModuleId);
-    if (isCompactLayout) {
-      setSidebarOpen(false);
-    }
+    const normalizedParams = module === "monitor" ? { ...params, trackerView: "board" } : params;
+    navigateWorkspace("station-status", normalizedModule, normalizedParams);
   };
 
   const renderStationContent = () => {
@@ -816,6 +808,8 @@ const Index = () => {
               : "min-h-0"
         )}
       >
+        {navigationPending && <div role="status" className="flex flex-wrap items-center gap-3 p-3 text-sm">正在載入目標功能，目前畫面仍可操作。<button type="button" className="min-h-11 rounded-lg border border-border px-4" onClick={cancelModuleNavigation}>取消切換</button></div>}
+        {(navigationRetry || historyRetry) && <ModuleLoadRecovery onRetry={navigationRetry ?? historyRetry!} onCancel={() => { cancelModuleNavigation(); setHistoryRetry(null); }} />}
         <React.Suspense
           fallback={
             <div className="p-3">

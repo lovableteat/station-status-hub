@@ -1,37 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, RefreshCw, RotateCcw } from "lucide-react";
 
-const CHUNK_RETRY_KEY = "station-status-hub:chunk-retry";
-const CHUNK_RETRY_WINDOW_MS = 30_000;
-
-interface ChunkRetryRecord {
-  fingerprint: string;
-  attemptedAt: number;
-}
-
-function hasRecentChunkRetry(value: string | null, fingerprint: string, now: number) {
-  if (!value) return false;
-  try {
-    const record = JSON.parse(value) as Partial<ChunkRetryRecord>;
-    return record.fingerprint === fingerprint
-      && typeof record.attemptedAt === "number"
-      && now - record.attemptedAt < CHUNK_RETRY_WINDOW_MS;
-  } catch {
-    return false;
-  }
-}
-
-function isChunkLoadError(error: Error) {
-  return /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Loading (?:CSS )?chunk|ChunkLoadError|Unable to preload CSS|Failed to load module script/i.test(
-    error.message
-  );
-}
-
-function replaceWithCacheBuster() {
-  const nextUrl = new URL(window.location.href);
-  nextUrl.searchParams.set("reload", Date.now().toString());
-  window.location.replace(nextUrl.toString());
-}
+import { requestApplicationUpdate } from "@/lib/applicationUpdate";
 
 interface AppRuntimeBoundaryProps {
   children: ReactNode;
@@ -39,7 +9,6 @@ interface AppRuntimeBoundaryProps {
 
 interface AppRuntimeBoundaryState {
   error: Error | null;
-  retrying: boolean;
 }
 
 export class AppRuntimeBoundary extends Component<
@@ -48,59 +17,21 @@ export class AppRuntimeBoundary extends Component<
 > {
   state: AppRuntimeBoundaryState = {
     error: null,
-    retrying: false,
   };
 
   static getDerivedStateFromError(error: Error): AppRuntimeBoundaryState {
-    return { error, retrying: false };
+    return { error };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("Application render failed:", error, info.componentStack);
 
-    if (!isChunkLoadError(error)) return;
-
-    try {
-      const fingerprint = error.message || error.name;
-      const now = Date.now();
-      if (hasRecentChunkRetry(window.sessionStorage.getItem(CHUNK_RETRY_KEY), fingerprint, now)) return;
-      window.sessionStorage.setItem(CHUNK_RETRY_KEY, JSON.stringify({ fingerprint, attemptedAt: now }));
-    } catch {
-      // The recovery screen remains available when storage is unavailable.
-      return;
-    }
-
-    this.setState({ retrying: true });
-    replaceWithCacheBuster();
   }
 
-  private handleReload = () => {
-    try {
-      window.sessionStorage.removeItem(CHUNK_RETRY_KEY);
-    } catch {
-      // Reload still works when storage is unavailable.
-    }
-    replaceWithCacheBuster();
-  };
-
-  private handleResetSession = () => {
-    try {
-      window.localStorage.removeItem("user");
-      window.sessionStorage.removeItem("user");
-      window.sessionStorage.removeItem(CHUNK_RETRY_KEY);
-      window.sessionStorage.removeItem("station-status-hub:boot-retry");
-    } catch {
-      // Continue to the login screen even when storage cleanup is blocked.
-    }
-
-    const nextUrl = new URL(window.location.href);
-    nextUrl.search = "";
-    nextUrl.hash = "";
-    window.location.replace(nextUrl.toString());
-  };
+  private handleRetry = () => { this.setState({ error: null }); };
 
   render() {
-    const { error, retrying } = this.state;
+    const { error } = this.state;
     if (!error) return this.props.children;
 
     return (
@@ -112,33 +43,31 @@ export class AppRuntimeBoundary extends Component<
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
-                {retrying ? "正在同步最新版本" : "頁面載入遇到問題"}
+                頁面載入遇到問題
               </h1>
               <p className="mt-2 max-w-[52ch] text-sm leading-6 text-sky-100 sm:text-base">
-                {retrying
-                  ? "偵測到瀏覽器仍在使用舊版檔案，系統正在自動重新載入。"
-                  : "系統已攔截錯誤，因此不會再顯示整頁黑畫面。請重新載入，或清除登入狀態後再次登入。"}
+                系統沒有自動重新整理或清除登入狀態。此畫面未儲存的內容可能無法恢復；其他仍可操作的畫面請先儲存或匯出，再更新版本。
               </p>
             </div>
           </div>
 
-          {!retrying && (
+          {(
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
-                onClick={this.handleReload}
+                onClick={requestApplicationUpdate}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-sky-400 px-5 text-sm font-bold text-slate-950 hover:bg-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               >
                 <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                載入最新版本
+                儲存後更新版本
               </button>
               <button
                 type="button"
-                onClick={this.handleResetSession}
+                onClick={this.handleRetry}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-sky-300/45 bg-[#102b43] px-5 text-sm font-semibold text-sky-50 hover:bg-[#163853] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200"
               >
                 <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                清除登入狀態
+                重試畫面
               </button>
             </div>
           )}

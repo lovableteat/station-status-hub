@@ -1,3 +1,4 @@
+import { requestApplicationUpdate } from "@/lib/applicationUpdate";
 
 import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
@@ -449,7 +450,7 @@ function ErrorFallback({ onRetry }: { onRetry?: () => void }) {
               重新載入
             </Button>
           )}
-          <Button onClick={() => window.location.reload()} variant="default" size="sm">
+          <Button onClick={requestApplicationUpdate} variant="default" size="sm">
             重新整理頁面
           </Button>
         </div>

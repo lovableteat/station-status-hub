@@ -335,7 +335,7 @@ test("shows editors and live viewers across the PCB workspace", () => {
 });
 
 test("provides a lazy interactive 3D PCB view without replacing the 2D editor", () => {
-  assert.match(workspaceSource, /lazy\(\(\) => import\(["']\.\/Pcb3DCanvas\.tsx["']\)/);
+  assert.match(workspaceSource, /recoverableLazy\(\(\) => import\(["']\.\/Pcb3DCanvas\.tsx["']\)/);
   assert.match(workspaceSource, /viewMode === ["']2d["'][\s\S]{0,500}<PcbCanvas/);
   assert.match(workspaceSource, /<Pcb3DCanvas/);
   assert.match(canvas3dSource, /<Canvas/);

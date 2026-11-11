@@ -39,6 +39,7 @@ function component(path, exported, replacements) {
     exports, URL: BrowserURL, URLSearchParams, Blob, TextEncoder, console,
     require(name) {
       if (name === "react") return hook.react;
+      if (name === "@/components/common/recoverableLazy") return { recoverableLazy: hook.react.lazy };
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "Fragment" };
       if (name in replacements) return replacements[name];
       return new Proxy({}, { get: (_, key) => String(key) });

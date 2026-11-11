@@ -50,12 +50,27 @@ function createApplication(session) {
     },
   }).outputText;
   const load = (specifier) => {
+    const sharedRecovery = specifier === "@/components/common/recoverableLazy" ? "recoverableLazy" : specifier === "./ModuleLoadRecovery" ? "ModuleLoadRecovery" : null;
+    if (sharedRecovery) {
+      const recovery = { exports: {} };
+      const code = ts.transpileModule(readFileSync(resolve(root, `src/components/common/${sharedRecovery}.tsx`), "utf8"), {
+        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+      }).outputText;
+      runInNewContext(`(function(require,module,exports){${code}\n})`, {})(load, recovery, recovery.exports);
+      return recovery.exports;
+    }
     if (specifier === "@/components/auth/AuthenticatedApplication") {
       authenticatedImports += 1;
       return {
         __esModule: true,
         default: () => React.createElement("section", null, "已驗證工作區"),
       };
+    }
+    if (specifier === "@/lib/applicationUpdate") {
+      const recovery = { exports: {} };
+      const code = ts.transpileModule(readFileSync(resolve(root, "src/lib/applicationUpdate.ts"), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+      runInNewContext(`(function(require,module,exports){${code}\n})`, {})(load, recovery, recovery.exports);
+      return recovery.exports;
     }
     assert.ok(specifier in mocks, `the login entry unexpectedly imported ${specifier}`);
     return mocks[specifier];
