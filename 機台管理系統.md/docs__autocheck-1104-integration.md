@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/autocheck-1104-integration.md`；程式參考基準：`f96b970ff818d5ffacb2f1c8493a69aaf3f0970e`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/autocheck-1104-integration.md`；程式參考基準：`78d25152378400d695bd253a2d562f5cb27e8ce1`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # AutoCheck 2026-11-04 整合與功能對照
 
