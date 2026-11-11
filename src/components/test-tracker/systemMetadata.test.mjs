@@ -12,7 +12,7 @@ const transpiled = ts.transpileModule(source, {
   },
 }).outputText;
 const metadata = await import(
-  `data:text/javascript;base64,${Buffer.from(transpiled).toString("base64")}`,
+  `data:text/javascript;base64,${Buffer.from(transpiled).toString("base64")}`
 );
 
 const textField = { field_key: "release_notes", field_type: "text" };

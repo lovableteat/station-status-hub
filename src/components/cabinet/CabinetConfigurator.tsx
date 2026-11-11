@@ -1,3 +1,5 @@
+import type { Tables } from "@/integrations/supabase/types";
+type SystemDetails = Tables<"test_systems">;
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,7 +47,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
     return saved || 'count';
   });
   const [showSystemSelector, setShowSystemSelector] = useState(false);
-  const [selectedSystemDetails, setSelectedSystemDetails] = useState<any>(null);
+  const [selectedSystemDetails, setSelectedSystemDetails] = useState<ReturnType<typeof useUnifiedData>["systems"][number] & Partial<SystemDetails>>(null);
   
   const { systems } = useUnifiedData();
 
@@ -77,7 +79,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
   };
 
 
-  const showSystemDetails = (system: any) => {
+  const showSystemDetails = (system: ReturnType<typeof useUnifiedData>["systems"][number]) => {
     setSelectedSystemDetails(system);
   };
 
@@ -282,7 +284,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                 const allocationsKey = `global-system-allocations`;
                 const savedAllocations = localStorage.getItem(allocationsKey);
                 const allocations = savedAllocations ? JSON.parse(savedAllocations) : [];
-                const allocation = allocations.find((a: any) => a.systemId === system.id);
+                const allocation = allocations.find((a: { systemId: string; cabinetId: string }) => a.systemId === system.id);
                 return !allocation; // 只顯示未分配的系統
               }).length} 台可選)</Label>
               <div className="text-xs text-yellow-200 bg-yellow-400/15 p-2 rounded border border-yellow-400/40">
@@ -295,7 +297,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                     const allocationsKey = `global-system-allocations`;
                     const savedAllocations = localStorage.getItem(allocationsKey);
                     const allocations = savedAllocations ? JSON.parse(savedAllocations) : [];
-                    const allocation = allocations.find((a: any) => a.systemId === system.id);
+                    const allocation = allocations.find((a: { systemId: string; cabinetId: string }) => a.systemId === system.id);
                     return !allocation;
                   })
                   .map((system) => (
@@ -334,7 +336,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                   const allocationsKey = `global-system-allocations`;
                   const savedAllocations = localStorage.getItem(allocationsKey);
                   const allocations = savedAllocations ? JSON.parse(savedAllocations) : [];
-                  const allocation = allocations.find((a: any) => a.systemId === system.id);
+                  const allocation = allocations.find((a: { systemId: string; cabinetId: string }) => a.systemId === system.id);
                   return !allocation;
                 }).length === 0 && (
                   <div className="text-center py-4 text-muted-foreground text-sm">
@@ -359,7 +361,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                 const allocationsKey = `global-system-allocations`;
                 const savedAllocations = localStorage.getItem(allocationsKey);
                 const allocations = savedAllocations ? JSON.parse(savedAllocations) : [];
-                const currentCabinetAllocations = allocations.filter((a: any) => 
+                const currentCabinetAllocations = allocations.filter((a: { systemId: string; cabinetId: string }) =>
                   a.cabinetId === (cabinetId || 'default')
                 );
                 return currentCabinetAllocations.length;
@@ -373,7 +375,7 @@ export function CabinetConfigurator({ config, onConfigChange, cabinetId }: {
                 const allocationsKey = `global-system-allocations`;
                 const savedAllocations = localStorage.getItem(allocationsKey);
                 const allocations = savedAllocations ? JSON.parse(savedAllocations) : [];
-                const currentCabinetAllocations = allocations.filter((a: any) => 
+                const currentCabinetAllocations = allocations.filter((a: { systemId: string; cabinetId: string }) =>
                   a.cabinetId === (cabinetId || 'default')
                 );
                 const progress = Math.min(100, Math.round((currentCabinetAllocations.length / totalComponents) * 100));

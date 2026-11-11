@@ -11,10 +11,10 @@ interface ExportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  data?: any[];
-  stations?: any[];
-  testItems?: any[];
-  progress?: any[];
+  data?: Parameters<typeof generatePDF>[1];
+  stations?: Parameters<typeof generatePDF>[2];
+  testItems?: Parameters<typeof generatePDF>[3];
+  progress?: Parameters<typeof generatePDF>[4];
 }
 
 export function ExportDialog({ 

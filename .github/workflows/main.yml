@@ -21,7 +21,13 @@ concurrency:
   group: pages
   cancel-in-progress: false
 jobs:
+  quality:
+    uses: ./.github/workflows/audit-on-main.yml
+    permissions:
+      contents: read
   build:
+    needs: quality
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,10 +35,10 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - name: Install and Build
         run: |
-          npm install --legacy-peer-deps
+          npm ci --legacy-peer-deps
           npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}

@@ -1,3 +1,5 @@
+import { attachmentPath, downloadPrivateAttachment } from "@/lib/privateAttachments";
+import { PrivateAttachmentHtml } from "@/components/attachments/PrivateAttachmentHtml";
 import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import DOMPurify from "dompurify";
@@ -173,16 +175,10 @@ function getFileType(fileName: string | null) {
   return extension && extension !== fileName ? extension.toUpperCase() : "FILE";
 }
 
-function getStoragePath(publicUrl: string | null) {
-  if (!publicUrl) return null;
-  const marker = "/storage/v1/object/public/task-attachments/";
-  try {
-    const pathname = new URL(publicUrl).pathname;
-    const markerIndex = pathname.indexOf(marker);
-    return markerIndex >= 0 ? decodeURIComponent(pathname.slice(markerIndex + marker.length)) : null;
-  } catch {
-    return null;
-  }
+function getStoragePath(value: string | null) {
+  if (!value) return null;
+  try { return attachmentPath("task-attachments", value); }
+  catch { return null; }
 }
 
 function emptyAssignments() {
@@ -615,7 +611,18 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
       toast({ title: "此資產沒有可下載的檔案", variant: "destructive" });
       return;
     }
-    window.open(tool.file_path, "_blank", "noopener,noreferrer");
+    try {
+      const path = getStoragePath(tool.file_path);
+      if (path) await downloadPrivateAttachment("task-attachments", path, tool.file_name || tool.tool_name);
+      else {
+        const external = new URL(tool.file_path);
+        if (!["https:", "http:"].includes(external.protocol)) throw new Error("無效的附件網址");
+        window.open(external.href, "_blank", "noopener,noreferrer");
+      }
+    } catch (error) {
+      toast({ title: "附件下載失敗", description: error instanceof Error ? error.message : "請確認登入與存取權限。", variant: "destructive" });
+      return;
+    }
     await supabase
       .from("tools_management")
       .update({ download_count: (tool.download_count || 0) + 1 })
@@ -927,7 +934,7 @@ function AssetDetails({
             </div>
           </div>
         )}
-        {asset.kind === "tool" && asset.raw.sop_content && <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#d8e6f0]" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(asset.raw.sop_content) }} />}
+        {asset.kind === "tool" && asset.raw.sop_content && <PrivateAttachmentHtml className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#d8e6f0]" html={DOMPurify.sanitize(asset.raw.sop_content)} />}
         {asset.kind === "tool" && asset.raw.file_name && <div className="rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-3 text-sm text-[#d8e6f0]"><div className="text-xs text-[#91aabd]">{isGeneralAsset ? "傳輸檔案" : "附件"}</div><div className="mt-1 truncate">{asset.raw.file_name}</div></div>}
       </div>
       <DialogFooter className="border-t border-[#2a526f] bg-[#071522] px-6 py-4 flex-row flex-wrap justify-end gap-2">

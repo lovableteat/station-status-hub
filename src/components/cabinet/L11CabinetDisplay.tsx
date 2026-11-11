@@ -82,7 +82,7 @@ interface CabinetRackProps {
 }
 
 function CabinetRack({ position, color, size, serialNumber, componentType, isSelected, onComponentClick }: CabinetRackProps) {
-  const handleClick = (e: any) => {
+  const handleClick = (e: { stopPropagation: () => void }) => {
     e.stopPropagation();
     onComponentClick(componentType, serialNumber);
   };
@@ -796,7 +796,7 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
   }, [componentSystemMapping, currentCabinetId, deallocateSystem, getStorageKey]);
 
   // 處理系統選擇確認，添加錯誤處理
-  const handleSystemSelection = useCallback((system: any) => {
+  const handleSystemSelection = useCallback((system: ReturnType<typeof useUnifiedData>["systems"][number]) => {
     try {
       const currentSerialNumber = system.serial_number || system.system_name;
       const key = `${systemSelectionDialog.componentType}-${systemSelectionDialog.componentSn}`;

@@ -154,7 +154,7 @@ export function MobileSystemCard({
           </div>
           <div className="bg-muted/30 rounded p-2">
             <span className="text-muted-foreground">90BOM:</span>
-            <div className="font-medium">{(system as any).bom_90 || '未設定'}</div>
+            <div className="font-medium">{(system as TestSystem & { bom_90?: string }).bom_90 || '未設定'}</div>
           </div>
           <div className="bg-muted/30 rounded p-2">
             <span className="text-muted-foreground">工程師:</span>

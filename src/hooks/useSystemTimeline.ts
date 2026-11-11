@@ -39,7 +39,7 @@ export function useSystemTimeline() {
         .single();
 
       if (data?.settings) {
-        const settings = data.settings as any;
+        const settings = data.settings as { project_start_date?: string; systems_per_day?: number; work_days?: string[]; daily_work_hours?: number };
         setConfig({
           projectStartDate: settings.project_start_date || DEFAULT_CONFIG.projectStartDate,
           systemsPerDay: settings.systems_per_day || DEFAULT_CONFIG.systemsPerDay,
@@ -54,7 +54,7 @@ export function useSystemTimeline() {
     }
   };
 
-  const calculateSystemTimeline = (systemName: string, systems: any[], systemProgress?: number): SystemTimeline => {
+  const calculateSystemTimeline = (systemName: string, systems: { system_name: string }[], systemProgress?: number): SystemTimeline => {
     // Find system index (assuming naming pattern like System01, System02, etc.)
     const systemIndex = systems.findIndex(s => s.system_name === systemName);
     const actualIndex = systemIndex >= 0 ? systemIndex : 0;
@@ -65,7 +65,7 @@ export function useSystemTimeline() {
     // Base start date from config
     const baseStartDate = new Date(config.projectStartDate);
     let workDaysAdded = 0;
-    let currentDate = new Date(baseStartDate);
+    const currentDate = new Date(baseStartDate);
 
     // Add working days to get to the correct start date
     while (workDaysAdded < dayOffset) {
@@ -80,7 +80,7 @@ export function useSystemTimeline() {
     // Smart scheduling based on system progress
     const today = new Date();
     let actualStartDate = new Date(currentDate);
-    let workDaysForCompletion = 8; // More realistic estimate: 8 working days per system
+    const workDaysForCompletion = 8; // More realistic estimate: 8 working days per system
 
     // If system has progress > 0, it should have started in the past
     if (systemProgress && systemProgress > 0) {

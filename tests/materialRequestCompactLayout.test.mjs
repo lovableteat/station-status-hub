@@ -206,7 +206,8 @@ test("BOMs are grouped by project in BOM 管理 and in the header switcher", () 
   assert.match(versionCenter, /aria-expanded=\{expanded\}/);
   assert.match(versionCenter, /hidden=\{!expanded\}/);
   assert.match(versionCenter, /請有編輯權限的同事上傳或指定專案/);
-  assert.match(versionCenter, />目前專案</);
+  assert.match(versionCenter, /group\.isActive && <span[^>]*>工作區專案<\/span>/);
+  assert.match(versionCenter, /所選 BOM 專案：/, "the selected BOM project stays distinct from navigation context");
   assert.match(versionCenter, /onAssignProject\(selectedSeries, value === UNASSIGNED_VALUE \? null : value\)/);
   assert.match(versionCenter, /尚無 BOM/);
   assert.match(desktopHeader, /<SelectGroup key=\{group\.key\}>/);

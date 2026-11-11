@@ -111,18 +111,18 @@ export function DailyStationCompletionChart() {
   }, [days, progress, sortedStations, systems, testItems]);
 
   // 自訂 Tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value?: number | string; color?: string; dataKey?: string }[]; label?: string | number }) => {
     if (active && payload && payload.length) {
       const visiblePayload = payload
-        .filter((entry: any) => Number(entry.value) > 0)
-        .sort((a: any, b: any) => Number(b.value) - Number(a.value));
+        .filter((entry) => Number(entry.value) > 0)
+        .sort((a, b) => Number(b.value) - Number(a.value));
 
       return (
         <div className="min-w-[220px] rounded-2xl border border-border/70 bg-popover/95 p-3 shadow-2xl backdrop-blur">
           <p className="text-sm font-semibold text-popover-foreground">{label}</p>
           <p className="mt-1 text-xs text-muted-foreground">當日各站完成台數</p>
           <div className="mt-3 space-y-2">
-            {(visiblePayload.length > 0 ? visiblePayload : payload).map((entry: any, index: number) => (
+            {(visiblePayload.length > 0 ? visiblePayload : payload).map((entry, index: number) => (
               <div key={index} className="flex items-center justify-between gap-3 text-sm">
                 <div className="flex items-center gap-2">
                   <span

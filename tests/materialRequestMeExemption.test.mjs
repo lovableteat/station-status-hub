@@ -4,7 +4,7 @@ import test from 'node:test';
 import { buildMaterialDataset, isMeManufacturedRecord } from '../src/components/material-requests/materialRequestUtils.ts';
 import { buildPendingApplications } from '../src/components/material-requests/materialRequestPresentation.ts';
 import { buildVendorMailSections } from '../src/components/material-requests/materialRequestExport.ts';
-const seed = JSON.parse(await readFile(new URL('../src/data/materialRequestSeed.json', import.meta.url), 'utf8'));
+const seed = JSON.parse(await readFile(new URL('./fixtures/materialWorkbook.synthetic.json', import.meta.url), 'utf8'));
 const record = (id, refDes, extra = {}) => ({ ...seed.records[0], id, sourceGroupKey: id, isGroupStart: true, refDes, refGroup: refDes,
   name: 'Part ' + id, partNumber: '', virtualAlternative: '', manufacturer: 'Example', manufacturerPartNumber: id,
   remark: 'Part/Symbol', trackingStatus: '已完成', trackingNote: '保留人工追蹤', trackingHistory: [], ...extra });

@@ -219,7 +219,7 @@ test("reports placement search limits truthfully and batches BOM auto-placement"
   assert.match(editorHookSource, /batch\.length \* worstCaseObstacles/);
   assert.match(editorHookSource, /deferred/);
   assert.match(editorHookSource, /search-limit/);
-  assert.doesNotMatch(railSource, /activeTab === ["\']bom["\']/);
+  assert.doesNotMatch(railSource, /activeTab === ["']bom["']/);
 });
 
 test("keeps all four tools mutually exclusive and accessible", () => {

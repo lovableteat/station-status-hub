@@ -5,7 +5,7 @@ const {chromium}=createRequire(path.resolve(process.env.AUDIT_QA_DIR||'../qa-too
 const evidence=path.resolve(process.env.MATERIAL_REALTIME_EVIDENCE_DIR||'../material-live-realtime-evidence');
 const env=Object.fromEntries(fs.readFileSync('.env','utf8').split(/\r?\n/).map(line=>line.match(/^([^#=]+)=(.*)$/)).filter(Boolean).map(([,key,value])=>[key.trim(),value.trim().replace(/^['"]|['"]$/g,'')]));
 const editor=page=>page.locator('.material-record-dialog');
-const seed=JSON.parse(fs.readFileSync('src/data/materialRequestSeed.json','utf8'));
+const seed=JSON.parse(fs.readFileSync('tests/fixtures/materialWorkbook.synthetic.json','utf8'));
 
 async function switchBom(page,name){
   await page.getByTestId('material-table-card').waitFor({timeout:120000});

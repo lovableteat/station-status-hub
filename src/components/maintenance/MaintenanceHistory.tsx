@@ -1,3 +1,4 @@
+import { PrivateAttachmentHtml } from "@/components/attachments/PrivateAttachmentHtml";
 import { useEffect, useId, useMemo, useState } from 'react';
 import DOMPurify from 'dompurify';
 import { ChevronDown, Search } from 'lucide-react';
@@ -57,7 +58,7 @@ function HistorySystemRow({ system, entries }: { system: HistorySystem; entries:
                         <div><dt>原工時</dt><dd>{item.actual_hours ?? '未記錄'}</dd></div>
                         <div><dt>負責人</dt><dd>{item.assigned_to || '未指定'}</dd></div>
                       </dl>
-                      {item.notes && <div className="mf-rich-text" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.notes) }}/>}
+                      {item.notes && <PrivateAttachmentHtml className="mf-rich-text" html={DOMPurify.sanitize(item.notes)}/>}
                     </section>
                   ))}
                 </div>

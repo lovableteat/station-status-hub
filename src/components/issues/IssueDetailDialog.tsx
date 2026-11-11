@@ -1,3 +1,4 @@
+import { PrivateAttachmentHtml } from "@/components/attachments/PrivateAttachmentHtml";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -159,9 +160,9 @@ export function IssueDetailDialog({ issue, isOpen, onClose, onEdit }: IssueDetai
           <div>
             <label className="text-sm font-medium text-muted-foreground">問題描述</label>
             <div className="mt-2 p-3 bg-muted/50 rounded-md">
-              <div 
+              <PrivateAttachmentHtml
                 className="text-sm prose prose-sm max-w-none dark:prose-invert"
-                dangerouslySetInnerHTML={{ __html: issue.description }}
+                html={issue.description}
               />
             </div>
           </div>
@@ -192,9 +193,9 @@ export function IssueDetailDialog({ issue, isOpen, onClose, onEdit }: IssueDetai
               <div>
                 <label className="text-sm font-medium text-muted-foreground">解決方案</label>
                 <div className="mt-2 rounded-md border border-primary/20 bg-primary/10 p-3">
-                  <div 
+                  <PrivateAttachmentHtml
                     className="text-sm prose prose-sm max-w-none dark:prose-invert"
-                    dangerouslySetInnerHTML={{ __html: issue.solution }}
+                    html={issue.solution}
                   />
                 </div>
               </div>
