@@ -10,9 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Force Database Activity
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
-          # 🌟 重點：加上 apikey 與查詢指令，去翻動剛才建好的 keep_alive_check 表
-          curl -X GET "${{ secrets.VITE_SUPABASE_URL }}/rest/v1/keep_alive_check?select=*" \
-          -H "apikey: ${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
-          -H "Authorization: Bearer ${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
-          -H "Accept-Profile: ${{ vars.SUPABASE_DB_SCHEMA || 'workspace' }}"
+          # Execute a constant-only database query, never expose application rows.
+          response=$(curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 --retry 2 \
+            "${SUPABASE_URL}/rest/v1/rpc/database_healthcheck" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Accept-Profile: public")
+          test "$response" = 'true'
