@@ -28,5 +28,7 @@ jobs:
         run: echo "AUDIT_QA_DIR=$RUNNER_TEMP/station-audit-qa" >> "$GITHUB_ENV"
       - name: Install isolated QA dependencies
         run: npm install --prefix "$AUDIT_QA_DIR" --no-package-lock react@18.3.1 react-test-renderer@18.3.1 jsdom@29.1.1 @electric-sql/pglite@0.5.8
+      - name: Anonymous data exposure and authenticated compatibility
+        run: node tests/anonymousExposure.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
       - name: Deferred requests, live events, drafts and permissions
         run: node --test tests/audit*.integration.cjs
