@@ -73,7 +73,8 @@
   padding-left: 36px;
   background: hsl(var(--secondary));
 }
-.ma-asset-filter .mobile-filter-bar__input { padding-right: 40px; }
+.ma-asset-filter .mobile-filter-bar__input { padding-right: 12px; }
+.ma-asset-filter .mobile-filter-bar__search:has(.mobile-filter-bar__clear) .mobile-filter-bar__input { padding-right: 40px; }
 .ma-asset-filter .mobile-filter-bar__controls { display: flex; flex: 0 1 auto; gap: 8px; }
 .ma-asset-filter .mobile-filter-bar__controls [role="combobox"], .ma-library-filters [role="combobox"] {
   width: auto;
@@ -105,7 +106,7 @@
 .ma-asset-list { overflow: hidden; border: 1px solid hsl(var(--border)); border-radius: 10px; background: hsl(var(--card)); }
 .ma-asset-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1.8fr) minmax(112px, .75fr) minmax(112px, 1fr) minmax(94px, .6fr) auto;
+  grid-template-columns: minmax(160px, 1.8fr) minmax(112px, .75fr) minmax(112px, 1fr) minmax(94px, .6fr) 128px;
   align-items: center;
   column-gap: 14px;
   padding: 9px 14px;
@@ -164,6 +165,7 @@
   .ma-tabs > button { flex: 0 0 auto; gap: 4px; padding-inline: 7px; font-size: 13px; }
   .ma-asset-filter .mobile-filter-bar__search, .ma-library-filters .ma-library-search { flex-basis: 100%; }
   .ma-asset-filter .mobile-filter-bar__controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .ma-asset-filter .mobile-filter-bar__controls > :only-child { grid-column: 1 / -1; }
   .ma-asset-filter .mobile-filter-bar__controls [role="combobox"] { width: 100%; min-width: 0; }
   .ma-library-filters > :is([role="combobox"], button) { flex: 1 1 124px; min-width: 0; }
   .ma-asset-filter .mobile-filter-bar__input, .ma-asset-filter .mobile-filter-bar__controls [role="combobox"], .ma-library-filters :is(input, [role="combobox"]) { height: 44px; }
@@ -186,4 +188,9 @@
   .ma-asset-meta span { display: none; }
   .ma-asset-actions > button { min-height: 44px; }
   .ma-asset-name > button { min-height: 44px; }
+}
+
+@container (min-width: 330px) and (max-width: 695px) {
+  .ma-asset-filter:has(.mobile-filter-bar__controls > :only-child) .mobile-filter-bar__search { flex-basis: 0; }
+  .ma-asset-filter .mobile-filter-bar__controls:has(> :only-child) { width: 112px; }
 }
