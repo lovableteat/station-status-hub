@@ -353,7 +353,7 @@ const PageMap = memo(function PageMap({ codes, currentPage, rangeStart, rangeEnd
       const pageNumber = start + index + 1, status = statusOfCode(code.toLowerCase());
       const selected = pageNumber >= rangeStart && pageNumber <= rangeEnd;
       const power = code !== code.toLowerCase();
-      return <button key={pageNumber} type="button" data-map-page={pageNumber} data-status={status} data-current={pageNumber === currentPage} aria-pressed={selected} tabIndex={pageNumber === (anchor > start && anchor <= end ? anchor : start + 1) ? 0 : -1}
+      return <button key={pageNumber} type="button" data-map-page={pageNumber} data-status={status} data-power={power || undefined} data-current={pageNumber === currentPage} aria-pressed={selected} tabIndex={pageNumber === (anchor > start && anchor <= end ? anchor : start + 1) ? 0 : -1}
         aria-label={`第 ${pageNumber} 頁，${BOM_PAGE_STATUS_LABELS[status]}${pageNumber === currentPage ? "，目前頁" : ""}${power ? "，POWER" : ""}`} title={`第 ${pageNumber} 頁 · ${BOM_PAGE_STATUS_LABELS[status]}${power ? " · POWER" : ""}`}
         onClick={(event: MouseEvent) => onPick(pageNumber, event.shiftKey)}>{pageNumber}{power && <Zap className="bom-tracker-map-power" aria-hidden="true" />}</button>;
     })}

@@ -37,6 +37,7 @@ All colors MUST be HSL for proper theming support.
     --platform-amber: 43 96% 56%;
     --platform-violet: 255 76% 72%;
     --platform-rose: 351 95% 71%;
+    --bom-tracker-power-color: 270 63% 76%;
 
     /* Status colors for testing system */
     --success: 142 71% 45%;

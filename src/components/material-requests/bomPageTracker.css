@@ -38,7 +38,7 @@
 .bom-tracker-map > header li[data-status="done"]::before { border-color: hsl(var(--success)); background: hsl(var(--success) / .55); }
 .bom-tracker-map > header li[data-status="pending"]::before { border-color: hsl(var(--info)); background: hsl(var(--info) / .4); }
 .bom-tracker-map > header li[data-status="done_missing"]::before { border-color: hsl(var(--warning)); background: hsl(var(--warning) / .6); }
-.bom-tracker-map > header .bom-tracker-power-legend { display: inline-flex; align-items: center; gap: 3px; color: hsl(var(--platform-violet)); }
+.bom-tracker-map > header .bom-tracker-power-legend { display: inline-flex; align-items: center; gap: 3px; color: hsl(var(--bom-tracker-power-color)); }
 .bom-tracker-map > header .bom-tracker-power-legend::before { content: none; }
 .bom-tracker-power-legend > svg { width: 12px; height: 12px; }
 .bom-tracker-map-window { display: contents; }
@@ -50,11 +50,13 @@
 .bom-tracker-map-navigation select { min-width: 136px; height: 28px; border: 1px solid hsl(var(--border)); border-radius: 6px; padding-inline: 8px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); font-size: 13px; }
 .bom-tracker-map-grid { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 3px; max-height: 108px; overflow-y: auto; overscroll-behavior: contain; padding: 3px; }
 .bom-tracker-map-grid > button { position: relative; height: 24px; border: 1px solid hsl(var(--bom-status-color) / .3); border-radius: 4px; padding: 0; background: hsl(var(--bom-status-color) / .08); color: hsl(var(--bom-status-color)); font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1; }
-.bom-tracker-map-power { position: absolute; top: 1px; right: 1px; width: 9px; height: 9px; color: hsl(var(--platform-violet)); }
+.bom-tracker-map-power { position: absolute; top: 1px; right: 1px; width: 9px; height: 9px; }
 .bom-tracker-map-grid > button:hover { border-color: hsl(var(--foreground) / .5); color: hsl(var(--foreground)); }
 .bom-tracker-map-grid > button[data-status="done"] { border-color: hsl(var(--success) / .5); background: hsl(var(--success) / .2); color: hsl(var(--success)); }
 .bom-tracker-map-grid > button[data-status="done_missing"] { border-color: hsl(var(--warning) / .55); background: hsl(var(--warning) / .22); color: hsl(var(--warning)); }
 .bom-tracker-map-grid > button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px hsl(var(--foreground) / .75); color: hsl(var(--foreground)); }
+.bom-tracker-map-grid > button[data-power] { border-color: hsl(var(--bom-tracker-power-color) / .6); border-bottom: 2px solid hsl(var(--bom-status-color)); background: hsl(var(--bom-tracker-power-color) / .18); color: hsl(var(--bom-tracker-power-color)); }
+.bom-tracker-map-grid > button[data-power]:hover { background: hsl(var(--bom-tracker-power-color) / .26); }
 .bom-tracker-map-grid > button[data-current="true"] { outline: 2px solid hsl(var(--primary)); outline-offset: 1px; font-weight: 700; }
 .bom-tracker-map-grid > button:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 1px; }
 .bom-tracker-batch { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 6px; padding-inline: 2px; color: hsl(var(--muted-foreground)); font-size: 13px; }
@@ -96,7 +98,7 @@
 .bom-tracker-power-mark { height: 30px; margin-left: auto; padding-inline: 6px; font-size: 11px; }
 .bom-tracker-power-mark:disabled { cursor: default; }
 :is(.bom-tracker-power-filter, .bom-tracker-power-mark):hover:not(:disabled) { background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
-:is(.bom-tracker-power-filter, .bom-tracker-power-mark)[aria-pressed="true"] { border-color: hsl(var(--platform-violet) / .55); background: hsl(var(--platform-violet) / .14); color: hsl(var(--platform-violet)); }
+:is(.bom-tracker-power-filter, .bom-tracker-power-mark)[aria-pressed="true"] { border-color: hsl(var(--bom-tracker-power-color) / .55); background: hsl(var(--bom-tracker-power-color) / .14); color: hsl(var(--bom-tracker-power-color)); }
 :is(.bom-tracker-power-filter, .bom-tracker-power-mark):focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 1px; }
 .bom-tracker-count { margin-left: auto; color: hsl(var(--primary)); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bom-tracker-chips { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 6px; }
