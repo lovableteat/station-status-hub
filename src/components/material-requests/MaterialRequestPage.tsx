@@ -818,31 +818,31 @@ function loadSavedChanges(): SavedMaterialChanges {
   }
 }
 
-function createDefaultBomWorkspace(sourcePayload?: MaterialWorkbookPayload): BomWorkspace {
-  const payload = sourcePayload ?? {
-    sourceFile: "申請carrier料.xlsx",
+function createDefaultBomWorkspace(): BomWorkspace {
+  // The former bundled BOM was real business data. An empty directory must not
+  // import it or persist a replacement over shared work. Keep legacy local
+  // additions/edits recoverable in the UI without changing their stored copy.
+  const savedChanges = loadSavedChanges();
+  const records = [...new Map([
+    ...savedChanges.added,
+    ...Object.values(savedChanges.updated),
+  ].filter((record) => record && typeof record === "object" && typeof record.id === "string" && record.id)
+    .map((record) => [record.id, record])).values()];
+  const payload: MaterialWorkbookPayload = {
+    sourceFile: records.length > 0 ? "本機保留的 BOM 修改" : "尚未匯入 BOM",
     sheetName: "",
     generatedAt: new Date(0).toISOString(),
-    recordCount: 0,
-    records: [],
+    recordCount: records.length,
+    records,
   };
-  const savedChanges = loadSavedChanges();
-  const records = payload.records
-    .map((record) => savedChanges.updated[record.id] ?? record)
-    .concat(savedChanges.added);
 
   return {
     id: DEFAULT_BOM_ID,
     name: payload.sourceFile,
-    payload: { ...payload, recordCount: records.length, records },
+    payload,
     tableColorTheme: DEFAULT_BOM_TABLE_COLOR_THEME,
     updatedAt: payload.generatedAt,
   };
-}
-
-async function loadDefaultBomWorkspace() {
-  const module = await import("@/data/materialRequestSeed.json");
-  return createDefaultBomWorkspace(module.default as MaterialWorkbookPayload);
 }
 
 function createBomId(fileName: string) {
@@ -3773,20 +3773,11 @@ export function MaterialRequestPage() {
   const applyLoadedWorkspaces = useCallback((storedWorkspaces: BomWorkspace[], preferredBomId?: string) => {
     if (user?.userId !== bomAccountRef.current.accountId) return;
     if (storedWorkspaces.length === 0) {
-      const loadingWorkspace = createDefaultBomWorkspace();
-      setBomWorkspaces([loadingWorkspace]);
-      setActiveBomId(loadingWorkspace.id);
-      const generation = bomAccountRef.current.generation;
-      let writeScope;
-      try {writeScope = captureBomWrite();} catch { /* View-only accounts may read the local default. */ }
-      void loadDefaultBomWorkspace().then((fallbackWorkspace) => {
-        if (generation !== bomAccountRef.current.generation) return;
-        setBomWorkspaces((current) => current.length === 1 && current[0].id === loadingWorkspace.id
-          ? [fallbackWorkspace]
-          : current);
-        const approvedScope = writeScope;
-        if (approvedScope && isBomWriteCurrent(approvedScope)) return saveBomWorkspace(fallbackWorkspace, () => assertBomWriteCurrent(approvedScope));
-      }).catch(() => undefined);
+      const placeholderWorkspace = createDefaultBomWorkspace();
+      setBomWorkspaces([placeholderWorkspace]);
+      setActiveBomId(placeholderWorkspace.id);
+      // Loading an empty directory is read-only, even for editors. A failed
+      // request never reaches this branch; existing/cached BOMs stay intact.
       return;
     }
 
@@ -3807,7 +3798,7 @@ export function MaterialRequestPage() {
         ? candidateBomId
         : storedWorkspaces[0].id;
     });
-  }, [assertBomWriteCurrent, captureBomWrite, isBomWriteCurrent, user?.userId]);
+  }, [user?.userId]);
 
   const reloadBomWorkspaces = useCallback(async (
     preferredBomId?: string,
@@ -5373,9 +5364,7 @@ export function MaterialRequestPage() {
     if (targetWorkspaces.length === 0) return;
 
     const remaining = bomWorkspaces.filter((workspace) => !targetIds.includes(workspace.id));
-    const fallbackWorkspace = remaining.length > 0
-      ? createDefaultBomWorkspace()
-      : await loadDefaultBomWorkspace();
+    const fallbackWorkspace = createDefaultBomWorkspace();
     const nextWorkspaces = remaining.length > 0 ? remaining : [fallbackWorkspace];
     if (!isBomWriteCurrent(writeScope)) return;
 
@@ -5400,15 +5389,11 @@ export function MaterialRequestPage() {
           },
         });
       }
-      if (remaining.length === 0) {
-        await saveBomWorkspace(fallbackWorkspace, () => assertBomWriteCurrent(writeScope));
-        if (!isBomWriteCurrent(writeScope)) return;
-      }
       await reloadBomWorkspaces(nextWorkspaces[0].id);
       if (!isBomWriteCurrent(writeScope)) return;
       toast({
         title: targetWorkspaces.length > 1 ? `已刪除 ${targetWorkspaces.length} 個 BOM 版本` : "BOM 版本已刪除",
-        description: remaining.length === 0 ? "已自動建立新的預設備援 BOM。" : `剩餘 ${remaining.length} 個 BOM 版本。`,
+        description: remaining.length === 0 ? "目前沒有共享 BOM，可匯入新檔。本機保留資料不會自動上傳。" : `剩餘 ${remaining.length} 個 BOM 版本。`,
       });
     } catch {
       if (!isBomWriteCurrent(writeScope)) return;

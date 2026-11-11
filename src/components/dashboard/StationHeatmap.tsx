@@ -44,7 +44,7 @@ export function StationHeatmap({ onStationClick }: StationHeatmapProps) {
     .sort((a, b) => a.station_order - b.station_order);
 
 // 計算每個站點的狀態
-  const calculateStationStatus = (station: any) => {
+  const calculateStationStatus = (station: (typeof stations)[number]) => {
     const stationItems = testItems.filter(item => item.station_id === station.id);
     
     if (stationItems.length === 0) {

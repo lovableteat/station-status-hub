@@ -35,7 +35,8 @@ test("the embedded production board consumes the tracker data and filters", () =
   assert.match(monitor, /embedded \? "space-y-2" : "maintenance-page space-y-3"/);
 });
 
-test("the sidebar has one L10 entry and no separate production monitor entry", () => {
-  assert.equal((sidebar.match(/label: "L10 測試追蹤"/g) ?? []).length, 1);
+test("the sidebar keeps one legacy test entry and no separate production monitor entry", () => {
+  assert.equal((sidebar.match(/id: "test-tracker"/g) ?? []).length, 1);
+  assert.match(sidebar, /id: "test-tracker", label: "舊測試紀錄"/);
   assert.doesNotMatch(sidebar, /label: "生產監控牆"/);
 });

@@ -45,7 +45,7 @@ interface ProgressEditDialogProps {
     started_at?: string;
     completed_at?: string;
   };
-  setEditValues: (values: any) => void;
+  setEditValues: (values: ProgressEditDialogProps["editValues"]) => void;
   getProgressForSystemItem: (systemId: string, stationId: string, itemId: string) => TestProgress | undefined;
   handleEditProgress: (systemId: string, stationId: string, itemId: string) => void;
   handleSaveProgress: (systemId: string, stationId: string, itemId: string) => void;

@@ -1,0 +1,32 @@
+{
+  "sourceFile": "QA_BOM.xlsx",
+  "sheetName": "QA",
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "recordCount": 1,
+  "records": [
+    {
+      "id": "qa-material-template",
+      "sourceGroupKey": "qa-group",
+      "sourceRow": 1,
+      "isGroupStart": true,
+      "sectionName": "QA Components",
+      "assemblyName": "QA Circuit",
+      "level": 2,
+      "name": "QA RES 10K 0402",
+      "qty": 1,
+      "refDes": "R1",
+      "manufacturerPartNumber": "QA-MPN-10K",
+      "manufacturerPartNumberAlt": "",
+      "manufacturer": "Example Vendor",
+      "sourcingStatus": "Approved",
+      "refGroup": "R1",
+      "lv": "",
+      "remark": "",
+      "partNumber": "QA-PART-10K",
+      "partName": "QA Resistor",
+      "partSpec": "10K 1% 0402",
+      "schematicPart": "QA_RESISTOR",
+      "pcbFootprint": "QA_0402"
+    }
+  ]
+}

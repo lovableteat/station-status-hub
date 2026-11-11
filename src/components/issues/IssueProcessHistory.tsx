@@ -1,3 +1,4 @@
+import { PrivateAttachmentHtml } from "@/components/attachments/PrivateAttachmentHtml";
 import DOMPurify from "dompurify";
 import { Activity, Clock3 } from "lucide-react";
 
@@ -93,9 +94,9 @@ export function IssueProcessHistory({
         </div>
 
         {hasNotes ? (
-          <div
+          <PrivateAttachmentHtml
             className="prose prose-invert mt-3 max-w-none text-sm leading-6 text-[#e6f4f8] prose-a:text-cyan-200 prose-strong:text-white"
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(processNotes || "") }}
+            html={DOMPurify.sanitize(processNotes || "")}
           />
         ) : (
           <div className="mt-3 rounded-lg border border-dashed border-amber-200/25 bg-[#0b1b2d]/70 px-4 py-3">

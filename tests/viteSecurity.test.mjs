@@ -29,18 +29,18 @@ test("pins the supported patched Vite and Rollup graph with integrity", async ()
       readJson(installedManifest("lovable-tagger")),
     ]);
 
-  assert.equal(manifest.devDependencies.vite, "6.4.3");
+  assert.equal(manifest.devDependencies.vite, "6.4.6");
   assert.equal(manifest.devDependencies["@vitejs/plugin-react-swc"], "3.7.2");
   assert.equal(manifest.devDependencies["lovable-tagger"], "1.1.10");
   assert.equal(manifest.devDependencies.picomatch, "4.0.7");
   assert.equal(manifest.overrides?.rollup, "4.59.0");
-  assert.equal(lockfile.packages[""].devDependencies.vite, "6.4.3");
+  assert.equal(lockfile.packages[""].devDependencies.vite, "6.4.6");
   assert.equal(lockfile.packages[""].devDependencies["@vitejs/plugin-react-swc"], "3.7.2");
   assert.equal(lockfile.packages[""].devDependencies["lovable-tagger"], "1.1.10");
   assert.equal(lockfile.packages[""].devDependencies.picomatch, "4.0.7");
   assert.deepEqual(
     [vitePackage.version, rollupPackage.version, reactSwcPackage.version, taggerPackage.version],
-    ["6.4.3", "4.59.0", "3.7.2", "1.1.10"],
+    ["6.4.6", "4.59.0", "3.7.2", "1.1.10"],
   );
 
   for (const packageName of [

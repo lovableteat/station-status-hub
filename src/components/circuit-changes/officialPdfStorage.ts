@@ -1,16 +1,19 @@
+import type { AdditiveClient, AdditiveQuery } from "./storage";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizeCircuitPdfRegistry, type CircuitPdfDocument } from "./circuitPdf";
 
 export interface CircuitPdfOfficial { documentId: string; at: string; by: string; byName: string; revision: number; document: CircuitPdfDocument }
 // These additive tables are deployed before refreshing generated database types.
-const db = supabase as any;
+type OfficialRow = { document_id: string; document: unknown; updated_at: string; updated_by: string; updated_by_name: string; revision: number };
+type OfficialHistoryRow = { document_id: string; document: unknown; revision: number; created_at: string; actor_name: string | null };
+const db = supabase as unknown as AdditiveClient<{ circuit_pdf_official: OfficialRow; circuit_pdf_official_history: OfficialHistoryRow }, { circuit_pdf_set_official: OfficialRow }>;
 
-async function request(query: any) {
+async function request<Row, Result>(query: AdditiveQuery<Row, Result>) {
   const { data, error, status } = await query.abortSignal(AbortSignal.timeout(20_000));
   if (error) throw new Error(status === 409 || error.code === "PT409" ? "官方版本已由其他人更新，請重新載入後核對。" : error.message || "官方版本尚未儲存，請重試。");
   return data;
 }
-function official(row: any): CircuitPdfOfficial | null {
+function official(row: OfficialRow): CircuitPdfOfficial | null {
   if (!row) return null;
   const document = normalizeCircuitPdfRegistry({ version: 1, documents: [row.document], pages: {}, positions: {} }).documents[0];
   if (!document || document.id !== row.document_id || document.localOnly) throw new Error("官方版本原檔資訊不完整，請重新載入。");

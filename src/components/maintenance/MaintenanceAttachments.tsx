@@ -1,3 +1,5 @@
+import { PrivateAttachmentImage } from '@/components/attachments/PrivateAttachmentImage';
+import { downloadPrivateAttachment } from '@/lib/privateAttachments';
 import { useEffect, useRef, useState } from 'react';
 import { ImagePlus, Paperclip, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -62,10 +64,14 @@ export function FilePicker({ state, disabled }: { state: FaultFiles; disabled?: 
 
 export function AttachmentGallery({ attachments }: { attachments: FaultAttachment[] }) {
   const [preview, setPreview] = useState<FaultAttachment | null>(null);
-  const url = (file: FaultAttachment) => supabase.storage.from('issue-attachments').getPublicUrl(file.file_path).data.publicUrl;
+  const [downloadError, setDownloadError] = useState('');
+  const download = (file: FaultAttachment) => {
+    setDownloadError('');
+    void downloadPrivateAttachment('issue-attachments', file.file_path, file.file_name).catch(() => setDownloadError('附件下載失敗，請確認登入與存取權限。'));
+  };
   return <><div className="mf-attachment-grid">{attachments.map(file => <div key={file.id}>
-    {file.file_type?.startsWith('image/') ? <button type="button" className="mf-image" onClick={() => setPreview(file)} aria-label={`放大 ${file.file_name}`}><img src={url(file)} loading="lazy" alt={file.file_name}/></button> : <Paperclip size={22}/>}
-    <a href={`${url(file)}?download=${encodeURIComponent(file.file_name)}`} download={file.file_name} target="_blank" rel="noreferrer" title={file.file_name}>下載 {file.file_name}</a>
-  </div>)}</div>
-  <Dialog open={!!preview} onOpenChange={open => { if (!open) setPreview(null); }}><DialogContent className="mf-image-dialog"><DialogTitle>{preview?.file_name}</DialogTitle>{preview && <img src={url(preview)} alt={preview.file_name}/>}</DialogContent></Dialog></>;
+    {file.file_type?.startsWith('image/') ? <button type="button" className="mf-image" onClick={() => setPreview(file)} aria-label={`放大 ${file.file_name}`}><PrivateAttachmentImage path={file.file_path} loading="lazy" alt={file.file_name}/></button> : <Paperclip size={22}/>}
+    <button type="button" className="mf-attachment-download" onClick={() => download(file)} title={file.file_name}>下載 {file.file_name}</button>
+  </div>)}</div>{downloadError && <p role="alert" className="mf-error">{downloadError}</p>}
+  <Dialog open={!!preview} onOpenChange={open => { if (!open) setPreview(null); }}><DialogContent className="mf-image-dialog"><DialogTitle>{preview?.file_name}</DialogTitle>{preview && <PrivateAttachmentImage path={preview.file_path} alt={preview.file_name}/>}</DialogContent></Dialog></>;
 }

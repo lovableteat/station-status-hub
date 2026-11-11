@@ -1,4 +1,4 @@
-import seed from '../../src/data/materialRequestSeed.json';
+import seed from '../fixtures/materialWorkbook.synthetic.json';
 import { useSyncExternalStore } from 'react';
 import { supplierSearchContacts } from './supplierSearchCases.js';
 import { supabase as baseSupabase } from './vendorMailMock';
@@ -103,6 +103,10 @@ const legacyWorkspace = {
 };
 const store = new Map([[workspace.id, workspace], [previousWorkspace.id, previousWorkspace], [legacyWorkspace.id, legacyWorkspace]]);
 const fullRecords = new Map([[workspace.id, records], [previousWorkspace.id, previousRecords], [legacyWorkspace.id, previousRecords.slice(0, 3)]]);
+const safetyMode = new URLSearchParams(window.location.search).get('qaBomSafety');
+if (safetyMode === 'empty') { store.clear(); fullRecords.clear(); }
+if (safetyMode) window.__qaBomSafety = { reads: 0, writes: [] };
+
 const snapshot = (preferredId) => [...store.values()].map(item => structuredClone({ ...item, payload: { ...item.payload, records: item.id === (preferredId ?? workspace.id) ? (fullRecords.get(item.id) ?? []) : [] }, isLoaded: item.id === (preferredId ?? workspace.id) }));
 const liveRecords = new URLSearchParams(window.location.search).has('qaLiveRecords');
 if (liveRecords) for (const item of store.values()) item.recordMeta = Object.fromEntries((fullRecords.get(item.id) ?? []).map(record => [record.id, { updatedAt: '2026-11-01T00:00:00.000Z' }]));
@@ -154,8 +158,10 @@ if (liveRecords) window.__qaLiveRecords = {
 };
 
 export class BomRecordConflictError extends Error {}
-export const loadCachedBomWorkspacesDetailed = async () => null;
+export const loadCachedBomWorkspacesDetailed = async () => safetyMode === 'read-error' ? { mode: 'remote', workspaces: snapshot(workspace.id) } : null;
 export const loadBomWorkspacesDetailed = async (preferredId, options = {}) => {
+  if (safetyMode) window.__qaBomSafety.reads += 1;
+  if (safetyMode === 'read-error') throw new Error('QA simulated read failure');
   if (liveRecords) window.__qaLiveRecords.loads += 1;
   const result = { mode: 'remote', workspaces: snapshot(store.has(preferredId) ? preferredId : undefined) };
   options.onPreview?.(result);
@@ -188,7 +194,7 @@ export const subscribeBomWorkspaceChanges = (listener, onStatusChange) => {
   queueMicrotask(() => { if (active) onStatusChange?.('SUBSCRIBED'); });
   return () => { active = false; workspaceListeners.delete(listener); };
 };
-export const saveBomWorkspace = async (next) => { store.set(next.id, structuredClone({ ...next, payload: { ...next.payload, records: [] } })); fullRecords.set(next.id, structuredClone(next.payload.records)); };
+export const saveBomWorkspace = async (next) => { if (safetyMode) window.__qaBomSafety.writes.push({ method: 'save', id: next.id }); store.set(next.id, structuredClone({ ...next, payload: { ...next.payload, records: [] } })); fullRecords.set(next.id, structuredClone(next.payload.records)); };
 export const saveBomWorkspacePageTracker = async (id, pageTracker) => { const item = store.get(id); if (item) item.pageTracker = pageTracker; };
 export const saveBomWorkspaceArchive = async (id, archive) => { const item = store.get(id); if (item) item.archive = archive ?? undefined; };
 export const saveBomWorkspaceProject = async (id, nextProject) => { const item = store.get(id); if (item) item.project = nextProject ?? undefined; };
@@ -197,7 +203,7 @@ export const saveBomWorkspaceTableColorTheme = async (id, theme) => {
   if (globalThis.__qaFailTableThemeSave) throw new Error('QA simulated save failure');
   const item = store.get(id); if (item) item.tableColorTheme = structuredClone(theme);
 };
-export const removeBomWorkspace = async (id) => { store.delete(id); fullRecords.delete(id); };
+export const removeBomWorkspace = async (id) => { if (safetyMode) window.__qaBomSafety.writes.push({ method: 'delete', id }); store.delete(id); fullRecords.delete(id); };
 export const saveBomWorkspaceRecord = async (target, record) => {
   const list = fullRecords.get(target.id) ?? [];
   const index = list.findIndex(item => item.id === record.id);

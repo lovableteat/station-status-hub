@@ -223,7 +223,7 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
     const savedAllocations = localStorage.getItem(allocationsKey);
     if (savedAllocations) {
       const allocations = JSON.parse(savedAllocations);
-      const filteredAllocations = allocations.filter((allocation: any) => allocation.cabinetId !== cabinet.id);
+      const filteredAllocations = allocations.filter((allocation: { cabinetId: string }) => allocation.cabinetId !== cabinet.id);
       localStorage.setItem(allocationsKey, JSON.stringify(filteredAllocations));
     }
     
@@ -246,7 +246,7 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
     const allocations = savedAllocations ? JSON.parse(savedAllocations) : [];
     
     // 計算該機櫃已分配的機台數量
-    const cabinetAllocations = allocations.filter((allocation: any) => allocation.cabinetId === cabinet.id);
+    const cabinetAllocations = allocations.filter((allocation: { cabinetId: string }) => allocation.cabinetId === cabinet.id);
     const allocatedSystemCount = cabinetAllocations.length;
     
     // 從機櫃配置讀取總組件數量作為滿配標準
@@ -256,7 +256,7 @@ export function CabinetInstanceManager({ currentCabinetId, onCabinetSelect }: Ca
     
     // 計算總組件數量（組裝清單中的總配置數量）
     const totalComponents = config ? 
-      Object.values(config).reduce((sum: number, comp: any) => sum + (comp.count || 0), 0) : 
+      Object.values(config).reduce((sum: number, comp: { count?: number }) => sum + (comp.count || 0), 0) :
       cabinet.totalComponents;
     
     // 確保totalComponents是有效數字，避免除零錯誤

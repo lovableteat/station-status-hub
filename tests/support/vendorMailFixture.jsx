@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MaterialRecordDialog, PendingMailDialog, PendingMaterialsDialog, VirtualAlternativeValue } from '../../src/components/material-requests/MaterialRequestPage';
 import { buildMaterialDataset } from '../../src/components/material-requests/materialRequestUtils';
-import seed from '../../src/data/materialRequestSeed.json';
+import seed from '../fixtures/materialWorkbook.synthetic.json';
 import { Button } from '../../src/components/ui/button';
 import { Toaster } from '../../src/components/ui/toaster';
 import { SupplierDirectoryDialog } from '../../src/components/material-requests/SupplierDirectoryDialog';

@@ -5,6 +5,8 @@ import { FileText, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { TestSystem, TestStation, TestItem, TestProgress } from "./SystemStatusCalculator";
 
+type ReportSystem = TestSystem & { os_mac_address?: string; bmc_address?: string; ubuntu_version?: string; cuda_version?: string };
+
 interface TestItemStatusReportProps {
   systems: TestSystem[];
   stations: TestStation[];
@@ -68,7 +70,7 @@ export function TestItemStatusReport({
       setIsExporting(true);
       
       // 準備報表數據
-      const reportData: any[] = [];
+      const reportData: (Record<string, string | number> & { status: string })[] = [];
       
       systems.forEach(system => {
         stations.forEach(station => {
@@ -82,8 +84,8 @@ export function TestItemStatusReport({
             reportData.push({
               systemName: system.system_name,
               serialNumber: system.serial_number || '',
-              nicMacAddress: (system as any).os_mac_address || '',
-              bmcAddress: (system as any).bmc_address || '',
+              nicMacAddress: (system as ReportSystem).os_mac_address || '',
+              bmcAddress: (system as ReportSystem).bmc_address || '',
               stationName: station.station_name,
               itemSeq: item.item_order ?? (index + 1),
               itemName: item.item_name,
@@ -94,8 +96,8 @@ export function TestItemStatusReport({
               startedAt: formatTime(itemProgress?.started_at),
               completedAt: formatTime(itemProgress?.completed_at),
               assignedTo: system.assigned_engineer || '',
-              ubuntuVersion: (system as any).ubuntu_version || '',
-              cudaVersion: (system as any).cuda_version || ''
+              ubuntuVersion: (system as ReportSystem).ubuntu_version || '',
+              cudaVersion: (system as ReportSystem).cuda_version || ''
             });
           });
         });
@@ -341,8 +343,8 @@ export function TestItemStatusReport({
                            <tr key={`${system.id}-${station.id}-${item.id}`} className={`hover:bg-muted/40 transition-colors ${rowBg}`}>
                             <td className="border border-border p-2">{system.system_name}</td>
                             <td className="border border-border p-2">{system.serial_number || '-'}</td>
-                            <td className="border border-border p-2 text-xs">{(system as any).os_mac_address || '-'}</td>
-                            <td className="border border-border p-2 text-xs">{(system as any).bmc_address || '-'}</td>
+                            <td className="border border-border p-2 text-xs">{(system as ReportSystem).os_mac_address || '-'}</td>
+                            <td className="border border-border p-2 text-xs">{(system as ReportSystem).bmc_address || '-'}</td>
                             <td className="border border-border p-2">{station.station_name}</td>
                             <td className="border border-border p-2">{item.item_order}</td>
                             <td className="border border-border p-2 text-left">{item.item_name}</td>
@@ -355,8 +357,8 @@ export function TestItemStatusReport({
                             <td className="border border-border p-2">{formatTime(itemProgress?.started_at)}</td>
                             <td className="border border-border p-2">{formatTime(itemProgress?.completed_at)}</td>
                             <td className="border border-border p-2">{system.assigned_engineer || '-'}</td>
-                            <td className="border border-border p-2">{(system as any).ubuntu_version || '-'}</td>
-                            <td className="border border-border p-2">{(system as any).cuda_version || '-'}</td>
+                            <td className="border border-border p-2">{(system as ReportSystem).ubuntu_version || '-'}</td>
+                            <td className="border border-border p-2">{(system as ReportSystem).cuda_version || '-'}</td>
                             <td className="border border-border p-2 text-left align-top">
                               <div className="text-xs whitespace-pre-wrap break-words max-w-[360px] max-h-24 overflow-auto p-1 bg-muted/40 rounded">
                                 {itemProgress?.notes ? (

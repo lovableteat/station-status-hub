@@ -220,7 +220,7 @@ export function IssuePDFExportManager({ issues }: IssuePDFExportManagerProps) {
           try {
             printWindow.focus();
             printWindow.print();
-          } catch {}
+          } catch { /* Printing can be blocked by the browser; leave the preview open. */ }
         };
 
         if (printWindow.document.readyState === 'complete') {

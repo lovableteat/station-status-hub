@@ -31,7 +31,7 @@ export function useNotificationInbox(userId: string | undefined, authenticated: 
     if (!userId || !authenticated) { setNotifications([]); setLoading(false); setError(null); return; }
     if (!loaded.current) setLoading(true);
     try {
-      const { data, error: queryError } = await (supabase as any).from("user_notifications")
+      const { data, error: queryError } = await supabase.from("user_notifications")
         .select("id,title,message,notification_type,is_read,created_at,reference_type,reference_id,action_url,metadata")
         .eq("recipient_id", userId).is("archived_at", null).order("created_at", { ascending: false }).limit(80);
       if (version !== request.current || scope.current !== account) return;

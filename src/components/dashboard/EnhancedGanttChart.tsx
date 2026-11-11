@@ -186,7 +186,7 @@ export function EnhancedGanttChart() {
     }
     
     // Generate markers at regular intervals
-    let currentDate = new Date(start);
+    const currentDate = new Date(start);
     // Start from the beginning of the day
     currentDate.setHours(0, 0, 0, 0);
     

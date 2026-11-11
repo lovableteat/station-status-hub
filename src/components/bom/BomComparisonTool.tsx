@@ -72,7 +72,7 @@ export function BomComparisonTool() {
         const allRows: BomItem[] = [];
         wb.SheetNames.forEach((sheetName, sIdx) => {
           const sheet = wb.Sheets[sheetName];
-          const json: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+          const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
           json.forEach((row, idx) => {
             const keys = Object.keys(row);
             const norm = (s: string) => s.toLowerCase().replace(/\s|_/g, '');

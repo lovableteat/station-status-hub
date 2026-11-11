@@ -88,7 +88,7 @@ export function useGlobalSystemAllocation() {
   };
 
   // 過濾可用系統（排除已分配到其他機櫃的系統）
-  const getAvailableSystems = (systems: any[], currentCabinetId: string) => {
+  const getAvailableSystems = <T extends { id: string }>(systems: T[], currentCabinetId: string) => {
     return systems.filter(system => {
       const allocation = getSystemAllocation(system.id);
       return !allocation || allocation.cabinetId === currentCabinetId;
