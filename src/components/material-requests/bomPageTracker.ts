@@ -1,5 +1,5 @@
 /**
- * 頁數進度: one shared document per BOM (total pages, the page work has reached, and a status, title and note per page).
+ * 頁數進度: one shared document per BOM (total pages, the page work has reached, and a status, title, note and POWER marker per page).
  * Pure helpers shared by the material page, the page progress dialog and tests.
  */
 import type { BomPageTracker, BomPageTrackerPage, BomPageTrackerStatus } from "./materialBomStorage";
@@ -30,6 +30,7 @@ export function syncBomTrackerPages(pages: BomPageTrackerPage[], totalPages: num
       status: page.status ?? (page.completed === true ? "done" : "pending"),
       note: page.note ?? "",
       ...(typeof page.title === "string" ? { title: page.title } : {}),
+      ...(page.power === true ? { power: true } : {}),
     });
   });
 
@@ -89,8 +90,11 @@ export function draftFromBomPageTracker(pageTracker?: BomPageTracker): BomPageTr
   return { totalPages: summary.totalPages, currentPage: summary.currentPage, pages: syncBomTrackerPages(pageTracker?.pages ?? [], summary.totalPages) };
 }
 
-const samePage = (left?: BomPageTrackerPage, right?: BomPageTrackerPage) =>
+const samePageProgress = (left?: BomPageTrackerPage, right?: BomPageTrackerPage) =>
   (left?.status ?? "pending") === (right?.status ?? "pending") && (left?.note ?? "") === (right?.note ?? "") && (left?.title ?? "") === (right?.title ?? "");
+const isPowerPage = (page?: BomPageTrackerPage) => page?.power === true;
+const samePage = (left?: BomPageTrackerPage, right?: BomPageTrackerPage) =>
+  samePageProgress(left, right) && isPowerPage(left) === isPowerPage(right);
 const byNumber = (pages: BomPageTrackerPage[]) => new Map(pages.map((page) => [page.pageNumber, page]));
 
 /** What differs from the document the draft started from: the number of pages, and whether the total or current page moved. */
@@ -103,26 +107,37 @@ export function countBomPageTrackerChanges(baseline: BomPageTrackerDraft, draft:
 
 /**
  * The document is stored whole, so saving a copy that was opened earlier would undo what a colleague saved meanwhile.
- * This rebases the draft instead: every page and setting the user changed since `baseline` keeps the user's value,
- * everything else follows `latest`.
+ * The draft's edited page progress and settings take precedence. The POWER marker merges independently so a
+ * marker change can be saved alongside someone else's status, title or note change on the same page.
  */
 export function mergeBomPageTracker(baseline: BomPageTrackerDraft, draft: BomPageTrackerDraft, latest: BomPageTrackerDraft): BomPageTrackerDraft {
   const before = byNumber(baseline.pages), mine = byNumber(draft.pages), theirs = byNumber(latest.pages);
   const totalPages = draft.totalPages !== baseline.totalPages ? draft.totalPages : latest.totalPages;
   const pages: BomPageTrackerPage[] = [];
   for (const pageNumber of new Set([...before.keys(), ...mine.keys(), ...theirs.keys()])) {
-    const edited = !samePage(before.get(pageNumber), mine.get(pageNumber));
-    const page = edited ? mine.get(pageNumber) : theirs.get(pageNumber) ?? (theirs.size ? undefined : mine.get(pageNumber));
-    if (page) pages.push(page);
+    const original = before.get(pageNumber), edited = mine.get(pageNumber);
+    const stored = theirs.get(pageNumber) ?? (theirs.size ? undefined : edited);
+    const page = samePageProgress(original, edited) ? stored : edited;
+    const power = isPowerPage(original) === isPowerPage(edited) ? isPowerPage(stored) : isPowerPage(edited);
+    if (!page && !power) continue;
+    if (page && isPowerPage(page) === power) {
+      pages.push(page);
+    } else {
+      const merged = { ...(page ?? blankPage(pageNumber)) };
+      if (power) merged.power = true;
+      else delete merged.power;
+      pages.push(merged);
+    }
   }
   const currentPage = draft.currentPage !== baseline.currentPage ? draft.currentPage : latest.currentPage;
   return { totalPages, currentPage: totalPages > 0 ? Math.min(totalPages, currentPage) : 0, pages: extendBomTrackerPages(pages.sort((left, right) => left.pageNumber - right.pageNumber), totalPages) };
 }
 
-/** Pages inside the total that match the status and the search text (page number, title or note). */
-export function filterBomTrackerPages(pages: BomPageTrackerPage[], totalPages: number, filters: { query: string; status: BomPageStatusFilter }) {
+/** Pages inside the total that match the status, POWER filter and search text. */
+export function filterBomTrackerPages(pages: BomPageTrackerPage[], totalPages: number, filters: { query: string; status: BomPageStatusFilter; powerOnly?: boolean }) {
   const needle = filters.query.trim().toLocaleLowerCase();
   return pages.filter((page) => page.pageNumber <= totalPages
     && (filters.status === "all" || page.status === filters.status)
+    && (!filters.powerOnly || isPowerPage(page))
     && (!needle || `${page.pageNumber} 第${page.pageNumber}頁 第 ${page.pageNumber} 頁 ${page.title ?? ""} ${page.note}`.toLocaleLowerCase().includes(needle)));
 }
