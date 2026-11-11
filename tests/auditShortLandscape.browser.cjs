@@ -63,6 +63,15 @@ async function noHorizontalOverflow(page, phase) {
   assert.ok(widths.document <= widths.viewport, `${phase}: page-level horizontal overflow: ${JSON.stringify(widths)}`);
 }
 
+async function compactDocumentScroller(page, phase) {
+  const state = await page.evaluate(() => {
+    const bodyStyle = getComputedStyle(document.body);
+    return { overflowX: bodyStyle.overflowX, overflowY: bodyStyle.overflowY, documentIsScroller: document.scrollingElement === document.documentElement, scrollLock: document.body.getAttribute('data-scroll-locked') };
+  });
+  assert.deepEqual(state, { overflowX: 'clip', overflowY: 'visible', documentIsScroller: true, scrollLock: null }, `${phase}: compact maintenance must not create a hidden body scroller`);
+  return state;
+}
+
 async function scrollDiagnostics(page, point) {
   return page.evaluate(point => {
     const describe = element => {
@@ -201,6 +210,7 @@ async function checkViewport(width, height) {
     assert.deepEqual(await nav.getByRole('button').allTextContents().then(texts => texts.map(text => text.trim())), modules.map(module => module.label));
     assert.equal(await nav.locator('[aria-current="page"]').count(), 1);
     if (width < 1024) {
+      result.bodyBeforeReport = await compactDocumentScroller(page, 'Before report');
       assert.equal(await page.locator('[data-mobile-maintenance-nav]').count(), 1);
       assert.equal(await page.locator('.maintenance-sidebar').count(), 0);
       result.position = await nav.evaluate(element => getComputedStyle(element).position);
@@ -227,6 +237,8 @@ async function checkViewport(width, height) {
     for (const dismissal of ['close', 'cancel', 'escape']) await checkDialog(page, trigger, result, dismissal);
 
     if (width < 1024) {
+      result.bodyAfterReport = await compactDocumentScroller(page, 'After all report dismissals');
+      result.checks.push('compact-body-keeps-document-scroller');
       const before = await page.evaluate(() => scrollY);
       await swipe(page, 120);
       assert.ok(await page.evaluate(() => scrollY) > before, 'Closing the report must restore page touch scrolling');
