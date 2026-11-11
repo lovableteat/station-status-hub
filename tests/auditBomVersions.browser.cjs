@@ -122,7 +122,9 @@ function startHarness() {
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
     const small = await phone.newPage();
     await small.goto(`http://127.0.0.1:${PORT}/`);
-    await small.getByRole('button', { name: /BOM$/ }).click();
+    await small.getByRole('button', { name: '排序與工具', exact: true }).click();
+    await small.getByTestId('material-mobile-tools').getByRole('button', { name: /^BOM 管理/ }).click();
+    await small.getByTestId('bom-version-center').waitFor();
     await small.getByTestId('bom-series-list').waitFor();
     await small.getByTestId('bom-series-list').getByRole('button', { name: /QA 主板/ }).first().click();
     await small.getByTestId('bom-series-detail').waitFor();
@@ -131,6 +133,7 @@ function startHarness() {
     assert.ok(widths.document <= widths.viewport, `no page overflow on a phone (${JSON.stringify(widths)})`);
     assert.ok(widths.center <= widths.centerClient, `the version center scrolls only inside its table (${JSON.stringify(widths)})`);
     for (const label of ['上傳新版本', '比對版本', '封存系列', '刪除系列']) assert.ok(await small.getByRole('button', { name: label }).isVisible(), `${label} reachable on a phone`);
+    if (process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH) await small.screenshot({ path: process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH, fullPage: true });
     await phone.close();
     console.log('BOM version flow: upload, carry-over, compare, export, switch and phone layout verified on QA data only');
   } finally {

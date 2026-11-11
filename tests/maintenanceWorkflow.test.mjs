@@ -8,6 +8,15 @@ const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind
 const model = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
 const issue = (id, extra = {}) => ({ id, title: '無法開機', description: '', status: 'open', assigned_to: null, assignee_user_ids: [], asset_identifier: 'GB300-021', system_id: null, category: null, created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-10T00:00:00Z', ...extra });
 
+test('controlled report closure returns focus to its real opener without moving the page', async () => {
+  const report = await readFile(new URL('../src/components/maintenance/MaintenanceReport.tsx', import.meta.url), 'utf8');
+  const workspace = await readFile(new URL('../src/components/maintenance/MaintenanceWorkspace.tsx', import.meta.url), 'utf8');
+  assert.match(report, /onCloseAutoFocus=\{event => \{ event\.preventDefault\(\); onExited\(\); \}\}/);
+  assert.match(workspace, /<Button ref=\{reportTriggerRef\} onClick=\{\(\) => setReport/);
+  assert.match(workspace, /reportTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(workspace, /previous\.session === report\.session && !previous\.open/);
+});
+
 test('old issue statuses and old assignee text remain visible without inventing identities', () => {
   assert.equal(model.getFaultStatus(issue('A')), 'pending');
   assert.equal(model.getFaultStatus(issue('B', { status: 'closed' })), 'resolved');
