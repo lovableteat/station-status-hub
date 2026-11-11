@@ -49,7 +49,7 @@ const evidence = path.resolve(process.env.CIRCUIT_CONTROLS_EVIDENCE_DIR || '../c
         await dialog.getByRole('textbox', { name: '標題', exact: true }).fill('QA 控制色彩 ' + width);
         await page.waitForFunction(() => document.querySelector('.circuit-detail-footer [role="status"]')?.textContent === '已儲存');
         if (width < 1024) await dialog.getByRole('button', { name: '返回問題清單', exact: true }).tap();
-        else { const expand = dialog.getByRole('button', { name: '展開修改清單', exact: true }); if (await expand.isVisible()) await expand.tap(); }
+        else { const expand = dialog.getByRole('button', { name: '展開清單', exact: true }); if (await expand.isVisible()) await expand.tap(); }
         await dialog.getByRole('textbox', { name: '搜尋線路修改', exact: true }).fill('QA 控制');
         await dialog.getByRole('combobox', { name: '篩選修改狀態', exact: true }).selectOption('draft');
         const owner = dialog.getByRole('combobox', { name: '篩選修改負責人', exact: true });
@@ -63,7 +63,7 @@ const evidence = path.resolve(process.env.CIRCUIT_CONTROLS_EVIDENCE_DIR || '../c
         assert.ok(colors.every(color => color.background !== 'rgba(0, 0, 0, 0)' && color.icon !== color.text), JSON.stringify(colors));
         assert.equal(colors[0].icon, colors[1].icon, 'both active filters use the same accent');
         await page.screenshot({ path: path.join(evidence, 'filters-' + width + '.png') });
-        if (width >= 1024) { await dialog.getByRole('button', { name: '收合修改清單', exact: true }).tap(); await dialog.getByRole('button', { name: '展開修改清單', exact: true }).tap(); assert.equal(await owner.inputValue(), ownerValue); }
+        if (width >= 1024) { await dialog.getByRole('button', { name: '收合清單', exact: true }).tap(); await dialog.getByRole('button', { name: '展開清單', exact: true }).tap(); assert.equal(await owner.inputValue(), ownerValue); }
         await dialog.getByRole('button', { name: '移除篩選：狀態：待改善', exact: true }).tap(); assert.equal(await dialog.getByRole('combobox', { name: '篩選修改狀態', exact: true }).inputValue(), 'all');
         await dialog.getByRole('button', { name: '全部清除', exact: true }).tap(); await dialog.getByTestId('circuit-active-filters').waitFor({ state: 'hidden' });
         await dialog.getByRole('button', { name: '新增問題', exact: true }).tap();
@@ -74,16 +74,16 @@ const evidence = path.resolve(process.env.CIRCUIT_CONTROLS_EVIDENCE_DIR || '../c
         const state = await (await fetch(origin + '/__circuit/state')).json(); assert.ok(state.items.some(item => item.content.title === title), 'explicit close flushes the latest input');
         await open();
         await dialog.getByTestId('circuit-change-item').filter({ hasText: title }).tap();
-        await dialog.getByRole('button', { name: '移除問題', exact: true }).tap();
-        const remove = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: '移除這個問題？', exact: true }) });
+        await dialog.getByRole('button', { name: '刪除問題', exact: true }).tap();
+        const remove = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: '刪除這個問題？', exact: true }) });
         assert.ok((await remove.innerText()).includes('已儲存的追蹤紀錄與原圖保留'));
         await page.screenshot({ path: path.join(evidence, 'remove-' + width + '.png') });
-        await remove.getByRole('button', { name: '確認移除', exact: true }).tap(); await remove.waitFor({ state: 'hidden' });
-        await dialog.getByRole('button', { name: /^已移除的問題/ }).tap();
-        const archive = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: '已移除的問題', exact: true }) });
+        await remove.getByRole('button', { name: '確認刪除', exact: true }).tap(); await remove.waitFor({ state: 'hidden' });
+        await dialog.getByRole('button', { name: /^已刪除的問題/ }).tap();
+        const archive = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: '已刪除的問題', exact: true }) });
         await page.screenshot({ path: path.join(evidence, 'restore-' + width + '.png') });
         await archive.getByRole('button', { name: /^還原問題 #/ }).tap();
-        await archive.getByText('沒有已移除的問題', { exact: true }).waitFor();
+        await archive.getByText('沒有已刪除的問題', { exact: true }).waitFor();
         await archive.getByRole('button', { name: '關閉', exact: true }).tap();
         if (width < 1024 && !(await dialog.getByTestId('circuit-change-item').first().isVisible())) await dialog.getByRole('button', { name: '返回問題清單', exact: true }).tap();
         assert.equal(await dialog.getByTestId('circuit-change-item').filter({ hasText: title }).count(), 1);

@@ -20,7 +20,7 @@ export interface CircuitPdfAiReviewProps {
     onSave: (report: CircuitPdfAiReviewReport) => Promise<void>;
   };
 }
-const decisionLabels = { pending: "待確認", confirmed: "已確認", dismissed: "不採用" };
+const decisionLabels = { pending: "未判讀", confirmed: "已確認", dismissed: "不採用" };
 const decisionHints = { pending: "還沒判斷這一項", confirmed: "確認這是新舊版真的不同的地方", dismissed: "AI 看錯了，這一項不採用" };
 const checkLabels = { "possible-issue": "有待核對項目", "no-visible-issue": "未見明顯差異", unverifiable: "證據不足" };
 const priorityLabels = { high: "優先核對", medium: "需要注意", low: "一般提醒" };
@@ -195,7 +195,7 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
       {!result && !analysing && !batchRunning && validPair && <div className="circuit-pdf-ai-empty"><Sparkles aria-hidden="true" /><h3>還沒有比對結果</h3><p>按上方「全部頁面比對」，AI 會逐頁比對官方版本與新版；比完後打開每一項差異，選「已確認」或「不採用」並儲存。每頁都留有模型、時間與操作者，重新比對會另存一筆。</p></div>}
       {result && <section className="circuit-pdf-ai-results" aria-label="本頁 AI 初審結果"><header><h3>工作第 {result.workingPage} 頁 · 官方第 {result.officialPage} 頁初審摘要</h3><p>{result.summary}</p><small>{result.generatedBy} · {new Date(result.createdAt).toLocaleString("zh-TW")} · {result.modelLabel}</small></header>
         <dl className="circuit-pdf-ai-checks">{result.checks.map(item => <div key={item.category} data-state={item.state}><dt>{CIRCUIT_AI_CATEGORY_LABELS[item.category]}<strong>{checkLabels[item.state]}</strong></dt><dd>{item.note}</dd></div>)}</dl>
-        <h3>差異清單 <span>{result.findings.filter(item => item.decision === "pending").length} 項待確認／共 {result.findings.length} 項</span></h3>
+        <h3>差異清單 <span>{result.findings.filter(item => item.decision === "pending").length} 項未判讀／共 {result.findings.length} 項</span></h3>
         {!result.findings.length && <p className="circuit-pdf-ai-message">AI 未列出具體可見疑點，仍需你核對圖面與初審限制後，另行完成正式 Review。</p>}
         {result.findings.map(item => <details key={item.id} className="circuit-pdf-ai-finding"><summary><span data-priority={item.priority}>{priorityLabels[item.priority]}</span><b>{item.id} · {item.title}</b><small>{decisionLabels[item.decision]}</small></summary><div className="circuit-pdf-ai-finding-content"><p><strong>{CIRCUIT_AI_CATEGORY_LABELS[item.category]} · 位置</strong>{item.location}</p><div className="circuit-pdf-ai-evidence"><p><strong>官方版本證據</strong>{item.officialEvidence}</p><p><strong>工作版本證據</strong>{item.workingEvidence}</p></div><p><strong>核對建議</strong>{item.suggestion}</p>{item.category === "connectivity" && <p className="circuit-pdf-ai-message">連接性僅為影像疑點，請以 netlist／ERC 核對後再判斷。</p>}<div className="circuit-pdf-ai-decisions" role="group" aria-label={`${item.id} 人工判讀`}>{(["pending", "confirmed", "dismissed"] as const).map(decision => <button key={decision} type="button" title={decisionHints[decision]} disabled={disabled || busy || Boolean(historyId)} aria-pressed={item.decision === decision} onClick={() => editFinding(item.id, { decision })}>{decisionLabels[decision]}</button>)}</div><label className="circuit-pdf-ai-note">人工核對備註<Textarea aria-label={`${item.id} 人工核對備註`} value={item.reviewNote} maxLength={2000} disabled={disabled || busy || Boolean(historyId)} onChange={event => editFinding(item.id, { reviewNote: event.target.value })} placeholder="例如：已核對原生 netlist，兩個標籤屬同一個 Net。" /></label>{item.reviewedAt && <small>{item.reviewedBy} · {new Date(item.reviewedAt).toLocaleString("zh-TW")}</small>}</div></details>)}
       </section>}

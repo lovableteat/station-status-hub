@@ -159,9 +159,9 @@ async function checkMobileGeometry(page) {
     assert.equal(await transfer('textarea[aria-label="改善說明"]','paste',{text:'R2301 10K -> 4.7K'}),false,'cell text copied from a spreadsheet is pasted as text, not uploaded as a picture');
     assert.equal(await transfer('[data-ui="scrim"]','dragover'),true,'a file dragged beside the dialog must not make the browser open it');
     await a.page.waitForTimeout(600);await imageCount(a.page,14);
-    await a.page.getByRole('button',{name:'移除圖片 dropped-reference.png',exact:true}).click();await imageCount(a.page,13);
-    await a.page.getByRole('button',{name:'復原',exact:true}).click();await imageCount(a.page,14);
-    await a.page.getByRole('button',{name:'移除圖片 dropped-reference.png',exact:true}).click();await imageCount(a.page,13);await saved(a.page);
+    await a.page.getByRole('button',{name:'刪除圖片 dropped-reference.png',exact:true}).click();await imageCount(a.page,13);
+    await a.page.getByRole('button',{name:'還原',exact:true}).click();await imageCount(a.page,14);
+    await a.page.getByRole('button',{name:'刪除圖片 dropped-reference.png',exact:true}).click();await imageCount(a.page,13);await saved(a.page);
     report.checks.push('drop targets the pane under the pointer, spreadsheet text is not hijacked, stray drops are neutralised, image removal can be undone');
     const b=await createPage(browser,origin,'B');sessions.push(b);
     await b.page.getByRole('textbox',{name:'標題',exact:true}).waitFor();
@@ -169,14 +169,14 @@ async function checkMobileGeometry(page) {
     await task(b.page,'改善追蹤');
     const aNav=a.navigations.length,bNav=b.navigations.length;
     await a.page.getByRole('button',{name:'回報改善',exact:true}).click();await status(a.page,'in_review');await status(b.page,'in_review');
-    await b.page.getByRole('textbox',{name:'主管意見或退回原因',exact:true}).fill('請補修改後接法及上拉阻值的依據');
+    await b.page.getByRole('textbox',{name:'留言',exact:true}).fill('請補修改後接法及上拉阻值的依據');
     await b.page.getByRole('button',{name:'退回重改',exact:true}).click();await status(b.page,'needs_changes');await status(a.page,'needs_changes');
     await a.page.getByRole('textbox',{name:'改善說明',exact:true}).fill('已補修改後接法，R2301 4.7K 依最新設計確認');await saved(a.page);await status(a.page,'draft');
     await a.page.getByRole('button',{name:'回報改善',exact:true}).click();await status(b.page,'in_review');
     await b.page.getByRole('button',{name:'確認結案',exact:true}).click();await status(b.page,'approved');await status(a.page,'approved');
     // An approved change is locked; editing it is a deliberate step and starts a new revision that needs review again.
     assert.equal(await a.page.getByRole('textbox',{name:'改善說明',exact:true}).isDisabled(),true);
-    await a.page.getByRole('button',{name:'修改內容',exact:true}).click();
+    await a.page.getByRole('button',{name:'解除鎖定',exact:true}).click();
     await a.page.getByRole('button',{name:'修改問題',exact:true}).click();
     await a.page.getByRole('textbox',{name:'標題',exact:true}).fill('QA R2301 新修訂需要再次 Review');await saved(a.page);await status(a.page,'draft');await status(b.page,'draft');
     assert.equal(a.navigations.length,aNav);assert.equal(b.navigations.length,bNav);
@@ -212,7 +212,7 @@ async function checkMobileGeometry(page) {
     await a.page.getByTestId('circuit-active-filters').getByRole('button',{name:'全部清除',exact:true}).click();
     assert.equal(await a.page.getByTestId('circuit-change-item').count(),2);
     const excelPromise=a.page.waitForEvent('download');
-    await a.page.getByRole('button',{name:'匯出 Change List',exact:true}).click();
+    await a.page.getByRole('button',{name:'匯出問題清單',exact:true}).click();
     const excel=await excelPromise;const excelPath=path.join(evidence,'change-list.xlsx');await excel.saveAs(excelPath);
     const ExcelJS=require('exceljs'),book=new ExcelJS.Workbook();await book.xlsx.readFile(excelPath);
     let embedded=0;const texts=[];

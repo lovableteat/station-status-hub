@@ -106,13 +106,13 @@ async function geometry(page, dialog, width, height) {
           const scrollTop = await scroll.evaluate(node => { node.scrollTop = Math.min(140, node.scrollHeight - node.clientHeight); return node.scrollTop; });
           const originalListCollapsed = await dialog.locator('.circuit-workspace').getAttribute('data-list-collapsed') === 'true';
           for (let cycle = 0; cycle < 2; cycle++) {
-            await panelControl(dialog.getByRole('button', { name: '收合修改內容', exact: true }), '收合', true);
-            await dialog.getByRole('button', { name: '收合修改內容', exact: true }).click();
+            await panelControl(dialog.getByRole('button', { name: '收合表單', exact: true }), '收合表單', true);
+            await dialog.getByRole('button', { name: '收合表單', exact: true }).click();
             await detail.waitFor({ state: 'hidden' });
-            const expand = dialog.getByRole('button', { name: '展開修改內容', exact: true });
+            const expand = dialog.getByRole('button', { name: '展開表單', exact: true });
             await expand.waitFor();
-            await panelControl(expand, '展開內容', false);
-            await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '展開修改內容');
+            await panelControl(expand, '展開表單', false);
+            await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '展開表單');
             assert.equal(await expand.getAttribute('aria-expanded'), 'false');
             assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('circuit-changes-layout:v1')).detail), false);
             const wider = await pdf.evaluate(node => node.getBoundingClientRect().width);
@@ -120,20 +120,20 @@ async function geometry(page, dialog, width, height) {
             assert.ok(Math.abs(await dialog.locator('.circuit-detail-rail').evaluate(node => node.getBoundingClientRect().width) - 72) <= 1);
             if (cycle === 0) {
               const switchList = async collapsed => {
-                const control = dialog.getByRole('button', { name: collapsed ? '展開修改清單' : '收合修改清單', exact: true });
+                const control = dialog.getByRole('button', { name: collapsed ? '展開清單' : '收合清單', exact: true });
                 await panelControl(control, collapsed ? '展開清單' : '收合清單', !collapsed);
                 await control.click();
               };
               await switchList(originalListCollapsed);
               assert.equal(await dialog.locator('.circuit-workspace').getAttribute('data-detail-collapsed'), 'true');
               assert.ok((await pdf.evaluate(node => node.getBoundingClientRect().width)) > 300);
-              assert.ok(await dialog.getByRole('button', { name: '展開修改內容', exact: true }).isVisible());
+              assert.ok(await dialog.getByRole('button', { name: '展開表單', exact: true }).isVisible());
               await switchList(!originalListCollapsed);
               await page.screenshot({ path: path.join(evidence, `collapsed-${width}.png`) });
             }
             await expand.click();
             await detail.waitFor({ state: 'visible' });
-            await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '收合修改內容');
+            await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '收合表單');
             const restoredScrollTop = await scroll.evaluate(node => node.scrollTop);
             assert.ok(Math.abs(restoredScrollTop - scrollTop) <= 1, `Detail scroll position must be restored: ${scrollTop} -> ${restoredScrollTop} (cycle ${cycle})`);
             assert.equal(await note.inputValue(), noteText);
@@ -141,32 +141,32 @@ async function geometry(page, dialog, width, height) {
             assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('circuit-changes-layout:v1')).detail), true);
           }
           if (width === 1920) {
-            await dialog.getByRole('button', { name: '收合修改內容', exact: true }).click();
+            await dialog.getByRole('button', { name: '收合表單', exact: true }).click();
             await page.reload();
             await page.getByTestId('material-circuit-changes').filter({ visible: true }).click();
-            await dialog.getByRole('button', { name: '展開修改內容', exact: true }).waitFor();
+            await dialog.getByRole('button', { name: '展開表單', exact: true }).waitFor();
             assert.equal(await detail.isVisible(), false, 'The saved desktop collapse survives a full reload');
             await page.setViewportSize({ width: 390, height: 884 });
             await page.waitForFunction(() => !document.querySelector('[data-testid="circuit-change-detail"]').hidden);
             // The window remembers 線路 Review; on a phone it opens on the form, and the drawing only on request.
-            if (await dialog.getByTestId('circuit-pdf-panel').isVisible()) await dialog.getByRole('button', { name: '返回修改內容', exact: true }).tap();
+            if (await dialog.getByTestId('circuit-pdf-panel').isVisible()) await dialog.getByRole('button', { name: '返回表單', exact: true }).tap();
             if (!(await dialog.getByTestId('circuit-change-item').first().isVisible())) await dialog.getByRole('button', { name: '返回問題清單', exact: true }).tap();
             await dialog.getByTestId('circuit-change-item').first().tap();
             await detail.waitFor({ state: 'visible' });
-            assert.equal(await dialog.getByRole('button', { name: '收合修改內容', exact: true }).count(), 0);
+            assert.equal(await dialog.getByRole('button', { name: '收合表單', exact: true }).count(), 0);
             await page.setViewportSize({ width, height: 884 });
-            await dialog.getByRole('button', { name: '收合修改內容', exact: true }).waitFor();
+            await dialog.getByRole('button', { name: '收合表單', exact: true }).waitFor();
             await note.fill(noteText);
           }
           collapse = { beforeWidth, preservedScrollTop: scrollTop, cycles: 2, bothListStates: true, reloadAndMobileTransition: width === 1920, actualPdfComparison: width === 1920 };
         } else {
-          assert.equal(await dialog.getByRole('button', { name: '收合修改內容', exact: true }).count(), 0, 'Phone keeps its existing single-pane flow');
+          assert.equal(await dialog.getByRole('button', { name: '收合表單', exact: true }).count(), 0, 'Phone keeps its existing single-pane flow');
         }
         // 改善追蹤: the fix is written and sent, then the reviewer writes a long note beside 確認結案 / 退回重改.
         await task('改善追蹤');
         await dialog.getByRole('textbox', { name: '改善說明', exact: true }).fill('把 R2301 改為 4.7K，保留原本 Net 名稱。');
         await dialog.getByRole('button', { name: '回報改善', exact: true }).tap();
-        const reviewNote = dialog.getByRole('textbox', { name: '主管意見或退回原因', exact: true }); await reviewNote.waitFor();
+        const reviewNote = dialog.getByRole('textbox', { name: '留言', exact: true }); await reviewNote.waitFor();
         await reviewNote.fill('請補上修改後的接線位置，並核對訊號名稱。'.repeat(8));
         const normal = await geometry(page, dialog, width, 884);
         await page.screenshot({ path: path.join(evidence, `review-${width}.png`) });

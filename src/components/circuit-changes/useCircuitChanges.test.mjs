@@ -296,7 +296,7 @@ test("a remote removal moves clean selection off the item but retains a dirty dr
     assert.equal(dirty.model.items.length, 0); assert.equal(dirty.model.removedItems.length, 1);
     assert.equal(dirty.model.draft.title, "Keep my draft"); assert.equal(dirty.model.conflict, true);
     assert.ok(dirty.model.selectedItem.removedAt);
-    await act(async () => assert.rejects(dirty.model.saveMyRevision(), /移除/));
+    await act(async () => assert.rejects(dirty.model.saveMyRevision(), /刪除/));
     act(() => dirty.model.adoptRemote());
     assert.equal(dirty.model.selectedItem.revision, 0); assert.equal(dirty.model.dirty, false);
   } finally { dirty.unmount(); }

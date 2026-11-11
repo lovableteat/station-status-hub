@@ -82,22 +82,22 @@ test("collapsing the detail preserves mounted content and Review notes without s
   try {
     const detail = view.root.root.findByProps({ "data-testid": "circuit-change-detail" });
     const title = view.root.root.findByProps({ "aria-label": "標題" });
-    assert.equal(view.root.root.findAllByProps({ "aria-label": "主管意見或退回原因" }).length, 0, "確認結案 / 退回重改 are in 改善追蹤, not beside the drawing");
+    assert.equal(view.root.root.findAllByProps({ "aria-label": "留言" }).length, 0, "確認結案 / 退回重改 are in 改善追蹤, not beside the drawing");
     for (let cycle = 0; cycle < 2; cycle++) {
-      assert.match(textOf(view.root.root.findByProps({ "aria-label": "收合修改內容" })), /收合/);
-      act(() => view.root.root.findByProps({ "aria-label": "收合修改內容" }).props.onClick());
+      assert.match(textOf(view.root.root.findByProps({ "aria-label": "收合表單" })), /收合/);
+      act(() => view.root.root.findByProps({ "aria-label": "收合表單" }).props.onClick());
       assert.equal(detail.props.hidden, true);
-      assert.match(textOf(view.root.root.findByProps({ "aria-label": "展開修改內容" })), /展開內容/);
-      assert.equal(view.root.root.findByProps({ "aria-label": "展開修改內容" }).props["aria-expanded"], false);
+      assert.match(textOf(view.root.root.findByProps({ "aria-label": "展開表單" })), /展開表單/);
+      assert.equal(view.root.root.findByProps({ "aria-label": "展開表單" }).props["aria-expanded"], false);
       assert.equal(JSON.parse(view.window.localStorage.getItem("circuit-changes-layout:v1")).detail, false);
-      act(() => view.root.root.findByProps({ "aria-label": "展開修改內容" }).props.onClick());
+      act(() => view.root.root.findByProps({ "aria-label": "展開表單" }).props.onClick());
       assert.equal(detail.props.hidden, false);
       assert.equal(view.root.root.findByProps({ "data-testid": "circuit-change-detail" }), detail);
       assert.equal(title.props.value, "修改降壓線路");
       assert.equal(JSON.parse(view.window.localStorage.getItem("circuit-changes-layout:v1")).detail, true);
     }
     assert.equal(view.calls.some(call => ["save", "review", "draft"].includes(call[0])), false);
-    act(() => view.root.root.findByProps({ "aria-label": "收合修改內容" }).props.onClick());
+    act(() => view.root.root.findByProps({ "aria-label": "收合表單" }).props.onClick());
     assert.equal(detail.props.hidden, true, "the collapsed form stays collapsed beside the drawing");
     await act(async () => view.root.root.findByProps({ "aria-label": "下一個問題" }).props.onClick());
     assert.equal(detail.props.hidden, false, "selecting a modification opens its content");
@@ -108,18 +108,18 @@ test("collapsing the detail preserves mounted content and Review notes without s
 test("list panel controls visibly name their action and expose the controlled region", () => {
   const view = mount();
   try {
-    let control = view.root.root.findByProps({ "aria-label": "收合修改清單" });
+    let control = view.root.root.findByProps({ "aria-label": "收合清單" });
     assert.match(textOf(control), /收合清單/);
     assert.equal(control.props["aria-expanded"], true);
     assert.equal(control.props["aria-controls"], "circuit-change-list");
     act(() => control.props.onClick());
-    control = view.root.root.findByProps({ "aria-label": "展開修改清單" });
+    control = view.root.root.findByProps({ "aria-label": "展開清單" });
     assert.match(textOf(control), /展開清單/);
     assert.equal(control.props["aria-expanded"], false);
     assert.equal(control.props["aria-controls"], "circuit-change-list");
     assert.ok(view.root.root.findByProps({ id: "circuit-change-list" }));
     act(() => control.props.onClick());
-    assert.match(textOf(view.root.root.findByProps({ "aria-label": "收合修改清單" })), /收合清單/);
+    assert.match(textOf(view.root.root.findByProps({ "aria-label": "收合清單" })), /收合清單/);
     assert.equal(view.calls.some(call => ["save", "review", "draft"].includes(call[0])), false);
   } finally { act(() => view.root.unmount()); }
 });
@@ -144,10 +144,10 @@ test("removal is explicit and reversible while preserving the item history", asy
   const removed = item("removed", 2, "draft", "已移除的線路修改"), actions = [];
   const { root, button } = mount({ removedItems: [removed], deleteItem: async id => actions.push(["remove", id]), restoreItem: async id => actions.push(["restore", id]) });
   try {
-    act(() => root.root.findByProps({ "aria-label": "移除問題" }).props.onClick());
+    act(() => root.root.findByProps({ "aria-label": "刪除問題" }).props.onClick());
     assert.ok(JSON.stringify(root.toJSON()).includes("已儲存的追蹤紀錄與原圖保留"));
     assert.deepEqual(actions, []);
-    await act(async () => button("確認移除").props.onClick());
+    await act(async () => button("確認刪除").props.onClick());
     assert.deepEqual(actions, [["remove", "one"]]);
     act(() => root.root.findByProps({ className: "circuit-removed-trigger" }).props.onClick());
     await act(async () => root.root.findByProps({ "aria-label": "還原問題 #002" }).props.onClick());
@@ -201,11 +201,11 @@ test("review validates return reason, retains per-item action and opens immutabl
   try {
     // The reason box sits with the decision buttons, not at the far end of the form.
     const bar = root.root.findByProps({ className: "circuit-review-bar" });
-    assert.equal(bar.findAllByProps({ "aria-label": "主管意見或退回原因" }, { deep: false }).length, 1);
+    assert.equal(bar.findAllByProps({ "aria-label": "留言" }, { deep: false }).length, 1);
     await act(async () => { button("退回重改").props.onClick(); });
     assert.equal(calls.filter(call => call[0] === "review").length, 0);
     assert.ok(text().includes("請先寫退回原因"));
-    act(() => root.root.findByProps({ "aria-label": "主管意見或退回原因" }).props.onChange({ target: { value: "請補修改後圖" } }));
+    act(() => root.root.findByProps({ "aria-label": "留言" }).props.onChange({ target: { value: "請補修改後圖" } }));
     await act(async () => { button("退回重改").props.onClick(); });
     assert.deepEqual(calls.find(call => call[0] === "review"), ["review", "request_changes", "請補修改後圖"]);
     // 改善追蹤 opens with the record showing; an old revision shows its problem as text and its fields locked.
@@ -225,7 +225,7 @@ test("a returned change shows its reason first and cannot be sent until the requ
     const reason = root.root.findByProps({ className: "circuit-returned" });
     assert.ok(textOf(reason).includes("請補量測波形") && textOf(reason).includes("審查主管"));
     assert.ok(text().includes("回報改善前還缺：") && text().includes("標題") && text().includes("改善說明或改好後截圖"));
-    assert.equal(button("回報改善").props.disabled, true);
+    assert.equal(button("回報改善").props.disabled, false, "the button is never dead: pressing it says what is missing");
     await act(async () => { button("回報改善").props.onClick(); });
     assert.equal(calls.filter(call => call[0] === "review").length, 0, "an incomplete change never reaches the server");
   } finally { act(() => root.unmount()); }
@@ -270,13 +270,13 @@ test("a file dropped on a pane is added to that pane, and a removed picture can 
     const dropped = calls.find(call => call[0] === "images");
     assert.equal(dropped[1].length, 1); assert.equal(dropped[1][0], file); assert.equal(dropped[2], "reference", "not the pane that happened to be the paste target");
     assert.equal(pane("before").props["data-image-count"], 1); assert.equal(pane("after").props["data-image-count"], 2);
-    act(() => root.root.findByProps({ "aria-label": "移除圖片 a1.png" }).props.onClick());
+    act(() => root.root.findByProps({ "aria-label": "刪除圖片 a1.png" }).props.onClick());
     const removal = calls.find(call => call[0] === "draft")[1];
     assert.equal(removal.images.map(image => image.id).join(), "b1,a2");
     update({ draft: { ...withImages.content, ...removal } });
     const undo = root.root.findByProps({ className: "circuit-upload-undo" });
-    assert.ok(textOf(undo).includes("已移除 a1.png"));
-    act(() => undo.findAll(node => node.type === "stub" && node.props.children === "復原")[0].props.onClick());
+    assert.ok(textOf(undo).includes("已刪除 a1.png"));
+    act(() => undo.findAll(node => node.type === "stub" && node.props.children === "還原")[0].props.onClick());
     assert.equal(calls.filter(call => call[0] === "draft")[1][1].images.map(image => image.id).join(), "b1,a1,a2", "restored at its old position, not appended");
   } finally { act(() => root.unmount()); }
 });
@@ -311,7 +311,7 @@ test("a change that waits for review or is approved is locked until the user cho
     assert.equal(view.calls.filter(call => call[0] === "images").length, 0);
     assert.ok(view.text().includes("內容已鎖定"));
     assert.equal(view.root.root.findAllByProps({ className: "circuit-review-bar" }).length, 0, "確認結案 / 退回重改 are in 改善追蹤");
-    act(() => view.button("修改內容").props.onClick());
+    act(() => view.button("解除鎖定").props.onClick());
     assert.equal(titleField().props.disabled, false);
     assert.equal(view.root.root.findAllByProps({ className: "circuit-locked" }).length, 0);
     assert.ok(view.text().includes("會撤回回報"));
@@ -323,7 +323,7 @@ test("a change that waits for review or is approved is locked until the user cho
   try {
     assert.ok(textOf(done.root.root.findByProps({ className: "circuit-locked" })).includes("已結案"));
     assert.equal(done.root.root.findByProps({ "aria-label": "改善說明" }).props.disabled, true);
-    act(() => done.button("修改內容").props.onClick());
+    act(() => done.button("解除鎖定").props.onClick());
     assert.equal(done.root.root.findByProps({ "aria-label": "改善說明" }).props.disabled, false);
     assert.ok(done.text().includes("需要重新確認"));
   } finally { act(() => done.root.unmount()); }
@@ -415,6 +415,6 @@ test("a picture framed on a PDF opens its page; a picture from a removed version
     await act(async () => { button("到 PDF 第 7 頁（2026-11-09）").props.onClick(); });
     assert.deepEqual(view.calls.filter(call => call[0] === "show").map(call => call.slice(1)), [["v9", 7]]);
     await act(async () => { button("到 PDF 第 7 頁（2026-11-01）").props.onClick(); });
-    assert.ok(view.text().includes("已從清單移除"));
+    assert.ok(view.text().includes("已從 PDF 清單刪除"));
   } finally { act(() => view.root.unmount()); }
 });

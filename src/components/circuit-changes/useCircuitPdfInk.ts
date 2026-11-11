@@ -103,7 +103,7 @@ export function useCircuitPdfInk({ open, seriesId, canEdit, userId, userName }: 
           if (!writable()) throw new Error("畫筆儲存已停止，暫存會保留到下次開啟。");
           const merged = mergeCircuitPdfInk(latest, delta);
           const addsNew = delta.some(row => !row.removedAt && !latest.some(known => known.id === row.id));
-          if (addsNew && merged.filter(row => !row.removedAt).length > CIRCUIT_PDF_INK_MAX_STROKES) throw new Error(`每頁最多 ${CIRCUIT_PDF_INK_MAX_STROKES} 筆畫筆，請先移除不需要的筆畫。`);
+          if (addsNew && merged.filter(row => !row.removedAt).length > CIRCUIT_PDF_INK_MAX_STROKES) throw new Error(`每頁最多 ${CIRCUIT_PDF_INK_MAX_STROKES} 筆畫筆，請先擦掉不需要的筆畫。`);
           return merged;
         });
         if (!isCurrent()) return;
@@ -129,7 +129,7 @@ export function useCircuitPdfInk({ open, seriesId, canEdit, userId, userName }: 
 
   const load = useCallback(async (documentId: string, page: number): Promise<void> => {
     if (!isCurrent() || !session.open || !session.seriesId || !session.userId) return;
-    if (!validTarget(documentId, page)) throw new Error("PDF 版本或頁碼無效。");
+    if (!validTarget(documentId, page)) throw new Error("PDF 或頁碼無效。");
     const pageKey = keyFor(documentId, page);
     session.requested.set(pageKey, { documentId, page });
     if (session.loaded.has(pageKey)) return;
@@ -165,9 +165,9 @@ export function useCircuitPdfInk({ open, seriesId, canEdit, userId, userName }: 
   const add = useCallback((documentId: string, page: number, points: CircuitPdfInkStroke["points"]) => {
     if (!writable()) { if (isCurrent()) { session.error = "目前無法編輯畫筆，請確認編輯權限。"; publish(); } return; }
     const fail = (message: string) => { session.error = message; publish(); };
-    if (!validTarget(documentId, page)) { fail("PDF 版本或頁碼無效。"); return; }
+    if (!validTarget(documentId, page)) { fail("PDF 或頁碼無效。"); return; }
     if (!Array.isArray(points) || !points.length || points.length > CIRCUIT_PDF_INK_MAX_POINTS) { fail(`每筆畫筆需有 1–${CIRCUIT_PDF_INK_MAX_POINTS} 個座標點。`); return; }
-    if ((session.pages[keyFor(documentId, page)] || []).length >= CIRCUIT_PDF_INK_MAX_STROKES) { fail(`每頁最多 ${CIRCUIT_PDF_INK_MAX_STROKES} 筆畫筆，請先移除不需要的筆畫。`); return; }
+    if ((session.pages[keyFor(documentId, page)] || []).length >= CIRCUIT_PDF_INK_MAX_STROKES) { fail(`每頁最多 ${CIRCUIT_PDF_INK_MAX_STROKES} 筆畫筆，請先擦掉不需要的筆畫。`); return; }
     session.at = Math.max(Date.now(), session.at + 1);
     const row = normalizeCircuitPdfInk([{ id: crypto.randomUUID(), documentId, page, points, color: CIRCUIT_PDF_INK_COLOR, width: CIRCUIT_PDF_INK_WIDTH,
       at: new Date(session.at).toISOString(), by: session.userId, byName: session.userName }], documentId, page)[0];

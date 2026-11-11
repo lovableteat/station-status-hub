@@ -52,11 +52,11 @@ async function frame(page, index = 0, from = [400 / 1190, 380 / 842], to = [590 
   const box = await surface.boundingBox();
   await page.mouse.move(box.x + box.width * from[0], box.y + box.height * from[1]); await page.mouse.down();
   await page.mouse.move(box.x + box.width * to[0], box.y + box.height * to[1], {steps:5}); await page.mouse.up();
-  await panel(page).getByRole('group', {name:'加入框選區域'}).waitFor();
+  await panel(page).getByRole('group', {name:'加入截圖'}).waitFor();
 }
 const pageNumber = page => panel(page).getByLabel('目前頁碼', {exact:true}).inputValue();
 const versionLabel = async page => (await panel(page).locator('.circuit-pdf-version-button > span').innerText()).trim();
-async function openVersions(page) { if (!(await panel(page).locator('#circuit-pdf-version-manager').isVisible())) await panel(page).getByRole('button', {name:'選擇 PDF 版本', exact:true}).click(); }
+async function openVersions(page) { if (!(await panel(page).locator('#circuit-pdf-version-manager').isVisible())) await panel(page).getByRole('button', {name:'選擇 PDF', exact:true}).click(); }
 async function onPage(page, value) { await page.waitForFunction(expected => document.querySelector('input[aria-label="目前頁碼"]')?.value === String(expected), value); }
 async function saved(page) { await page.waitForFunction(() => document.querySelector('.circuit-detail-footer [role="status"]')?.textContent === '已儲存'); }
 async function imageCount(page, side, count) { await page.waitForFunction(([key, expected]) => Number(document.querySelector(`.circuit-image-column[data-side="${key}"]`)?.dataset.imageCount || 0) === expected, [side, count]); }
@@ -104,13 +104,13 @@ async function eventually(check, message, timeout = 8000) {
     // --- First use on a laptop screen: the PDF pane is there with its upload target, the form beside it, the list folded.
     const a = await createPage(browser, origin, 'A'); sessions.push(a);
     const p = a.page;
-    await panel(p).getByRole('button', {name:/上傳原理圖 PDF/}).waitFor();
+    await panel(p).getByRole('button', {name:/^上傳 PDF/}).waitFor();
     assert.ok(await dialog(p).getByRole('textbox', {name:'標題', exact:true}).isVisible(), 'the form stays on screen beside the PDF');
     assert.equal(await dialog(p).getByRole('tab', {name:/^線路 Review/}).getAttribute('aria-selected'), 'true', '線路 Review is the first task');
-    await dialog(p).getByRole('button', {name:'展開修改清單', exact:true}).click();
+    await dialog(p).getByRole('button', {name:'展開清單', exact:true}).click();
     await dialog(p).locator('.circuit-item-list').waitFor();
-    await dialog(p).getByRole('button', {name:'收合修改清單', exact:true}).click();
-    await dialog(p).getByRole('button', {name:'展開修改清單', exact:true}).waitFor();
+    await dialog(p).getByRole('button', {name:'收合清單', exact:true}).click();
+    await dialog(p).getByRole('button', {name:'展開清單', exact:true}).waitFor();
     assert.equal((await stateOf(origin)).pdfWrites, 0, 'opening the pane writes nothing');
     await p.screenshot({path:path.join(evidence, '1-first-use-1440.png')});
     check('first use: upload target, form beside it, list folds and unfolds, nothing written');
@@ -148,7 +148,7 @@ async function eventually(check, message, timeout = 8000) {
     for (const name of ['加到問題截圖', '加到補充圖']) assert.ok(await panel(p).getByRole('button', {name, exact:true}).isVisible(), name);
     assert.equal(await panel(p).getByRole('button', {name:'加到改好後截圖', exact:true}).count(), 0, '線路 Review frames the problem, not the fix');
     await p.keyboard.press('Escape');
-    await panel(p).getByRole('group', {name:'加入框選區域'}).waitFor({state:'hidden'});
+    await panel(p).getByRole('group', {name:'加入截圖'}).waitFor({state:'hidden'});
     assert.ok(await dialog(p).isVisible(), 'Escape with a framed area keeps the dialog open');
     await frame(p);
     await panel(p).getByRole('button', {name:'加到補充圖', exact:true}).click();
@@ -164,11 +164,11 @@ async function eventually(check, message, timeout = 8000) {
     check('Escape drops the framed area only; 加到補充圖 creates the change, fills 頁碼 and keeps the source page');
 
     // --- Version list: edit the date and the note, Escape closes it.
-    await panel(p).getByRole('button', {name:'選擇 PDF 版本', exact:true}).click();
-    const versions = panel(p).getByRole('group', {name:'PDF 版本（依圖面日期）'});
+    await panel(p).getByRole('button', {name:'選擇 PDF', exact:true}).click();
+    const versions = panel(p).getByRole('group', {name:'PDF 清單（依圖面日期）'});
     await versions.waitFor();
-    await versions.getByRole('button', {name:'編輯版本資訊：Vera_SCH_20261108.pdf', exact:true}).click();
-    await versions.getByLabel('Vera_SCH_20261108.pdf 的版本備註', {exact:true}).fill('第1天'); await p.keyboard.press('Tab');
+    await versions.getByRole('button', {name:'改日期與備註：Vera_SCH_20261108.pdf', exact:true}).click();
+    await versions.getByLabel('Vera_SCH_20261108.pdf 的備註', {exact:true}).fill('第1天'); await p.keyboard.press('Tab');
     await versions.getByLabel('Vera_SCH_20261108.pdf 的圖面日期', {exact:true}).fill('2026-11-07'); await p.keyboard.press('Tab');
     await eventually(async () => { const row = (await registryOf(origin)).documents[0]; return row.label === '第1天' && row.date === '2026-11-07'; }, 'date and note are saved');
     await p.keyboard.press('Escape');
@@ -201,7 +201,7 @@ async function eventually(check, message, timeout = 8000) {
     await panel(p).getByRole('group', {name:'本頁的修改項目'}).getByRole('button', {name:'#002', exact:true}).waitFor();
     await dialog(p).getByRole('tab', {name:/^改善追蹤/}).click();
     await panel(p).waitFor({state:'hidden'});
-    await dialog(p).getByRole('button', {name:'從圖面框選改好後截圖', exact:true}).click();
+    await dialog(p).getByRole('button', {name:'從圖面截圖', exact:true}).click();
     await panel(p).waitFor();
     await openVersions(p);
     await panel(p).getByRole('button', {name:'開啟 11/09 版 Vera_SCH_20261109.pdf', exact:true}).click(); await rendered(p);
@@ -272,7 +272,7 @@ async function eventually(check, message, timeout = 8000) {
     const big = registry.documents.find(row => row.date === '2026-11-10');
     assert.equal(big.localOnly, true); assert.equal(big.path, ''); assert.equal((await stateOf(origin)).pdfs.length, objectsBefore, 'nothing over the limit is sent to the server');
     await b.open();
-    await panel(b.page).getByRole('button', {name:'選擇 PDF 版本', exact:true}).click();
+    await panel(b.page).getByRole('button', {name:'選擇 PDF', exact:true}).click();
     await panel(b.page).getByRole('button', {name:/^開啟 11\/10 版/}).click();
     await panel(b.page).getByRole('button', {name:'選擇檔案開啟', exact:true}).waitFor();
     await panel(b.page).locator('input[aria-label="選擇本機 PDF 原檔"]').setInputFiles(large);
@@ -287,16 +287,16 @@ async function eventually(check, message, timeout = 8000) {
     await eventually(async () => (await registryOf(origin)).documents.find(row => row.date === '2026-11-07')?.removedAt, 'the version is marked removed');
     await eventually(async () => (await stateOf(origin)).pdfs.every(name => !name.includes(big.id)) && (await stateOf(origin)).pdfs.length === objectsBefore, 'archiving keeps the original PDF file');
     await p.keyboard.press('Escape');
-    await dialog(p).getByRole('button', {name:'展開修改清單', exact:true}).click();
+    await dialog(p).getByRole('button', {name:'展開清單', exact:true}).click();
     await dialog(p).getByTestId('circuit-change-item').filter({hasText:'#002'}).click();
     await imageCount(p, 'before', 2);
     await dialog(p).locator('.circuit-image-column[data-side="before"]').getByRole('button', {name:/到 PDF 第 5 頁（2026-11-07）/}).click();
-    await dialog(p).getByRole('alert').filter({hasText:'已從清單移除'}).waitFor();
+    await dialog(p).getByRole('alert').filter({hasText:'已從 PDF 清單刪除'}).waitFor();
     assert.equal((await stateOf(origin)).items.find(row => row.number === 2).content.images.filter(image => image.side === 'before').length, 2);
     check('archiving a version: hidden from the main list, its original and pictures kept, and P5 explains where it went');
 
     // --- 刪除 in the version list: it asks first, Escape or 取消 keep the PDF, 刪除 hides it, and it can be restored.
-    const shownName = async () => (await panel(p).getByRole('button', {name:'選擇 PDF 版本', exact:true}).getAttribute('title')).split(' · ')[0];
+    const shownName = async () => (await panel(p).getByRole('button', {name:'選擇 PDF', exact:true}).getAttribute('title')).split(' · ')[0];
     const doomed = await shownName();
     const deleteButton = panel(p).getByRole('button', {name:'刪除 PDF：' + doomed, exact:true});
     await openVersions(p); await deleteButton.click();
@@ -337,22 +337,22 @@ async function eventually(check, message, timeout = 8000) {
     await q.waitForFunction(()=>{const list=document.querySelector('[data-testid="circuit-changes-dialog"] .circuit-item-list');return list&&list.getAttribute('aria-busy')!=='true';});await q.waitForTimeout(300);
     await dialog(q).getByRole('button', {name:'看圖面', exact:true}).filter({visible:true}).first().tap();
     // This browser has no copy of the 51 MB PDF last opened on the laptop, so it offers the file picker; the phone switches to 11/09.
-    await panel(q).getByRole('button', {name:'選擇 PDF 版本', exact:true}).tap();
+    await panel(q).getByRole('button', {name:'選擇 PDF', exact:true}).tap();
     await panel(q).getByRole('button', {name:'開啟 11/09 版 Vera_SCH_20261109.pdf', exact:true}).tap();
     await rendered(q);
     assert.equal(await dialog(q).locator('.circuit-detail').isVisible(), false, 'one pane at a time on a phone');
     const finish = panel(q).locator('.circuit-pdf-finish-bar');
     const finishBox = await finish.boundingBox();
     assert.ok(finishBox && finishBox.y + finishBox.height <= 844 + 1, 'the finishing bar is on screen');
-    await panel(q).getByRole('button', {name:'框選', exact:true}).tap();
+    await panel(q).getByRole('button', {name:'截圖', exact:true}).tap();
     await frame(q);
-    const actionsBox = await panel(q).getByRole('group', {name:'加入框選區域'}).boundingBox();
+    const actionsBox = await panel(q).getByRole('group', {name:'加入截圖'}).boundingBox();
     assert.ok(actionsBox.y + actionsBox.height <= 844 + 1, 'the add buttons are on screen');
     await panel(q).getByRole('button', {name:'加到問題截圖', exact:true}).tap();
     await panel(q).locator('.circuit-pdf-actions[role="status"]').waitFor();
     assert.equal(await q.evaluate(() => document.documentElement.scrollWidth), 390, 'no sideways page scroll');
     await q.screenshot({path:path.join(evidence, '3-phone-390.png')});
-    await panel(q).getByRole('button', {name:'返回修改內容', exact:true}).first().tap();
+    await panel(q).getByRole('button', {name:'返回表單', exact:true}).first().tap();
     await dialog(q).locator('.circuit-detail').waitFor();
     check('phone 390: PDF pane alone, framing toggle, add buttons and finishing bar on screen, back to the form');
 

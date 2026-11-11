@@ -20,7 +20,7 @@ export async function validateCircuitImage(file: File) {
   if (text.startsWith("RIFF") && text.slice(8, 12) === "WEBP") return { mime: "image/webp", extension: "webp" };
   if (text.startsWith("GIF87a") || text.startsWith("GIF89a")) return { mime: "image/gif", extension: "gif" };
   if (text.startsWith("BM")) return { mime: "image/bmp", extension: "bmp" };
-  throw new CircuitImageRejectedError("不是可用的圖片，請使用 PNG、JPEG、WEBP、GIF 或 BMP（PDF 請上傳到「PDF 圖面」再框選）。");
+  throw new CircuitImageRejectedError("不是可用的圖片，請使用 PNG、JPEG、WEBP、GIF 或 BMP（PDF 請上傳到「PDF 圖面」再截圖）。");
 }
 
 async function preview(file: File) {

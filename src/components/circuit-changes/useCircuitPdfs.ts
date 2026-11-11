@@ -308,7 +308,7 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
   const setOfficial = useCallback(async (id: string) => {
     if (!canEdit) throw new Error("目前為檢視權限，無法設定官方版本。");
     const row = registryRef.current.documents.find(item => item.id === id && !item.removedAt);
-    if (!row) throw new Error("這個 PDF 版本已不在清單中，請重新載入。");
+    if (!row) throw new Error("這份 PDF 已不在清單中，請重新載入。");
     if (row.localOnly || !row.path) throw new Error("官方版本須使用已存到雲端的 PDF；本機 PDF 仍可作為工作版本。");
     const captured = scopeRef.current;
     const selection = await saveCircuitPdfOfficial(seriesId, id);

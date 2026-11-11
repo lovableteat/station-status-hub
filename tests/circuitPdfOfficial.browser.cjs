@@ -27,7 +27,7 @@ async function eventually(read, message, timeout = 10000) {
 async function rendered(page) {
   await page.waitForFunction(() => { const pages = [...document.querySelectorAll('.circuit-pdf-surface')]; return pages.length > 0 && pages.every(node => node.dataset.rendering === 'false'); });
 }
-const versionManagerFor = page => panel(page).getByRole('group', { name: 'PDF 版本（依圖面日期）' });
+const versionManagerFor = page => panel(page).getByRole('group', { name: 'PDF 清單（依圖面日期）' });
 async function headerFits(page, width) {
   await page.waitForFunction(() => {
     const frame = document.querySelector('[data-testid="circuit-changes-dialog"]')?.getBoundingClientRect();
@@ -38,7 +38,9 @@ async function headerFits(page, width) {
     const r = node.getBoundingClientRect();
     return { left: r.left, right: r.right, overflow: node.scrollWidth - node.clientWidth, buttons: [...node.querySelectorAll('button')].map(button => { const b = button.getBoundingClientRect(); return { label: button.getAttribute('aria-label'), top: b.top, left: b.left, right: b.right, height: b.height }; }), labels: [...node.querySelectorAll('button')].map(button => button.getAttribute('aria-label')) };
   });
-  assert.deepEqual(geometry.labels, ['匯出 Change List', '更多', '關閉線路修改']);
+  // 匯出問題清單 is shown where there is a problem list (線路 Review, 改善追蹤), not in AI 比對 or 官方版本.
+  const listTask = await dialog(page).locator('[role="tab"][aria-selected="true"]').evaluate(node => ['review', 'track'].includes(node.dataset.task));
+  assert.deepEqual(geometry.labels, listTask ? ['匯出問題清單', '更多', '關閉線路修改'] : ['更多', '關閉線路修改']);
   const tasks = await dialog(page).locator('.circuit-tasks').boundingBox();
   assert.ok(tasks && tasks.x >= 0 && tasks.x + tasks.width <= width + 1, 'the four task tabs fit: ' + JSON.stringify(tasks));
   assert.ok(geometry.left >= 0 && geometry.right <= width + 1 && geometry.overflow <= 1, JSON.stringify(geometry));
@@ -95,7 +97,7 @@ async function managerFits(page, label) {
       return { page, errors };
     };
     const desktop = await open(1440), page = desktop.page;
-    const versionManager = () => panel(page).getByRole('group', { name: 'PDF 版本（依圖面日期）' });
+    const versionManager = () => panel(page).getByRole('group', { name: 'PDF 清單（依圖面日期）' });
     await dialog(page).getByRole('tab', { name: /^官方版本/ }).click();
     await dialog(page).getByTestId('circuit-official-versions').getByText('還沒有設定', { exact: true }).waitFor();
     await dialog(page).getByRole('tab', { name: /^AI 比對/ }).click();
@@ -115,27 +117,27 @@ async function managerFits(page, label) {
     await dialog(page).getByRole('button', { name: '確定更換', exact: true }).click();
     await eventually(() => fixture.state.pdfOfficials.get('series:qa')?.documentId === baselineId, 'The explicit pin must persist separately from the version registry');
     await dialog(page).getByRole('tab', { name: /^線路 Review/ }).click(); await rendered(page);
-    await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
+    await panel(page).getByRole('button', { name: '選擇 PDF', exact: true }).click();
     assert.equal(await panel(page).getByRole('button', { name: /^設為官方版本：|^刪除 PDF：/ }).count(), 0, 'The version list has no second way to set the official version or delete');
     const baselineSnapshot = structuredClone(fixture.state.pdfOfficials.get('series:qa').document);
     assert.equal(baselineSnapshot.name, 'Official_20261101.pdf');
     assert.match(await panel(page).locator('.circuit-pdf-baseline-section').innerText(), /Official_20261101\.pdf/);
     assert.equal(await panel(page).getByRole('button', { name: '刪除 PDF：Official_20261101.pdf', exact: true }).count(), 0, 'The official original cannot be deleted');
-    const manager = panel(page).getByRole('group', { name: 'PDF 版本（依圖面日期）' });
+    const manager = panel(page).getByRole('group', { name: 'PDF 清單（依圖面日期）' });
     await manager.getByText('沒有其他 PDF', { exact: true }).waitFor();
     assert.equal(await manager.locator('.circuit-pdf-baseline-section input').count(), 0, 'A fixed baseline is a readable summary, not disabled input fields');
     assert.equal(await manager.locator('.circuit-pdf-working-section li').count(), 0, 'The official baseline must not be duplicated among working versions');
     await managerFits(page, 'desktop empty working versions');
     await page.screenshot({ path: path.join(evidence, 'manager-official-only-1440.png') });
-    await manager.getByRole('button', { name: '關閉 PDF 版本管理', exact: true }).click();
+    await manager.getByRole('button', { name: '關閉 PDF 清單', exact: true }).click();
     await manager.waitFor({ state: 'hidden' });
     assert.ok(await dialog(page).isVisible(), 'Closing the manager must retain the workspace');
-    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '選擇 PDF 版本');
-    await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '選擇 PDF');
+    await panel(page).getByRole('button', { name: '選擇 PDF', exact: true }).click();
     await page.keyboard.press('Escape');
     await manager.waitFor({ state: 'hidden' });
     assert.ok(await dialog(page).isVisible());
-    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '選擇 PDF 版本');
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '選擇 PDF');
     report.checks.push('first upload is not silently official; explicit official baseline persists');
 
     for (const file of files.slice(1)) {
@@ -157,27 +159,27 @@ async function managerFits(page, label) {
     assert.equal(registry().documents.length, 3); assert.equal(fixture.state.pdfs.size, 3, 'No older original file may be overwritten or deleted');
     report.checks.push('two newer working revisions retain the same official pointer and all three original PDFs');
 
-    await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
+    await panel(page).getByRole('button', { name: '選擇 PDF', exact: true }).click();
     assert.equal(await manager.locator('.circuit-pdf-working-section li').count(), 2);
-    assert.equal(await manager.getByLabel('Working_20261109.pdf 的版本備註', { exact: true }).count(), 0, 'Metadata editors stay hidden until explicitly opened');
-    await manager.getByRole('button', { name: '編輯版本資訊：Working_20261109.pdf', exact: true }).click();
-    await manager.getByLabel('Working_20261109.pdf 的版本備註', { exact: true }).fill('訊號修正'); await page.keyboard.press('Tab');
+    assert.equal(await manager.getByLabel('Working_20261109.pdf 的備註', { exact: true }).count(), 0, 'Metadata editors stay hidden until explicitly opened');
+    await manager.getByRole('button', { name: '改日期與備註：Working_20261109.pdf', exact: true }).click();
+    await manager.getByLabel('Working_20261109.pdf 的備註', { exact: true }).fill('訊號修正'); await page.keyboard.press('Tab');
     await manager.getByLabel('Working_20261109.pdf 的圖面日期', { exact: true }).fill('2026-11-10'); await page.keyboard.press('Tab');
     await eventually(() => { const row = registry().documents.find(row => row.name === 'Working_20261109.pdf'); return row.label === '訊號修正' && row.date === '2026-11-10'; }, 'Version metadata keeps the existing save timing');
     await managerFits(page, 'desktop metadata editing');
     await page.screenshot({ path: path.join(evidence, 'manager-working-edit-1440.png') });
-    await manager.getByRole('button', { name: '關閉 PDF 版本管理', exact: true }).click();
-    await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
-    await manager.getByRole('button', { name: '編輯版本資訊：Working_20261109.pdf', exact: true }).click();
-    assert.equal(await manager.getByLabel('Working_20261109.pdf 的版本備註', { exact: true }).inputValue(), '訊號修正');
+    await manager.getByRole('button', { name: '關閉 PDF 清單', exact: true }).click();
+    await panel(page).getByRole('button', { name: '選擇 PDF', exact: true }).click();
+    await manager.getByRole('button', { name: '改日期與備註：Working_20261109.pdf', exact: true }).click();
+    assert.equal(await manager.getByLabel('Working_20261109.pdf 的備註', { exact: true }).inputValue(), '訊號修正');
     assert.equal(await manager.getByLabel('Working_20261109.pdf 的圖面日期', { exact: true }).inputValue(), '2026-11-10');
     await page.keyboard.press('Escape');
     report.checks.push('manager separates baseline and working versions; metadata editing is explicit and persists across closing/reopening');
 
-    await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
+    await panel(page).getByRole('button', { name: '選擇 PDF', exact: true }).click();
     await panel(page).getByRole('button', { name: '刪除 PDF：Working_20261108.pdf', exact: true }).click();
     await panel(page).getByRole('button', { name: '確認刪除 Working_20261108.pdf', exact: true }).click();
-    if (!(await manager.isVisible())) await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
+    if (!(await manager.isVisible())) await panel(page).getByRole('button', { name: '選擇 PDF', exact: true }).click();
     await eventually(() => registry().documents.find(row => row.name === 'Working_20261108.pdf')?.removedAt, 'Archiving must persist without deleting the original');
     assert.equal(fixture.state.pdfs.size, 3);
     await panel(page).getByRole('button', { name: /已刪除的 PDF/ }).click();
@@ -190,7 +192,7 @@ async function managerFits(page, label) {
     await dialog(page).getByRole('tab', { name: /^AI 比對/ }).click();
     await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').waitFor();
     await panel(page).getByLabel('目前頁碼', { exact: true }).fill('5'); await panel(page).getByLabel('目前頁碼', { exact: true }).press('Enter'); await rendered(page);
-    await panel(page).getByRole('button', { name: '對照頁往後一頁', exact: true }).click(); await rendered(page);
+    await panel(page).getByRole('button', { name: '官方對應頁往後一頁', exact: true }).click(); await rendered(page);
     assert.equal(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), 'Official_20261101.pdf 第 6 頁');
     report.checks.push('official comparison supports an explicitly matched page offset');
 
@@ -258,10 +260,10 @@ async function managerFits(page, label) {
     report.checks.push('protected official file snapshot remains independent of later legacy registry edits');
 
     await dialog(page).getByRole('tab', { name: /^線路 Review/ }).click();
-    await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
-    await manager.getByRole('button', { name: '關閉 PDF 版本管理', exact: true }).click();
+    await panel(page).getByRole('button', { name: '選擇 PDF', exact: true }).click();
+    await manager.getByRole('button', { name: '關閉 PDF 清單', exact: true }).click();
     for (const name of ['Working_20261108.pdf', 'Working_20261109.pdf']) {
-      if (!(await manager.isVisible())) await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
+      if (!(await manager.isVisible())) await panel(page).getByRole('button', { name: '選擇 PDF', exact: true }).click();
       const confirmBar = panel(page).getByRole('group', { name: '確認刪除 PDF' });
       await manager.getByRole('button', { name: '刪除 PDF：' + name, exact: true }).click();
       if (name === 'Working_20261108.pdf') {
@@ -272,38 +274,38 @@ async function managerFits(page, label) {
       await confirmBar.getByRole('button', { name: '確認刪除 ' + name, exact: true }).click();
       await eventually(() => registry().documents.find(row => row.name === name)?.removedAt, 'Deleting the work version keeps its original for restoration');
     }
-    if (!(await manager.isVisible())) await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
+    if (!(await manager.isVisible())) await panel(page).getByRole('button', { name: '選擇 PDF', exact: true }).click();
     await manager.getByText('沒有其他 PDF', { exact: true }).waitFor();
     await manager.getByRole('button', { name: /已刪除的 PDF/ }).click();
     assert.equal(await manager.getByRole('button', { name: /^還原 PDF：/ }).count(), 2);
     await managerFits(page, 'desktop official-only with deleted working versions');
     await page.screenshot({ path: path.join(evidence, 'manager-deleted-1440.png') });
-    const beforeRestore = await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).innerText();
+    const beforeRestore = await panel(page).getByRole('button', { name: '選擇 PDF', exact: true }).innerText();
     for (const name of ['Working_20261108.pdf', 'Working_20261109.pdf']) {
       await manager.getByRole('button', { name: '還原 PDF：' + name, exact: true }).click();
       await eventually(() => !registry().documents.find(row => row.name === name)?.removedAt, 'Restore returns the PDF to working versions');
-      assert.equal(await panel(page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).innerText(), beforeRestore, 'Restoring does not change the current PDF');
+      assert.equal(await panel(page).getByRole('button', { name: '選擇 PDF', exact: true }).innerText(), beforeRestore, 'Restoring does not change the current PDF');
     }
     await manager.getByRole('status').waitFor();
     assert.equal(await manager.locator('.circuit-pdf-working-section li').count(), 2);
-    await manager.getByRole('button', { name: '關閉 PDF 版本管理', exact: true }).click();
+    await manager.getByRole('button', { name: '關閉 PDF 清單', exact: true }).click();
     report.checks.push('official-only empty state, named delete cancel, compact restoration and restored-work feedback are usable without switching the active PDF');
 
     const viewer = await open(390, 'view'); await rendered(viewer.page);
     await headerFits(viewer.page, 390);
     await viewer.page.screenshot({ path: path.join(evidence, 'header-actions-390.png') });
-    await panel(viewer.page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
+    await panel(viewer.page).getByRole('button', { name: '選擇 PDF', exact: true }).click();
     await versionManagerFor(viewer.page).waitFor();
     assert.match(await panel(viewer.page).locator('.circuit-pdf-baseline-section').innerText(), /Official_20261101\.pdf/);
-    await versionManagerFor(viewer.page).getByRole('button', { name: '關閉 PDF 版本管理', exact: true }).click();
-    assert.equal(await viewer.page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '選擇 PDF 版本', 'closing the version list returns focus to its button');
-    await panel(viewer.page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
+    await versionManagerFor(viewer.page).getByRole('button', { name: '關閉 PDF 清單', exact: true }).click();
+    assert.equal(await viewer.page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '選擇 PDF', 'closing the version list returns focus to its button');
+    await panel(viewer.page).getByRole('button', { name: '選擇 PDF', exact: true }).click();
     assert.equal(await panel(viewer.page).getByRole('button', { name: /設為官方版本：/ }).count(), 0, 'A viewer cannot designate a baseline');
     const versionBounds = await panel(viewer.page).locator('.circuit-pdf-version-list').boundingBox();
     assert.ok(versionBounds.x >= 0 && versionBounds.x + versionBounds.width <= 390 && versionBounds.y + versionBounds.height <= 884, 'The whole phone version popup must fit within the viewport');
     await viewer.page.screenshot({ path: path.join(evidence, 'official-versions-390.png') });
     await managerFits(viewer.page, 'phone manager');
-    assert.equal(await panel(viewer.page).getByRole('button', { name: /^編輯版本資訊：|^刪除 PDF：|^還原 PDF：/ }).count(), 0, 'Read-only people only see opening controls');
+    assert.equal(await panel(viewer.page).getByRole('button', { name: /^改日期與備註：|^刪除 PDF：|^還原 PDF：/ }).count(), 0, 'Read-only people only see opening controls');
     await viewer.page.setViewportSize({ width: 390, height: 500 });
     await viewer.page.waitForFunction(() => document.querySelector('.circuit-pdf-version-list').getBoundingClientRect().bottom <= innerHeight + 1);
     await managerFits(viewer.page, 'short phone manager');
@@ -317,8 +319,8 @@ async function managerFits(page, label) {
     fixture.state.pdfOfficials.delete('series:qa');
     for (const row of registry().documents) row.removedAt = '2026-11-10T01:00:00.000Z';
     const recovery = await open(390);
-    await panel(recovery.page).getByRole('button', { name: '選擇 PDF 版本', exact: true }).click();
-    const recoveryManager = panel(recovery.page).getByRole('group', { name: 'PDF 版本（依圖面日期）' });
+    await panel(recovery.page).getByRole('button', { name: '選擇 PDF', exact: true }).click();
+    const recoveryManager = panel(recovery.page).getByRole('group', { name: 'PDF 清單（依圖面日期）' });
     await recoveryManager.getByText('沒有其他 PDF', { exact: true }).waitFor();
     await recoveryManager.getByRole('button', { name: /已刪除的 PDF/ }).click();
     await managerFits(recovery.page, 'phone all-archived recovery');
@@ -326,13 +328,13 @@ async function managerFits(page, label) {
     await recoveryManager.getByRole('button', { name: '還原 PDF：Working_20261108.pdf', exact: true }).click();
     await eventually(() => !registry().documents.find(row => row.name === 'Working_20261108.pdf')?.removedAt, 'All-archived PDFs remain reachable and restorable');
     assert.ok(!fixture.state.pdfOfficials.get('series:qa'), 'Recovery does not silently assign a new baseline');
-    await recoveryManager.getByRole('button', { name: '編輯版本資訊：Working_20261108.pdf', exact: true }).click();
-    await recoveryManager.getByLabel('Working_20261108.pdf 的版本備註', { exact: true }).fill('手機版本註記');
+    await recoveryManager.getByRole('button', { name: '改日期與備註：Working_20261108.pdf', exact: true }).click();
+    await recoveryManager.getByLabel('Working_20261108.pdf 的備註', { exact: true }).fill('手機版本註記');
     await recovery.page.keyboard.press('Tab');
     await eventually(() => registry().documents.find(row => row.name === 'Working_20261108.pdf')?.label === '手機版本註記', 'Phone explicit metadata editing saves');
     await managerFits(recovery.page, 'phone editing working version');
     await recovery.page.screenshot({ path: path.join(evidence, 'manager-edit-390.png') });
-    await recoveryManager.getByRole('button', { name: '關閉 PDF 版本管理', exact: true }).click();
+    await recoveryManager.getByRole('button', { name: '關閉 PDF 清單', exact: true }).click();
     await recoveryManager.waitFor({ state: 'hidden' });
     assert.ok(await dialog(recovery.page).isVisible());
     const mobileFile = path.join(evidence, 'Mobile_Working_20261110.pdf'); fs.copyFileSync(files[2], mobileFile);

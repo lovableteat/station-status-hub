@@ -77,5 +77,5 @@ export async function downloadCircuitPdf(path: string): Promise<ArrayBuffer> {
 export async function removeCircuitPdfFile(path: string): Promise<void> {
   if (!path) return;
   const { error } = await supabase.storage.from(CIRCUIT_PDF_BUCKET).remove([path]);
-  if (error) throw new Error(error.message || "PDF 檔案移除失敗。");
+  if (error) throw new Error(error.message || "PDF 檔案刪除失敗。");
 }
