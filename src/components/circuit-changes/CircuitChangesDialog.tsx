@@ -14,6 +14,7 @@ import { exportCircuitChangeList } from "./export";
 import { CircuitChangeImages, type CircuitImageUrls } from "./CircuitChangeImages";
 import { CircuitChangeImageViewer } from "./CircuitChangeImageViewer";
 import { CircuitOfficialVersions } from "./CircuitOfficialVersions";
+import { CircuitTrackingList, TRACKING_PAGE_SIZE } from "./CircuitTrackingList";
 import { CIRCUIT_EVENT_LABELS, circuitSetLabel, groupCircuitChangeEvents, latestCircuitReturn } from "./presentation";
 import { CIRCUIT_CHANGE_FIELD_LIMITS, CIRCUIT_CHANGE_STATUS_LABELS, CIRCUIT_IMAGE_SIDE_LABELS, CIRCUIT_TASKS, circuitChangeMissingForReview, type CircuitTask, defaultCircuitChangeSet, isUnsavedCircuitChange, type CircuitChangeContext, type CircuitChangeContent, type CircuitChangeItem, type CircuitChangeStatus, type CircuitChangeTextField, type CircuitChangesModel, type CircuitImage, type CircuitImageSide } from "./types";
 import "./circuitChanges.css";
@@ -34,8 +35,8 @@ const CIRCUIT_TONE_LEGEND = [
 ] as const;
 const guideSteps = [
   { title: "線路 Review：看圖、標記問題（檢查線路的人）", text: "上傳原理圖 PDF 逐頁看。看到問題就按「截圖」在圖上框出來，再按「加到問題截圖」；寫標題（必填）、問題說明並指定負責人，輸入後自動儲存。按「看完，下一頁」記下看到哪裡，明天上傳新的 PDF 會接續同一頁。" },
-  { title: "AI 比對：確認新舊版差在哪裡", text: "左邊是官方版本，右邊是新版，兩邊同步捲動。按「AI 比對新舊版」逐頁找出差異，每一項選「已確認」或「不採用」並保存，結果留有時間與操作者。這一頁只看兩份圖面，不填問題。" },
-  { title: "改善追蹤：回報改善、確認結案（畫線路的人、主管）", text: "畫線路的人選「待改善」的問題，在「改善結果」寫改善說明、加改好後截圖（可按「從圖面截圖」），按「回報改善」。主管看「待確認」的問題，按「確認結案」或寫意見後「退回重改」。每一步都記在「追蹤紀錄」。" },
+  { title: "AI 比對：確認兩份 PDF 的差異", text: "左邊選基準版，右邊選比對版，兩邊可連動捲動。開啟「AI 比對新舊版」後，可比對目前頁面或全部頁面。每項差異可以確認或不採用，儲存後可回查時間與操作者。" },
+  { title: "改善追蹤：回報改善、確認結案（畫線路的人、主管）", text: "問題超過 25 項時先顯示分頁清單，可依編號、狀態或負責人找問題。畫線路的人選「待改善」的問題，在「改善結果」寫改善說明、加改好後截圖（可按「從圖面截圖」），按「回報改善」。主管看「待確認」的問題，按「確認結案」或寫意見後「退回重改」。每一步都記在「追蹤紀錄」。" },
   { title: "官方版本：換了就記下來", text: "官方版本更換時，在「官方版本」選新的 PDF 並確認。每次更換都記下 PDF、設定人與時間；舊的 PDF 與紀錄都保留。" },
 ];
 const dateTime = (value: string) => value ? new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "";
@@ -63,6 +64,8 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
 }) {
   const naming = useMemo(() => defaultCircuitChangeSet(context.versionLabel), [context.versionLabel]);
   const [filters, setFilters] = useState(readFilters);
+  const [trackingView, setTrackingView] = useState<"auto" | "list" | "detail">("auto");
+  const [trackingPage, setTrackingPage] = useState(1);
   const [notice, setNotice] = useState("");
   const [working, setWorking] = useState(false);
   const [newSetOpen, setNewSetOpen] = useState(false);
@@ -95,6 +98,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   const versionsOpener = useRef<HTMLButtonElement | null>(null);
   // 改善追蹤 opens the drawing only when someone wants to frame the 改好後截圖 from it.
   const [trackPdf, setTrackPdf] = useState(false);
+  const showTrackingList = task === "track" && (trackingView === "list" || (trackingView === "auto" && model.items.length > TRACKING_PAGE_SIZE));
   const [problemEditId, setProblemEditId] = useState("");
   const pdfOpen = task === "official" ? false : wide ? task === "review" || task === "ai" || (task === "track" && trackPdf) : mobilePdf;
   const listCollapsed = wide && pdfOpen && (layout.list === "collapsed" || (layout.list === "auto" && !roomy));
@@ -135,9 +139,10 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   const statusCounts = useMemo(() => Object.fromEntries(statusKeys.map(key => [key, model.items.filter(row => row.status === key).length])) as Record<CircuitChangeStatus, number>, [model.items]);
   const filtered = useMemo(() => {
     const needle = filters.query.trim().toLocaleLowerCase();
+    const issueNumber = /^#(\d+)$/.exec(needle);
     return model.items.filter(row => (filters.status === "all" || row.status === filters.status)
       && (filters.owner === "all" || row.content.owner === filters.owner)
-      && (!needle || [String(row.number), row.content.title, row.content.reason, row.content.description, row.content.refs, row.content.net, row.content.page, row.content.owner].join(" ").toLocaleLowerCase().includes(needle)));
+      && (issueNumber ? row.number === Number(issueNumber[1]) : !needle || [String(row.number), number(row.number), row.content.title, row.content.reason, row.content.description, row.content.refs, row.content.net, row.content.page, row.content.owner].join(" ").toLocaleLowerCase().includes(needle)));
   }, [model.items, filters]);
   const selectedIndex = filtered.findIndex(row => row.id === model.selectedItemId);
   const canPrevious = selectedIndex > 0;
@@ -156,7 +161,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     window.history.replaceState(window.history.state, "", url);
   }, [filters, open]);
   useEffect(() => {
-    const read = () => setFilters(readFilters());
+    const read = () => { setFilters(readFilters()); setTrackingPage(1); };
     window.addEventListener("popstate", read);
     return () => window.removeEventListener("popstate", read);
   }, []);
@@ -168,6 +173,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     return () => { query?.removeEventListener("change", read); large?.removeEventListener("change", read); };
   }, [open]);
   useEffect(() => { setVersionsOpen(false); }, [open, context.seriesId]);
+  useEffect(() => { setTrackingView("auto"); setTrackingPage(1); }, [open, context.seriesId]);
   useEffect(() => {
     if (!open) return;
     const visual = window.visualViewport;
@@ -234,12 +240,33 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     window.history.replaceState(window.history.state, "", url);
     onOpenChange(false);
   }
-  function selectItem(id: string) { void run(async () => { await model.selectItem(id); changeLayout({ detail: true }); setMobileDetail(true); }); }
+  function selectItem(id: string, fromTrackingList = false) {
+    void run(async () => {
+      await model.selectItem(id);
+      changeLayout({ detail: true }); setMobileDetail(true);
+      if (fromTrackingList) {
+        setTrackingView("detail");
+        requestAnimationFrame(() => detailPanel.current?.querySelector<HTMLButtonElement>(".circuit-track-back")?.focus());
+      }
+    });
+  }
+  function changeFilters(patch: Partial<ReturnType<typeof readFilters>>) {
+    setFilters(current => ({ ...current, ...patch }));
+    setTrackingPage(1);
+  }
+  function returnToTrackingList() {
+    setTrackingView("list"); setTrackPdf(false); setMobilePdf(false); setMobileDetail(false);
+    requestAnimationFrame(() => {
+      const panel = document.getElementById("circuit-task-panel");
+      const row = panel?.querySelector<HTMLButtonElement>('[data-selected="true"] .circuit-track-item');
+      (row ?? panel?.querySelector<HTMLInputElement>(".circuit-search input"))?.focus();
+    });
+  }
   function newItem() {
     void run(async () => {
       await model.createItem();
       // A new change is a draft; a status or search filter would hide the row it gets once it is saved.
-      setFilters({ query: "", status: "all", owner: "all" }); changeLayout({ detail: true }); setMobileDetail(true);
+      changeFilters({ query: "", status: "all", owner: "all" }); changeLayout({ detail: true }); setMobileDetail(true);
       if (sideBySide()) requestAnimationFrame(() => detailScroll.current?.querySelector<HTMLInputElement>(".circuit-field-title input")?.focus());
     });
   }
@@ -247,7 +274,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   function submitNewSet(event: FormEvent) {
     event.preventDefault();
     if (working || !newTitle.trim()) return;
-    void run(async () => { await model.createSet(newTitle.trim(), fromLabel.trim(), toLabel.trim()); setNewSetOpen(false); });
+    void run(async () => { await model.createSet(newTitle.trim(), fromLabel.trim(), toLabel.trim()); setTrackingPage(1); setNewSetOpen(false); });
   }
   function changeLayout(patch: Partial<ReturnType<typeof readLayout>>) { setLayout(current => { const next = { ...current, ...patch }; writeLayout(next); return next; }); }
   function toggleDetail() {
@@ -406,6 +433,31 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     <Textarea aria-label="留言" value={reviewNote} disabled={!canEdit || remotelyRemoved} maxLength={10000} placeholder={reviewing ? "退回時寫清楚還要改什麼；確認結案可以留空。" : "補充說明或討論，會記在追蹤紀錄。"} onChange={event => setReviewNote(event.target.value)} />
   </label>;
   const commentButton = <Button data-circuit-tone="edit" title="把意見記到追蹤紀錄，不改變狀態" type="button" variant="outline" disabled={busy || !canEdit || remotelyRemoved || !reviewNote.trim()} onClick={() => act("comment")}><MessageSquare aria-hidden="true" />新增留言</Button>;
+  const setPicker = model.sets.length > 1 && <label className="circuit-set-picker" title="每次改版各有一份問題清單"><span>改版清單</span>
+    <select aria-label="選擇改版紀錄" value={model.selectedSetId} disabled={busy || model.loading} onChange={event => {
+      const id = event.target.value;
+      void run(async () => { await model.selectSet(id); setTrackingPage(1); if (showTrackingList) setTrackingView("list"); });
+    }}>
+      {model.sets.map(set => <option key={set.id} value={set.id}>{circuitSetLabel(set)}</option>)}
+    </select>
+  </label>;
+  const filterControls = <>
+    <div className="circuit-filter-bar" role="group" aria-label="線路修改篩選">
+      <label className="circuit-search"><Search aria-hidden="true" /><Input aria-label="搜尋線路修改" placeholder="搜尋編號、標題、Ref、Net" value={filters.query} onChange={event => changeFilters({ query: event.target.value })} /></label>
+      <label className="circuit-filter-select" data-status={filters.status}><Filter aria-hidden="true" /><span className="sr-only">狀態</span><select title="只看某個狀態的問題" aria-label="篩選修改狀態" value={filters.status} onChange={event => changeFilters({ status: event.target.value })}>
+        <option value="all">全部狀態</option>{statusKeys.map(key => <option key={key} value={key}>{CIRCUIT_CHANGE_STATUS_LABELS[key]}（{statusCounts[key]}）</option>)}
+      </select></label>
+      <label className="circuit-filter-select circuit-filter-owner" data-active={filters.owner !== "all"}><UserRound aria-hidden="true" /><span className="sr-only">負責人</span><select title="只看某位負責人的問題" aria-label="篩選修改負責人" value={filters.owner} onChange={event => changeFilters({ owner: event.target.value })}>
+        <option value="all">全部負責人</option>{filters.owner !== "all" && !owners.includes(filters.owner) && <option value={filters.owner}>{filters.owner}</option>}{owners.map(owner => <option key={owner} value={owner}>{owner}</option>)}
+      </select></label>
+    </div>
+    {activeChips.length > 0 && <div className="circuit-active-filters" data-testid="circuit-active-filters">
+      {activeChips.map(chip => <button type="button" key={chip.key} aria-label={`移除篩選：${chip.label}`} onClick={() => changeFilters({ [chip.key]: chip.reset })}>{chip.label}<X aria-hidden="true" /></button>)}
+      <Button type="button" variant="ghost" onClick={() => changeFilters({ query: "", status: "all", owner: "all" })}>全部清除</Button>
+    </div>}
+  </>;
+  const removedCount = canEdit ? model.removedItems?.length ?? 0 : 0;
+  const openRemoved = () => { setNotice(""); setRemovedOpen(true); };
 
   return <>
     <Dialog open={open} onOpenChange={close}>
@@ -443,35 +495,26 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
         </nav>
         {(notice || model.error || model.saveError) && <div className="circuit-message" role="alert"><span>{notice || model.saveError || model.error}</span><div>{closeBlocked && <Button type="button" variant="ghost" title={unsaved ? "這項新修改還沒有建立，關閉後不會保留" : "未儲存的草稿會留在這台電腦，下次開啟這一項時帶回"} onClick={leave}>不儲存，直接關閉</Button>}<Button title="重新讀取最新資料" type="button" variant="ghost" onClick={() => void run(() => model.reload())}>重新載入</Button></div></div>}
         {task === "official" ? <div id="circuit-task-panel" role="tabpanel" aria-labelledby="circuit-task-official" className="circuit-task-panel">
-          <CircuitOfficialVersions seriesId={context.seriesId} pdfs={pdfs} canEdit={canEdit} onOpen={documentId => { pdfs.select(documentId); chooseTask("review"); }} />
-        </div> : <div id="circuit-task-panel" role="tabpanel" aria-labelledby={`circuit-task-${task}`} className="circuit-workspace" data-task={task} data-pdf-open={pdfOpen} data-list-collapsed={listCollapsed} data-detail-collapsed={detailCollapsed}>
-          {task !== "ai" && <aside id="circuit-change-list" className="circuit-list-panel" aria-label="修改項目">
+          <CircuitOfficialVersions seriesId={context.seriesId} pdfs={pdfs} canEdit={canEdit} onOpen={documentId => {
+            pdfs.select(documentId);
+            chooseTask("review");
+            if (!wide) setMobilePdf(true);
+          }} />
+        </div> : showTrackingList ? <div id="circuit-task-panel" role="tabpanel" aria-labelledby="circuit-task-track" className="circuit-workspace" data-task="track" data-tracking-view="list">
+          <CircuitTrackingList items={filtered} total={model.items.length} counts={statusCounts} status={filters.status} page={trackingPage} busy={busy} loading={model.loading} selectedId={model.selectedItemId}
+            filters={filterControls} setPicker={setPicker} removedCount={removedCount} onRemoved={openRemoved} onPage={setTrackingPage} onSelect={id => selectItem(id, true)} onStatus={status => changeFilters({ status })} />
+        </div> : <div id="circuit-task-panel" role="tabpanel" aria-labelledby={`circuit-task-${task}`} className="circuit-workspace" data-task={task} data-pdf-open={pdfOpen} data-list-collapsed={listCollapsed} data-detail-collapsed={detailCollapsed} data-tracking-view={task === "track" ? trackingView : undefined}>
+          {task !== "ai" && !(task === "track" && trackingView === "detail") && <aside id="circuit-change-list" className="circuit-list-panel" aria-label="修改項目">
             {listCollapsed ? <div className="circuit-list-rail">
               <Button data-circuit-tone="edit" type="button" variant="outline" className="circuit-panel-toggle" aria-label="展開清單" title="展開問題清單" aria-expanded={false} aria-controls="circuit-change-list" onClick={() => changeLayout({ list: "open" })}><PanelLeftOpen aria-hidden="true" /><span>展開清單</span></Button>
               {canEdit && task === "review" && <Button data-circuit-tone="add" type="button" variant="outline" className="circuit-panel-toggle circuit-rail-new" aria-label="新增問題" title="記錄一個新問題" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" /><span>新增問題</span></Button>}
               <span title={`共 ${model.items.length} 個問題`}>{model.items.length}<small>項</small></span>
             </div> : <>
-            {model.sets.length > 1 && <label className="circuit-set-picker" title="每次改版各有一份問題清單"><span>改版清單</span>
-              <select aria-label="選擇改版紀錄" value={model.selectedSetId} disabled={busy || model.loading} onChange={event => void run(() => model.selectSet(event.target.value))}>
-                {model.sets.map(set => <option key={set.id} value={set.id}>{circuitSetLabel(set)}</option>)}
-              </select>
-            </label>}
+            {setPicker}
             {((canEdit && task === "review") || (!wide && task === "review") || (wide && pdfOpen)) && <div className="circuit-new-item-row">{canEdit && task === "review" && <Button data-circuit-tone="add" data-fill="solid" type="button" variant="outline" className="circuit-new-item" title="每個問題記成一項" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" />新增問題</Button>}
               {!wide && task === "review" && <Button data-circuit-tone="view" type="button" variant="outline" className="circuit-list-collapse circuit-mobile-pdf-list" aria-label="看圖面" title="打開圖面，逐頁看、截圖" onClick={() => setMobilePdf(true)}><FileText aria-hidden="true" /></Button>}
               {wide && pdfOpen && <Button data-circuit-tone="edit" type="button" variant="outline" className="circuit-list-collapse circuit-panel-toggle" aria-label="收合清單" title="收合左邊的問題清單，讓圖面更寬" aria-expanded={true} aria-controls="circuit-change-list" onClick={() => changeLayout({ list: "collapsed" })}><PanelLeftClose aria-hidden="true" /><span>收合清單</span></Button>}</div>}
-            <div className="circuit-filter-bar" role="group" aria-label="線路修改篩選">
-              <label className="circuit-search"><Search aria-hidden="true" /><Input aria-label="搜尋線路修改" placeholder="搜尋編號、標題、Ref、Net" value={filters.query} onChange={event => setFilters(current => ({ ...current, query: event.target.value }))} /></label>
-              <label className="circuit-filter-select" data-status={filters.status}><Filter aria-hidden="true" /><span className="sr-only">狀態</span><select title="只看某個狀態的問題" aria-label="篩選修改狀態" value={filters.status} onChange={event => setFilters(current => ({ ...current, status: event.target.value }))}>
-                <option value="all">全部狀態</option>{statusKeys.map(key => <option key={key} value={key}>{CIRCUIT_CHANGE_STATUS_LABELS[key]}（{statusCounts[key]}）</option>)}
-              </select></label>
-              <label className="circuit-filter-select circuit-filter-owner" data-active={filters.owner !== "all"}><UserRound aria-hidden="true" /><span className="sr-only">負責人</span><select title="只看某位負責人的問題" aria-label="篩選修改負責人" value={filters.owner} onChange={event => setFilters(current => ({ ...current, owner: event.target.value }))}>
-                <option value="all">全部負責人</option>{filters.owner !== "all" && !owners.includes(filters.owner) && <option value={filters.owner}>{filters.owner}</option>}{owners.map(owner => <option key={owner} value={owner}>{owner}</option>)}
-              </select></label>
-            </div>
-            {activeChips.length > 0 && <div className="circuit-active-filters" data-testid="circuit-active-filters">
-              {activeChips.map(chip => <button type="button" key={chip.key} aria-label={`移除篩選：${chip.label}`} onClick={() => setFilters(current => ({ ...current, [chip.key]: chip.reset }))}>{chip.label}<X aria-hidden="true" /></button>)}
-              <Button type="button" variant="ghost" onClick={() => setFilters({ query: "", status: "all", owner: "all" })}>全部清除</Button>
-            </div>}
+            {filterControls}
             <div className="circuit-item-list" aria-label="問題清單" aria-busy={model.loading}>
               <div className="circuit-list-heading"><span>編號</span><span className="circuit-list-heading-title">問題<span className="circuit-result-count">{filtered.length === model.items.length ? `${model.items.length} 項` : `${filtered.length} / ${model.items.length} 項`}</span></span><span>狀態</span></div>
               {filtered.map(row => <button title={`打開 ${number(row.number)} ${row.content.title || "未命名問題"}`} type="button" key={row.id} data-testid="circuit-change-item" className="circuit-item" aria-pressed={row.id === model.selectedItemId} disabled={busy} onClick={() => selectItem(row.id)}>
@@ -483,7 +526,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                 : model.items.length > 0 && !filtered.length ? <p className="circuit-empty">目前篩選條件沒有符合的問題</p>
                 : !model.items.length ? <p className="circuit-empty">{unsaved && canEdit ? "還沒有問題；在右邊填寫就會建立第一項" : "這次改版還沒有記錄任何問題"}</p> : null}
             </div>
-            {canEdit && (model.removedItems?.length ?? 0) > 0 && <Button data-circuit-tone="delete" type="button" variant="outline" className="circuit-removed-trigger" aria-label={`已刪除的問題（${model.removedItems.length}）`} title="打開已刪除的問題，可以放回清單" onClick={() => { setNotice(""); setRemovedOpen(true); }}><ArchiveRestore aria-hidden="true" /><span>已刪除 {model.removedItems.length} 個問題</span><b>還原</b></Button>}
+            {removedCount > 0 && <Button data-circuit-tone="delete" type="button" variant="outline" className="circuit-removed-trigger" aria-label={`已刪除的問題（${removedCount}）`} title="打開已刪除的問題，可以放回清單" onClick={openRemoved}><ArchiveRestore aria-hidden="true" /><span>已刪除 {removedCount} 個問題</span><b>還原</b></Button>}
             </>}
           </aside>}
           {pdfOpen && <CircuitPdfPanel mode={task === "ai" ? "ai" : "review"} captureSide={task === "track" ? "after" : "before"} pageReview={task === "review"} onAiReview={onAiReview} onSetupOfficial={() => chooseTask("official")} pdfs={pdfs} ink={pdfInk} canEdit={canEdit} captureBlocked={captureBlocked} targetLabel={targetLabel} pageChanges={pageChanges} crops={pdfCrops} versionsOpen={versionsOpen} onVersionsOpenChange={setVersionsOpen} versionsOpener={versionsOpener}
@@ -491,7 +534,8 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
           {task !== "ai" && <section ref={detailPanel} id="circuit-change-detail" className="circuit-detail" hidden={detailCollapsed} aria-label="問題內容" data-testid="circuit-change-detail" aria-busy={model.switching}>
             {content && item && !(task === "track" && unsaved) ? <>
               <header className="circuit-detail-heading">
-                <Button type="button" variant="ghost" className="circuit-mobile-back" aria-label="返回問題清單" onClick={() => setMobileDetail(false)}><ArrowLeft aria-hidden="true" /></Button>
+                {task === "track" ? <Button type="button" variant="outline" className="circuit-track-back" aria-label="返回問題清單" title="返回問題清單" onClick={returnToTrackingList}><ArrowLeft aria-hidden="true" /><span>返回問題清單</span></Button>
+                  : <Button type="button" variant="ghost" className="circuit-mobile-back" aria-label="返回問題清單" onClick={() => setMobileDetail(false)}><ArrowLeft aria-hidden="true" /></Button>}
                 <div>
                   <strong>{unsaved ? "新問題" : number(item.number)}{!unsaved && <span className="circuit-list-status" data-status={item.status}>{CIRCUIT_CHANGE_STATUS_LABELS[item.status]}</span>}</strong>
                   {!unsaved && <span data-revision title={`修訂 ${item.revision}${latestActor ? ` · ${latestActor}` : ""} · ${dateTime(item.updatedAt)}`}>{`修訂 ${item.revision}${latestActor ? ` · ${latestActor}` : ""}`}</span>}
@@ -585,7 +629,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
       <DialogContent className="circuit-remove-dialog" style={viewportStyle}>
         <DialogTitle>刪除這個問題？</DialogTitle>
         <DialogDescription>「{removeTarget && `${number(removeTarget.number)} ${removeTarget.content.title || "未命名問題"}`}」會從問題清單刪除。已儲存的追蹤紀錄與原圖保留，之後可從「已刪除的問題」還原；未儲存的草稿會捨棄。</DialogDescription>
-        <div className="circuit-new-set-actions"><Button title="不刪除，回到問題" type="button" variant="outline" disabled={busy} onClick={() => setRemoveTarget(null)}>取消</Button><Button data-circuit-tone="delete" data-fill="solid" title="從清單刪除；追蹤紀錄與原圖保留，之後可以還原" type="button" variant="destructive" disabled={busy || !canEdit || !removeTarget} onClick={() => void run(async () => { await model.deleteItem(removeTarget!.id); setRemoveTarget(null); setMobileDetail(false); })}>確認刪除</Button></div>
+        <div className="circuit-new-set-actions"><Button title="不刪除，回到問題" type="button" variant="outline" disabled={busy} onClick={() => setRemoveTarget(null)}>取消</Button><Button data-circuit-tone="delete" data-fill="solid" title="從清單刪除；追蹤紀錄與原圖保留，之後可以還原" type="button" variant="destructive" disabled={busy || !canEdit || !removeTarget} onClick={() => void run(async () => { await model.deleteItem(removeTarget!.id); setRemoveTarget(null); setMobileDetail(false); if (task === "track") returnToTrackingList(); })}>確認刪除</Button></div>
         {notice && <p role="alert">{notice}</p>}
       </DialogContent>
     </Dialog>
@@ -623,7 +667,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
           <section><h3>一個問題怎麼走完？</h3><p>在「線路 Review」標記問題（待改善）→ 畫線路的人在「改善追蹤」寫改善說明、加改好後截圖，按「回報改善」（待確認）→ 主管「確認結案」（已結案），或寫意見「退回重改」（退回重改）。有標題，再加上改善說明或改好後截圖，才能回報改善。</p></section>
           <section><h3>PDF 怎麼用？</h3><p>上傳原理圖 PDF（可拖入，每份 50 MB 內存到雲端，更大的只在這台電腦開啟，不需壓縮）。日期先取檔名裡的日期，沒有就用檔案日期，可在 PDF 清單修改。按「截圖」後在頁面上拖曳框出一塊，再按「加到問題截圖」（改善追蹤裡是「加到改好後截圖」），圖會從 PDF 重新繪製並記下來源版本與頁碼；這個問題的頁碼欄若是空的會自動填入。「畫筆」可直接畫線並自動儲存，「橡皮擦」點掉筆跡；PDF 原圖不變。上傳錯了，打開 PDF 清單按那一份的「刪除」，可在下方「已刪除的 PDF」還原。</p></section>
           <section><h3>貼圖與標記</h3><p>截圖後按 Ctrl+V，圖會加到標示「貼上會加到這裡」的那一格；也可以把檔案拖到想放的那一格。每個問題最多 200 張、每張 50 MB，不需壓縮。點圖片放大，用「位置標記」或「框選」標出位置並寫說明。</p></section>
-          <section><h3>AI 比對的限制</h3><p>AI 只看得到兩頁 PDF 的圖像與文字，會列出可見的連接、Net 與名稱差異；每一項由你確認或不採用，結果與人工確認分開保存。PDF 比對不能取代原始 Netlist／ERC 的電氣連通驗證。頁數不同時，在圖面上方調整「官方對應頁」。</p></section>
+          <section><h3>AI 比對的限制</h3><p>AI 依 PDF 的圖像與文字列出可見的連接、Net 與名稱差異，電氣連通請用原始 Netlist／ERC 核對。頁碼不同時，在圖面上方調整基準版的對應頁。</p></section>
           <section><h3>匯出與改版清單</h3><p>按右上的「匯出」下載 Excel，包含目前篩選的問題、標註圖片與追蹤紀錄；要匯出全部，先清除篩選。換到下一次改版（例如 V2 → V3）時，從「⋯ 更多」新增改版清單；有兩份以上時，清單上方可以切換。</p></section>
         </div>
         <footer className="circuit-guide-footer"><Button title="關閉說明，回到線路修改" type="button" onClick={() => setGuideOpen(false)}>知道了</Button></footer>

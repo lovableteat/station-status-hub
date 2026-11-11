@@ -216,20 +216,30 @@
   .circuit-pdf-actions > button[aria-label="取消框選"] { flex: none; width: 44px; }
 }
 
-/* AI 比對 (2026-11-10): old (official) → new, then the one AI button. */
-.circuit-pdf-ai-bar { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border-bottom: 1px solid hsl(var(--border)); background: hsl(var(--primary) / .05); }
-.circuit-pdf-ai-side { display: flex; min-width: 0; align-items: center; gap: 8px; }
-.circuit-pdf-ai-side > small { flex: none; color: hsl(var(--muted-foreground)); font-size: 12px; }
-.circuit-pdf-ai-side > strong { display: inline-flex; min-width: 0; align-items: center; gap: 6px; overflow: hidden; font-size: 14px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.circuit-pdf-ai-side > strong > svg { flex: none; width: 16px; height: 16px; color: hsl(var(--warning)); }
-.circuit-pdf-ai-side > select { width: 300px; max-width: 100%; height: 36px; }
-.circuit-pdf-ai-arrow { flex: none; width: 16px; height: 16px; color: hsl(var(--muted-foreground)); }
-.circuit-pdf-ai-bar > button { height: 36px; gap: 6px; margin-left: auto; }
-@media (max-width: 1023px) {
-  .circuit-pdf-ai-bar { padding: 8px 16px; }
-  .circuit-pdf-ai-side[data-side="new"] { flex: 1; }
-  .circuit-pdf-ai-side > select { width: auto; flex: 1; height: 44px; }
-  .circuit-pdf-ai-bar > button { flex: 1 0 100%; height: 44px; margin-left: 0; }
+/* The two file selectors follow the left/right order of the drawing panes. */
+.circuit-pdf-ai-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  flex: none;
+  align-items: end;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.circuit-pdf-ai-pair > label { display: grid; min-width: 0; gap: 4px; }
+.circuit-pdf-ai-pair > label > strong { color: hsl(var(--muted-foreground)); font-size: 12px; font-weight: 600; }
+.circuit-pdf-ai-pair > label[data-side="old"] > strong { color: hsl(var(--warning)); }
+.circuit-pdf-ai-pair > label[data-side="new"] > strong { color: hsl(var(--primary)); }
+.circuit-pdf-ai-pair select { width: 100%; min-width: 0; height: 36px; text-overflow: ellipsis; }
+.circuit-pdf-ai-pair .circuit-pdf-swap { width: 36px; height: 36px; padding: 0; }
+.circuit-pdf-ai-pair-actions { display: flex; gap: 8px; }
+.circuit-pdf-ai-pair-actions > button { height: 36px; gap: 6px; }
+@media (max-width: 760px) {
+  .circuit-pdf-ai-pair { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+  .circuit-pdf-ai-pair-actions { grid-column: 1 / -1; }
+  .circuit-pdf-ai-pair-actions > button { flex: 1; padding-inline: 8px; }
+  .circuit-pdf-ai-pair select, .circuit-pdf-ai-pair .circuit-pdf-swap, .circuit-pdf-ai-pair-actions > button { height: 44px; }
+  .circuit-pdf-ai-pair .circuit-pdf-swap { width: 44px; }
 }
 
 /* A tool group the current task does not use. */
@@ -258,40 +268,15 @@
 .circuit-pdf-overview > .circuit-pdf-progress { min-width: 0; }
 
 /* AI 比對 steps (2026-11-10): numbered, the current one ringed in teal, finished ones checked. */
-.circuit-pdf-ai-bar { gap: 8px 16px; }
-.circuit-pdf-ai-steps { display: flex; flex: 1; min-width: 0; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
-.circuit-pdf-ai-steps > li { display: flex; min-width: 0; align-items: center; gap: 8px; color: hsl(var(--muted-foreground)); }
-.circuit-pdf-ai-steps > li > b, .circuit-pdf-ai-guide li > b { display: inline-flex; flex: none; width: 22px; height: 22px; align-items: center; justify-content: center; border: 1px solid hsl(var(--border)); border-radius: 50%; font-size: 12px; font-weight: 600; }
-.circuit-pdf-ai-steps > li > b > svg, .circuit-pdf-ai-guide li > b > svg { width: 13px; height: 13px; }
-.circuit-pdf-ai-steps > li > span { display: flex; min-width: 0; align-items: center; gap: 6px; }
-.circuit-pdf-ai-steps > li > span > small { flex: none; font-size: 12px; }
-.circuit-pdf-ai-steps > li > span > strong { overflow: hidden; font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.circuit-pdf-ai-steps > li > span > select { width: 260px; max-width: 100%; height: 34px; }
-.circuit-pdf-ai-steps > li[data-state="done"] > b, .circuit-pdf-ai-guide li[data-state="done"] > b { border-color: hsl(var(--primary) / .5); color: hsl(var(--primary)); }
-.circuit-pdf-ai-steps > li[data-state="done"], .circuit-pdf-ai-steps > li[data-state="current"] { color: hsl(var(--foreground)); }
-.circuit-pdf-ai-steps > li[data-state="current"] > b, .circuit-pdf-ai-guide li[data-state="current"] > b { border-color: hsl(var(--primary)); background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
-.circuit-pdf-ai-bar > .circuit-pdf-ai-run { flex: none; height: 36px; gap: 6px; margin-left: auto; }
 .circuit-pdf-ai-guide { display: grid; align-content: start; gap: 14px; width: min(640px, calc(100% - 32px)); margin: 40px auto; padding: 24px 28px; border: 1px solid hsl(var(--foreground) / .1); border-radius: 12px; background: hsl(var(--card)); box-shadow: inset 0 1px 0 hsl(0 0% 100% / .04); }
 .circuit-pdf-ai-guide > h3 { font-size: 18px; font-weight: 600; }
 .circuit-pdf-ai-guide > p { color: hsl(var(--muted-foreground)); font-size: 14px; line-height: 22px; }
-.circuit-pdf-ai-guide > ol { display: grid; gap: 12px; }
-.circuit-pdf-ai-guide li { display: flex; align-items: flex-start; gap: 12px; color: hsl(var(--muted-foreground)); }
-.circuit-pdf-ai-guide li > div { display: grid; gap: 2px; font-size: 13px; line-height: 20px; }
-.circuit-pdf-ai-guide li > div > strong { color: hsl(var(--foreground)); font-size: 14px; font-weight: 600; }
-.circuit-pdf-ai-guide li[data-state="waiting"] > div > strong { color: hsl(var(--muted-foreground)); }
-.circuit-pdf-ai-guide-action > button { height: 40px; gap: 6px; padding-inline: 16px; }
-.circuit-pdf-ai-guide-note { color: hsl(var(--muted-foreground)); font-size: 13px; }
 
 @media (max-width: 1023px) {
   .circuit-pdf-strip, .circuit-pdf-strip:has(button > span) { height: 40px; }
   .circuit-pdf-strip > [data-strip-page] { height: 20px; }
   .circuit-pdf-strip > [data-current] { width: 14px; height: 32px; }
-  .circuit-pdf-ai-steps { gap: 6px 12px; }
-  .circuit-pdf-ai-steps > li > span > select { width: auto; flex: 1; height: 44px; }
-  .circuit-pdf-ai-steps > li[data-side="new"] { flex: 1 0 100%; }
-  .circuit-pdf-ai-bar > .circuit-pdf-ai-run { flex: 1 0 100%; height: 44px; margin-left: 0; }
   .circuit-pdf-ai-guide { margin: 16px auto; padding: 18px; }
-  .circuit-pdf-ai-guide-action > button { width: 100%; height: 44px; }
 }
 
 /* AutoCheck look (2026-11-11): inside the framed drawing panel the bars sit on the card, the page area stays black so
@@ -300,13 +285,7 @@
 .circuit-pdf-toolbar, .circuit-pdf-overview, .circuit-pdf-link-bar, .circuit-pdf-ai-bar { background: hsl(var(--card)); border-color: hsl(var(--foreground) / .1); }
 .circuit-pdf-stage { background: hsl(var(--background)); }
 .circuit-pdf-strip > [data-current] { box-shadow: 0 0 0 2px hsl(var(--card)); }
-.circuit-pdf-ai-steps > li[data-state="done"] > b, .circuit-pdf-ai-guide li[data-state="done"] > b { border-color: transparent; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
-.circuit-pdf-ai-steps > li[data-state="current"] > b, .circuit-pdf-ai-guide li[data-state="current"] > b { border-color: hsl(var(--warning)); background: transparent; color: hsl(var(--warning)); }
-.circuit-pdf-ai-steps > li[data-state="current"] > span > strong { color: hsl(var(--warning)); }
 .circuit-pdf-ai-guide { border-color: hsl(var(--primary) / .45); background: hsl(var(--card)); }
-.circuit-pdf-ai-guide li[data-state="current"] > div > strong { color: hsl(var(--warning)); }
-.circuit-pdf-ai-steps > li > .circuit-pdf-ai-run { height: 34px; gap: 6px; }
-@media (min-width: 1024px) and (max-width: 1439px) { .circuit-pdf-ai-steps > li > span > small { display: none; } .circuit-pdf-ai-steps > li > span > select { width: 200px; } .circuit-pdf-ai-steps { gap: 6px 12px; } }
 
 /* Toolbar clarity (2026-11-11): the drawing tools are one segmented control with words (移動・框選・畫筆) and the
    current tool in solid teal; the file actions stay at the left with the version, pages and zoom move to the right. */
@@ -351,8 +330,6 @@
 .circuit-pdf-panel .circuit-pdf-empty { border-color: hsl(202 34% 44%); background: hsl(202 30% 14% / .7); }
 .circuit-pdf-panel .circuit-pdf-empty:hover { border-color: hsl(202 50% 60%); }
 .circuit-pdf-panel .circuit-pdf-empty > svg { color: hsl(202 64% 72%); }
-.circuit-pdf-ai-steps > li[data-side="old"] strong { color: hsl(43 70% 70%); }
-.circuit-pdf-ai-steps > li[data-state="done"] > b { border-color: transparent; background: hsl(144 46% 58%); color: hsl(144 40% 8%); }
 .circuit-pdf-overview > .circuit-pdf-offset > label { color: hsl(43 70% 70%); }
 .circuit-pdf-pager-name { color: hsl(170 60% 70%); }
 

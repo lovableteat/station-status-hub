@@ -198,6 +198,44 @@ test("viewers cannot pin a baseline, and a local-only PDF cannot become a shared
     assert.equal(editor.model.official, null);
   } finally { await editor.unmount(); }
 });
+
+test("the selected baseline survives a right-side change and swapping reverses the page mapping", async () => {
+  const documents = [doc("official", "2026-11-07"), doc("work-a", "2026-11-08"), doc("work-b", "2026-11-09", { pages: 15 })];
+  const view = await mount({ stored: { version: 1, documents, pages: {}, positions: {} } });
+  try {
+    assert.equal(view.model.compare.id, "work-a", "AI comparison has a usable default before pinning an official file");
+    await act(async () => view.model.setOfficial("official"));
+    act(() => view.model.setCompare("work-a"));
+    act(() => view.model.select("official"));
+    assert.equal(view.model.compare.id, "work-a");
+    act(() => view.model.select("work-b"));
+    assert.equal(view.model.compare.id, "work-a");
+    act(() => view.model.setCompare("work-b"));
+    assert.equal(view.model.compare.id, "work-a", "the same source cannot occupy both sides");
+    act(() => view.model.goTo(15));
+    assert.equal(view.model.comparePage, 0, "an unmatched baseline page is not clamped to the last page");
+    act(() => { view.model.goTo(7); view.model.setCompareOffset(-2); });
+    act(() => view.model.swapComparison());
+    assert.deepEqual([view.model.compare.id, view.model.comparePage, view.model.active.id, view.model.page], ["work-b", 7, "work-a", 5]);
+    assert.equal(view.model.compareOffset, 2);
+    assert.equal(view.model.official.id, "official");
+  } finally { await view.unmount(); }
+});
+
+test("both selected local PDFs can be reopened from their matching files", async () => {
+  const files = [pdfFile("pair-a.pdf", 6, 80), pdfFile("pair-b.pdf", 7, 90)];
+  const documents = files.map((file, index) => doc(`local-pair-${index}`, `2026-11-0${8 + index}`, { localOnly: true, path: "", size: file.size, pages: 6 + index }));
+  const view = await mount({ stored: { version: 1, documents, pages: {}, positions: {} } });
+  try {
+    assert.match(view.model.openError, /local-pair-1\.pdf/);
+    await act(async () => view.model.openLocal(files[1]));
+    assert.match(view.model.openError, /local-pair-0\.pdf/);
+    await act(async () => view.model.openLocal(files[0]));
+    assert.equal(view.model.openError, "");
+    assert.equal(view.model.comparePdf.numPages, 6);
+    assert.equal(view.model.activePdf.numPages, 7);
+  } finally { await view.unmount(); }
+});
 test("the reading position this browser kept wins when it is newer than the shared one", async () => {
   const window = browser();
   const shared = { version: 1, documents: [doc("d1", "2026-11-09")], pages: {}, positions: { "qa-A": { documentId: "d1", page: 3, at: "2026-11-09T01:00:00.000Z" } } };

@@ -33,7 +33,7 @@ const SIDE_BY_SIDE_MIN = 900;
  * right as a sharp picture rendered from the PDF; with an older version beside it, the same area is taken from both dates.
  */
 export function CircuitPdfPanel({ mode = "review", captureSide = "before", pageReview = mode === "review", onAiReview, onSetupOfficial, pdfs, ink, canEdit, captureBlocked, targetLabel, pageChanges, crops, onCapture, onSelectChange, onBack, versionsOpen, onVersionsOpenChange: setVersionsOpen, versionsOpener }: {
-  /** 線路 Review reads one drawing page by page; AI 比對 shows the official version beside the new one with the AI button. */
+  /** 線路 Review reads one drawing page by page; AI 比對 shows the two selected versions. */
   mode?: "review" | "ai"; onAiReview?: () => void; onSetupOfficial?: () => void;
   pdfs: CircuitPdfModel; ink?: CircuitPdfInkModel; canEdit: boolean; captureBlocked: string; targetLabel: string;
   pageChanges: Map<number, Array<{ id: string; number: number }>>; crops: CircuitPdfCrop[];
@@ -209,7 +209,7 @@ export function CircuitPdfPanel({ mode = "review", captureSide = "before", pageR
   async function capture(sides: Array<{ pane: Pane; side: CircuitImageSide }>) {
     if (!selection || capturing || captureBlocked) return;
     if (ink?.loading) { setFailure("畫筆標註載入中，請稍後再截圖。"); return; }
-    if (sides.some(side => side.pane === "compare") && !compareReady) { setFailure("請先指定有效的官方對應頁，再加入修改前截圖。"); return; }
+    if (sides.some(side => side.pane === "compare") && !compareReady) { setFailure("請先指定有效的基準對應頁，再加入修改前截圖。"); return; }
     setCapturing(true); setFailure("");
     try {
       const captures: CircuitPdfCapture[] = [];
@@ -235,26 +235,25 @@ export function CircuitPdfPanel({ mode = "review", captureSide = "before", pageR
     <input ref={localInput} type="file" accept=".pdf,application/pdf" className="sr-only" aria-label="選擇本機 PDF 原檔" onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void pdfs.openLocal(file).catch(error => setFailure(error instanceof Error ? error.message : "PDF 無法開啟。")); }} />
   </>;
   const message = failure || pdfs.error;
-  const aiReady = Boolean(official && pdfs.officialPdf && active && active.id !== official.id && pdfs.activePdf && !pdfs.opening);
-  // 1 官方版本 → 2 新版 → 3 AI 比對 → 4 逐項確認. The step that is missing decides the one action on screen.
-  const aiStep = !official ? 1 : !workingVersions.length ? 2 : 3;
-  const aiState = (step: number) => step < aiStep ? "done" : step === aiStep ? "current" : "waiting";
-  const aiAction = !official
-    ? <Button data-circuit-tone="official" data-fill="solid" type="button" title="到「官方版本」選一份 PDF 當比對的舊版" onClick={onSetupOfficial}><ShieldCheck aria-hidden="true" />設定官方版本</Button>
-    : !workingVersions.length ? (canEdit ? <Button data-circuit-tone="add" data-fill="solid" type="button" title="上傳要跟官方版本比對的新版 PDF（也可以把 PDF 拖進來）" disabled={Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><Upload aria-hidden="true" />{pdfs.uploading ? "上傳中…" : "上傳新版 PDF"}</Button> : null)
-    : <Button data-circuit-tone="ai" data-fill="solid" type="button" className="circuit-pdf-ai-run" disabled={!aiReady || !onAiReview} title={aiReady ? "逐頁比對官方版本與新版，列出差異讓你確認" : "PDF 開啟後即可比對"} onClick={onAiReview}><Sparkles aria-hidden="true" />AI 比對新舊版</Button>;
-  const aiBar = mode === "ai" ? <div className="circuit-pdf-ai-bar" role="group" aria-label="AI 比對步驟" data-testid="circuit-pdf-ai-bar" data-step={aiStep}>
-    <ol className="circuit-pdf-ai-steps">
-      <li data-state={aiState(1)} data-side="old"><b aria-hidden="true">{aiStep > 1 ? <Check /> : 1}</b><span><small>舊版</small>{official
-        ? <strong title={official.name}>官方版本 · {circuitPdfVersionLabel(official)}</strong> : <strong>設定官方版本</strong>}</span></li>
-      <li data-state={aiState(2)} data-side="new"><b aria-hidden="true">{aiStep > 2 ? <Check /> : 2}</b><span><small>新版</small>{workingVersions.length
-        ? <select title="選要跟官方版本比對的新版 PDF" aria-label="選擇新版 PDF" value={active && active.id !== official?.id ? active.id : ""} onChange={event => { if (event.target.value) pdfs.select(event.target.value); }}>
-          <option value="" disabled>選擇新版</option>
-          {workingVersions.map(row => <option key={row.id} value={row.id}>{circuitPdfVersionLabel(row)} · {row.name}</option>)}
-        </select> : <strong>上傳新版 PDF</strong>}</span></li>
-      <li data-state={aiState(3)}><b aria-hidden="true">3</b>{aiStep === 3 ? aiAction : <span><small>比對</small><strong>AI 比對新舊版</strong></span>}</li>
-      <li data-state="waiting"><b aria-hidden="true">4</b><span><small>確認</small><strong>逐項確認差異</strong></span></li>
-    </ol>
+  const aiReady = Boolean(compare && pdfs.comparePdf && active && pdfs.activePdf && !pdfs.opening);
+  const comparePageLabel = compare?.id === official?.id ? "官方對應頁" : "基準對應頁";
+  const aiFileLabel = (row: CircuitPdfDocument) => `${row.id === official?.id ? "官方 · " : ""}${circuitPdfVersionLabel(row)} · ${row.name}${row.localOnly ? " · 本機" : ""}`;
+  const aiBar = mode === "ai" ? <div className="circuit-pdf-ai-bar circuit-pdf-ai-pair" role="group" aria-label="選擇 AI 比對版本" data-testid="circuit-pdf-ai-bar">
+    <label data-side="old"><strong>基準版（左）</strong><select aria-label="選擇基準版 PDF" title={compare ? aiFileLabel(compare) : undefined} value={compare?.id || ""} disabled={documents.length < 2}
+      onChange={event => { setFailure(""); pdfs.setCompare(event.target.value); }}>
+      <option value="" disabled>選擇基準版</option>
+      {documents.map(row => <option key={row.id} value={row.id} disabled={row.id === active?.id}>{aiFileLabel(row)}</option>)}
+    </select></label>
+    <Button type="button" variant="outline" className="circuit-pdf-swap" aria-label="交換左右版本" title="交換左右版本及對應頁" disabled={!active || !compare} onClick={() => { setFailure(""); pdfs.swapComparison(); }}><MoveHorizontal aria-hidden="true" /></Button>
+    <label data-side="new"><strong>比對版（右）</strong><select aria-label="選擇比對版 PDF" title={active ? aiFileLabel(active) : undefined} value={active?.id || ""} disabled={!documents.length}
+      onChange={event => { setFailure(""); pdfs.select(event.target.value); }}>
+      <option value="" disabled>選擇比對版</option>
+      {documents.map(row => <option key={row.id} value={row.id} disabled={row.id === compare?.id}>{aiFileLabel(row)}</option>)}
+    </select></label>
+    <div className="circuit-pdf-ai-pair-actions">
+      {canEdit && <Button data-circuit-tone="add" type="button" variant="outline" title="上傳原理圖 PDF，也可把檔案拖到圖面區" disabled={Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><Upload aria-hidden="true" />{pdfs.uploading ? "上傳中…" : "上傳 PDF"}</Button>}
+      <Button data-circuit-tone="ai" data-fill="solid" type="button" className="circuit-pdf-ai-run" disabled={!aiReady || !onAiReview} title={aiReady ? "查看這兩份 PDF 的比對選項" : "選好兩份 PDF，等圖面開啟即可比對"} onClick={onAiReview}><Sparkles aria-hidden="true" />AI 比對新舊版</Button>
+    </div>
   </div> : null;
   const back = onBack ? <Button title="關閉圖面，回到表單" type="button" variant="ghost" className="circuit-pdf-back" aria-label="返回表單" onClick={onBack}><ArrowLeft aria-hidden="true" /></Button> : null;
   const sideWord = captureSide === "after" ? "改好後截圖" : "問題截圖";
@@ -278,14 +277,13 @@ export function CircuitPdfPanel({ mode = "review", captureSide = "before", pageR
     </section>;
   }
 
-  const compareChoices = documents.filter(row => row.id !== active?.id);
   const finish = (className: string) => canEdit && active && pageReview ? <div className={className}>
     {pageState === "here"
       ? <><Button data-circuit-tone="done" type="button" variant="outline" className="circuit-pdf-seen" aria-pressed="true" title="這一頁已標記看過；按一下取消" onClick={() => pdfs.setChecked(page, false)}><Check aria-hidden="true" />已看過</Button>
         {page < active.pages && <Button data-circuit-tone="view" data-fill="solid" type="button" title="翻到下一頁（→）" onClick={() => pdfs.goTo(page + 1)}>下一頁<ChevronRight aria-hidden="true" /></Button>}</>
       : <Button data-circuit-tone="view" data-fill="solid" type="button" onClick={finishPage} title={pageState === "older" ? "這頁在較早的版本看過；標記這一版也看過並翻到下一頁" : "標記本頁看過並翻到下一頁"}><Check aria-hidden="true" />{page < active.pages ? "看完，下一頁" : "看完本頁"}</Button>}
   </div> : null;
-  if (mode === "ai" && aiStep < 3) {
+  if (mode === "ai" && documents.length < 2) {
     return <section className="circuit-pdf-panel" aria-label="PDF 圖面" data-testid="circuit-pdf-panel" data-dropping={dropping}
       onDragOver={event => { if (carriesFiles(event) && canEdit) { event.preventDefault(); event.stopPropagation(); setDropping(true); } }}
       onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(false); }} onDrop={drop}>
@@ -294,14 +292,7 @@ export function CircuitPdfPanel({ mode = "review", captureSide = "before", pageR
       {message && <p className="circuit-pdf-message" role="alert"><span>{message}</span><Button type="button" variant="ghost" aria-label="關閉訊息" title="關閉這則訊息" onClick={() => { setFailure(""); pdfs.clearError(); }}><X aria-hidden="true" /></Button></p>}
       <div className="circuit-pdf-ai-guide" role="region" aria-label="AI 比對怎麼用">
         <h3>AI 比對要兩份 PDF</h3>
-        <p>左邊放官方版本（舊版），右邊放現在畫好的新版。AI 會逐頁找出兩份不一樣的地方，你再一項一項確認，結果會存下來可以回查。</p>
-        <ol>
-          <li data-state={aiState(1)}><b aria-hidden="true">{aiStep > 1 ? <Check /> : 1}</b><div><strong>官方版本</strong><span>{official ? `已設定：${official.name}（${circuitPdfVersionLabel(official)}）` : "還沒有。到「官方版本」選一份原廠或已發行的 PDF。"}</span></div></li>
-          <li data-state={aiState(2)}><b aria-hidden="true">2</b><div><strong>新版 PDF</strong><span>還沒有。上傳現在畫好的線路圖 PDF，也可以直接把檔案拖進這裡。</span></div></li>
-          <li data-state="waiting"><b aria-hidden="true">3</b><div><strong>按「AI 比對新舊版」</strong><span>兩份會並排、同步捲動，AI 逐頁列出差異。</span></div></li>
-          <li data-state="waiting"><b aria-hidden="true">4</b><div><strong>逐項確認</strong><span>每一項選「已確認」或「不採用」並儲存，結果會存下來可以回查。</span></div></li>
-        </ol>
-        {aiAction ? <div className="circuit-pdf-ai-guide-action">{aiAction}</div> : <p className="circuit-pdf-ai-guide-note">目前是檢視權限，請有編輯權限的同仁上傳新版 PDF。</p>}
+        <p>{pdfs.loading ? "正在讀取 PDF 清單…" : canEdit ? "上傳或拖入原理圖 PDF，再分別選擇左側基準版和右側比對版。" : "請有編輯權限的同仁上傳兩份原理圖 PDF。"}</p>
       </div>
     </section>;
   }
@@ -330,10 +321,10 @@ export function CircuitPdfPanel({ mode = "review", captureSide = "before", pageR
               {message && <p className="circuit-pdf-version-feedback" role="alert">{message}</p>}
               {restoredName && <p className="circuit-pdf-version-feedback" role="status"><Check aria-hidden="true" /><span>已還原「{restoredName}」，在「其他 PDF」可以開啟。</span></p>}
               <section className="circuit-pdf-baseline-section" aria-label="官方版本版本">
-                <h3><ShieldCheck aria-hidden="true" />官方版本<span>AI 比對的舊版</span></h3>
+                <h3><ShieldCheck aria-hidden="true" />官方版本<span>AI 比對預設基準</span></h3>
                 {official ? <><ul><VersionRow row={official} active={official.id === active?.id} official canEdit={false} removing={false} confirmingOfficial={false} settingOfficial={false}
                   onOpen={() => { pdfs.select(official.id); closeVersions(); }} onUpdate={() => {}} onAskRemove={() => {}} onRemove={() => {}} onAskOfficial={() => {}} onSetOfficial={() => {}} /></ul><p>要更換官方版本，到上方的「官方版本」分頁。</p></>
-                  : <p>尚未指定。{onSetupOfficial && <Button data-circuit-tone="official" type="button" variant="outline" title="到「官方版本」分頁選一份 PDF 當比對的舊版" onClick={() => { closeVersions(); onSetupOfficial(); }}><ShieldCheck aria-hidden="true" />到官方版本設定</Button>}</p>}
+                  : <p>尚未指定。{onSetupOfficial && <Button data-circuit-tone="official" type="button" variant="outline" title="到「官方版本」分頁設定此系列的官方圖面" onClick={() => { closeVersions(); onSetupOfficial(); }}><ShieldCheck aria-hidden="true" />到官方版本設定</Button>}</p>}
               </section>
               <section className="circuit-pdf-working-section" aria-label="其他 PDF">
                 <header><h3>其他 PDF<span>{workingVersions.length}</span></h3></header>
@@ -376,19 +367,19 @@ export function CircuitPdfPanel({ mode = "review", captureSide = "before", pageR
     {ink?.error && !versionsOpen && <p className="circuit-pdf-message" role="alert"><span>{ink.error}</span><Button type="button" variant="ghost" aria-label="重試儲存畫筆標註" title="重新連線並儲存本機保留的筆跡" onClick={() => void ink.retry().catch(() => {})}><RotateCcw aria-hidden="true" /></Button></p>}
     {active && <div className="circuit-pdf-overview">
       <div className="circuit-pdf-pager" role="group" aria-label="翻頁">
-        {mode === "ai" && <span className="circuit-pdf-pager-name">新版</span>}
+        {mode === "ai" && <span className="circuit-pdf-pager-name">比對版</span>}
         <Button type="button" variant="ghost" aria-label="上一頁" title="上一頁（←）" disabled={page <= 1} onClick={() => pdfs.goTo(page - 1)}><ChevronLeft aria-hidden="true" /></Button>
         <label><span className="sr-only">頁碼</span><input aria-label="目前頁碼" inputMode="numeric" value={pageInput} onChange={event => setPageInput(event.target.value.replace(/[^0-9]/g, ""))}
           onBlur={() => { pdfs.goTo(Number(pageInput) || page); setPageInput(String(page)); }} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); pdfs.goTo(Number(pageInput) || page); } }} /></label>
         <span>/ {active.pages}</span>
         {!(pageReview && canEdit) && <Button type="button" variant="ghost" aria-label="下一頁" title="下一頁（→）" disabled={page >= active.pages} onClick={() => pdfs.goTo(page + 1)}><ChevronRight aria-hidden="true" /></Button>}
       </div>
-      {mode === "ai" && compare && <div className="circuit-pdf-offset" role="group" aria-label="調整官方對應頁" title="兩份 PDF 頁數不同時，調整左邊官方版本要對到第幾頁">
-        {compare.id === official?.id ? <label>官方對應頁<input type="number" aria-label="官方對應頁" placeholder="頁碼" min={1} max={compare.pages} value={pdfs.comparePage || ""} onChange={event => { const target = Number(event.target.value); if (target >= 1 && target <= compare.pages) pdfs.setCompareOffset(target - page); }} /></label> : <span>第 {pdfs.comparePage} 頁</span>}
-        <Button title="兩版頁數不同時，讓左邊對照的頁碼往前一頁" type="button" variant="ghost" aria-label="官方對應頁往前一頁" disabled={pdfs.comparePage <= 1} onClick={() => pdfs.setCompareOffset(pdfs.compareOffset - 1)}><Minus aria-hidden="true" /></Button>
-        <Button title="兩版頁數不同時，讓左邊對照的頁碼往後一頁" type="button" variant="ghost" aria-label="官方對應頁往後一頁" disabled={!pdfs.comparePage || pdfs.comparePage >= compare.pages} onClick={() => pdfs.setCompareOffset(pdfs.compareOffset + 1)}><Plus aria-hidden="true" /></Button>
+      {mode === "ai" && compare && <div className="circuit-pdf-offset" role="group" aria-label={`調整${comparePageLabel}`} title="兩份 PDF 頁數不同時，調整左邊要對到第幾頁">
+        <label>{comparePageLabel}<input type="number" aria-label={comparePageLabel} placeholder="頁碼" min={1} max={compare.pages} value={pdfs.comparePage || ""} onChange={event => { const target = Number(event.target.value); if (Number.isInteger(target) && target >= 1 && target <= compare.pages) pdfs.setCompareOffset(target - page); }} /></label>
+        <Button title="讓左邊對照的頁碼往前一頁" type="button" variant="ghost" aria-label={`${comparePageLabel}往前一頁`} disabled={pdfs.comparePage <= 1} onClick={() => pdfs.setCompareOffset(pdfs.compareOffset - 1)}><Minus aria-hidden="true" /></Button>
+        <Button title="讓左邊對照的頁碼往後一頁" type="button" variant="ghost" aria-label={`${comparePageLabel}往後一頁`} disabled={!pdfs.comparePage || pdfs.comparePage >= compare.pages} onClick={() => pdfs.setCompareOffset(pdfs.compareOffset + 1)}><Plus aria-hidden="true" /></Button>
       </div>}
-      {mode === "ai" && official && !pdfs.officialPage && <small className="circuit-pdf-page-warning" role="status">請輸入官方對應頁</small>}
+      {mode === "ai" && compare && !pdfs.comparePage && <small className="circuit-pdf-page-warning" role="status">請輸入{comparePageLabel}</small>}
       {pageReview && progress && <span className="circuit-pdf-progress" title={`這版看過 ${progress.here} 頁；較早版本看過 ${progress.older} 頁`}>
         已看 {progress.checked} / {progress.total} 頁
       </span>}
@@ -405,12 +396,12 @@ export function CircuitPdfPanel({ mode = "review", captureSide = "before", pageR
       </div>
         : !pdfs.activePdf || !active ? <p className="circuit-pdf-loading">{pdfs.opening ? "正在開啟 PDF…" : "選一份 PDF"}</p>
         : <div className="circuit-pdf-pages" data-compare={Boolean(compare)} data-stacked={Boolean(compare) && stacked}>
-          {compare && (pdfs.comparePage ? <PdfPage key={`compare:${compare.id}`} pane="compare" pdf={pdfs.comparePdf} row={compare} page={pdfs.comparePage} scale={scale} heading={`${compare.id === official?.id ? "官方版本" : "自選對照"} · ${circuitPdfVersionLabel(compare)} 第 ${pdfs.comparePage} 頁`}
+          {compare && (pdfs.comparePage ? <PdfPage key={`compare:${compare.id}`} pane="compare" pdf={pdfs.comparePdf} row={compare} page={pdfs.comparePage} scale={scale} heading={`基準版${compare.id === official?.id ? "（官方）" : ""} · ${circuitPdfVersionLabel(compare)} 第 ${pdfs.comparePage} 頁`}
             tool={canEdit && ink && !ink.loading ? tool : cropMode ? "crop" : "pan"} strokes={ink?.pages[`${compare.id}:${pdfs.comparePage}`] || []}
             onAddInk={points => ink?.add(compare.id, pdfs.comparePage, points)} onRemoveInk={id => ink?.remove(compare.id, pdfs.comparePage, id)} onInkTarget={() => setInkPane("compare")}
             crops={crops.filter(crop => crop.documentId === compare.id && crop.page === pdfs.comparePage)} selection={selection} cropMode={cropMode} onSelection={setSelection}
-            stage={compareViewport} viewportRef={compareViewport} onScroll={linkedViews.onCompareScroll} onResize={() => linkedViews.afterResize("compare")} /> : <figure className="circuit-pdf-page circuit-pdf-unmatched" data-pane="compare"><figcaption>官方版本 · 尚未對應頁面</figcaption><div role="status"><strong>官方版本沒有對應的第 {page + pdfs.compareOffset} 頁</strong><span>請在「官方對應頁」輸入 1–{compare.pages}，再比對或加入修改前截圖。</span></div></figure>)}
-          <PdfPage key={`active:${active!.id}`} pane="active" pdf={pdfs.activePdf} row={active!} page={page} scale={scale} heading={compare ? `新版 · ${circuitPdfVersionLabel(active!)} 第 ${page} 頁` : ""}
+            stage={compareViewport} viewportRef={compareViewport} onScroll={linkedViews.onCompareScroll} onResize={() => linkedViews.afterResize("compare")} /> : <figure className="circuit-pdf-page circuit-pdf-unmatched" data-pane="compare"><figcaption>基準版 · 尚未對應頁面</figcaption><div role="status"><strong>基準版沒有對應的第 {page + pdfs.compareOffset} 頁</strong><span>請在「{comparePageLabel}」輸入 1–{compare.pages}，再比對或加入修改前截圖。</span></div></figure>)}
+          <PdfPage key={`active:${active!.id}`} pane="active" pdf={pdfs.activePdf} row={active!} page={page} scale={scale} heading={compare ? `比對版${active.id === official?.id ? "（官方）" : ""} · ${circuitPdfVersionLabel(active)} 第 ${page} 頁` : ""}
             tool={canEdit && ink && !ink.loading ? tool : cropMode ? "crop" : "pan"} strokes={ink?.pages[`${active.id}:${page}`] || []}
             onAddInk={points => ink?.add(active.id, page, points)} onRemoveInk={id => ink?.remove(active.id, page, id)} onInkTarget={() => setInkPane("active")}
             crops={crops.filter(crop => crop.documentId === active!.id && crop.page === page)} selection={selection} cropMode={cropMode} onSelection={setSelection}

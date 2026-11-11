@@ -15,6 +15,20 @@
 .circuit-pdf-ai-toolbar label { display: grid; flex: 1; min-width: 180px; gap: 5px; color: hsl(var(--muted-foreground)); font-size: 12px; }
 .circuit-pdf-ai-toolbar select { width: 100%; min-width: 0; height: 42px; border: 1px solid hsl(var(--border)); border-radius: 7px; padding-inline: 10px; color: hsl(var(--foreground)); font-size: 14px; }
 .circuit-pdf-ai-toolbar > button { min-height: 42px; gap: 7px; }
+.circuit-pdf-ai-countdown {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid hsl(var(--primary) / .3);
+  border-radius: 8px;
+  background: hsl(var(--primary) / .06);
+  font-size: 13px;
+}
+.circuit-pdf-ai-countdown > svg { width: 16px; height: 16px; color: hsl(var(--primary)); }
+.circuit-pdf-ai-countdown strong { color: hsl(var(--primary)); font-size: 14px; font-variant-numeric: tabular-nums; }
 .circuit-pdf-ai-batch-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; color: hsl(var(--muted-foreground)); font-size: 12px; }
 .circuit-pdf-ai-batch-hint > p { flex: 1; min-width: 200px; }
 .circuit-pdf-ai-batch-hint > label { display: flex; align-items: center; gap: 8px; }

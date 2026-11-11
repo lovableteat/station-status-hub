@@ -398,45 +398,6 @@
 .circuit-list-panel > .circuit-set-picker > span { flex: none; color: hsl(var(--muted-foreground)); font-size: 13px; }
 .circuit-task-panel { display: flex; flex: 1; min-height: 0; }
 
-/* 官方版本: the current official PDF, how to change it, and every change so far. */
-.circuit-official { display: flex; flex: 1; min-height: 0; }
-.circuit-official-scroll { display: flex; flex: 1; flex-direction: column; gap: 16px; width: 100%; max-width: 1040px; margin: 0 auto; overflow: auto; padding: 24px; }
-.circuit-official-current { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 16px 20px; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--secondary) / .25); }
-.circuit-official-current[data-configured="true"] { border-color: hsl(var(--warning) / .4); }
-.circuit-official-current > svg { width: 28px; height: 28px; color: hsl(var(--warning)); }
-.circuit-official-current > div:not(.circuit-official-actions) { display: grid; min-width: 0; gap: 2px; }
-.circuit-official-current span { color: hsl(var(--muted-foreground)); font-size: 13px; }
-.circuit-official-current strong { overflow: hidden; font-size: 17px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.circuit-official-current small { overflow: hidden; color: hsl(var(--muted-foreground)); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.circuit-official-actions { display: flex; gap: 8px; }
-.circuit-official-actions > button { height: 40px; gap: 6px; }
-.circuit-official-note, .circuit-official-error { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-.circuit-official-note { color: hsl(var(--primary)); }
-.circuit-official-error { color: hsl(var(--destructive)); }
-.circuit-official-choose, .circuit-official-history { display: grid; gap: 10px; padding: 16px 20px; border: 1px solid hsl(var(--border)); border-radius: 12px; }
-.circuit-official-choose > header, .circuit-official-history > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.circuit-official-choose h3, .circuit-official-history h3 { font-size: 15px; font-weight: 600; }
-.circuit-official-history > header > span { color: hsl(var(--muted-foreground)); font-size: 13px; font-variant-numeric: tabular-nums; }
-.circuit-official-choose ul { display: grid; }
-.circuit-official-choose li { display: flex; min-height: 56px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid hsl(var(--border)); }
-.circuit-official-choose li[data-candidate="true"] { background: hsl(var(--primary) / .06); }
-.circuit-official-choose li > div { display: grid; min-width: 0; gap: 2px; }
-.circuit-official-choose li strong { overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.circuit-official-choose li small { color: hsl(var(--muted-foreground)); font-size: 13px; }
-.circuit-official-choose button { flex: none; height: 36px; gap: 6px; }
-.circuit-official-confirm { display: flex; flex: none; align-items: center; gap: 8px; font-size: 14px; }
-.circuit-official-hint { color: hsl(var(--muted-foreground)); font-size: 13px; }
-.circuit-official-empty { color: hsl(var(--muted-foreground)); font-size: 14px; text-align: center; }
-.circuit-official-history table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
-.circuit-official-history th { padding: 8px 12px; border-bottom: 1px solid hsl(var(--border)); color: hsl(var(--muted-foreground)); font-size: 13px; font-weight: 500; text-align: left; }
-.circuit-official-history th:nth-child(1) { width: 190px; }
-.circuit-official-history th:nth-child(3) { width: 130px; }
-.circuit-official-history th:nth-child(4) { width: 160px; }
-.circuit-official-history td { height: 44px; padding: 0 12px; border-bottom: 1px solid hsl(var(--border) / .6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.circuit-official-history td > span { overflow: hidden; text-overflow: ellipsis; }
-.circuit-official-history td > em { margin-left: 8px; padding: 1px 6px; border-radius: 4px; background: hsl(var(--warning) / .14); color: hsl(var(--warning)); font-size: 12px; font-style: normal; }
-.circuit-official-history td.circuit-official-empty { height: 64px; }
-
 @media (min-width: 1024px) and (max-width: 1279px) {
   .circuit-header .circuit-task { padding-inline: 10px; }
   .circuit-header .circuit-task > svg { display: none; }
@@ -447,15 +408,6 @@
   .circuit-header .circuit-task > svg { display: none; }
   .circuit-header-actions > .circuit-action-more { width: 44px; height: 44px; }
   .circuit-list-panel > .circuit-set-picker { margin: 10px 16px 0; }
-  .circuit-official-scroll { padding: 16px; }
-  .circuit-official-current { grid-template-columns: auto minmax(0, 1fr); }
-  .circuit-official-actions { grid-column: 1 / -1; }
-  .circuit-official-actions > button { flex: 1; height: 44px; }
-  .circuit-official-choose li { flex-wrap: wrap; }
-  .circuit-official-choose button { height: 44px; }
-  .circuit-official-history th:nth-child(3), .circuit-official-history td:nth-child(3) { display: none; }
-  .circuit-official-history th:nth-child(1) { width: 120px; }
-  .circuit-official-history th:nth-child(4) { width: 96px; }
 }
 
 /* Beside the drawing the form column is narrow: the tracking button reads 紀錄 N there. */
@@ -527,9 +479,6 @@
 .circuit-image-empty { border-color: hsl(var(--primary) / .4); background: hsl(var(--primary) / .04); }
 .circuit-image-column[data-active="true"] { border-color: hsl(var(--primary) / .6); }
 
-/* 官方版本 cards share the frame. */
-.circuit-official-current[data-configured="true"], .circuit-official-choose, .circuit-official-history { border-color: var(--circuit-frame); background: hsl(var(--card)); }
-.circuit-official-current { background: hsl(var(--card)); }
 /* Framed panels need their gaps: below 1600px the form column is 390px (the dialog is 34px narrower than the window since a3c5dacd) so 1440 keeps the drawings side by side. */
 @media (min-width: 1024px) and (max-width: 1599px) { .circuit-workspace { --circuit-detail-width: minmax(360px, 390px); } }
 .circuit-item-navigation > button:has(> .circuit-history-word) { gap: 0; }

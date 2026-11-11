@@ -19,7 +19,7 @@ export interface CircuitPdfModel {
   upload: (file: File) => Promise<void>; openLocal: (file: File) => Promise<void>;
   /** Opens a version at a page, e.g. the page a picture was framed on. Returns false when that version is no longer offered. */
   show: (documentId: string, page: number) => boolean;
-  select: (id: string) => void; setCompare: (id: string) => void; setCompareOffset: (offset: number) => void;
+  select: (id: string) => void; setCompare: (id: string) => void; setCompareOffset: (offset: number) => void; swapComparison: () => void;
   setOfficial: (id: string) => Promise<void>; compareOfficial: () => void;
   goTo: (page: number) => void; setChecked: (page: number, checked: boolean) => void;
   updateDocument: (id: string, patch: { date?: string; label?: string }) => void;
@@ -42,8 +42,7 @@ const localFiles = new Map<string, File>();
 const positionKey = (userId: string, seriesId: string) => `circuit-pdf-position:v1:${userId}:${seriesId}`;
 
 /**
- * `autoCompareOfficial` puts the official version beside every working version that opens. The 線路修改 window turns it on
- * only in its AI 比對 task; checking a drawing in 線路 Review shows the drawing alone unless the user picks a comparison.
+ * `autoCompareOfficial` picks a default baseline when entering AI 比對. A selected baseline takes precedence.
  */
 export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, autoCompareOfficial = true }: { open: boolean; seriesId: string; canEdit: boolean; userId: string; userName: string; autoCompareOfficial?: boolean }): CircuitPdfModel {
   const [registry, setRegistry] = useState<CircuitPdfRegistry>(empty);
@@ -59,7 +58,8 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
   const [pdfs, setPdfs] = useState<Record<string, PDFDocumentProxy>>({});
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState("");
-  const [needsLocalFile, setNeedsLocalFile] = useState(false);
+  const [localFileId, setLocalFileId] = useState("");
+  const [openRetry, setOpenRetry] = useState(0);
   const scope = `${userId}:${seriesId}:${open}`;
   const scopeRef = useRef(scope); scopeRef.current = scope;
   const registryRef = useRef(registry); registryRef.current = registry;
@@ -73,10 +73,13 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
   const documents = useMemo(() => visibleCircuitPdfDocuments(official ? { ...registry, documents: [...registry.documents.filter(row => row.id !== official.id), official] } : registry), [registry, official]);
   const active = documents.find(row => row.id === activeId) || null;
   const officialRef = useRef(official); officialRef.current = official;
-  const compare = documents.find(row => row.id === compareId && row.id !== activeId) || null;
+  const defaultCompare = autoCompareOfficial && active
+    ? official && official.id !== activeId ? official : documents.find(row => row.id !== activeId)
+    : null;
+  const compare = documents.find(row => row.id === compareId && row.id !== activeId) || defaultCompare || null;
   const compareTarget = page + compareOffset;
-  const comparePage = compare ? compare.id === official?.id && (compareTarget < 1 || compareTarget > compare.pages) ? 0 : Math.min(compare.pages, Math.max(1, compareTarget)) : 0;
-  const officialTarget = page + (compareId === official?.id ? compareOffset : 0);
+  const comparePage = compare && compareTarget >= 1 && compareTarget <= compare.pages ? compareTarget : 0;
+  const officialTarget = page + (compare?.id === official?.id ? compareOffset : 0);
   const officialPage = official && officialTarget >= 1 && officialTarget <= official.pages ? officialTarget : 0;
   // What is on screen right now, for actions that continue from it (a new upload keeps the page being read).
   const onScreen = useRef<{ documentId: string; page: number }>({ documentId: "", page: 1 });
@@ -137,7 +140,7 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
 
   useEffect(() => {
     if (!open || !seriesId) return;
-    placed.current = ""; setActiveId(""); setCompareId(""); setCompareOffset(0); setOpenError(""); setNeedsLocalFile(false);
+    placed.current = ""; setActiveId(""); setCompareId(""); setCompareOffset(0); setOpenError(""); setLocalFileId("");
     setRegistry(empty()); setOfficialSelection(null); pending.current = empty();
     void reload();
     const cache = opened.current;
@@ -178,26 +181,24 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
   }, []);
 
   useEffect(() => {
-    if (!autoCompareOfficial || !official || !active || official.id === active.id) return;
-    setCompareId(official.id); setCompareOffset(0);
-  }, [official?.id, active?.id, autoCompareOfficial]);
-
-  useEffect(() => {
     if (!open) return;
-    const wanted = [active, compare, official].filter((row, index, all): row is CircuitPdfDocument => Boolean(row) && all.findIndex(item => item?.id === row?.id) === index);
-    if (!wanted.length) return;
+    const wanted = [active, compare].filter((row): row is CircuitPdfDocument => Boolean(row));
+    if (!wanted.length) { setOpening(false); setOpenError(""); setLocalFileId(""); return; }
     let current = true;
-    setOpening(true); setOpenError(""); setNeedsLocalFile(false);
-    Promise.all(wanted.map(row => load(row).then(pdf => [row.id, pdf] as const))).then(entries => {
+    setOpening(true); setOpenError(""); setLocalFileId("");
+    Promise.allSettled(wanted.map(load)).then(results => {
       if (!current) return;
+      const entries = results.flatMap((result, index) => result.status === "fulfilled" ? [[wanted[index].id, result.value] as const] : []);
       setPdfs(previous => ({ ...previous, ...Object.fromEntries(entries) }));
-    }).catch(failure => {
-      if (!current) return;
-      setOpenError(failure instanceof Error ? failure.message : "PDF 無法開啟，請重試。");
-      setNeedsLocalFile(Boolean((failure as { localFile?: boolean })?.localFile));
+      const failedIndex = results.findIndex(result => result.status === "rejected");
+      if (failedIndex === -1) return;
+      const failure = (results[failedIndex] as PromiseRejectedResult).reason;
+      const row = wanted[failedIndex];
+      setOpenError(`「${row.name}」：${failure instanceof Error ? failure.message : "PDF 無法開啟，請重試。"}`);
+      if ((failure as { localFile?: boolean })?.localFile) setLocalFileId(row.id);
     }).finally(() => { if (current) setOpening(false); });
     return () => { current = false; };
-  }, [open, active, compare, official, load]);
+  }, [open, active, compare, load, openRetry]);
 
   // The first time a version is shown, it opens where this person stopped (yesterday's page on today's PDF).
   useEffect(() => {
@@ -229,22 +230,33 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
 
   const select = useCallback((id: string) => {
     const row = documents.find(item => item.id === id);
-    if (!row) return;
+    if (!row || row.id === activeId) return;
     placed.current = row.id;
     // Switching versions keeps the page on screen, so the same sheet of another date can be compared directly.
     setPage(current => Math.min(row.pages, current));
     setActiveId(row.id);
+    setCompareOffset(0);
     if (compareId === row.id) setCompareId("");
-  }, [documents, compareId]);
+  }, [documents, activeId, compareId]);
+
+  const swapComparison = useCallback(() => {
+    if (!active || !compare) return;
+    placed.current = compare.id;
+    setActiveId(compare.id);
+    setCompareId(active.id);
+    setPage(Math.min(compare.pages, Math.max(1, page + compareOffset)));
+    setCompareOffset(-compareOffset);
+  }, [active, compare, page, compareOffset]);
 
   const show = useCallback((documentId: string, target: number) => {
     const row = documents.find(item => item.id === documentId);
     if (!row) return false;
     placed.current = row.id; setActiveId(row.id);
     setPage(Math.min(row.pages, Math.max(1, Math.round(target) || 1)));
+    if (activeId !== row.id) setCompareOffset(0);
     if (compareId === row.id) setCompareId("");
     return true;
-  }, [documents, compareId]);
+  }, [documents, activeId, compareId]);
 
   const register = useCallback(async (file: File) => {
     if (!canEdit) throw new Error("目前為檢視權限，無法上傳 PDF。");
@@ -272,7 +284,7 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
     try {
       const { row, localOnly } = await register(file);
       if (scopeRef.current !== captured) return;
-      placed.current = row.id; setActiveId(row.id); setOpenError(""); setNeedsLocalFile(false);
+      placed.current = row.id; setActiveId(row.id); setOpenError(""); setLocalFileId(""); setCompareOffset(0);
       setPage(Math.min(row.pages, Math.max(1, reading)));
       if (localOnly) setError(`「${file.name}」超過雲端 50 MB 上限：已在這台電腦開啟，截圖與進度照常保存；其他同仁需要自己的檔案，之後重新開啟時請再選一次這個檔案。`);
     } catch (failure) {
@@ -282,14 +294,23 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
   }, [register, userId, seriesId]);
 
   const openLocal = useCallback(async (file: File) => {
-    if (!active?.localOnly) return;
+    const target = [active, compare].find(row => row?.id === localFileId && row.localOnly);
+    if (!target) return;
+    const captured = scopeRef.current;
     if (!(await isPdfFile(file))) throw new Error(`${file.name} 不是有效的 PDF。`);
-    if (file.size !== active.size) throw new Error(`選擇的檔案大小與「${active.name}」不同，請選擇同一個檔案。`);
-    localFiles.set(active.id, file); opened.current.delete(active.id);
-    setOpenError(""); setNeedsLocalFile(false);
-    const pdf = await load(active);
-    setPdfs(previous => ({ ...previous, [active.id]: pdf }));
-  }, [active, load]);
+    if (file.size !== target.size) throw new Error(`選擇的檔案大小與「${target.name}」不同，請選擇同一個檔案。`);
+    if (scopeRef.current !== captured) return;
+    const pdf = await openCircuitPdf(await file.arrayBuffer());
+    if (pdf.numPages !== target.pages || scopeRef.current !== captured) {
+      void pdf.destroy();
+      if (scopeRef.current === captured) throw new Error(`選擇的檔案頁數與「${target.name}」不同，請選擇同一個檔案。`);
+      return;
+    }
+    localFiles.set(target.id, file); opened.current.set(target.id, Promise.resolve(pdf));
+    setPdfs(previous => ({ ...previous, [target.id]: pdf }));
+    // Recheck both selected sources so a second local PDF can request its own file.
+    setOpenRetry(value => value + 1);
+  }, [active, compare, localFileId]);
 
   const setChecked = useCallback((target: number, checked: boolean) => {
     if (!active || !canEdit) return;
@@ -338,8 +359,8 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
     registry, documents, loading, saving, error, uploading, active, compare,
     official, officialPdf: official ? pdfs[official.id] || null : null, officialPage,
     activePdf: active ? pdfs[active.id] || null : null, comparePdf: compare ? pdfs[compare.id] || null : null,
-    opening, openError, needsLocalFile, page, comparePage, compareOffset,
-    upload, openLocal, show, select, setCompare: id => { setCompareId(id); setCompareOffset(0); }, setCompareOffset,
+    opening, openError, needsLocalFile: Boolean(localFileId), page, comparePage, compareOffset,
+    upload, openLocal, show, select, setCompare: id => { if (id === activeId) return; setCompareId(id); setCompareOffset(0); }, setCompareOffset, swapComparison,
     setOfficial, compareOfficial: () => { setCompareId(official?.id || ""); setCompareOffset(0); },
     goTo, setChecked, updateDocument, removeDocument, restoreDocument, reload, clearError: () => setError(""),
   };

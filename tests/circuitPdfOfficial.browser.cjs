@@ -103,7 +103,7 @@ async function managerFits(page, label) {
     await dialog(page).getByRole('tab', { name: /^AI 比對/ }).click();
     await panel(page).waitFor();
     await panel(page).getByRole('region', { name: 'AI 比對怎麼用', exact: true }).waitFor();
-    assert.equal(await panel(page).getByRole('button', { name: '設定官方版本', exact: true }).count(), 1, 'with no PDF yet AI 比對 explains its steps and offers the missing one');
+    assert.equal(await panel(page).getByRole('button', { name: '上傳 PDF', exact: true }).count(), 1, 'with no PDF yet AI 比對 offers upload');
     await dialog(page).getByRole('tab', { name: /^線路 Review/ }).click();
     report.checks.push('官方版本 has its own page that says when none is set; AI 比對 waits for a PDF');
     await panel(page).locator('input[aria-label="選擇原理圖 PDF"]').setInputFiles(files[0]); await rendered(page);
@@ -245,7 +245,7 @@ async function managerFits(page, label) {
     await dialog(page).getByRole('combobox', { name: '選擇改版紀錄', exact: true }).selectOption('qa-group-b');
     assert.equal(fixture.state.pdfOfficials.get('series:qa').documentId, baselineId);
     await dialog(page).getByRole('tab', { name: /^AI 比對/ }).click();
-    assert.match(await panel(page).getByTestId('circuit-pdf-ai-bar').locator('[data-side="old"] strong').getAttribute('title'), /Official_20261101\.pdf/);
+    assert.match(await panel(page).getByTestId('circuit-pdf-ai-bar').locator('[data-side="old"] select').getAttribute('title'), /Official_20261101\.pdf/);
     await page.screenshot({ path: path.join(evidence, 'official-compare-1440.png') });
     await dialog(page).getByRole('button', { name: '關閉線路修改', exact: true }).click(); await dialog(page).waitFor({ state: 'hidden' });
     // Legacy version metadata may change; it must never replace the protected official file snapshot.
@@ -253,7 +253,7 @@ async function managerFits(page, label) {
     Object.assign(legacyBaseline, { name: 'Edited_legacy_metadata.pdf', path: registry().documents.find(row => row.name === 'Working_20261109.pdf').path });
     await page.getByTestId('material-circuit-changes').filter({ visible: true }).click(); await dialog(page).waitFor(); await rendered(page);
     assert.equal(await dialog(page).getByRole('tab', { name: /^AI 比對/ }).getAttribute('aria-selected'), 'true', 'the window reopens on the task used last');
-    assert.match(await panel(page).getByTestId('circuit-pdf-ai-bar').locator('[data-side="old"] strong').getAttribute('title'), /Official_20261101\.pdf/);
+    assert.match(await panel(page).getByTestId('circuit-pdf-ai-bar').locator('[data-side="old"] select').getAttribute('title'), /Official_20261101\.pdf/);
     assert.deepEqual(fixture.state.pdfOfficials.get('series:qa').document, baselineSnapshot, 'Legacy registry metadata cannot mutate the official file snapshot');
     assert.match(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), /Official_20261101\.pdf/);
     report.checks.push('official baseline survives a modification-group switch and closing/reopening the workspace');
