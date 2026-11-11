@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/performance-rd2-integration.md`；程式參考基準：`01f1af430a4fa4816137f7397e054c782acf3072`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/performance-rd2-integration.md`；程式參考基準：`9b6de2cd1474a68ee949fe1926c38d8d5d4313f4`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # RD2 績效、組織與評分標準
 
