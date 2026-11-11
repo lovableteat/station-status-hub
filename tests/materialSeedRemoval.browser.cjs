@@ -9,6 +9,16 @@ const evidence = path.resolve(process.env.MATERIAL_SEED_EVIDENCE_DIR || '../mate
 const template = JSON.parse(fs.readFileSync('tests/fixtures/materialWorkbook.synthetic.json', 'utf8')).records[0];
 const storageKey = 'station-status-hub:material-changes:v1';
 
+async function verifyMobileDetail(page, recordId, expectedText) {
+  const row = page.locator(`[data-testid="material-mobile-list-row"][data-record-id="${recordId}"]`);
+  await row.getByTestId('material-mobile-row-open').click();
+  const detail = page.getByTestId('material-mobile-detail');
+  await detail.waitFor();
+  for (const text of expectedText) await detail.getByText(text, { exact: false }).first().waitFor();
+  await detail.getByRole('button', { name: '關閉料件詳情', exact: true }).click();
+  await detail.waitFor({ state: 'hidden' });
+}
+
 (async () => {
   fs.mkdirSync(evidence, { recursive: true });
   const browser = await chromium.launch({ ...(process.env.CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.CHROMIUM_EXECUTABLE_PATH } : {}), headless: true });
@@ -34,16 +44,20 @@ const storageKey = 'station-status-hub:material-changes:v1';
         await page.waitForFunction(() => window.__qaBomSafety?.reads > 0);
         const rows = width < 500 ? page.getByTestId('material-mobile-list-row') : page.locator('table.material-table-crosshair tbody tr[data-record-id]');
         if (scenario === 'empty') {
-          await page.getByText('尚未匯入 BOM', { exact: true }).first().waitFor();
+          // The selected label also contains its version badge on desktop and BOM count on mobile.
+          await page.getByLabel('切換 BOM', { exact: true }).filter({ hasText: '尚未匯入 BOM' }).waitFor();
           assert.equal(await rows.count(), 0);
         } else if (scenario === 'local-recovery') {
-          await page.getByText('本機保留的 BOM 修改', { exact: true }).first().waitFor();
-          await page.waitForFunction(() => document.body.textContent.includes('R-LOCAL') && document.body.textContent.includes('R-EDITED'));
+          await page.getByLabel('切換 BOM', { exact: true }).filter({ hasText: '本機保留的 BOM 修改' }).waitFor();
+          if (width < 500) await verifyMobileDetail(page, 'local-added', ['R-LOCAL', 'R-EDITED']);
+          else await page.waitForFunction(() => document.body.textContent.includes('R-LOCAL') && document.body.textContent.includes('R-EDITED'));
           assert.equal(await page.evaluate(key => localStorage.getItem(key), storageKey), JSON.stringify(saved));
         } else {
-          await page.waitForFunction(() => document.body.textContent.includes('QA-MPN-0'));
+          if (width < 500) await verifyMobileDetail(page, 'qa-0', ['QA-MPN-0']);
+          else await page.waitForFunction(() => document.body.textContent.includes('QA-MPN-0'));
           await page.getByRole('button', { name: 'QA 帳號 B（檢視）', exact: true }).click();
-          await page.waitForFunction(() => document.body.textContent.includes('QA-MPN-0'));
+          if (width < 500) await verifyMobileDetail(page, 'qa-0', ['QA-MPN-0']);
+          else await page.waitForFunction(() => document.body.textContent.includes('QA-MPN-0'));
         }
         assert.deepEqual(await page.evaluate(() => window.__qaBomSafety.writes), []);
         assert.equal(requests.some(url => /materialRequestSeed/.test(url)), false);

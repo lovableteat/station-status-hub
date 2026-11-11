@@ -60,6 +60,8 @@ const makeRecord = (ref, index, overrides = {}) => ({
   manufacturer: index % 2 ? 'QA Vendor B' : 'QA Vendor A', manufacturerPartNumber: `QA-MPN-${index}`,
   virtualAlternative: hasPart(index) ? '000-VIRTUAL' : '', partNumber: hasPart(index) ? `000-PHYSICAL-${index}` : '',
   requestOwnerId: index === 8 ? '00000000-0000-4000-8000-000000000002' : undefined, requestOwnerName: index === 8 ? 'CE 王同學' : undefined,
+  // Keep the synthetic V2 baseline aligned with the V3 workbook in auditBomVersions.browser.cjs.
+  sectionName: 'Sub-BOM Board Level Components', schematicPart: 'C', pcbFootprint: 'c0402',
   partName: 'QA 公司料名', partSpec: '10K 1% 0402', assemblyName: 'QA 原始模組', remark: 'QA 原始備註保留',
   trackingStatus: index === 8 ? 'SYMBOL申請中' : index === 0 ? '處理中' : '', trackingHistory: [], trackingNote: '', sourcingStatus: 'Approved', ...overrides,
 });

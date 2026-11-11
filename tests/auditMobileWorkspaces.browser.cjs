@@ -13,8 +13,10 @@ const BASE = `http://127.0.0.1:${PORT}/station-status-hub/`;
 const page = (workspace) => `${BASE}?demo=admin&workspace=${workspace}`;
 
 function startVite() {
-  const child = spawn(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['vite', '--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], {
-    cwd: process.cwd(), stdio: ['ignore', 'pipe', 'pipe'], shell: process.platform === 'win32',
+  // Own the Vite process directly so stopping it cannot leave an npx grandchild
+  // holding stdout/stderr pipes open after the browser assertions have ended.
+  const child = spawn(process.execPath, [path.resolve('node_modules/vite/bin/vite.js'), '--port', String(PORT), '--strictPort', '--host', '127.0.0.1'], {
+    cwd: process.cwd(), stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || 'http://127.0.0.1:54321', VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || 'isolated-test-key' },
   });
   child.stdout.on('data', () => {}); child.stderr.on('data', (chunk) => { const text = String(chunk); if (/error/i.test(text)) process.stderr.write(text); });
@@ -22,7 +24,8 @@ function startVite() {
   return new Promise((resolve, reject) => {
     const started = Date.now();
     child.on('exit', (code) => reject(new Error(`vite exited with ${code}`)));
-    const probe = () => fetch(BASE).then((response) => {
+    const probe = () => fetch(BASE, { signal: AbortSignal.timeout(2000) }).then(async (response) => {
+      await response.body?.cancel();
       if (response.ok) { console.log(`vite ready in ${Date.now() - started}ms`); resolve(child); }
       else throw new Error(String(response.status));
     }).catch(() => { if (Date.now() - started > 120000) reject(new Error('vite did not start')); else setTimeout(probe, 500); });
