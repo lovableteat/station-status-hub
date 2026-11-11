@@ -97,7 +97,7 @@
 .bom-tracker-power-filter > span { font-variant-numeric: tabular-nums; }
 .bom-tracker-power-mark { height: 30px; margin-left: auto; padding-inline: 6px; font-size: 11px; }
 .bom-tracker-power-mark:disabled { cursor: default; }
-:is(.bom-tracker-power-filter, .bom-tracker-power-mark):hover:not(:disabled) { background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+:is(.bom-tracker-power-filter, .bom-tracker-power-mark)[aria-pressed="false"]:hover:not(:disabled) { background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
 :is(.bom-tracker-power-filter, .bom-tracker-power-mark)[aria-pressed="true"] { border-color: hsl(var(--bom-tracker-power-color) / .55); background: hsl(var(--bom-tracker-power-color) / .14); color: hsl(var(--bom-tracker-power-color)); }
 :is(.bom-tracker-power-filter, .bom-tracker-power-mark):focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 1px; }
 .bom-tracker-count { margin-left: auto; color: hsl(var(--primary)); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
