@@ -6,12 +6,12 @@ import {
   FileImage,
   FileSpreadsheet,
   FileText,
-  Loader2,
   Presentation,
   UploadCloud,
   X,
 } from "lucide-react";
 
+import { MaintenanceSpinner, showMaintenanceSuccess } from "@/components/maintenance/MaintenanceFeedback";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -93,6 +93,7 @@ export function FileUploadDialog({
   const { toast } = useToast();
 
   const addFiles = (incomingFiles: File[]) => {
+    if (isUploading) return;
     const nextFiles = mergeFiles(files, incomingFiles);
     if (files.length + incomingFiles.length > MAX_FILES_PER_UPLOAD) {
       toast({
@@ -212,10 +213,8 @@ export function FileUploadDialog({
       return;
     }
 
-    toast({
-      title: `${successCount} 個檔案已上傳`,
-      description: projectId && canAssignToProject ? "已放入目前專案的不特定資產。" : isGlobal ? "已放入通用資產庫。" : "已放入目前 workspace 資產庫。",
-    });
+    const destination = projectId && canAssignToProject ? "已放入目前專案的不特定資產。" : isGlobal ? "已放入通用資產庫。" : "已放入目前 workspace 資產庫。";
+    showMaintenanceSuccess(`${successCount} 個檔案已上傳`, destination);
     resetDialog();
     onClose();
   };
@@ -225,8 +224,8 @@ export function FileUploadDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto border-[#2a526f] bg-[#071522] p-0 text-[#f3f8fc] sm:max-w-2xl">
-        <DialogHeader className="border-b border-[#2a526f] bg-gradient-to-r from-cyan-400/[0.12] via-blue-400/[0.06] to-transparent px-6 py-5 text-left">
+      <DialogContent className="mf-tool-dialog mf-upload-dialog flex flex-col gap-0 overflow-hidden border-[#2a526f] bg-[#071522] p-0 text-[#f3f8fc] sm:max-h-[88dvh] sm:max-w-2xl sm:gap-0 sm:p-0">
+        <DialogHeader className="shrink-0 border-b border-[#2a526f] bg-gradient-to-r from-cyan-400/[0.12] via-blue-400/[0.06] to-transparent px-4 py-4 text-left sm:px-6 sm:py-5">
           <div className="flex items-start gap-3 pr-8">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-300/35 bg-cyan-300/10 text-cyan-100">
               <UploadCloud className="h-5 w-5" />
@@ -242,7 +241,7 @@ export function FileUploadDialog({
           </div>
         </DialogHeader>
 
-        <div className="space-y-5 px-6 py-5">
+        <div className="min-h-0 space-y-5 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
           <div className="flex flex-wrap gap-2" aria-label="支援格式">
             {["PDF / Word", "Excel / CSV", "PPT / PPTX", "STP / STEP", "圖片", "其他格式"].map((format) => (
               <span key={format} className="rounded-md border border-[#315d79] bg-[#10263a] px-2.5 py-1 text-xs font-medium text-[#cce4f2]">
@@ -260,7 +259,7 @@ export function FileUploadDialog({
             )}
             onDragEnter={(event) => {
               event.preventDefault();
-              setIsDragging(true);
+              if (!isUploading) setIsDragging(true);
             }}
             onDragOver={(event) => event.preventDefault()}
             onDragLeave={(event) => {
@@ -340,27 +339,31 @@ export function FileUploadDialog({
             <Switch checked={isGlobal} onCheckedChange={setIsGlobal} disabled={isUploading} />
           </div>
 
-          {isUploading && (
-            <div className="rounded-xl border border-cyan-300/25 bg-cyan-300/[0.07] p-4">
-              <div className="mb-2 flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2 font-medium"><Loader2 className="h-4 w-4 animate-spin" />正在上傳</span>
-                <span className="font-data text-cyan-100">{completedCount}/{files.length}</span>
-              </div>
-              <Progress value={progress} className="h-2" />
-            </div>
-          )}
-
           {!canAssignToProject && projectId && (
             <div className="rounded-lg border border-amber-300/30 bg-amber-300/[0.08] px-3 py-2 text-sm text-amber-100">
               專案套用資料尚未就緒；檔案仍會儲存到所選範圍，稍後再手動套用。
             </div>
           )}
+        </div>
 
-          <div className="flex justify-end gap-2 border-t border-[#24465e] pt-4">
-            <Button type="button" variant="outline" onClick={handleClose} disabled={isUploading}>取消</Button>
-            <Button type="button" onClick={handleUpload} disabled={isUploading || !files.length}>
-              {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-              {files.length ? `上傳 ${files.length} 個檔案` : "開始上傳"}
+        <div className="shrink-0 space-y-2 border-t border-[#24465e] px-4 py-3 sm:px-6">
+          {isUploading && (
+            <div className="rounded-xl border border-cyan-300/25 bg-cyan-300/[0.07] px-3 py-2">
+              <div className="mb-2 flex items-center justify-between text-sm">
+                <span className="font-medium">正在上傳</span>
+                <span className="font-data text-cyan-100">{completedCount}/{files.length}</span>
+              </div>
+              <Progress value={progress} aria-label="檔案上傳進度" aria-valuenow={progress} aria-valuetext={`已處理 ${completedCount} 個，共 ${files.length} 個`} className="h-2" />
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" className="min-h-11" onClick={handleClose} disabled={isUploading}>取消</Button>
+            <Button type="button" className="min-h-11" onClick={handleUpload} disabled={isUploading || !files.length} aria-busy={isUploading}>
+              {isUploading ? <><MaintenanceSpinner/>上傳中…</> : <>
+                <UploadCloud className="h-4 w-4" aria-hidden="true"/>
+                {files.length ? `上傳 ${files.length} 個檔案` : "開始上傳"}
+              </>}
             </Button>
           </div>
         </div>

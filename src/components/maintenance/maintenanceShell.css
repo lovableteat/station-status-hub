@@ -189,3 +189,104 @@
     transition: none;
   }
 }
+
+.mf-shell-loading {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  background: hsl(var(--card));
+}
+
+.mf-loading {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 12px;
+  border: 1px solid hsl(var(--primary) / .24);
+  border-radius: 8px;
+  background: hsl(var(--primary) / .08);
+  color: var(--mf-text, hsl(var(--foreground)));
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.mf-loading-spinner {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+}
+
+.mf-loading > .mf-loading-spinner { color: var(--mf-teal, hsl(var(--primary))); }
+
+:is(.maintenance-shell, .mf-action-dialog, .mf-report-dialog, .mf-tool-dialog) button[aria-busy="true"] {
+  cursor: progress;
+  opacity: .85;
+}
+
+[data-sonner-toaster] .mf-success-toast[data-sonner-toast] {
+  right: 0;
+  left: auto;
+  width: max-content !important;
+  max-width: 100%;
+  min-height: 42px !important;
+  padding: 9px 14px !important;
+  border: 1px solid hsl(var(--success) / .55) !important;
+  border-radius: 10px;
+  background: color-mix(in srgb, hsl(var(--card)), hsl(var(--success)) 14%) !important;
+  color: hsl(var(--foreground)) !important;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.mf-success-toast [data-icon] { color: hsl(var(--success)); }
+.mf-success-toast [data-description] { color: hsl(var(--muted-foreground)); }
+
+@media (max-width: 1023px) {
+  [data-sonner-toaster][data-y-position="top"]:has(> .mf-success-toast) {
+    top: auto !important;
+    right: 12px !important;
+    bottom: calc(var(--mobile-shell-bottom, 68px) + 12px) !important;
+    left: auto !important;
+    width: min(260px, calc(100% - 24px)) !important;
+    pointer-events: none;
+  }
+  body:has(.maintenance-fault-center[data-detail-open="true"]) [data-sonner-toaster][data-y-position="top"]:has(> .mf-success-toast) {
+    bottom: calc(var(--mobile-shell-bottom, 68px) + 144px) !important;
+  }
+  [data-sonner-toaster][data-y-position="top"] .mf-success-toast[data-sonner-toast] {
+    --lift: 1;
+    inset: auto 0 0 auto;
+  }
+  body:has(:is(.mf-report-dialog, .mf-action-dialog, .mf-upload-dialog)[data-state="open"]) .mf-success-toast[data-sonner-toast] { opacity: 0; }
+}
+
+@keyframes maintenance-spinner { to { rotate: 360deg; } }
+@keyframes maintenance-results-enter { from { opacity: .65; } to { opacity: 1; } }
+@keyframes maintenance-check-enter { from { opacity: .4; scale: .78; } to { opacity: 1; scale: 1; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .mf-loading-spinner { animation: maintenance-spinner .75s linear infinite; }
+  .maintenance-shell :is(.mf-results-ready, .mf-history-detail) { animation: maintenance-results-enter 150ms ease-out; }
+  .mf-success-toast[data-visible="true"] [data-icon] { animation: maintenance-check-enter 170ms ease-out; }
+
+  :is(.maintenance-shell, .mf-action-dialog, .mf-report-dialog, .mf-tool-dialog) :is(button[data-ui="button"], button[data-ui="dialog-close"], button[data-maintenance-module], button[data-mobile-maintenance-module], button[data-maintenance-project-picker], button[role="tab"]) {
+    transition: scale 130ms ease-out, opacity 130ms ease-out, background-color 140ms ease-out, border-color 140ms ease-out, color 140ms ease-out;
+  }
+
+  :is(.maintenance-shell, .mf-action-dialog, .mf-report-dialog, .mf-tool-dialog) :is(button[data-ui="button"], button[data-ui="dialog-close"], button[data-maintenance-module], button[data-mobile-maintenance-module], button[data-maintenance-project-picker], button[role="tab"]):enabled:active {
+    scale: .97;
+    transition-duration: 65ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-sonner-toaster] .mf-success-toast[data-sonner-toast] { transition: none; }
+}

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ChevronRight, Layers3, Search, Server } from 'lucide-react';
 import { useUser } from '@/components/auth/UserContext';
 import { useTestProject } from '@/components/test-projects/TestProjectProvider';
+import { MaintenanceLoading } from './MaintenanceFeedback';
 import { buildFaultStatistics, writeFaultFilters } from './maintenanceModel';
 import { useMaintenanceData } from './useMaintenanceData';
 import './maintenance.css';
@@ -34,11 +35,11 @@ export function MaintenanceDashboard({ onNavigate }: { onNavigate: (module: stri
           <p className="mf-hint">目前專案的故障統計，包含已解決紀錄</p>
         </div>
       </header>
-      <div className="mf-dashboard-summary" aria-label="專案故障統計">
+      <div className="mf-dashboard-summary" aria-label="專案故障統計" aria-busy={loading}>
         <div><span>累計故障</span><strong>{loading || error ? '—' : data.issues.length}</strong></div>
         <div data-tone="open"><span>未解決</span><strong>{loading || error ? '—' : openCount}</strong></div>
         <div data-tone="closed"><span>已解決</span><strong>{loading || error ? '—' : data.issues.length - openCount}</strong></div>
-        {stats.unidentified > 0 && !error ? (
+        {stats.unidentified > 0 && !loading && !error ? (
           <button type="button" onClick={() => navigate('machine', '未記錄機台')} title="查看未記錄機台的故障">
             <span>未記錄機台</span><strong>{stats.unidentified}</strong><ChevronRight size={16} aria-hidden="true"/>
           </button>
@@ -62,7 +63,7 @@ export function MaintenanceDashboard({ onNavigate }: { onNavigate: (module: stri
               <h2><Icon size={18} aria-hidden="true"/>{title}</h2>
               <table>
                 <thead><tr><th scope="col">{column}</th><th scope="col">累計故障</th><th scope="col">未解決</th></tr></thead>
-                <tbody>
+                <tbody className={loading ? undefined : 'mf-results-ready'}>
                   {rows.map(item => (
                     <tr key={item.name}>
                       <td>
@@ -74,7 +75,13 @@ export function MaintenanceDashboard({ onNavigate }: { onNavigate: (module: stri
                       <td><span className="mf-open-count" data-open={item.open > 0}>{item.open}</span></td>
                     </tr>
                   ))}
-                  {!rows.length && <tr><td colSpan={3} className="mf-empty">{loading ? '讀取中…' : `目前篩選條件沒有符合的${entity}`}</td></tr>}
+                  {!rows.length && (
+                    <tr><td colSpan={3} className="mf-empty">
+                      {loading ? (
+                        <MaintenanceLoading label="載入故障統計中…" announce={type === 'machines'}/>
+                      ) : error ? '暫時無法顯示統計' : `目前篩選條件沒有符合的${entity}`}
+                    </td></tr>
+                  )}
                 </tbody>
               </table>
             </section>

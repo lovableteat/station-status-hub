@@ -33,6 +33,7 @@ import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { WorkspaceEntrance } from "@/components/layout/WorkspaceEntrance";
 import { MaintenanceLoading } from "@/components/maintenance/MaintenanceLoading";
+import { MaintenanceLoading as MaintenanceLoadingStatus } from "@/components/maintenance/MaintenanceFeedback";
 import "@/components/maintenance/maintenanceShell.css";
 import { ProjectScopeBar } from "@/components/test-projects/ProjectScopeBar";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
@@ -723,9 +724,9 @@ const Index = () => {
                   className="maintenance-shell-content"
                 >
                   {isSwitchingProject ? (
-                    <MaintenanceLoading />
+                    <div className="mf-shell-loading"><MaintenanceLoadingStatus label="載入專案資料…" /></div>
                   ) : (
-                    <React.Suspense fallback={<MaintenanceLoading label="正在載入維修模組" />}>
+                    <React.Suspense fallback={<div className="mf-shell-loading"><MaintenanceLoadingStatus label="載入維修模組…" /></div>}>
                       <div
                         key={`${activeProjectId ?? "no-project"}:${activeStationModule}`}
                         className="maintenance-shell-module"

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -7,20 +8,23 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Fault, MaintenanceSystem } from './maintenanceModel';
 import { FilePicker, useFaultFiles } from './MaintenanceAttachments';
 import { maintenanceError, useMaintenanceViewport } from './useMaintenanceData';
+import { MaintenanceSpinner } from './MaintenanceFeedback';
 
-export function MaintenanceReport({ projectId, systems, assetSuggestions = [], onClose, onCreated }: {
-  projectId: string; systems: MaintenanceSystem[]; assetSuggestions?: string[]; onClose: () => void; onCreated: (id: string) => void;
+export function MaintenanceReport({ open, projectId, systems, assetSuggestions = [], onClose, onExited, onCreated }: {
+  open: boolean; projectId: string; systems: MaintenanceSystem[]; assetSuggestions?: string[]; onClose: () => void; onExited: () => void; onCreated: (id: string) => void;
 }) {
   const [asset, setAsset] = useState(''), [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [saved, setSaved] = useState<Fault | null>(null);
   const requestId = useRef(crypto.randomUUID()), messageId = useRef(crypto.randomUUID());
   const files = useFaultFiles();
+  const complete = !open && !!saved && !files.files.length;
   const viewport = useMaintenanceViewport();
   const system = systems.find(item => (item.serial_number?.trim() || item.system_name) === asset.trim());
   const close = () => { if (!busy && (saved || (!asset && !title && !files.files.length) || window.confirm('尚未送出的內容將放棄，確定關閉？'))) onClose(); };
   const submit = async (event: React.FormEvent) => {
-    event.preventDefault(); setBusy(true); setError('');
+    event.preventDefault(); if (busy) return;
+    setBusy(true); setError('');
     try {
       let issue = saved;
       if (!issue) {
@@ -37,7 +41,7 @@ export function MaintenanceReport({ projectId, systems, assetSuggestions = [], o
     } catch (cause) { setError(maintenanceError(cause)); }
     finally { setBusy(false); }
   };
-  return <Dialog open onOpenChange={open => { if (!open) close(); }}><DialogContent className="mf-report-dialog" style={{ '--mf-visible-height': `${viewport.height}px`, '--mf-keyboard-gap': `${viewport.bottom}px` } as React.CSSProperties} onInteractOutside={event => { if (busy) event.preventDefault(); }} onEscapeKeyDown={event => { if (busy) event.preventDefault(); }}>
+  return <Dialog open={open} onOpenChange={nextOpen => { if (!nextOpen) close(); }}><DialogContent className="mf-report-dialog" style={{ '--mf-visible-height': `${viewport.height}px`, '--mf-keyboard-gap': `${viewport.bottom}px` } as React.CSSProperties} onCloseAutoFocus={onExited} onInteractOutside={event => { if (busy) event.preventDefault(); }} onEscapeKeyDown={event => { if (busy) event.preventDefault(); }}>
     <header><DialogTitle>快速報修</DialogTitle><DialogDescription>先記下哪台、什麼問題，負責人與分類稍後再補。</DialogDescription></header>
     <form onSubmit={submit} onPaste={event => { if (!busy && !saved && event.clipboardData.files.length) { event.preventDefault(); files.add(event.clipboardData.files); } }}>
       <div className="mf-report-fields">
@@ -50,7 +54,7 @@ export function MaintenanceReport({ projectId, systems, assetSuggestions = [], o
         <FilePicker state={files} disabled={busy}/>
         {error && <p className="mf-error" role="alert">{saved && '故障已建立。'}{error}</p>}
       </div>
-      <footer><Button type="button" variant="ghost" disabled={busy} onClick={close}>{saved ? '稍後補附件' : '取消'}</Button><Button type="submit" disabled={busy}>{busy ? '儲存中…' : saved ? '重試剩餘附件' : '建立報修'}</Button></footer>
+      <footer><Button type="button" variant="ghost" disabled={busy || complete} onClick={close}>{saved && !complete ? '稍後補附件' : '取消'}</Button><Button className="mf-submit" type="submit" disabled={busy || complete} aria-busy={busy || undefined}>{busy ? <MaintenanceSpinner /> : complete ? <Check size={16} /> : null}{busy ? saved ? '上傳附件中…' : '建立中…' : complete ? '已建立' : saved ? '重試剩餘附件' : '建立報修'}</Button></footer>
     </form>
   </DialogContent></Dialog>;
 }
