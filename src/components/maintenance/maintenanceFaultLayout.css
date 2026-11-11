@@ -199,7 +199,20 @@
   .mf-action-dialog[data-keyboard="true"] .mf-people { max-height: max(72px, calc(var(--mf-visible-height) - 270px)); }
 }
 
+@keyframes maintenance-fault-detail-enter {
+  from { opacity: .72; translate: 0 6px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
 @media (prefers-reduced-motion: no-preference) {
+  .maintenance-fault-center .mf-detail > .mf-detail-scroll {
+    animation: maintenance-fault-detail-enter 180ms ease-out;
+  }
+  .maintenance-fault-center .mf-fault-row {
+    transition: background-color 140ms ease-out, box-shadow 140ms ease-out;
+  }
+  .maintenance-fault-center .mf-row-arrow svg { transition: translate 140ms ease-out; }
+  .maintenance-fault-center .mf-fault-row[data-active="true"] .mf-row-arrow svg { translate: 3px 0; }
   .maintenance-fault-center :is(.mf-row-arrow, .mf-row-owner, .mf-mine) {
     transition: color 140ms ease, background-color 140ms ease;
   }
