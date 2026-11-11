@@ -20,10 +20,12 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci --legacy-peer-deps
+      - id: app-dependencies
+        run: npm ci --legacy-peer-deps
       - name: Set isolated QA directory
         run: echo "AUDIT_QA_DIR=$RUNNER_TEMP/station-audit-qa" >> "$GITHUB_ENV"
       - name: Install isolated QA dependencies
+        id: qa-dependencies
         run: npm install --prefix "$AUDIT_QA_DIR" --no-package-lock react@18.3.1 react-test-renderer@18.3.1 jsdom@29.1.1 @electric-sql/pglite@0.5.8 playwright@1.58.2
       - name: Anonymous data exposure and authenticated compatibility
         run: node tests/anonymousExposure.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
@@ -54,15 +56,20 @@ jobs:
           node tests/performanceSubmission.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
       - name: PGlite AI model usage telemetry and RLS
         run: node tests/aiModelUsageTelemetry.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
+      - name: Install isolated Chromium
+        id: install-browser
+        if: ${{ !cancelled() && steps.qa-dependencies.outcome == 'success' }}
+        run: '"$AUDIT_QA_DIR/node_modules/.bin/playwright" install --with-deps chromium'
       - name: Browser history cancellation
-        run: |
-          "$AUDIT_QA_DIR/node_modules/.bin/playwright" install --with-deps chromium
-          node tests/auditHistory.browser.cjs
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
+        run: node tests/auditHistory.browser.cjs
       - name: Private rich-text previews, sign-out and document preservation
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         env:
           AUDIT_SCREENSHOT_PATH: ${{ runner.temp }}/private-richtext.png
         run: node tests/auditRichText.browser.cjs
       - name: Public seed removal and desktop/mobile BOM data preservation
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         run: |
           MATERIAL_QA_PORT=8106 node tests/materialWorkspace.browser.cjs > "$RUNNER_TEMP/material-fixture.log" 2>&1 &
           fixture_pid=$!
@@ -75,14 +82,19 @@ jobs:
           if [ "$ready" != true ]; then cat "$RUNNER_TEMP/material-fixture.log"; exit 1; fi
           MATERIAL_QA_URL=http://127.0.0.1:8106 MATERIAL_SEED_EVIDENCE_DIR="$RUNNER_TEMP/material-seed-evidence" node tests/materialSeedRemoval.browser.cjs
       - name: Permissions dialog layout and isolated interactions
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         run: node tests/auditPermissionsDialog.browser.cjs
       - name: BOM version upload, carry-over, diff export and phone layout
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         run: node tests/auditBomVersions.browser.cjs
       - name: Phone shell across files, AutoCheck, admin, performance and maintenance
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         run: node tests/auditMobileWorkspaces.browser.cjs
       - name: Short landscape maintenance navigation and touch scrolling
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         run: node tests/auditShortLandscape.browser.cjs
-      - run: npm run build
+      - if: ${{ !cancelled() && steps.app-dependencies.outcome == 'success' }}
+        run: npm run build
       - name: Preserve synthetic browser evidence
         if: always()
         uses: actions/upload-artifact@v4
