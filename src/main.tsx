@@ -1,3 +1,4 @@
+import './lib/workspaceHistory'; // Register history interception before any Router/editor.
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';

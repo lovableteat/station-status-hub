@@ -1,5 +1,16 @@
 const INDEX = "workspaceHistoryIndex";
 const COMMIT = "workspace-history-commit";
+// Window-target popstate listeners can run in registration order even when a
+// later listener uses capture. Install this dispatcher at module evaluation,
+// before React/HashRouter/editor listeners (main.tsx imports this module first).
+// Keep it installed across watcher cleanup/remounts so it never loses priority.
+let activePopstate: ((event: Event) => void) | null = null;
+let replaying = false;
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", event => {
+    if (!replaying) activePopstate?.(event);
+  }, true);
+}
 // Native hash / third-party entries have no reliable workspace cursor. Once
 // encountered, do not infer history.go distances across that unknown entry.
 let contiguousHistory = true;
@@ -50,7 +61,6 @@ export function watchWorkspaceHistory(
     acceptedState = window.history.state;
   };
   const committed = () => { invalidate(); rememberAccepted(); };
-  let replaying = false;
   const popped = (event: Event) => {
     if (replaying) return;
     const marker = window.history.state?.[INDEX];
@@ -98,7 +108,7 @@ export function watchWorkspaceHistory(
       onLoadError?.(retry);
       return;
     }
-    // Capture before Router and editor listeners. They must not accept a URL
+    // The early dispatcher runs before Router/editor listeners. They must not accept a URL
     // whose module has not loaded. Replay once only after successful prepare.
     if (prepareNavigate) event.stopImmediatePropagation();
     const destination = index();
@@ -169,6 +179,10 @@ export function watchWorkspaceHistory(
     });
   };
   window.addEventListener(COMMIT, committed);
-  window.addEventListener("popstate", popped, Boolean(prepareNavigate));
-  return () => { sequence += 1; window.removeEventListener(COMMIT, committed); window.removeEventListener("popstate", popped, Boolean(prepareNavigate)); };
+  activePopstate = popped;
+  return () => {
+    sequence += 1;
+    window.removeEventListener(COMMIT, committed);
+    if (activePopstate === popped) activePopstate = null;
+  };
 }
