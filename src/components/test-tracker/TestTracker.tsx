@@ -1,5 +1,6 @@
+import { recoverableLazy } from "@/components/common/recoverableLazy";
 import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Activity,
@@ -69,7 +70,7 @@ import type { TrackerLinkedIssue } from "./testTrackerPresentation";
 type StatusFilter = "all" | "未開始" | "進行中" | "已完成";
 type TrackerView = "table" | "board";
 
-const ProductionMonitor = lazy(() =>
+const ProductionMonitor = recoverableLazy(() =>
   import("@/components/production/ProductionMonitor").then((module) => ({
     default: module.ProductionMonitor,
   }))

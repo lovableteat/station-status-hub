@@ -67,9 +67,11 @@ test('draft-PR checks remain isolated from production deployment and credentials
   assert.doesNotMatch(read('.github/workflows/keep_alive.yml'), /(?:push|pull_request(?:_target)?):/);
   assert.match(regression, /node tests\/auditRichText\.browser\.cjs/);
   assert.match(regression, /node tests\/materialSeedRemoval\.browser\.cjs/);
+  assert.match(regression, /node tests\/auditDeploymentRecovery\.browser\.cjs/);
+  assert.match(regression, /AUDIT_DEPLOYMENT_EVIDENCE_DIR: \$\{\{ runner\.temp \}\}\/deployment-recovery/);
   assert.match(regression, /curl --fail --silent http:\/\/127\.0\.0\.1:8106\//);
   assert.doesNotMatch(regression, /continue-on-error:/);
-  assert.equal((regression.match(/!cancelled\(\) && steps\.install-browser\.outcome == 'success'/g) || []).length, 7, 'independent browser checks continue after earlier failures without hiding the failed job');
-  assert.equal((regression.match(/timeout --signal=TERM --kill-after=10s 180s node tests\//g) || []).length, 7, 'a browser fixture cannot leave later independent checks waiting on a leaked process');
+  assert.equal((regression.match(/!cancelled\(\) && steps\.install-browser\.outcome == 'success'/g) || []).length, 8, 'independent browser checks continue after earlier failures without hiding the failed job');
+  assert.equal((regression.match(/timeout --signal=TERM --kill-after=10s 180s node tests\//g) || []).length, 8, 'a browser fixture cannot leave later independent checks waiting on a leaked process');
   assert.match(read('tests/auditMobileWorkspaces.browser.cjs'), /spawn\(process\.execPath, \[path\.resolve\('node_modules\/vite\/bin\/vite\.js'\)/);
 });

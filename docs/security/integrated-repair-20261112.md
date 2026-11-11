@@ -32,7 +32,7 @@ Independent cross-review found two additional display problems and the integrate
 1. The editor lightbox previously copied the temporary signed DOM URL, so it did not refresh or clear with sign-out. It now keeps the durable image reference and resolves it through the shared signing hook. Display-only metadata never enters saved HTML, JSON, or undo history.
 2. Timers and source/node updates previously could re-sign after sign-out during the frontend-first transition. All three display paths now remain suspended after sign-out or a null-session Auth event, until an Auth event supplies a session. Regression tests cover timer ticks, source/HTML/node changes, sessionless events, and re-login.
 
-The initial renderer can still attempt signing before the first Auth event. Server-side private bucket/RLS rules, not frontend state, are the authorization boundary. A copied signed URL remains usable until its expiry; downloaded files cannot be recalled.
+The initial renderer can still attempt signing before the first Auth event. Server-side private bucket/RLS rules, not frontend state, are the authorization boundary. A copied signed URL may remain usable from CDN cache even after token expiry; [Supabase Smart CDN](https://supabase.com/docs/guides/storage/cdn/smart-cdn) treats cache TTL separately. Downloaded files cannot be recalled. Do not promise a five-minute access cutoff or delete original objects as a cache-clearing shortcut.
 
 ## Local verification
 

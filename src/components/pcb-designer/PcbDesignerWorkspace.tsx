@@ -1,4 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { recoverableLazy } from "@/components/common/recoverableLazy";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { CircuitBoard, LayoutTemplate, MoreHorizontal, PanelLeft, PanelRight, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -61,7 +62,7 @@ import {
 import { usePcbProjectPresence, type PcbViewMode } from "./hooks/usePcbProjectPresence.ts";
 import "./pcb-designer.css";
 
-const Pcb3DCanvas = lazy(() => import("./Pcb3DCanvas.tsx").then((module) => ({
+const Pcb3DCanvas = recoverableLazy(() => import("./Pcb3DCanvas.tsx").then((module) => ({
   default: module.Pcb3DCanvasSafe,
 })));
 

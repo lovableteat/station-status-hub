@@ -9,7 +9,7 @@ This change is prepared in isolation. It does not change a production bucket, da
 - Do not save short-lived signed URLs to records. Tiptap uses a display-only NodeView while save, undo and redo retain the original source URL.
 - Uploads keep their existing paths and content. All existing collaboration permissions are enforced by Storage policies, not by client-side owner checks.
 - Images and previews use five-minute signed URLs, refreshed after four minutes. Downloads use authenticated Storage download. Authorization failures have no public URL fallback.
-- Sign-out clears displayed signed URLs. An already copied signed URL remains a bearer capability until expiry. An already downloaded or externally cached file cannot be recalled by this change.
+- Sign-out clears displayed signed URLs, but it does not recall copies or clear caches. Token expiry is not a guaranteed access cutoff: [Supabase Smart CDN](https://supabase.com/docs/guides/storage/cdn/smart-cdn) can serve an already cached signed response until its independent cache TTL expires. Verify hosted cache behavior separately; never delete the user's original objects as a cache-clearing shortcut.
 - The integrated repair also routes the editor lightbox through the signing hook. Timers, source changes and NodeView updates remain suspended after sign-out until an Auth event supplies a real session. Display-only durable-reference metadata is never serialized into saved editor HTML.
 
 ## Safe future rollout gates

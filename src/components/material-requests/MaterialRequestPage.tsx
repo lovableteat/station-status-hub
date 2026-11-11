@@ -1,9 +1,9 @@
-﻿import {
+import { recoverableLazy } from "@/components/common/recoverableLazy";
+import {
   type ChangeEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   memo,
-  lazy,
   Suspense,
   startTransition,
   useCallback,
@@ -171,8 +171,8 @@ import { getMaterialSpecDocuments, withMaterialSpecDocuments } from "./materialA
 import { getMaterialTrackingStatusMeaning, isTrackedMaterialApplication, MATERIAL_TRACKING_STATUS_OPTIONS, materialTrackingStatusTone, materialTrackingStatusPresentation, normalizeMaterialTrackingStatus } from "./materialTrackingStatus";
 import { MaterialWeeklyProgressDialog } from "./MaterialWeeklyProgressDialog";
 import { useSpecFillNavigation } from "./useSpecFillNavigation";
-const MaterialSpecFillDialog = lazy(() => import("./MaterialSpecFillDialog").then(module => ({ default: module.MaterialSpecFillDialog })));
-const CircuitChangesWorkspace = lazy(() => import("../circuit-changes/CircuitChangesWorkspace"));
+const MaterialSpecFillDialog = recoverableLazy(() => import("./MaterialSpecFillDialog").then(module => ({ default: module.MaterialSpecFillDialog })));
+const CircuitChangesWorkspace = recoverableLazy(() => import("../circuit-changes/CircuitChangesWorkspace"));
 import { restoreMaterialColumnSort, sortMaterialTableRows, type MaterialColumnSort } from "./materialTableSort";
 import { MaterialRequestOwnerPicker, type MaterialRequestOwner } from "./MaterialRequestOwnerPicker";
 import { useMaterialRequestOwners } from "./useMaterialRequestOwners";

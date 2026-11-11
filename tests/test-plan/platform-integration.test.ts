@@ -12,7 +12,7 @@ test("registers file upload as an independent workspace with the existing permis
   const index = await source("src/pages/Index.tsx");
   const sidebar = await source("src/components/layout/Sidebar.tsx");
 
-  assert.match(index, /const TestPlanWorkspace = React\.lazy/);
+  assert.match(index, /const TestPlanWorkspace = recoverableLazy/);
   assert.match(index, /import\("@\/components\/test-plan\/TestPlanWorkspace"\)/);
   assert.match(index, /\|\s*"file-uploads"/);
   assert.match(index, /case "file-uploads":[\s\S]{0,220}<PermissionGuard module="test-plan">/);

@@ -63,6 +63,11 @@ jobs:
       - name: Browser history cancellation
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         run: timeout --signal=TERM --kill-after=10s 180s node tests/auditHistory.browser.cjs
+      - name: Cross-release lazy modules, retained assets and memory-only draft protection
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
+        env:
+          AUDIT_DEPLOYMENT_EVIDENCE_DIR: ${{ runner.temp }}/deployment-recovery
+        run: timeout --signal=TERM --kill-after=10s 180s node tests/auditDeploymentRecovery.browser.cjs
       - name: Private rich-text previews, sign-out and document preservation
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         env:
@@ -109,5 +114,6 @@ jobs:
             ${{ runner.temp }}/material-seed-evidence/
             ${{ runner.temp }}/bom-version-phone*.png
             ${{ runner.temp }}/short-landscape/
+            ${{ runner.temp }}/deployment-recovery/
           if-no-files-found: ignore
           retention-days: 3
