@@ -171,8 +171,20 @@
   }
 }
 
+@keyframes maintenance-module-enter {
+  from { opacity: .68; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .maintenance-shell .maintenance-shell-module {
+    animation: maintenance-module-enter 150ms ease-out;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .maintenance-shell .maintenance-sidebar,
+  .maintenance-shell :is([data-maintenance-module], [data-mobile-maintenance-module]),
   .maintenance-shell [data-maintenance-project-picker] {
     transition: none;
   }
