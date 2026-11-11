@@ -50,7 +50,15 @@ async function verifyMobileDetail(page, recordId, expectedText) {
         } else if (scenario === 'local-recovery') {
           await page.getByLabel('切換 BOM', { exact: true }).filter({ hasText: '本機保留的 BOM 修改' }).waitFor();
           if (width < 500) await verifyMobileDetail(page, 'local-added', ['R-LOCAL', 'R-EDITED']);
-          else await page.waitForFunction(() => document.body.textContent.includes('R-LOCAL') && document.body.textContent.includes('R-EDITED'));
+          else {
+            // Identical main parts merge; the collapsed REF DES preview shows only one location.
+            await rows.getByRole('button', { name: '展開 2 個使用位置', exact: true }).click();
+            for (const [id, ref] of [['local-added', 'R-LOCAL'], ['local-edited', 'R-EDITED']]) {
+              const recoveredRow = rows.filter({ hasText: `位置：${ref}` });
+              await recoveredRow.waitFor();
+              assert.equal(await recoveredRow.getAttribute('data-record-id'), id);
+            }
+          }
           assert.equal(await page.evaluate(key => localStorage.getItem(key), storageKey), JSON.stringify(saved));
         } else {
           if (width < 500) await verifyMobileDetail(page, 'qa-0', ['QA-MPN-0']);

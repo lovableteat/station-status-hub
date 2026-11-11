@@ -86,12 +86,16 @@ jobs:
         run: timeout --signal=TERM --kill-after=10s 180s node tests/auditPermissionsDialog.browser.cjs
       - name: BOM version upload, carry-over, diff export and phone layout
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
+        env:
+          AUDIT_BOM_VERSION_SCREENSHOT_PATH: ${{ runner.temp }}/bom-version-phone.png
         run: timeout --signal=TERM --kill-after=10s 180s node tests/auditBomVersions.browser.cjs
       - name: Phone shell across files, AutoCheck, admin, performance and maintenance
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         run: timeout --signal=TERM --kill-after=10s 180s node tests/auditMobileWorkspaces.browser.cjs
       - name: Short landscape maintenance navigation and touch scrolling
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
+        env:
+          AUDIT_SCREENSHOT_DIR: ${{ runner.temp }}/short-landscape
         run: timeout --signal=TERM --kill-after=10s 180s node tests/auditShortLandscape.browser.cjs
       - if: ${{ !cancelled() && steps.app-dependencies.outcome == 'success' }}
         run: npm run build
@@ -103,5 +107,7 @@ jobs:
           path: |
             ${{ runner.temp }}/private-richtext*.png
             ${{ runner.temp }}/material-seed-evidence/
+            ${{ runner.temp }}/bom-version-phone.png
+            ${{ runner.temp }}/short-landscape/
           if-no-files-found: ignore
           retention-days: 3
