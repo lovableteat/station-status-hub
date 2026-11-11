@@ -5,7 +5,7 @@ import test from "node:test";
 const { React, create, act, loader, deferred } = createRequire(import.meta.url)("./support/renderHarness.cjs");
 const key = "v1:official:working:2:3";
 const report = (id = "existing", page = 3) => ({ id, key: `v1:official:working:${page - 1}:${page}`, officialVersionId: "official", workingVersionId: "working", officialPage: page - 1, workingPage: page, createdAt: "2026-11-10T00:00:00Z", summary: "本頁初審", findings: [] });
-const pdfs = () => ({ official: { id: "official", name: "官方.pdf" }, officialPdf: { numPages: 500 }, officialPage: 2,
+const pdfs = () => ({ compare: { id: "official", name: "官方.pdf" }, comparePdf: { numPages: 500 }, comparePage: 2, compareOffset: -1,
   active: { id: "working", name: "工作.pdf" }, activePdf: { numPages: 500 }, page: 3 });
 
 async function mount({ rows = [], firstLoad, ...overrides } = {}) {
@@ -107,7 +107,7 @@ test("failed report loading leaves the review blocked and an explicit retry relo
 });
 
 test("callbacks captured under another page or account cannot save into the new session", async () => {
-  for (const change of [view => ({ pdfs: { ...view.props.pdfs, page: 4 } }), () => ({ userId: "user-B", userName: "工程師 B" })]) {
+  for (const change of [view => ({ pdfs: { ...view.props.pdfs, page: 4, comparePage: 3 } }), () => ({ userId: "user-B", userName: "工程師 B" })]) {
     const view = await mount();
     try {
       const oldSave = view.review.onSave;
@@ -124,7 +124,7 @@ test("a response from the old page is ignored while the new page's reports are s
   const view = await mount({ firstLoad: () => oldPage.promise });
   try {
     view.setLoad(() => newPage.promise);
-    await view.update({ pdfs: { ...view.props.pdfs, page: 4 } });
+    await view.update({ pdfs: { ...view.props.pdfs, page: 4, comparePage: 3 } });
     await act(async () => oldPage.resolve([{ report: report("old-page"), revision: 5 }]));
     assert.equal(view.review, undefined);
     await act(async () => newPage.resolve([]));
@@ -177,15 +177,32 @@ test("selecting a batch result loads that page's own prior history and uses its 
   } finally { view.unmount(); }
 });
 
-test("all-pages remains available when the current working page has no official counterpart", async () => {
+test("all-pages remains available when the current working page has no baseline counterpart", async () => {
   const inputs = pdfs();
-  const view = await mount({ pdfs: { ...inputs, officialPage: 0, page: 5, officialPdf: { numPages: 3 }, activePdf: { numPages: 5 }, compare: inputs.official, compareOffset: 1 } });
+  const view = await mount({ pdfs: { ...inputs, comparePage: 0, page: 5, comparePdf: { numPages: 3 }, activePdf: { numPages: 5 }, compareOffset: 1 } });
   try {
     assert.ok(view.review);
     assert.equal(view.review.allPages.officialOffset, 1);
     assert.equal(view.loads.length, 0);
     await act(async () => view.review.allPages.onSave({ ...report("first", 1), key: "v1:official:working:2:1", officialPage: 2 }));
     assert.equal(view.saves.length, 1);
+  } finally { view.unmount(); }
+});
+
+test("an arbitrary pair reads and saves by both selected PDF IDs even when a different official PDF exists", async () => {
+  const inputs = { ...pdfs(), compare: { id: "working-a", name: "A.pdf" }, active: { id: "working-b", name: "B.pdf" }, official: { id: "official" } };
+  const view = await mount({ pdfs: inputs });
+  try {
+    assert.equal(view.review.official.id, "working-a");
+    assert.equal(view.review.working.id, "working-b");
+    assert.equal(view.loads[0].targetKey, "v1:working-a:working-b:2:3");
+    const result = { ...report(), key: "v1:working-a:working-b:3:4", officialVersionId: "working-a", workingVersionId: "working-b", officialPage: 3, workingPage: 4 };
+    await act(async () => view.review.allPages.onSave(result));
+    assert.deepEqual(view.saves[0].report, result);
+    const oldSave = view.review.allPages.onSave;
+    await view.update({ pdfs: { ...inputs, compare: inputs.active, active: inputs.compare } });
+    assert.equal(view.loads.at(-1).targetKey, "v1:working-b:working-a:2:3");
+    await assert.rejects(oldSave(result), /版本、頁碼或權限已變更/);
   } finally { view.unmount(); }
 });
 

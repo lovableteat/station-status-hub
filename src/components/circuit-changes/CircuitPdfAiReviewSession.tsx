@@ -9,12 +9,12 @@ import type { CircuitPdfModel } from "./useCircuitPdfs";
 export function CircuitPdfAiReviewSession({ open, onOpenChange, seriesId, userId, userName, canEdit, pdfs }: {
   open: boolean; onOpenChange: (open: boolean) => void; seriesId: string; userId: string; userName: string; canEdit: boolean; pdfs: CircuitPdfModel;
 }) {
-  const official = pdfs.official && pdfs.officialPdf ? { id: pdfs.official.id, name: pdfs.official.name, page: pdfs.officialPage, pdf: pdfs.officialPdf } : null;
+  const baseline = pdfs.compare && pdfs.comparePdf ? { id: pdfs.compare.id, name: pdfs.compare.name, page: pdfs.comparePage, pdf: pdfs.comparePdf } : null;
   const working = pdfs.active && pdfs.activePdf ? { id: pdfs.active.id, name: pdfs.active.name, page: pdfs.page, pdf: pdfs.activePdf } : null;
-  const validSources = Boolean(official && working && official.id !== working.id);
-  const key = official && working && official.page > 0 ? circuitPdfAiReviewKey({ officialVersionId: official.id, workingVersionId: working.id, officialPage: official.page, workingPage: working.page }) : "";
-  const officialOffset = pdfs.compare?.id === official?.id ? pdfs.compareOffset : official && working && official.page > 0 ? official.page - working.page : 0;
-  const scope = `${open}:${seriesId}:${userId}:${canEdit}:${official?.id}:${working?.id}:${key}:${officialOffset}`;
+  const validSources = Boolean(baseline && working && baseline.id !== working.id);
+  const key = validSources && baseline && working && baseline.page > 0 ? circuitPdfAiReviewKey({ officialVersionId: baseline.id, workingVersionId: working.id, officialPage: baseline.page, workingPage: working.page }) : "";
+  const officialOffset = pdfs.compareOffset;
+  const scope = `${open}:${seriesId}:${userId}:${canEdit}:${baseline?.id}:${working?.id}:${working?.page}:${key}:${officialOffset}`;
   const current = useRef(scope); current.current = scope;
   const [loaded, setLoaded] = useState("");
   const [rows, setRows] = useState<SavedCircuitPdfAiReview[]>([]);
@@ -33,8 +33,8 @@ export function CircuitPdfAiReviewSession({ open, onOpenChange, seriesId, userId
 
   const pageKey = (page: number) => {
     const officialPage = page + officialOffset;
-    if (!official || !working || !Number.isInteger(page) || page < 1 || page > working.pdf.numPages || officialPage < 1 || officialPage > official.pdf.numPages) throw new Error("這一頁沒有有效的官方對應頁。");
-    return circuitPdfAiReviewKey({ officialVersionId: official.id, workingVersionId: working.id, officialPage, workingPage: page });
+    if (!baseline || !working || !Number.isInteger(page) || page < 1 || page > working.pdf.numPages || officialPage < 1 || officialPage > baseline.pdf.numPages) throw new Error("這一頁沒有有效的基準對應頁。");
+    return circuitPdfAiReviewKey({ officialVersionId: baseline.id, workingVersionId: working.id, officialPage, workingPage: page });
   };
   const savePage = async (report: CircuitPdfAiReviewReport) => {
     if (!canEdit || current.current !== scope || report.key !== pageKey(report.workingPage)) throw new Error("版本、頁碼或權限已變更，請重新開啟初審。");
@@ -59,8 +59,8 @@ export function CircuitPdfAiReviewSession({ open, onOpenChange, seriesId, userId
     rowsRef.current = next; setRows(next); loadedPages.current.add(target);
   };
   if (!open) return null;
-  if (!validSources || loaded !== scope) return <Dialog open onOpenChange={onOpenChange}><DialogContent><DialogTitle>AI 比對新舊版</DialogTitle><DialogDescription>{!validSources ? "先指定官方版本與另一份工作 PDF。" : error || "正在讀取這兩個版本的初審紀錄…"}</DialogDescription>{error && <Button type="button" onClick={() => setRetry(value => value + 1)}>重試讀取</Button>}</DialogContent></Dialog>;
-  return <CircuitPdfAiReview open onOpenChange={onOpenChange} official={official} working={working} userName={userName} disabled={!canEdit}
+  if (!validSources || loaded !== scope) return <Dialog open onOpenChange={onOpenChange}><DialogContent><DialogTitle>AI 比對新舊版</DialogTitle><DialogDescription>{!validSources ? "請先開啟兩份不同的 PDF。" : error || "正在讀取這兩個版本的初審紀錄…"}</DialogDescription>{error && <Button type="button" onClick={() => setRetry(value => value + 1)}>重試讀取</Button>}</DialogContent></Dialog>;
+  return <CircuitPdfAiReview open onOpenChange={onOpenChange} official={baseline} working={working} userName={userName} disabled={!canEdit}
     savedReport={rows.find(row => row.report.key === key)?.report} previousReports={rows.map(row => row.report)} onSave={save}
     allPages={{ officialOffset, onLoadPage: loadPage, onSave: savePage }} />;
 }
