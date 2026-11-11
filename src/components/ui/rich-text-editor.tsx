@@ -74,6 +74,9 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
   const colorSelectionRef = useRef<{ from: number; to: number } | null>(null);
 
   const editor = useEditor({
+    // Toolbar state reads editor.isActive/can directly, including selection-only
+    // table changes that must not call onChange or alter the document.
+    shouldRerenderOnTransaction: true,
     extensions: [
       StarterKit.configure({
         heading: {

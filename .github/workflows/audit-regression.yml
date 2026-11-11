@@ -62,12 +62,12 @@ jobs:
         run: '"$AUDIT_QA_DIR/node_modules/.bin/playwright" install --with-deps chromium'
       - name: Browser history cancellation
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
-        run: node tests/auditHistory.browser.cjs
+        run: timeout --signal=TERM --kill-after=10s 180s node tests/auditHistory.browser.cjs
       - name: Private rich-text previews, sign-out and document preservation
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         env:
           AUDIT_SCREENSHOT_PATH: ${{ runner.temp }}/private-richtext.png
-        run: node tests/auditRichText.browser.cjs
+        run: timeout --signal=TERM --kill-after=10s 180s node tests/auditRichText.browser.cjs
       - name: Public seed removal and desktop/mobile BOM data preservation
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         run: |
@@ -80,19 +80,19 @@ jobs:
             sleep 1
           done
           if [ "$ready" != true ]; then cat "$RUNNER_TEMP/material-fixture.log"; exit 1; fi
-          MATERIAL_QA_URL=http://127.0.0.1:8106 MATERIAL_SEED_EVIDENCE_DIR="$RUNNER_TEMP/material-seed-evidence" node tests/materialSeedRemoval.browser.cjs
+          MATERIAL_QA_URL=http://127.0.0.1:8106 MATERIAL_SEED_EVIDENCE_DIR="$RUNNER_TEMP/material-seed-evidence" timeout --signal=TERM --kill-after=10s 180s node tests/materialSeedRemoval.browser.cjs
       - name: Permissions dialog layout and isolated interactions
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
-        run: node tests/auditPermissionsDialog.browser.cjs
+        run: timeout --signal=TERM --kill-after=10s 180s node tests/auditPermissionsDialog.browser.cjs
       - name: BOM version upload, carry-over, diff export and phone layout
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
-        run: node tests/auditBomVersions.browser.cjs
+        run: timeout --signal=TERM --kill-after=10s 180s node tests/auditBomVersions.browser.cjs
       - name: Phone shell across files, AutoCheck, admin, performance and maintenance
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
-        run: node tests/auditMobileWorkspaces.browser.cjs
+        run: timeout --signal=TERM --kill-after=10s 180s node tests/auditMobileWorkspaces.browser.cjs
       - name: Short landscape maintenance navigation and touch scrolling
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
-        run: node tests/auditShortLandscape.browser.cjs
+        run: timeout --signal=TERM --kill-after=10s 180s node tests/auditShortLandscape.browser.cjs
       - if: ${{ !cancelled() && steps.app-dependencies.outcome == 'success' }}
         run: npm run build
       - name: Preserve synthetic browser evidence
