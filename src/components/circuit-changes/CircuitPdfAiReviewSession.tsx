@@ -18,14 +18,14 @@ export function CircuitPdfAiReviewSession({ open, onOpenChange, seriesId, userId
   const current = useRef(scope); current.current = scope;
   const [loaded, setLoaded] = useState("");
   const [rows, setRows] = useState<SavedCircuitPdfAiReview[]>([]);
-  const rowsRef = useRef(rows); rowsRef.current = rows;
+  const rowsRef = useRef<SavedCircuitPdfAiReview[]>([]);
   const loadedPages = useRef(new Set<string>());
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     if (!open || !validSources) return;
-    let active = true; setError(""); setLoaded(""); setRows([]); loadedPages.current.clear();
-    if (!key) { rowsRef.current = []; setLoaded(scope); return; }
+    let active = true; setError(""); setLoaded(""); rowsRef.current = []; setRows([]); loadedPages.current.clear();
+    if (!key) { setLoaded(scope); return; }
     void loadCircuitPdfAiReviews(seriesId, key).then(value => { if (active && current.current === scope) { rowsRef.current = value; setRows(value); loadedPages.current.add(key); setLoaded(scope); } })
       .catch(failure => { if (active && current.current === scope) setError(failure instanceof Error ? failure.message : "無法讀取已儲存初審。"); });
     return () => { active = false; };

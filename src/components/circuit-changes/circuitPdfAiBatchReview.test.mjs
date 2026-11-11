@@ -3,10 +3,13 @@ import { createRequire } from "node:module";
 import test from "node:test";
 
 const { loader, deferred } = createRequire(import.meta.url)("../../../tests/support/renderHarness.cjs");
-const service = () => loader()("src/components/circuit-changes/circuitPdfAiBatchReview.ts");
+const service = () => {
+  const load = loader();
+  return { ...load("src/components/circuit-changes/circuitPdfAiBatchReview.ts"), ...load("src/components/api-management/aiRequestRecovery.ts") };
+};
 const plain = value => JSON.parse(JSON.stringify(value));
 const report = page => ({ id: `report-${page.workingPage}`, workingPage: page.workingPage, officialPage: page.officialPage });
-const settle = async () => { await Promise.resolve(); await Promise.resolve(); };
+const settle = () => new Promise(resolve => setImmediate(resolve));
 
 test("every working page retains its offset counterpart or an explicit unmatched row", () => {
   const { buildCircuitPdfAiBatchPages: build } = service();
@@ -22,22 +25,23 @@ test("every working page retains its offset counterpart or an explicit unmatched
   assert.deepEqual(plain(build(10, 0, 0)), []);
 });
 
-test("the next page starts only after both analysis and persistence of the preceding page finish", async () => {
-  const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run } = service();
+test("three pages run concurrently and a slow page cannot block the other workers", async () => {
+  const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run, CIRCUIT_PDF_AI_BATCH_CONCURRENCY } = service();
   const analysis = deferred(), persistence = deferred(), events = [], updates = [];
-  const pages = build(2, 2, 0), controller = new AbortController();
+  const pages = build(4, 4, 0), controller = new AbortController();
+  assert.equal(CIRCUIT_PDF_AI_BATCH_CONCURRENCY, 3);
   const running = run({ pages, signal: controller.signal,
     analyse: async page => { events.push(`analyse:${page.workingPage}`); return page.workingPage === 1 ? analysis.promise : report(page); },
-    save: async value => { events.push(`save:${value.workingPage}`); if (value.workingPage === 1) await persistence.promise; },
+    save: async value => { events.push(`save:${value.workingPage}`); if (value.workingPage === 2 || value.workingPage === 3) await persistence.promise; },
     onUpdate: page => updates.push(plain(page)),
   });
   await settle();
-  assert.deepEqual(events, ["analyse:1"]);
-  analysis.resolve(report(pages[0])); await settle();
-  assert.deepEqual(events, ["analyse:1", "save:1"]);
-  persistence.resolve(); await running;
-  assert.deepEqual(events, ["analyse:1", "save:1", "analyse:2", "save:2"]);
-  assert.deepEqual(updates.map(page => `${page.workingPage}:${page.status}`), ["1:analysing", "1:saving", "1:complete", "2:analysing", "2:saving", "2:complete"]);
+  assert.deepEqual(events, ["analyse:1", "analyse:2", "analyse:3", "save:2", "save:3"]);
+  persistence.resolve(); await settle();
+  assert.deepEqual(events, ["analyse:1", "analyse:2", "analyse:3", "save:2", "save:3", "analyse:4", "save:4"]);
+  assert.deepEqual(updates.filter(page => page.status === "complete").map(page => page.workingPage), [2, 3, 4]);
+  analysis.resolve(report(pages[0])); await running;
+  assert.deepEqual(updates.filter(page => page.workingPage === 1).map(page => page.status), ["analysing", "saving", "complete"]);
   assert.ok(pages.every(page => page.status === "pending"), "caller rows are not mutated in place");
 });
 
@@ -76,18 +80,18 @@ test("resuming retries an unsaved result without another provider call, skips sa
 
 test("cancellation ignores a late analyser result and leaves that page pending without scheduling another", async () => {
   const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run } = service();
-  const pending = deferred(), controller = new AbortController(), calls = [], updates = [], pages = build(2, 2, 0);
+  const pending = deferred(), controller = new AbortController(), calls = [], updates = [], pages = build(5, 5, 0);
   const running = run({ pages, signal: controller.signal,
     analyse: async page => { calls.push(`analyse:${page.workingPage}`); return pending.promise; },
     save: async value => { calls.push(`save:${value.workingPage}`); }, onUpdate: page => updates.push(plain(page)),
   });
   controller.abort(); await running;
-  assert.deepEqual(calls, ["analyse:1"]);
-  assert.deepEqual(updates.map(page => page.status), ["analysing", "pending"]);
-  assert.equal(updates.at(-1).report, undefined);
+  assert.deepEqual(calls, ["analyse:1", "analyse:2", "analyse:3"]);
+  assert.deepEqual(updates.map(page => page.status), ["analysing", "analysing", "analysing", "pending", "pending", "pending"]);
+  assert.ok(updates.every(page => page.report === undefined));
   pending.resolve(report(pages[0])); await settle();
-  assert.deepEqual(calls, ["analyse:1"], "a provider that finishes after cancel cannot trigger persistence");
-  assert.deepEqual(updates.map(page => page.status), ["analysing", "pending"]);
+  assert.deepEqual(calls, ["analyse:1", "analyse:2", "analyse:3"], "a provider that finishes after cancel cannot trigger persistence");
+  assert.equal(updates.length, 6);
 });
 
 test("an aborted analysis rejection is cancellation rather than a failed page", async () => {
@@ -104,19 +108,73 @@ test("an aborted analysis rejection is cancellation rather than a failed page", 
 test("cancelling an in-flight save still records its outcome and never starts the next page", async () => {
   for (const failSave of [false, true]) {
     const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run } = service();
-    const pending = deferred(), controller = new AbortController(), calls = [], updates = [];
-    const running = run({ pages: build(2, 2, 0), signal: controller.signal,
-      analyse: async page => { calls.push(`analyse:${page.workingPage}`); return report(page); },
+    const pending = deferred(), otherPages = deferred(), controller = new AbortController(), calls = [], updates = [];
+    const running = run({ pages: build(4, 4, 0), signal: controller.signal,
+      analyse: async page => { calls.push(`analyse:${page.workingPage}`); return page.workingPage === 1 ? report(page) : otherPages.promise; },
       save: async value => { calls.push(`save:${value.workingPage}`); await pending.promise; }, onUpdate: page => updates.push(plain(page)),
     });
-    await settle(); assert.deepEqual(calls, ["analyse:1", "save:1"]);
+    await settle(); assert.deepEqual(calls, ["analyse:1", "analyse:2", "analyse:3", "save:1"]);
     controller.abort();
     if (failSave) pending.reject(new Error("離線")); else pending.resolve();
     await running;
-    assert.deepEqual(calls, ["analyse:1", "save:1"]);
+    assert.deepEqual(calls, ["analyse:1", "analyse:2", "analyse:3", "save:1"]);
     assert.equal(updates.at(-1).status, failSave ? "unsaved" : "complete");
     assert.equal(updates.at(-1).report.id, "report-1");
   }
+});
+
+test("a short provider Retry-After delays new pages and retries the affected page once", async () => {
+  const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run, AiRequestFailure } = service();
+  const calls = [], saved = [], attempts = new Map(), cooldowns = [];
+  let throttledAt;
+  await run({ pages: build(4, 4, 0), signal: new AbortController().signal,
+    analyse: async (page, attemptNumber) => {
+      const count = (attempts.get(page.workingPage) ?? 0) + 1;
+      assert.equal(attemptNumber, count);
+      attempts.set(page.workingPage, count); calls.push([page.workingPage, Date.now()]);
+      if (page.workingPage === 1 && count === 1) {
+        throttledAt = Date.now(); throw new AiRequestFailure("等候額度恢復", "minute-quota", 50);
+      }
+      return report(page);
+    },
+    save: async value => saved.push(value.workingPage), onUpdate: () => {}, onCooldown: until => cooldowns.push(until),
+  });
+  assert.deepEqual([...attempts], [[1, 2], [2, 1], [3, 1], [4, 1]]);
+  assert.ok(calls.slice(3).every(([, time]) => time - throttledAt >= 50));
+  assert.equal(cooldowns.length, 1);
+  assert.ok(cooldowns[0] >= throttledAt + 50);
+  assert.deepEqual(saved.sort(), [1, 2, 3, 4]);
+});
+
+test("stopping during a rate-limit pause cancels the scheduled retry", async () => {
+  const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run, AiRequestFailure } = service();
+  const controller = new AbortController(), paused = deferred(), calls = [], updates = [];
+  const running = run({ pages: build(1, 1, 0), signal: controller.signal,
+    analyse: async (page, attemptNumber) => {
+      calls.push(attemptNumber); throw new AiRequestFailure("等待額度", "minute-quota", 2_000);
+    },
+    save: async () => assert.fail("cancelled analysis cannot save"),
+    onUpdate: page => updates.push(page.status), onCooldown: paused.resolve,
+  });
+  await paused.promise; controller.abort(); await running;
+  assert.deepEqual(calls, [1]);
+  assert.deepEqual(updates, ["analysing", "pending"]);
+});
+
+test("a provider-wide limit leaves waiting pages untouched and still saves completed analyses", async () => {
+  const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run, AiRequestFailure } = service();
+  const calls = [], saved = [], latest = new Map();
+  await assert.rejects(run({ pages: build(5, 5, 0), signal: new AbortController().signal,
+    analyse: async page => {
+      calls.push(page.workingPage);
+      if (page.workingPage === 1) throw new AiRequestFailure("今日額度已用完", "daily-quota");
+      return report(page);
+    },
+    save: async value => saved.push(value.workingPage), onUpdate: page => latest.set(page.workingPage, page.status),
+  }), /今日額度已用完/);
+  assert.deepEqual(calls, [1, 2, 3]);
+  assert.deepEqual(saved.sort(), [2, 3]);
+  assert.deepEqual([...latest], [[1, "failed"], [2, "complete"], [3, "complete"]]);
 });
 
 test("an already cancelled queue makes no provider, storage, or progress calls", async () => {
