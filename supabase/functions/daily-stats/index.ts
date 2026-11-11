@@ -34,7 +34,11 @@ Deno.serve(async (request) => {
       console.error("daily-stats calculation failed", error.code);
       return json({ error: "Calculation failed" }, 500);
     }
-    return json({ success: true, timestamp: new Date().toISOString() }, 200);
+    return json({
+      success: true,
+      message: "Daily production stats calculated successfully",
+      timestamp: new Date().toISOString(),
+    }, 200);
   } catch {
     return json({ error: "Internal server error" }, 500);
   }
