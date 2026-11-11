@@ -53,7 +53,7 @@ test("edge functions default to the archived workspace schema", () => {
   }
 });
 
-test("deployment workflows use Secrets, Variables, and the workspace profile", () => {
+test("deployment workflows use Secrets and the correct application/healthcheck profiles", () => {
   const main = read(".github/workflows/main.yml");
   const keepAlive = read(".github/workflows/keep_alive.yml");
 
@@ -61,7 +61,8 @@ test("deployment workflows use Secrets, Variables, and the workspace profile", (
   assert.match(main, /VITE_SUPABASE_ANON_KEY:\s*\$\{\{\s*secrets\.VITE_SUPABASE_ANON_KEY\s*\}\}/);
   assert.match(main, /VITE_REALTIME_COLLABORATION_V2:\s*\$\{\{\s*vars\.VITE_REALTIME_COLLABORATION_V2/);
   assert.match(main, /VITE_SUPABASE_SCHEMA:\s*\$\{\{\s*vars\.VITE_SUPABASE_SCHEMA\s*\|\|\s*["']workspace["']/);
-  assert.match(keepAlive, /Accept-Profile:\s*\$\{\{\s*vars\.SUPABASE_DB_SCHEMA\s*\|\|\s*["']workspace["']/);
+  assert.match(keepAlive, /Accept-Profile: public/);
+  assert.match(keepAlive, /\/rest\/v1\/rpc\/database_healthcheck/);
   assert.match(read(".env.example"), /VITE_SUPABASE_SCHEMA=workspace/);
   assert.match(read(".env.example"), /APP_DB_SCHEMA=workspace/);
 });
