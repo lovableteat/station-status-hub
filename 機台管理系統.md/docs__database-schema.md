@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/database-schema.md`；程式參考基準：`f96b970ff818d5ffacb2f1c8493a69aaf3f0970e`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/database-schema.md`；程式參考基準：`78d25152378400d695bd253a2d562f5cb27e8ce1`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Database schema layout
 
@@ -6,7 +6,7 @@
 
 Application data lives in the exposed `workspace` schema. Supabase-managed `auth`, `storage`, and `realtime` schemas remain unchanged.
 
-The migration [`20260822120000_archive_workspace_schema.sql`](https://github.com/lovableteat/station-status-hub/blob/f96b970ff818d5ffacb2f1c8493a69aaf3f0970e/supabase/migrations/20260822120000_archive_workspace_schema.sql) moves existing application tables without resetting data, preserves RLS/policies/triggers, and exposes workspace copies of the application RPC functions.
+The migration [`20260822120000_archive_workspace_schema.sql`](https://github.com/lovableteat/station-status-hub/blob/78d25152378400d695bd253a2d562f5cb27e8ce1/supabase/migrations/20260822120000_archive_workspace_schema.sql) moves existing application tables without resetting data, preserves RLS/policies/triggers, and exposes workspace copies of the application RPC functions.
 
 ## Table archive groups
 
@@ -36,4 +36,4 @@ Do not move or recreate `auth`, `storage`, or `realtime` objects. New applicatio
 
 The current production login, expired OAuth recovery, safe single-file fallback for migration-history mismatches, verification, and logout procedure is maintained in [`supabase-production-migration-runbook.md`](./docs__supabase-production-migration-runbook.md). GitHub Pages deployment does not apply database migrations.
 
-On 2026-09-20, [`20260920120000_complete_performance_feedback_workflow.sql`](https://github.com/lovableteat/station-status-hub/blob/f96b970ff818d5ffacb2f1c8493a69aaf3f0970e/supabase/migrations/20260920120000_complete_performance_feedback_workflow.sql) was applied directly to the linked production project after the normal dry-run was blocked by pre-existing remote/local migration-history differences. The migration is transaction-wrapped and idempotent. Remote checks confirmed its columns, RPC, trigger, and attachment validator. This direct single-file execution did not reconcile migration history; any history cleanup remains a separate planned operation and must not be performed ad hoc during a feature deployment.
+On 2026-09-20, [`20260920120000_complete_performance_feedback_workflow.sql`](https://github.com/lovableteat/station-status-hub/blob/78d25152378400d695bd253a2d562f5cb27e8ce1/supabase/migrations/20260920120000_complete_performance_feedback_workflow.sql) was applied directly to the linked production project after the normal dry-run was blocked by pre-existing remote/local migration-history differences. The migration is transaction-wrapped and idempotent. Remote checks confirmed its columns, RPC, trigger, and attachment validator. This direct single-file execution did not reconcile migration history; any history cleanup remains a separate planned operation and must not be performed ad hoc during a feature deployment.
