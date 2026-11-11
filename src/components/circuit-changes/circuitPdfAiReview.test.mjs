@@ -43,14 +43,13 @@ test('stored reports retain human decisions and reject malformed provenance or u
   const last={...stored,officialPage:3000,workingPage:3000};last.key=k.circuitPdfAiReviewKey(last);assert.ok(k.normalizeCircuitPdfAiReviewReport(last));
 });
 
-function adapter(payloadFactory=()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(analysis())}}]})) {
+function adapter(payloadFactory=()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(analysis())}}]}), {status=200, headers=new Headers()}={}) {
   const sent=[],renders=[];
   const canvas={width:0,height:0,toBlob(done){done(new Blob(['PNG'],{type:'image/png'}));}};
   class Reader {readAsDataURL(){this.result='data:image/png;base64,UE5H';Promise.resolve().then(()=>this.onload());}}
   const k=loader({globals:{document:{createElement:()=>({...canvas})},FileReader:Reader},mocks:{
     '../api-management/apiKeyHelpers':{normalizeApiKeyPermissions:()=>({read:true,metadata:{provider:'openai',baseUrl:'https://api.openai.com/v1',model:'gpt-5.4'}})},
-    '../api-management/aiUsageTelemetry':{trackedProviderFetch:async request=>{sent.push(request);return{ok:true,status:200,headers:new Headers(),json:async()=>payloadFactory()};}},
-    '../api-management/aiRequestRecovery':{classifyAiFailure:()=>new Error('provider failed')},
+    '../api-management/aiUsageTelemetry':{trackedProviderFetch:async request=>{sent.push(request);return{ok:status>=200&&status<300,status,headers,json:async()=>payloadFactory()};}},
   }})('src/components/circuit-changes/circuitPdfAiReview.ts');
   const pdf={numPages:3000,getPage:async page=>({getViewport:({scale})=>({width:1000*scale,height:700*scale}),render:options=>{renders.push({page,width:options.canvas.width,height:options.canvas.height});return{promise:Promise.resolve(),cancel(){}};},getTextContent:async()=>({items:[{str:'PCIE_RX_P',transform:[1,0,0,1,10,20]}]})})};
   const input={official:{id:'official',name:'官方.pdf',page:2,pdf},working:{id:'working',name:'工作.pdf',page:3,pdf},model:{id:'model-key::gpt-5.4',label:'QA GPT',record:{id:'model-key',api_key:'qa-test-secret',is_active:true}},userName:'RD 工程師',signal:new AbortController().signal};
@@ -74,4 +73,12 @@ test('provider truncation/refusal, invalid target and cancellation never return 
   const {k,input,sent}=adapter(); const controller=new AbortController();controller.abort();await assert.rejects(k.runCircuitPdfAiReview({...input,signal:controller.signal}));assert.equal(sent.length,0);
   await assert.rejects(k.runCircuitPdfAiReview({...input,working:{...input.working,id:'official'}}),/不同/);
   await assert.rejects(k.runCircuitPdfAiReview({...input,working:{...input.working,page:3001}}),/有效/);
+});
+
+test('a non-JSON rate limit retains Retry-After and records the actual attempt',async()=>{
+  const {k,input,sent}=adapter(()=>{throw new SyntaxError('non-JSON gateway response');}, {status:429,headers:new Headers({'Retry-After':'2'})});
+  await assert.rejects(k.runCircuitPdfAiReview({...input,attemptNumber:2}), error=>error.kind==='minute-quota'&&error.retryAfterMs===2000);
+  assert.equal(sent[0].attemptNumber,2);
+  await assert.rejects(k.runCircuitPdfAiReview({...input,model:{...input.model,record:{...input.model.record,is_active:false}}}), error=>error.kind==='auth');
+  assert.equal(sent.length,1);
 });

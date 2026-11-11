@@ -2,12 +2,22 @@ import type { ApiKeyRecord } from '../../src/components/api-management/apiKeyHel
 const model: ApiKeyRecord = {id:'qa-vision',key_name:'QA Vision',api_key:'qa-no-real-key',description:null,is_active:true,expires_at:null,last_used_at:null,usage_count:0,created_at:'2026-11-09T00:00:00Z',permissions:{read:true,metadata:{provider:'openai',model:'qa-vision',baseUrl:'https://api.openai.com/v1',editable:false}}};
 export const supabase = {from(){return{select(){return this},eq(){return this},order(){return this},abortSignal(){return Promise.resolve({data:[model],error:null})}}}};
 export async function trackedProviderFetch(request: {init:RequestInit}) {
-  const qa=(window as unknown as {__circuitAiQA:{mode:string;calls:Array<Record<string,unknown>>;failPages?:number[];slowPages?:number[]}}).__circuitAiQA;
+  const qa=(window as unknown as {__circuitAiQA:{mode:string;calls:Array<Record<string,unknown>>;failPages?:number[];slowPages?:number[];held?:Record<number,()=>void>}}).__circuitAiQA;
   const body=JSON.parse(String(request.init.body)), system=body.messages[0].content;
   const systemText=typeof system==='string'?system:system.map((part:{text?:string})=>part.text??'').join('');
   const target={officialVersionId:JSON.parse(systemText.match(/"officialVersionId":("[^"]+")/)?.[1]??'"official-v1"'),workingVersionId:JSON.parse(systemText.match(/"workingVersionId":("[^"]+")/)?.[1]??'"work-v2"'),officialPage:Number(systemText.match(/"officialPage":(\d+)/)?.[1]??1),workingPage:Number(systemText.match(/"workingPage":(\d+)/)?.[1]??1)};
   const images=body.messages.flatMap((message:{content:unknown})=>Array.isArray(message.content)?message.content:[]).filter((part:{type?:string})=>part.type==='image_url');
   qa.calls.push({target,images:images.length,detail:images.map((part:{image_url:{detail:string}})=>part.image_url.detail),text:JSON.stringify(body.messages.map((message:{content:unknown})=>message.content)).replace(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/g,'[image omitted]'),scope:systemText.includes('不得聲稱通過工程審核')});
+  if(qa.mode==='hold') {
+    const held=qa.held??={};
+    const page=target.workingPage,signal=request.init.signal;
+    await new Promise<void>((resolve,reject)=>{
+      const abort=()=>{delete held[page];reject(new DOMException('Cancelled','AbortError'));};
+      if(signal?.aborted){abort();return;}
+      held[page]=()=>{delete held[page];signal?.removeEventListener('abort',abort);resolve();};
+      signal?.addEventListener('abort',abort,{once:true});
+    });
+  }
   if(qa.mode==='slow'||qa.slowPages?.includes(target.workingPage)) await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,30000);request.init.signal?.addEventListener('abort',()=>{clearTimeout(timer);reject(new DOMException('Cancelled','AbortError'));},{once:true})});
   if(qa.failPages?.includes(target.workingPage))throw new Error(`QA 第 ${target.workingPage} 頁分析失敗`);
   const content={...target,summary:`工作第 ${target.workingPage} 頁／官方第 ${target.officialPage} 頁有一處差分 Net 標籤需要人工核對。未使用原生 netlist，不能證明完整連通。`,checks:[
