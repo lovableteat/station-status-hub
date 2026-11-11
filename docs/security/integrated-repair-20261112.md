@@ -15,7 +15,7 @@ Integrated source changes:
 - Release quality/dependency repair: `f7f29b542edf29aa09a9b59cfc0a2f16be4fb9b8`.
 - BOM removal patch prepared against the same base, with the seed file removed separately after identity verification.
 
-There were no merge conflicts. The rich-text editor merged automatically; both the private-image NodeView and `trailingNode: false` were retained and exercised by tests. The backend PostgreSQL proposal test was added to the same-commit release quality workflow.
+The original repair sources had no merge conflicts (the later main refresh had the `MaintenanceDetail` conflict noted above). The rich-text editor merged automatically; both the private-image NodeView and `trailingNode: false` were retained and exercised by tests. The backend PostgreSQL proposal test was added to the same-commit release quality workflow.
 
 ## Data preservation boundaries
 
@@ -77,4 +77,10 @@ Deeper SQL review and promotion restrictions are recorded in [migration promotio
 
 After refreshing from `a30615e`, the full local unit suite passed **2,231/2,239 with 8 existing skips and no failures**. Typecheck passed; lint reported **0 errors and 72 warnings** (the added Fast Refresh warning is in upstream `MaintenanceFeedback.tsx`). The refreshed production build passed in **34.67 seconds**. The expanded PostgreSQL security/cutover suites passed **15/15 on both PostgreSQL 17.5 and 18.3**. These refreshed results supersede the earlier local counts where they differ.
 
-Final independent local work added daily-stats failure-path coverage: missing service configuration, RPC errors, client exceptions, default/configured schema, no-store responses, and absence of credentials/private error text in responses or logs. The Edge handler suite passed **9/9** using the actual handler with synthetic dependencies; this is not a Deno runtime result. The final full unit suite passed **2,238/2,246 with 8 existing skips and no failures**, and the refreshed integration suite passed **105/105**. Dedicated-branch publication remains pending; there is no remote CI result or production release from this work.
+Final independent local work added daily-stats failure-path coverage: missing service configuration, RPC errors, client exceptions, default/configured schema, no-store responses, and absence of credentials/private error text in responses or logs. The Edge handler suite passed **9/9** using the actual handler with synthetic dependencies; this is not a Deno runtime result. The final full unit suite passed **2,238/2,246 with 8 existing skips and no failures**, and the refreshed integration suite passed **105/105**.
+
+## Dedicated-branch CI
+
+The authorized public dedicated branch was published as commit `ed7cb6d61dce51c32756e262eba3aa3f789a9ac6`, with parent `a30615e6a0dbecbd76119b821e58960924257491`. Its tree `0bd7bea3fa465d1528545c2201392b3120e30eeb` exactly matches the locally tested tree. Publication used a single new commit rather than uploading intermediate local repair history. This does not remove existing public ancestry.
+
+[Draft PR #48](https://github.com/lovableteat/station-status-hub/pull/48) targets main but is not merged. The initial [release quality run](https://github.com/lovableteat/station-status-hub/actions/runs/43080835346) passed. The initial [isolated regression run](https://github.com/lovableteat/station-status-hub/actions/runs/43080835343) passed real PostgreSQL 17.4 permission/revocation tests, Deno 2.1.4 account-admin contracts, and PostgreSQL workflow/RLS suites, then failed before browser tests: `ubuntu-latest` resolved to 26.04, unsupported by pinned Playwright 1.58.2. The browser runner is now pinned to supported `ubuntu-24.04`, with a source regression test; the new commit still requires its own complete CI result. No production deployment or database/Storage change occurred.

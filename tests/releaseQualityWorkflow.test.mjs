@@ -44,6 +44,12 @@ test('isolated render dependencies are installed before the full unit suite', ()
   assert.ok(configure >= 0 && configure < install && install < unit);
 });
 
+test('browser regression uses a runner supported by its pinned Playwright release', () => {
+  assert.match(regression, /runs-on: ubuntu-24\.04/);
+  assert.match(regression, /playwright@1\.58\.2/);
+  assert.doesNotMatch(regression, /runs-on: ubuntu-latest/);
+});
+
 test('draft-PR checks remain isolated from production deployment and credentials', () => {
   for (const workflow of [quality, regression]) {
     assert.match(workflow, /permissions:\n\s+contents: read/);
