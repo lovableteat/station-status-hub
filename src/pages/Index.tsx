@@ -33,6 +33,7 @@ import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { WorkspaceEntrance } from "@/components/layout/WorkspaceEntrance";
 import { MaintenanceLoading } from "@/components/maintenance/MaintenanceLoading";
+import "@/components/maintenance/maintenanceShell.css";
 import { ProjectScopeBar } from "@/components/test-projects/ProjectScopeBar";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { useIsCompactLayout } from "@/hooks/use-mobile";
@@ -703,26 +704,23 @@ const Index = () => {
       case "station-status":
       default:
         return (
-          <div className="maintenance-workspace relative min-h-0 lg:h-full lg:overflow-hidden">
-            <div className="flex min-h-0 flex-1 flex-col gap-2 px-2 pb-2 pt-2 sm:px-3 sm:pb-3 sm:pt-3 lg:h-full lg:gap-3">
+          <div className="maintenance-workspace maintenance-shell">
+            <div className="maintenance-shell-frame">
               <div className="shrink-0"><ProjectScopeBar faultMode /></div>
 
-              <div className={cn("relative flex min-h-[560px] flex-1 gap-3 lg:min-h-0", isCompactLayout && "min-h-0 flex-col gap-2")}>
+              <div className="maintenance-shell-body">
                 <Sidebar
                   activeModule={activeStationModule}
                   onModuleChange={handleStationNavigation}
                   isOpen={sidebarOpen}
                   onToggle={() => setSidebarOpen((value) => !value)}
                   isMobile={isCompactLayout}
-                  desktopStickyClass="top-[140px] h-full"
+                  desktopStickyClass="top-0 h-full"
                 />
 
                 <main
                   ref={stationMainRef}
-                  className={cn(
-                    "min-w-0 flex-1 overflow-y-auto overscroll-contain rounded-xl bg-[#06111f]",
-                    isCompactLayout && "rounded-2xl"
-                  )}
+                  className="maintenance-shell-content"
                 >
                   {isSwitchingProject ? (
                     <MaintenanceLoading />
@@ -730,7 +728,8 @@ const Index = () => {
                     <React.Suspense fallback={<MaintenanceLoading label="正在載入維修模組" />}>
                       <div
                         key={`${activeProjectId ?? "no-project"}:${activeStationModule}`}
-                        className={cn(activeStationModule === "flow-info" && "h-full min-h-0")}
+                        className="maintenance-shell-module"
+                        data-module={activeStationModule}
                       >
                         {renderStationContent()}
                       </div>

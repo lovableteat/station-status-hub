@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import { Check, Code2, Copy, Download, Edit2, Filter, Loader2, Plus, Search, Trash2 } from "lucide-react";
 
+import { MobileFilterBar } from "@/components/layout/mobile/MobileFilterBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -276,6 +277,13 @@ export function CodeStorageManager({ workspaceKey = "station-status" }: { worksp
 
   const categories = [...new Set(codeSnippets.map((snippet) => snippet.category))];
   const languages = [...new Set(codeSnippets.map((snippet) => snippet.language))];
+  const chips = [
+    ...(searchTerm.trim() ? [{ key: "search", label: `搜尋：${searchTerm.trim()}`, onRemove: () => setSearchTerm("") }] : []),
+    ...(advancedSearch ? [{ key: "content", label: "搜尋範圍：包含程式內容", onRemove: () => setAdvancedSearch(false) }] : []),
+    ...(filterLanguage !== "all" ? [{ key: "language", label: `語言：${filterLanguage}`, onRemove: () => setFilterLanguage("all") }] : []),
+    ...(filterCategory !== "all" ? [{ key: "category", label: `分類：${filterCategory}`, onRemove: () => setFilterCategory("all") }] : []),
+    ...(scopeFilter !== "all" ? [{ key: "scope", label: `範圍：${scopeFilter === "global" ? "通用" : "工作區專用"}`, onRemove: () => setScopeFilter("all") }] : []),
+  ];
   const selectedSnippet = filteredSnippets.find((snippet) => snippet.id === viewingSnippet?.id)
     || filteredSnippets[0]
     || null;
@@ -417,30 +425,33 @@ export function CodeStorageManager({ workspaceKey = "station-status" }: { worksp
         </Dialog>
       </div>
 
-      <div className="maintenance-toolbar flex flex-wrap items-center gap-2 p-2">
-        <div className="relative min-w-[240px] flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7699ad]" />
-          <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))} className="h-9 border-[#2a526f] bg-[#06111f] pl-9" placeholder={advancedSearch ? "搜尋名稱、說明、標籤或程式碼內容" : "搜尋名稱、說明或標籤"} />
+      <div className="ma-library-filters">
+        <div className="ma-library-search">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input type="search" aria-label="搜尋程式碼" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value.slice(0, 100))} placeholder={advancedSearch ? "搜尋名稱、說明、標籤或程式碼內容" : "搜尋名稱、說明或標籤"} />
         </div>
-        <Button type="button" size="sm" variant={advancedSearch ? "default" : "outline"} onClick={() => setAdvancedSearch((value) => !value)}>
+        <Button type="button" size="sm" className="min-h-10" variant={advancedSearch ? "default" : "outline"} aria-pressed={advancedSearch} onClick={() => setAdvancedSearch((value) => !value)}>
           <Filter className="mr-2 h-4 w-4" />搜尋程式內容
         </Button>
         <Select value={filterLanguage} onValueChange={setFilterLanguage}>
-          <SelectTrigger className="h-9 w-[150px]"><SelectValue placeholder="語言" /></SelectTrigger>
+          <SelectTrigger aria-label="程式碼語言"><SelectValue placeholder="語言" /></SelectTrigger>
           <SelectContent><SelectItem value="all">所有語言</SelectItem>{languages.map((language) => <SelectItem key={language} value={language}>{language}</SelectItem>)}</SelectContent>
         </Select>
         <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="h-9 w-[150px]"><SelectValue placeholder="分類" /></SelectTrigger>
+          <SelectTrigger aria-label="程式碼分類"><SelectValue placeholder="分類" /></SelectTrigger>
           <SelectContent><SelectItem value="all">所有分類</SelectItem>{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent>
         </Select>
         <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as AssetScopeFilter)}>
-          <SelectTrigger className="h-9 w-[170px]"><SelectValue placeholder="使用範圍" /></SelectTrigger>
+          <SelectTrigger aria-label="程式碼使用範圍"><SelectValue placeholder="使用範圍" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">全部範圍</SelectItem>
             <SelectItem value="global">通用</SelectItem>
             <SelectItem value="workspace">目前 workspace</SelectItem>
           </SelectContent>
         </Select>
+        {!!chips.length && <MobileFilterBar chips={chips} onClearAll={() => {
+          setSearchTerm(""); setAdvancedSearch(false); setFilterLanguage("all"); setFilterCategory("all"); setScopeFilter("all");
+        }} />}
       </div>
 
       <div data-testid="code-library-workspace" className="grid min-h-[520px] overflow-hidden rounded-xl border border-[#2a526f] bg-[#071522] lg:grid-cols-[minmax(280px,0.78fr)_minmax(0,1.55fr)]">

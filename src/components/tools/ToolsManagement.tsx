@@ -1,5 +1,5 @@
 import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import DOMPurify from "dompurify";
 import {
   Download,
@@ -9,7 +9,6 @@ import {
   Library,
   Loader2,
   Plus,
-  Search,
   Terminal,
   Trash2,
   Upload,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { MaintenancePageHeader } from "@/components/maintenance/MaintenancePageHeader";
+import { MobileFilterBar } from "@/components/layout/mobile/MobileFilterBar";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,6 +56,7 @@ import { cn } from "@/lib/utils";
 import { CodeStorageManager } from "./CodeStorageManager";
 import { CommandLibrary } from "./CommandLibrary";
 import { FileUploadDialog, GENERAL_ASSET_CATEGORY } from "./FileUploadDialog";
+import "./maintenanceAssets.css";
 
 type ToolRow = Database["public"]["Tables"]["tools_management"]["Row"];
 type CodeRow = Database["public"]["Tables"]["code_snippets"]["Row"];
@@ -142,12 +143,18 @@ const ASSET_CLASS_META = {
   tool: { icon: Wrench, label: "工具", tone: "border-cyan-300/35 bg-cyan-300/10 text-cyan-100" },
 };
 
-const ASSET_FILTERS: Array<{ activeClass: string; label: string; value: AssetFilter }> = [
-  { activeClass: "border-blue-300/50 bg-blue-300/15 text-blue-50", label: "全部", value: "all" },
-  { activeClass: "border-cyan-300/50 bg-cyan-300/15 text-cyan-50", label: "工具", value: "tool" },
-  { activeClass: "border-amber-300/50 bg-amber-300/15 text-amber-50", label: "指令", value: "command" },
-  { activeClass: "border-emerald-300/50 bg-emerald-300/15 text-emerald-50", label: "不特定", value: "general" },
-];
+const ASSET_FILTER_LABELS: Record<AssetFilter, string> = {
+  all: "全部類型",
+  tool: "工具",
+  command: "程式碼與指令",
+  general: "不特定檔案",
+};
+
+const ASSET_SCOPE_LABELS: Record<AssetScopeFilter, string> = {
+  all: "全部範圍",
+  global: "通用工具",
+  workspace: "目前 workspace 專用",
+};
 
 function getAssetClass(tool: ToolRow): AssetClass {
   return tool.category === GENERAL_ASSET_CATEGORY ? "general" : "tool";
@@ -235,6 +242,7 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
   const [uploadOpen, setUploadOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [assigningKey, setAssigningKey] = useState<string | null>(null);
+  const toolsTabRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -617,13 +625,45 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
   };
 
   const editingGeneralAsset = editingTool?.category === GENERAL_ASSET_CATEGORY;
+  const showAssetList = tab === "applied" || tab === "tools" || tab === "files";
+  const assetChips = [
+    ...(search.trim() ? [{ key: "search", label: `搜尋：${search.trim()}`, onRemove: () => setSearch("") }] : []),
+    ...(tab === "applied" && kindFilter !== "all" ? [{ key: "kind", label: `類型：${ASSET_FILTER_LABELS[kindFilter]}`, onRemove: () => setKindFilter("all") }] : []),
+    ...(scopeFilter !== "all" ? [{ key: "scope", label: `範圍：${ASSET_SCOPE_LABELS[scopeFilter]}`, onRemove: () => setScopeFilter("all") }] : []),
+  ];
+  const clearAssetFilters = () => {
+    setSearch("");
+    setKindFilter("all");
+    setScopeFilter("all");
+  };
+  const assetList = (
+    <AssetList
+      assets={visibleAssets}
+      assignments={assignments}
+      assigningKey={assigningKey}
+      loading={loading}
+      onPreview={setSelectedAsset}
+      onToggle={toggleAssignment}
+      emptyTitle={assetChips.length > 0
+        ? "目前篩選條件沒有符合的資產"
+        : tab === "applied"
+          ? activeProjectId ? "專案尚未套用資產" : "尚未選擇專案"
+          : tab === "files" ? "尚無不特定檔案" : "尚無工具"}
+      emptyAction={!assetChips.length && tab === "applied" && <Button variant="outline" onClick={() => {
+        handleWorkspaceTabChange("tools");
+        toolsTabRef.current?.focus();
+      }}>瀏覽工具庫</Button>}
+    />
+  );
 
   return (
-    <div className="maintenance-page space-y-3">
+    <div className="maintenance-page ma-workspace">
       <MaintenancePageHeader
         icon={Wrench}
         title="工具與資產"
-        description={`${activeProject?.name || "未選擇專案"} · 專案資產與公司共用庫`}
+        description={activeProject?.name || "未選擇專案"}
+        wrapActionsOnMobile
+        className="ma-workspace-header"
         actions={
           <>
             <Button variant="outline" size="sm" onClick={() => setUploadOpen(true)}>
@@ -643,93 +683,46 @@ export function ToolsManagement({ workspaceKey = "station-status" }: { workspace
       )}
 
       <Tabs value={tab} onValueChange={(value) => handleWorkspaceTabChange(value as WorkspaceTab)}>
-        <div data-testid="asset-workspace-navigation" className="maintenance-toolbar flex flex-wrap items-center gap-2 p-2">
-          <TabsList className="h-auto min-h-10 flex-wrap justify-start rounded-lg border border-[#23445d] bg-[#06111f] p-1">
-            <TabsTrigger value="applied" className="h-8 rounded-md px-3 py-1.5 text-xs">專案已套用 <span className="ml-1.5 font-mono text-[10px] opacity-75">{appliedCount}</span></TabsTrigger>
-            <TabsTrigger value="tools" className="h-8 rounded-md px-3 py-1.5 text-xs">工具 <span className="ml-1.5 font-mono text-[10px] opacity-75">{classCounts.tool}</span></TabsTrigger>
-            <TabsTrigger value="code" className="h-8 rounded-md px-3 py-1.5 text-xs">程式碼 <span className="ml-1.5 font-mono text-[10px] opacity-75">{snippets.length}</span></TabsTrigger>
-            <TabsTrigger value="commands" className="h-8 rounded-md px-3 py-1.5 text-xs">指令 <span className="ml-1.5 font-mono text-[10px] opacity-75">{commands.length}</span></TabsTrigger>
-            <TabsTrigger value="files" className="h-8 rounded-md px-3 py-1.5 text-xs">不特定檔案 <span className="ml-1.5 font-mono text-[10px] opacity-75">{classCounts.general}</span></TabsTrigger>
+        <div data-testid="asset-workspace-navigation">
+          <TabsList aria-label="資產工作區" className="ma-tabs">
+            <TabsTrigger value="applied" aria-label={`專案已套用 ${appliedCount}`}>已套用 <span>{appliedCount}</span></TabsTrigger>
+            <TabsTrigger value="tools" ref={toolsTabRef}>工具 <span>{classCounts.tool}</span></TabsTrigger>
+            <TabsTrigger value="code">程式碼 <span>{snippets.length}</span></TabsTrigger>
+            <TabsTrigger value="commands">指令 <span>{commands.length}</span></TabsTrigger>
+            <TabsTrigger value="files">不特定檔案 <span>{classCounts.general}</span></TabsTrigger>
           </TabsList>
-
-          {(tab === "applied" || tab === "tools" || tab === "files") && (
+        </div>
+        {showAssetList && (
+          <MobileFilterBar
+            className="ma-asset-filter"
+            search={{ value: search, onChange: (value) => setSearch(value.slice(0, 120)), placeholder: "搜尋名稱、分類、版本或說明", label: "搜尋資產" }}
+            chips={assetChips}
+            onClearAll={clearAssetFilters}
+            controls={
             <>
-              <div className="relative min-w-[220px] flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a9c0d1]" />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value.slice(0, 120))}
-                  className="h-9 border-[#2a526f] bg-[#06111f] pl-9"
-                  placeholder="搜尋名稱、分類、版本或說明"
-                />
-              </div>
-              {tab === "applied" && <div className="flex min-h-9 items-center gap-1 overflow-x-auto rounded-lg border border-[#2a526f] bg-[#06111f] p-1" aria-label="資產分類">
-                {ASSET_FILTERS.map((filter) => {
-                  const count = filter.value === "all" ? assets.length : classCounts[filter.value];
-                  return (
-                    <button
-                      key={filter.value}
-                      type="button"
-                      aria-pressed={kindFilter === filter.value}
-                      onClick={() => setKindFilter(filter.value)}
-                      className={cn(
-                        "flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-transparent px-2.5 text-xs font-semibold text-[#9eb8c9] transition-colors hover:bg-[#10263a] hover:text-[#f3f8fc]",
-                        kindFilter === filter.value && filter.activeClass,
-                      )}
-                    >
-                      {filter.label}<span className="font-data text-[10px] opacity-80">{count}</span>
-                    </button>
-                  );
-                })}
-              </div>}
+              {tab === "applied" && (
+                <Select value={kindFilter} onValueChange={(value) => setKindFilter(value as AssetFilter)}>
+                  <SelectTrigger aria-label="資產類型"><SelectValue /></SelectTrigger>
+                  <SelectContent>{Object.entries(ASSET_FILTER_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+                </Select>
+              )}
               <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as AssetScopeFilter)}>
-                <SelectTrigger className="h-9 w-[190px]" aria-label="資產使用範圍"><SelectValue placeholder="使用範圍" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部範圍</SelectItem>
-                  <SelectItem value="global">通用工具</SelectItem>
-                  <SelectItem value="workspace">目前 workspace 專用</SelectItem>
-                </SelectContent>
+                <SelectTrigger aria-label="資產使用範圍"><SelectValue /></SelectTrigger>
+                <SelectContent>{Object.entries(ASSET_SCOPE_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
               </Select>
             </>
-          )}
-        </div>
-
-        <TabsContent value="applied" className="mt-3">
-          <AssetList
-            assets={visibleAssets}
-            assignments={assignments}
-            assigningKey={assigningKey}
-            loading={loading}
-            onPreview={setSelectedAsset}
-            onToggle={toggleAssignment}
+            }
           />
-        </TabsContent>
-        <TabsContent value="tools" className="mt-3">
-          <AssetList
-            assets={visibleAssets}
-            assignments={assignments}
-            assigningKey={assigningKey}
-            loading={loading}
-            onPreview={setSelectedAsset}
-            onToggle={toggleAssignment}
-          />
-        </TabsContent>
-        <TabsContent value="code" className="mt-3 rounded-xl border border-[#2a526f] bg-[#071522] p-3">
+        )}
+        <TabsContent value="applied" className="ma-tab-content">{assetList}</TabsContent>
+        <TabsContent value="tools" className="ma-tab-content">{assetList}</TabsContent>
+        <TabsContent value="code" className="ma-library-content">
           <CodeStorageManager workspaceKey={workspaceKey} />
         </TabsContent>
-        <TabsContent value="commands" className="mt-3 rounded-xl border border-[#2a526f] bg-[#071522] p-3">
+        <TabsContent value="commands" className="ma-library-content">
           <CommandLibrary workspaceKey={workspaceKey} />
         </TabsContent>
-        <TabsContent value="files" className="mt-3">
-          <AssetList
-            assets={visibleAssets}
-            assignments={assignments}
-            assigningKey={assigningKey}
-            loading={loading}
-            onPreview={setSelectedAsset}
-            onToggle={toggleAssignment}
-          />
-        </TabsContent>
+        <TabsContent value="files" className="ma-tab-content">{assetList}</TabsContent>
       </Tabs>
 
       <Dialog open={Boolean(selectedAsset)} onOpenChange={(open) => !open && setSelectedAsset(null)}>
@@ -824,6 +817,8 @@ function AssetList({
   assets,
   assignments,
   assigningKey,
+  emptyAction,
+  emptyTitle,
   loading,
   onPreview,
   onToggle,
@@ -831,24 +826,27 @@ function AssetList({
   assets: Asset[];
   assignments: ReturnType<typeof emptyAssignments>;
   assigningKey: string | null;
+  emptyAction?: ReactNode;
+  emptyTitle: string;
   loading: boolean;
   onPreview: (asset: Asset) => void;
   onToggle: (asset: Asset) => void;
 }) {
-  if (loading) {
-    return <div className="maintenance-panel flex min-h-[300px] items-center justify-center text-sm text-[#a9c0d1]"><Loader2 className="mr-2 h-4 w-4 animate-spin" />載入資產中...</div>;
-  }
-  if (!assets.length) {
-    return <div className="maintenance-panel flex min-h-[260px] flex-col items-center justify-center text-center"><Library className="h-8 w-8 text-cyan-100" /><div className="mt-3 font-medium text-[#f3f8fc]">目前沒有符合條件的資產</div><div className="mt-1 text-sm text-[#a9c0d1]">切換到公司共用庫，或調整搜尋與類型篩選。</div></div>;
-  }
-
   return (
-    <div className="maintenance-panel overflow-hidden">
-      <div className="hidden grid-cols-[minmax(220px,1.4fr)_110px_minmax(150px,1fr)_110px_132px] gap-3 border-b border-[#2a526f] bg-[#0b1b2d] px-4 py-2 text-xs font-medium uppercase tracking-[0.08em] text-[#91aabd] lg:grid">
-        <div>資產</div><div>分類</div><div>格式／版本</div><div>更新</div><div className="text-right">專案狀態</div>
+    <div className="ma-asset-list" role="table" aria-label="資產清單" aria-busy={loading}>
+      <div className="ma-asset-row ma-asset-heading" role="row">
+        <div role="columnheader">資產 {!loading && <span className="ma-asset-count">{assets.length} 筆</span>}</div>
+        <div role="columnheader" className="ma-asset-category">類型／範圍</div>
+        <div role="columnheader" className="ma-asset-meta">格式／版本</div>
+        <div role="columnheader" className="ma-asset-date">更新時間</div>
+        <div role="columnheader" className="ma-asset-actions">專案操作</div>
       </div>
-      <div className="divide-y divide-[#2a526f]/70">
-        {assets.map((asset) => {
+      <div role="rowgroup">
+        {loading ? (
+          <div role="row"><div role="cell" aria-colspan={5} className="ma-asset-empty"><span role="status"><Loader2 className="animate-spin" aria-hidden="true" />載入資產中…</span></div></div>
+        ) : !assets.length ? (
+          <div role="row"><div role="cell" aria-colspan={5} className="ma-asset-empty"><Library aria-hidden="true" /><strong>{emptyTitle}</strong>{emptyAction}</div></div>
+        ) : assets.map((asset) => {
           const meta = ASSET_CLASS_META[asset.assetClass];
           const Icon = meta.icon;
           const assigned = assignments[asset.kind].has(asset.id);
@@ -861,25 +859,19 @@ function AssetList({
                 ? "指令範本"
                 : CATEGORY_LABELS[asset.category] || asset.category;
           return (
-            <div
-              key={`${asset.kind}:${asset.id}`}
-              className={cn(
-                "grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 border-l-2 px-4 py-3 transition-colors lg:grid-cols-[minmax(220px,1.4fr)_110px_minmax(150px,1fr)_110px_132px] lg:items-center lg:gap-3",
-                asset.assetClass === "tool" && "border-l-cyan-300/45 hover:bg-cyan-300/[0.04]",
-                asset.assetClass === "command" && "border-l-amber-300/45 hover:bg-amber-300/[0.04]",
-                asset.assetClass === "general" && "border-l-emerald-300/45 hover:bg-emerald-300/[0.04]",
-              )}
-            >
-              <button type="button" onClick={() => onPreview(asset)} className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
-                <div className="truncate text-sm font-semibold text-[#f3f8fc]">{asset.name}</div>
-                <div className="mt-0.5 truncate text-xs text-[#a9c0d1]">{asset.description}</div>
-              </button>
-              <div className="flex flex-wrap gap-1"><Badge variant="outline" className={cn("rounded-md", meta.tone)}><Icon className="mr-1.5 h-3.5 w-3.5" />{meta.label}</Badge><Badge variant="outline" className={cn("rounded-md text-[10px]", asset.scope === "global" ? "border-emerald-300/30 text-emerald-100" : "border-indigo-300/30 text-indigo-100")}>{asset.scope === "global" ? "通用" : "目前 workspace"}</Badge></div>
-              <div className="min-w-0 text-xs text-[#c7d8e4]"><div className="truncate">{sourceLabel}</div><div className="font-data mt-0.5 truncate text-[#82a2b8]">{asset.detail}</div></div>
-              <div className="font-data text-xs text-[#a9c0d1]">{formatDate(asset.updatedAt)}</div>
-              <div className="col-span-2 flex items-center justify-end gap-2 lg:col-span-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onPreview(asset)} aria-label={`查看 ${asset.name}`}><Eye className="h-4 w-4" /></Button>
-                <Button variant={assigned ? "outline" : "default"} size="sm" className="h-8 min-w-[86px]" disabled={assigning} onClick={() => onToggle(asset)}>{assigning ? <Loader2 className="h-4 w-4 animate-spin" /> : assigned ? "移出專案" : "套用專案"}</Button>
+            <div key={`${asset.kind}:${asset.id}`} className="ma-asset-row" role="row">
+              <div className="ma-asset-name" role="cell">
+                <button type="button" onClick={() => onPreview(asset)} title={asset.name}>
+                  <strong>{asset.name}</strong>
+                  <span>{asset.description}</span>
+                </button>
+              </div>
+              <div className="ma-asset-category" role="cell"><Badge variant="outline" className={cn("rounded-md", meta.tone)}><Icon className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />{meta.label}</Badge><span>{asset.scope === "global" ? "通用" : "工作區專用"}</span></div>
+              <div className="ma-asset-meta" role="cell"><strong title={asset.detail}>{asset.detail}</strong><span>{sourceLabel}</span></div>
+              <div className="ma-asset-date" role="cell">{formatDate(asset.updatedAt)}</div>
+              <div className="ma-asset-actions" role="cell">
+                <Button variant="ghost" size="icon" onClick={() => onPreview(asset)} aria-label={`查看 ${asset.name}`}><Eye className="h-4 w-4" /></Button>
+                <Button variant="outline" size="sm" data-assigned={assigned} disabled={assigning} onClick={() => onToggle(asset)}>{assigning ? <Loader2 className="h-4 w-4 animate-spin" /> : assigned ? "移出專案" : "套用專案"}</Button>
               </div>
             </div>
           );
