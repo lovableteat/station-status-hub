@@ -9,6 +9,24 @@ const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind
 const model = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
 const issue = (id, extra = {}) => ({ id, title: '無法開機', description: '', status: 'open', assigned_to: null, assignee_user_ids: [], asset_identifier: 'GB300-021', system_id: null, category: null, created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-10T00:00:00Z', ...extra });
 
+test('maintenance body clipping avoids a hidden scroll container in every compact orientation only', async () => {
+  const css = postcss.parse(await readFile(new URL('../src/index.css', import.meta.url), 'utf8'));
+  const maintenanceBodies = [];
+  css.walkRules('body:has(.maintenance-workspace)', rule => maintenanceBodies.push(rule));
+  assert.equal(maintenanceBodies.length, 1, 'Keep one maintenance-only body overflow rule');
+  const rule = maintenanceBodies[0];
+  assert.equal(rule.parent.type, 'atrule');
+  assert.equal(rule.parent.name, 'media');
+  assert.equal(rule.parent.params, '(max-width: 1023px)', 'Portrait phones must not be excluded by a max-height condition');
+  assert.deepEqual(rule.nodes.map(node => [node.prop, node.value]), [['overflow-x', 'clip']]);
+  const phone = css.nodes.find(node => node.type === 'atrule' && node.name === 'media' && node.params === '(max-width: 767px)' && node.nodes.some(child => child.type === 'rule' && child.selector === 'body'));
+  assert.ok(phone, 'The existing general phone tier remains intact');
+  const phoneBody = phone.nodes.find(node => node.type === 'rule' && node.selector === 'body');
+  assert.ok(phoneBody.nodes.some(node => node.prop === 'overflow-x' && node.value === 'hidden'), 'Do not change overflow in unrelated workspaces');
+  const shortLandscape = css.nodes.find(node => node.type === 'atrule' && node.name === 'media' && node.params === '(max-width: 1023px) and (max-height: 500px)');
+  assert.ok(shortLandscape.nodes.some(node => node.type === 'rule' && node.selector === '.maintenance-workspace main' && node.nodes.some(declaration => declaration.prop === 'overscroll-behavior-y' && declaration.value === 'auto')), 'Keep the existing short-landscape main scrolling rule');
+});
+
 test('compact fault lists release the panel scroll trap while desktop results keep their own scroller', async () => {
   const layout = postcss.parse(await readFile(new URL('../src/components/maintenance/maintenanceFaultLayout.css', import.meta.url), 'utf8'));
   const base = postcss.parse(await readFile(new URL('../src/components/maintenance/maintenance.css', import.meta.url), 'utf8'));
