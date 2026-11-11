@@ -70,7 +70,7 @@ const qa = createRequire(path.resolve(process.env.AUDIT_QA_DIR || '../qa-tools',
           {navigation.retry && <ModuleLoadRecovery onRetry={navigation.retry} onCancel={navigation.cancel} />}
           <Suspense fallback={<p>Loading feature</p>}>
             {showMissing && <MissingFeature />}
-            {view === 'safe' && <SafeFeature />}
+            {view === 'safe' && <div data-testid="retained-feature"><SafeFeature /></div>}
           </Suspense>
         </main>;
       }
@@ -146,7 +146,8 @@ const qa = createRequire(path.resolve(process.env.AUDIT_QA_DIR || '../qa-tools',
         await page.waitForTimeout(450);
         assert.equal(await page.getByTestId('fixture-view').innerText(), 'latest');
         await page.getByRole('button', { name: 'Navigate retained feature', exact: true }).click();
-        await page.getByText('Retained synthetic feature v1', { exact: true }).waitFor();
+        await page.getByTestId('retained-feature').waitFor();
+        assert.equal(await page.getByTestId('retained-feature').innerText(), 'Retained synthetic feature v1', 'The retained module renders its own exact output');
         assert.equal(navigations, initialNavigations, 'Import failures and retry controls never navigate the document');
         // Existing raw listeners and the real HashRouter must wait for a destination import.
         await page.evaluate(() => { fixtureHistory.push('?workspace=first#/first'); fixtureHistory.push('?workspace=current#/current'); dispatchEvent(new PopStateEvent('popstate', { state: history.state })); });
