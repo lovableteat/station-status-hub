@@ -132,10 +132,23 @@ function startHarness() {
     const widths = await small.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: window.innerWidth, center: document.querySelector('[data-testid="bom-version-center"]').scrollWidth, centerClient: document.querySelector('[data-testid="bom-version-center"]').clientWidth }));
     assert.ok(widths.document <= widths.viewport, `no page overflow on a phone (${JSON.stringify(widths)})`);
     assert.ok(widths.center <= widths.centerClient, `the version center scrolls only inside its table (${JSON.stringify(widths)})`);
-    for (const label of ['上傳新版本', '比對版本', '封存系列', '刪除系列']) assert.ok(await small.getByRole('button', { name: label }).isVisible(), `${label} reachable on a phone`);
+    for (const label of ['上傳此系列新版', '比對版本', '封存系列', '刪除系列']) {
+      const action = small.getByTestId('bom-series-detail').getByRole('button', { name: label, exact: true });
+      await action.waitFor();
+      assert.ok(await action.isVisible(), `${label} visible on a phone`);
+      // Check scrolling, hit targets and enabled state without uploading, archiving or deleting data.
+      await action.click({ trial: true });
+    }
     if (process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH) await small.screenshot({ path: process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH, fullPage: true });
     await phone.close();
     console.log('BOM version flow: upload, carry-over, compare, export, switch and phone layout verified on QA data only');
+  } catch (error) {
+    let index = 0;
+    for (const context of browser.contexts()) for (const page of context.pages()) {
+      console.error(JSON.stringify({ case: 'BOM version', url: page.url(), body: (await page.locator('body').innerText()).slice(0, 12000) }));
+      if (process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH) await page.screenshot({ path: process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH.replace(/\.png$/, `-failure-${index++}.png`), fullPage: false });
+    }
+    throw error;
   } finally {
     await browser.close();
     harness.kill();

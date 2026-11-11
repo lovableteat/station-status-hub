@@ -49,8 +49,22 @@ async function verifyMobileDetail(page, recordId, expectedText) {
           assert.equal(await rows.count(), 0);
         } else if (scenario === 'local-recovery') {
           await page.getByLabel('切換 BOM', { exact: true }).filter({ hasText: '本機保留的 BOM 修改' }).waitFor();
-          if (width < 500) await verifyMobileDetail(page, 'local-added', ['R-LOCAL', 'R-EDITED']);
-          else {
+          if (width < 500) {
+            // The merged main follows location sorting, not the order of saved additions/edits.
+            const mergedRow = rows.filter({ hasText: template.name }).filter({ hasText: template.partNumber });
+            await mergedRow.waitFor();
+            assert.equal(await mergedRow.count(), 1, 'both local locations share one displayed main part');
+            await mergedRow.getByTestId('material-mobile-row-open').click();
+            const detail = page.getByTestId('material-mobile-detail');
+            await detail.waitFor();
+            const locations = detail.getByTestId('material-mobile-location');
+            for (const ref of ['R-LOCAL', 'R-EDITED']) {
+              await locations.getByRole('button', { name: new RegExp(`^位置：${ref} · 用量`) }).waitFor();
+            }
+            assert.equal(await locations.count(), 2, 'both recovered locations remain available in details');
+            await detail.getByRole('button', { name: '關閉料件詳情', exact: true }).click();
+            await detail.waitFor({ state: 'hidden' });
+          } else {
             // Identical main parts merge; the collapsed REF DES preview shows only one location.
             await rows.getByRole('button', { name: '展開 2 個使用位置', exact: true }).click();
             for (const [id, ref] of [['local-added', 'R-LOCAL'], ['local-edited', 'R-EDITED']]) {
@@ -72,6 +86,10 @@ async function verifyMobileDetail(page, recordId, expectedText) {
         assert.deepEqual(failures, []);
         await page.screenshot({ path: path.join(evidence, `${scenario}-${width}.png`), fullPage: false });
         results.push({ scenario, width, result: 'passed', automaticWrites: 0, seedRequests: 0 });
+      } catch (error) {
+        console.error(JSON.stringify({ scenario, width, error: error.message, body: (await page.locator('body').innerText()).slice(0, 12000) }));
+        await page.screenshot({ path: path.join(evidence, `${scenario}-${width}-failure.png`), fullPage: false });
+        throw error;
       } finally { await context.close(); }
     }
   } finally {

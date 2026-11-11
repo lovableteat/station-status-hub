@@ -16,6 +16,7 @@ const modules = [
 const out = path.resolve(process.env.AUDIT_SCREENSHOT_DIR || '../evidence-20261002/short-integrated');
 fs.mkdirSync(out, { recursive: true });
 let server, baseURL;
+const touchReports = new WeakMap();
 
 async function shot(page, name) {
   await page.screenshot({ path: path.join(out, `${name}.png`), timeout: 10000 });
@@ -62,18 +63,51 @@ async function noHorizontalOverflow(page, phase) {
   assert.ok(widths.document <= widths.viewport, `${phase}: page-level horizontal overflow: ${JSON.stringify(widths)}`);
 }
 
+async function scrollDiagnostics(page, point) {
+  return page.evaluate(point => {
+    const describe = element => {
+      if (!element) return null;
+      const style = getComputedStyle(element), rect = element.getBoundingClientRect();
+      return {
+        tag: element.tagName, id: element.id, className: String(element.className), role: element.getAttribute('role'),
+        x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+        scrollTop: element.scrollTop, scrollHeight: element.scrollHeight, clientHeight: element.clientHeight,
+        overflowX: style.overflowX, overflowY: style.overflowY, overscrollY: style.overscrollBehaviorY,
+        touchAction: style.touchAction, pointerEvents: style.pointerEvents,
+      };
+    };
+    const hit = point ? document.elementFromPoint(point.x, point.y) : null;
+    const ancestors = [];
+    for (let element = hit; element; element = element.parentElement) ancestors.push(describe(element));
+    return {
+      scrollY, activeElement: describe(document.activeElement), scrollLock: document.body.getAttribute('data-scroll-locked'),
+      documentScroller: describe(document.scrollingElement), body: describe(document.body), hitAncestors: ancestors,
+      hosts: Object.fromEntries(['.maintenance-shell-content', '.mf-layout', '.mf-list-panel', '.mf-result-list'].map(selector => [selector, describe(document.querySelector(selector))])),
+    };
+  }, point);
+}
+
 // Real touch input. No scrollTop assignments, force clicks, or test-only layout changes.
 async function swipe(page, distance = 120, container) {
-  const area = container ? await container.boundingBox() : await page.evaluate(() => {
+  let area = await page.evaluate(() => {
     const header = document.querySelector('[data-mobile-app-header]')?.getBoundingClientRect();
     const dock = document.querySelector('[data-mobile-workspace-dock]')?.getBoundingClientRect();
     const top = Math.max(0, header?.bottom || 0), bottom = dock?.height ? dock.top : innerHeight;
     return { x: 0, y: top, width: innerWidth, height: bottom - top };
   });
+  if (container) {
+    const bounds = await container.boundingBox();
+    assert.ok(bounds, 'The requested touch-scroll container must be visible');
+    const x = Math.max(area.x, bounds.x), y = Math.max(area.y, bounds.y);
+    area = { x, y, width: Math.min(area.x + area.width, bounds.x + bounds.width) - x, height: Math.min(area.y + area.height, bounds.y + bounds.height) - y };
+  }
   assert.ok(area && area.height > 30, 'A usable touch-scroll region must exist');
   const x = area.x + area.width / 2;
   const length = Math.min(Math.abs(distance), area.height - 24);
   const start = distance > 0 ? area.y + area.height - 12 : area.y + 12;
+  const point = { x, y: start };
+  const report = { distance, area, point, before: await scrollDiagnostics(page, point) };
+  touchReports.get(page)?.push(report);
   const cdp = await page.context().newCDPSession(page);
   try {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: start, id: 0 }] });
@@ -83,7 +117,10 @@ async function swipe(page, distance = 120, container) {
     }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await page.waitForTimeout(250);
-  } finally { await cdp.detach(); }
+  } finally {
+    report.after = await scrollDiagnostics(page, point);
+    await cdp.detach();
+  }
 }
 
 async function revealByTouch(page, locator, label) {
@@ -129,7 +166,7 @@ async function checkDialog(page, trigger, result, dismissal) {
 }
 
 async function checkViewport(width, height) {
-  const result = { id: `${width}x${height}`, checks: [], pageErrors: [], errors: [], blockedRequests: [], focusReturns: [] };
+  const result = { id: `${width}x${height}`, checks: [], pageErrors: [], errors: [], blockedRequests: [], focusReturns: [], touchScrolls: [] };
   let browser, page;
   try {
     browser = await chromium.launch({ headless: true, ...(process.platform === 'win32' ? { executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe' } : {}) });
@@ -147,6 +184,7 @@ async function checkViewport(width, height) {
       socket.close();
     });
     page = await context.newPage();
+    touchReports.set(page, result.touchScrolls);
     page.setDefaultTimeout(20000);
     page.on('pageerror', error => {
       const stack = error.stack || String(error);
@@ -192,6 +230,17 @@ async function checkViewport(width, height) {
       const before = await page.evaluate(() => scrollY);
       await swipe(page, 120);
       assert.ok(await page.evaluate(() => scrollY) > before, 'Closing the report must restore page touch scrolling');
+      // Also start on actual result rows. A working page gutter must not conceal
+      // a list/filter ancestor that traps gestures with overscroll containment.
+      const firstRow = page.locator('.mf-row-open').first();
+      await revealByTouch(page, firstRow, 'First fault row');
+      await reachable(firstRow, 'First fault row');
+      const beforeRows = await page.evaluate(() => scrollY);
+      await swipe(page, 100, page.locator('.mf-result-list'));
+      const lastTouch = result.touchScrolls.at(-1);
+      assert.ok(lastTouch.before.hitAncestors.some(element => element.className.split(/\s+/).includes('mf-result-list')), 'The result-scroll gesture must actually start within the fault results');
+      assert.ok(await page.evaluate(() => scrollY) > beforeRows, 'Touch scrolling over fault rows must scroll the mobile document');
+      result.checks.push('touch-scroll-from-fault-result-rows');
     } else {
       const list = page.locator('.mf-result-list');
       const before = await list.evaluate(element => element.scrollTop);
@@ -241,6 +290,7 @@ async function checkViewport(width, height) {
     if (page) {
       await shot(page, `${result.id}-failure`).catch(failure => result.errors.push(`Failure screenshot: ${failure.stack || failure}`));
       result.failureURL = page.url();
+      result.failureScrollState = await scrollDiagnostics(page).catch(() => null);
       result.calls = await page.evaluate(() => window.__AUDIT_CALLS__ || []).catch(() => []);
     }
   } finally {

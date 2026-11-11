@@ -107,7 +107,7 @@ jobs:
           path: |
             ${{ runner.temp }}/private-richtext*.png
             ${{ runner.temp }}/material-seed-evidence/
-            ${{ runner.temp }}/bom-version-phone.png
+            ${{ runner.temp }}/bom-version-phone*.png
             ${{ runner.temp }}/short-landscape/
           if-no-files-found: ignore
           retention-days: 3
