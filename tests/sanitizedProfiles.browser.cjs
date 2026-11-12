@@ -232,7 +232,9 @@ test('dialog-save-failure-cancel-and-controlled-retry-preserve-source', 'dialog'
   await page.evaluate(() => { sanitizedProfilesFixture.saveMode = 'hold'; });
   await save(page).click();
   await page.waitForFunction(() => typeof sanitizedProfilesFixture.finishSave === 'function');
-  assert.equal(await page.getByRole('button', { name: '儲存中...' }).isDisabled(), true);
+  const pendingSave = page.getByRole('button', { name: '正在儲存權限…', exact: true });
+  assert.equal(await pendingSave.isDisabled(), true);
+  assert.equal(await pendingSave.getAttribute('aria-busy'), 'true');
   await page.evaluate(() => sanitizedProfilesFixture.finishSave());
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   await waitForPermissionsDialogClosed(page);
