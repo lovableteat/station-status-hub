@@ -38,6 +38,7 @@ import {
   FilterX,
   History,
   Layers3,
+  Loader2,
   Minus,
   MoreHorizontal,
   Paperclip,
@@ -155,6 +156,8 @@ import type { BomTableColorTheme, BomWorkspaceArchive, BomWorkspaceProject } fro
 import { loadBomWorkspaceArchives, loadBomWorkspaceProjects, saveBomWorkspaceArchive, saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
 import { loadBomWorkspaceRecords, loadBomWorkspaceVersions, saveBomWorkspaceVersion } from "./materialBomStorage";
 import { BomVersionCenter } from "./BomVersionCenter";
+import { buildNvBomTableIndex, matchNvBomTableChange, type NvBomTableCandidate } from "./nvBomTableMatch";
+import type { NvBomChange } from "./nvBomCompare";
 import { BomUploadDialog, NEW_BOM_SERIES_TARGET, type BomUploadMeta, type PendingBomUpload } from "./BomUploadDialog";
 import { carryBomTracking } from "./bomDiff";
 import {
@@ -2470,7 +2473,8 @@ export function MaterialRecordDialog({
   const [trackingDraft, setTrackingDraft] = useState(() => createMaterialTrackingDraft(record));
   const [activeTab, setActiveTab] = useState<MaterialEditorTab>(initialTab);
   const [detailsView, setDetailsView] = useState<"form" | "table">("form");
-  const [isSaving, setIsSaving] = useState(false);
+  const [savingAction, setSavingAction] = useState<"save" | "pending" | null>(null);
+  const isSaving = savingAction !== null;
   const [saveError, setSaveError] = useState("");
   const savingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -2515,7 +2519,11 @@ export function MaterialRecordDialog({
       if (!isCurrent()) return;
       if (result.documents.length) setForm(current => withMaterialSpecDocuments(current, [...getMaterialSpecDocuments(current), ...result.documents]));
       setSpecFailures(result.failures);
-      toast({ title: result.failures.length ? `已上傳 ${result.documents.length} 份，${result.failures.length} 份失敗` : `SPEC 已上傳 ${result.documents.length} 份`, description: "成功的檔案已加入清單；按「儲存資料與追蹤」保存到料件。", variant: result.failures.length ? "destructive" : undefined });
+      toast({
+        title: result.failures.length ? `已上傳 ${result.documents.length} 份，${result.failures.length} 份失敗` : `SPEC 已上傳 ${result.documents.length} 份`,
+        description: result.documents.length ? "成功的檔案已加入清單，請按「儲存資料與追蹤」保存到料件。" : "可在附件清單重試失敗的檔案。",
+        variant: result.failures.length ? (result.documents.length ? "warning" : "destructive") : "success",
+      });
     } finally {
       if (isCurrent()) { specUploadRef.current = false; setIsUploadingSpec(false); }
     }
@@ -2552,7 +2560,7 @@ export function MaterialRecordDialog({
         level: addToPending ? form.level : 2,
       }, trackingDraft, uploaderName);
       savingRef.current = true;
-      setIsSaving(true);
+      setSavingAction(addToPending ? "pending" : "save");
       await onSave(addToPending ? addMaterialToPending(next, uploaderName ?? "") : next, addToPending);
     } catch (error) {
       if (!mountedRef.current) return;
@@ -2561,7 +2569,7 @@ export function MaterialRecordDialog({
       toast({ title: "資料尚未儲存", description: message, variant: "destructive" });
     } finally {
       savingRef.current = false;
-      if (mountedRef.current) setIsSaving(false);
+      if (mountedRef.current) setSavingAction(null);
     }
   };
 
@@ -2674,7 +2682,10 @@ export function MaterialRecordDialog({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold">SPEC 文件</h3>
             <input ref={specInputRef} type="file" accept={MATERIAL_SPEC_ACCEPT} multiple className="hidden" onChange={(event) => void handleSpecFile(event)} />
-            {!readOnly && <Button type="button" data-testid="material-spec-add" disabled={isSaving || isUploadingSpec} onClick={() => specInputRef.current?.click()} className="h-11"><Upload data-icon="inline-start" />{isUploadingSpec ? `上傳中 ${specProgress.completed}/${specProgress.total}` : "新增 SPEC 檔案"}</Button>}
+            {!readOnly && <Button type="button" data-testid="material-spec-add" disabled={isSaving || isUploadingSpec} aria-busy={isUploadingSpec || undefined} onClick={() => specInputRef.current?.click()} className="h-11">
+              {isUploadingSpec ? <Loader2 aria-hidden="true" className="motion-safe:animate-spin" /> : <Upload data-icon="inline-start" aria-hidden="true" />}
+              {isUploadingSpec ? `上傳中 ${specProgress.completed}/${specProgress.total}` : "新增 SPEC 檔案"}
+            </Button>}
           </div>
           <div data-testid="material-spec-document" className="material-spec-files mt-3" aria-live="polite">
             {getMaterialSpecDocuments(form).map(document => <div className="material-spec-file" key={document.path}>
@@ -2728,10 +2739,12 @@ export function MaterialRecordDialog({
                 data-testid="material-record-add-pending"
                 className="h-11 border-primary/45 bg-primary/10 text-primary hover:bg-primary/20"
                 disabled={isSaving || isUploadingSpec || trackingDraft.pendingImageReads > 0 || !form.name.trim()}
+                aria-busy={savingAction === "pending" || undefined}
                 title="儲存目前的修改，並加入待處理料的「其他」分類"
                 onClick={() => void handleSave(true)}
               >
-                <Plus className="mr-1.5 h-3.5 w-3.5" />新增為待處理料
+                {savingAction === "pending" ? <Loader2 aria-hidden="true" className="motion-safe:animate-spin" /> : <Plus aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+                {savingAction === "pending" ? "加入待處理料中…" : "新增為待處理料"}
               </Button>
             )}
           </div>
@@ -2743,8 +2756,9 @@ export function MaterialRecordDialog({
               <Pencil className="mr-1.5 h-3.5 w-3.5" />修改這筆
             </Button>
           ) : (
-            <Button type="button" size="sm" className="h-11" onClick={() => void handleSave()} disabled={isSaving || isUploadingSpec || trackingDraft.pendingImageReads > 0 || !form.name.trim()}>
-              {isSaving ? "儲存中…" : "儲存資料與追蹤"}
+            <Button type="button" size="sm" className="h-11" onClick={() => void handleSave()} disabled={isSaving || isUploadingSpec || trackingDraft.pendingImageReads > 0 || !form.name.trim()} aria-busy={savingAction === "save" || undefined}>
+              {savingAction === "save" && <Loader2 aria-hidden="true" className="motion-safe:animate-spin" />}
+              {savingAction === "save" ? "儲存中…" : "儲存資料與追蹤"}
             </Button>
           )}
         </DialogFooter>
@@ -3004,6 +3018,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   row,
   itemValue,
   expanded,
+  locatedRecordId,
   editingNames,
   latestRecordUpdate,
   latestUpdater,
@@ -3017,6 +3032,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   row: VisibleGroupRow;
   itemValue: number;
   expanded: boolean;
+  locatedRecordId?: string;
   editingNames: string;
   latestRecordUpdate: string;
   latestUpdater: string;
@@ -3064,6 +3080,8 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
       <tr
         data-material-kind={isAlternateRow ? "alternative" : "primary"}
         data-record-id={primaryAlternative.id}
+        data-nv-bom-located={locatedRecordId === primaryAlternative.id ? locatedRecordId : undefined}
+        tabIndex={locatedRecordId === primaryAlternative.id ? -1 : undefined}
         onClick={() => !row.isLocation && hasAlternatives && actions.toggleExpanded(group.key)}
         style={mainRowStyle}
         className={cn(
@@ -3272,7 +3290,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
       </tr>
       </tbody>
       {expanded && hasLocations && row.locations!.map(location => (
-        <MaterialGroupRow key={location.key} row={{ ...row, group: location, locations: undefined, isLocation: true, matchingRecords: getSortedAlternatives(location), primaryAlternative: location.primaryRecord, virtualAlternativeRecord: location.primaryRecord, secondaryAlternatives: getSortedAlternatives(location).slice(1) }} itemValue={itemValue} expanded editingNames={editingNames} latestRecordUpdate={latestRecordUpdate} latestUpdater={latestUpdater} colorTheme={colorTheme} columns={columns} canEditNote={canEditNote} markedLocationIds={JSON.stringify(markedIds.includes(location.primaryRecord.id) ? [location.primaryRecord.id] : [])} markDisabled={markDisabled} actions={actions} />
+        <MaterialGroupRow key={location.key} row={{ ...row, group: location, locations: undefined, isLocation: true, matchingRecords: getSortedAlternatives(location), primaryAlternative: location.primaryRecord, virtualAlternativeRecord: location.primaryRecord, secondaryAlternatives: getSortedAlternatives(location).slice(1) }} itemValue={itemValue} expanded locatedRecordId={locatedRecordId} editingNames={editingNames} latestRecordUpdate={latestRecordUpdate} latestUpdater={latestUpdater} colorTheme={colorTheme} columns={columns} canEditNote={canEditNote} markedLocationIds={JSON.stringify(markedIds.includes(location.primaryRecord.id) ? [location.primaryRecord.id] : [])} markDisabled={markDisabled} actions={actions} />
       ))}
       {expanded && !hasLocations && (
         <tbody><CompactAlternativeRows
@@ -3280,6 +3298,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
           records={matchingRecords}
           primaryRecord={primaryAlternative}
           itemValue={itemValue}
+          locatedRecordId={locatedRecordId}
           colorTheme={colorTheme}
           columns={columns}
           onCopy={actions.copy}
@@ -3298,6 +3317,7 @@ function CompactAlternativeRows({
   records,
   primaryRecord,
   itemValue,
+  locatedRecordId,
   colorTheme,
   columns,
   onCopy,
@@ -3310,6 +3330,7 @@ function CompactAlternativeRows({
   records: MaterialRecord[];
   primaryRecord: MaterialRecord;
   itemValue: number;
+  locatedRecordId?: string;
   colorTheme: BomTableColorTheme;
   columns: MaterialColumnVisibility;
   onCopy: (value: string) => void;
@@ -3340,6 +3361,8 @@ function CompactAlternativeRows({
           <tr
             key={record.id}
             data-material-kind="alternative"
+            data-nv-bom-located={locatedRecordId === record.id ? locatedRecordId : undefined}
+            tabIndex={locatedRecordId === record.id ? -1 : undefined}
             style={rowStyle}
             className={cn(
               "group/material-row border-b border-white/15 text-slate-200 transition-colors",
@@ -3588,6 +3611,8 @@ export function MaterialRequestPage() {
   const [tableSettingsOpen, setTableSettingsOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [bomManagerOpen, setBomManagerOpen] = useState(false);
+  const [nvBomTableLocation, setNvBomTableLocation] = useState<NvBomTableCandidate | null>(null);
+  const tableResultsRef = useRef<HTMLDivElement>(null);
   const [circuitChangesOpen, setCircuitChangesOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ title: string; description: string; workspaceIds: string[] } | null>(null);
   const [pendingCurrent, setPendingCurrent] = useState<{ version: BomSeriesVersion; series: BomSeries } | null>(null);
@@ -3653,6 +3678,7 @@ export function MaterialRequestPage() {
   useEffect(() => { setMobileToolsOpen(false); }, [activeBomId, isCompactLayout, user?.userId]);
   useEffect(() => {
     setShowMarkedOnly(false);
+    setNvBomTableLocation(null);
     setEditorOpen(false);
     setReturnToPending(false);
     setPendingDialogOpen(false);
@@ -3734,6 +3760,15 @@ export function MaterialRequestPage() {
     : "";
   const isFullDatasetLoaded = activeWorkspace.isLoaded !== false
     && activeWorkspace.payload.records.length >= activeWorkspace.payload.recordCount;
+  const canMatchNvBom = canViewModuleAccess && isFullDatasetLoaded && !isWorkspaceLoading && activeWorkspace.id === activeBomId;
+  const currentNvBomName = [activeWorkspaceProjectLabel, `${activeSeriesName} ${activeVersionInfo?.version.displayNumber ?? "V1"}${isHistoricalVersion ? "（歷史版本）" : ""}`].filter(Boolean).join(" / ");
+  const matchCurrentBom = useMemo(() => {
+    let index: ReturnType<typeof buildNvBomTableIndex> | undefined;
+    return (change: NvBomChange) => matchNvBomTableChange(change, canMatchNvBom
+      ? (index ??= buildNvBomTableIndex(activeWorkspace.id, activeWorkspace.payload.records))
+      : null);
+  }, [activeWorkspace.id, activeWorkspace.payload.records, canMatchNvBom]);
+  const locatedBomCandidate = canMatchNvBom && nvBomTableLocation?.workspaceId === activeWorkspace.id ? nvBomTableLocation : null;
   const isPreviewDataset = !isFullDatasetLoaded && activeWorkspace.payload.records.length > 0;
   const activeTableColorTheme = useMemo(
     () => normalizeBomTableColorTheme(activeWorkspace.tableColorTheme),
@@ -4374,6 +4409,7 @@ export function MaterialRequestPage() {
   }, [markedFilterSet]);
 
   const getMatchingGroup = useCallback((group: MaterialMainGroup, ignoredKey?: ColumnFilterKey) => {
+    if (locatedBomCandidate) return searchMaterialMainGroup(group, record => record.id === locatedBomCandidate.id);
     const scoped = !markedLocationFilterSet && !hasActiveColumnFilters ? group
       : filterMaterialMainGroup(group, (record, location) => (!markedLocationFilterSet
         || getMaterialMarkKeys(location).some(key => markedLocationFilterSet.has(key)))
@@ -4386,11 +4422,12 @@ export function MaterialRequestPage() {
           return cachedValues.raw.some(value => selectedSet.has(value));
         }));
     return scoped && searchTokens.length > 0 ? searchMaterialMainGroup(scoped, matchesRecordSearch) : scoped;
-  }, [columnFilterSets, groupRuntimeIndex, hasActiveColumnFilters, markedLocationFilterSet, matchesRecordSearch, searchTokens.length]);
+  }, [columnFilterSets, groupRuntimeIndex, hasActiveColumnFilters, locatedBomCandidate, markedLocationFilterSet, matchesRecordSearch, searchTokens.length]);
 
   const searchAvailabilityGroups = useMemo(
-    () => displayGroups.filter((group) => matchesMarkedState(group) && matchesSearch(group) && matchesAvailability(group)),
-    [displayGroups, matchesAvailability, matchesMarkedState, matchesSearch],
+    () => locatedBomCandidate ? displayGroups.filter(group => group.records.some(record => record.id === locatedBomCandidate.id))
+      : displayGroups.filter((group) => matchesMarkedState(group) && matchesSearch(group) && matchesAvailability(group)),
+    [displayGroups, locatedBomCandidate, matchesAvailability, matchesMarkedState, matchesSearch],
   );
 
   const getColumnFilterOptions = useCallback((key: ColumnFilterKey) => {
@@ -4445,6 +4482,7 @@ export function MaterialRequestPage() {
   }, [filteredGroups]);
 
   const activeFilterChips = useMemo(() => {
+    if (locatedBomCandidate) return [{ key: "nv-location", label: `NV 比對定位：${locatedBomCandidate.mpn} · ${locatedBomCandidate.refDes}` }];
     const chips: Array<{ key: string; label: string }> = [];
 
     if (query) chips.push({ key: "query", label: `關鍵字：${query}` });
@@ -4463,7 +4501,7 @@ export function MaterialRequestPage() {
     });
 
     return chips;
-  }, [availability, columnFilters, query, searchColumn, showMarkedOnly]);
+  }, [availability, columnFilters, locatedBomCandidate, query, searchColumn, showMarkedOnly]);
 
   const totalPages = isFullDatasetLoaded
     ? Math.max(1, Math.ceil(filteredGroups.length / pageSize))
@@ -4502,7 +4540,7 @@ export function MaterialRequestPage() {
         workspaceName: activeWorkspace.name,
         exportedBy: user?.displayName || user?.username || "未知使用者",
       });
-      toast({ title: "不建議料明細已匯出", description: `${rows.length.toLocaleString()} 筆 · ${fileName}` });
+      toast({ title: "不建議料明細已匯出", description: `${rows.length.toLocaleString()} 筆 · ${fileName}`, variant: "success" });
     } catch (error) {
       toast({ title: "不建議料匯出失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
     } finally {
@@ -4519,7 +4557,7 @@ export function MaterialRequestPage() {
     setIsExportingDiscouraged(true);
     try {
       const fileName = await exportNonPvlApplyList({ partNumbers, workspaceName: activeWorkspace.name });
-      toast({ title: "PLM 申請清單已匯出", description: `${partNumbers.length.toLocaleString()} 個實體料號 · ${fileName}，請到 PLM 的 Non PVL 申請上傳。` });
+      toast({ title: "PLM 申請清單已匯出", description: `${partNumbers.length.toLocaleString()} 個實體料號 · ${fileName}，請到 PLM 的 Non PVL 申請上傳。`, variant: "success" });
     } catch (error) {
       toast({ title: "PLM 申請清單匯出失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
     } finally {
@@ -4568,6 +4606,20 @@ export function MaterialRequestPage() {
   useEffect(() => {
     setPage(1);
   }, [availability, columnFilters, columnSort, deferredQuery, pageSize, showMarkedOnly, sortMode]);
+
+  useEffect(() => {
+    setNvBomTableLocation(null);
+  }, [availability, columnFilters, columnSort, query, searchColumn, showMarkedOnly, sortMode]);
+
+  useEffect(() => {
+    if (!locatedBomCandidate || bomManagerOpen) return;
+    const frame = requestAnimationFrame(() => {
+      const row = tableResultsRef.current?.querySelector<HTMLElement>("[data-nv-bom-located]");
+      row?.focus({ preventScroll: true });
+      row?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [bomManagerOpen, locatedBomCandidate]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -4777,34 +4829,42 @@ export function MaterialRequestPage() {
         totalRecords += workspace.payload.recordCount;
       }
 
-      await reloadBomWorkspaces(lastWorkspaceId);
+      await reloadBomWorkspaces(lastWorkspaceId).catch(() => {
+        report.push("版本已建立，但清單更新失敗。請重新載入頁面查看新版本。");
+      });
       if (!isBomWriteCurrent(writeScope)) return;
       setUploadDialogOpen(false);
       setPendingUploads([]);
       setActiveBomId(lastWorkspaceId);
       setExpandedKey(null);
       setPage(1);
-      toast({
-        title: uploads.length === 1 ? "BOM 版本已建立" : `${uploads.length} 個 BOM 版本已建立`,
-        description: `共 ${totalRecords.toLocaleString()} 筆廠商料明細；新系列 ${newSeriesCount} 個、新版本 ${newVersionCount} 個${importProject && newSeriesCount > 0 ? `，新系列已歸入專案「${importProject.projectName}」` : ""}。可在 BOM 管理比對版本差異。`,
-      });
       if (orphanedTotal > 0) {
-        toast({
-          title: "有追蹤紀錄沒有帶到新版本",
-          description: `${orphanedTotal.toLocaleString()} 筆舊版追蹤找不到對應的位號或料號，舊版本完整保留；請在 BOM 管理的差異檢視用「追蹤未帶入」確認。`,
-          duration: 30_000,
-        });
+        report.push(`有追蹤紀錄沒有帶到新版本：${orphanedTotal.toLocaleString()} 筆舊版追蹤找不到對應的位號或料號，請在版本差異的「追蹤未帶入」確認。`);
       }
-      if (report.length > 0) {
-        toast({ title: "上傳時有資料需要注意", description: report.join("；"), duration: 30_000 });
-      }
+      const hasWarnings = report.length > 0;
+      const createdTitle = uploads.length === 1 ? "BOM 版本已建立" : `${uploads.length} 個 BOM 版本已建立`;
+      const UploadResultIcon = hasWarnings ? TriangleAlert : CircleCheck;
+      toast({
+        className: cn("bom-upload-toast", hasWarnings && "bom-upload-toast--warning"),
+        title: <span className="bom-upload-toast-heading"><UploadResultIcon aria-hidden="true" />{createdTitle}{hasWarnings && "，有資料待確認"}</span>,
+        description: <span className="grid gap-1">
+          <span>{totalRecords.toLocaleString()} 筆廠商料明細 · 新系列 {newSeriesCount} 個 · 新版本 {newVersionCount} 個</span>
+          {importProject && newSeriesCount > 0 && <span>新系列已歸入「{importProject.projectName}」</span>}
+          {report.map((warning, index) => <span key={index}>{warning}</span>)}
+        </span>,
+        duration: hasWarnings ? 30_000 : undefined,
+      });
     } catch (error) {
       if (writeScope && !isBomWriteCurrent(writeScope)) return;
       await reloadBomWorkspaces(activeBomId).catch(() => undefined);
+      if (!isBomWriteCurrent(writeScope)) return;
+      const completedVersions = newSeriesCount + newVersionCount;
       toast({
-        title: "BOM 版本建立失敗",
+        className: completedVersions > 0 ? "bom-upload-toast bom-upload-toast--warning" : undefined,
+        title: completedVersions > 0 ? `已建立 ${completedVersions} 個 BOM 版本，其餘處理中斷` : "BOM 版本建立失敗",
         description: error instanceof Error ? error.message : "請稍後再試。",
-        variant: "destructive",
+        variant: completedVersions > 0 ? undefined : "destructive",
+        duration: completedVersions > 0 ? 30_000 : undefined,
       });
     } finally {
       if (!writeScope || isBomWriteCurrent(writeScope)) setIsImporting(false);
@@ -5224,6 +5284,7 @@ export function MaterialRequestPage() {
       toast({
         title: addToPending ? "已加入待處理料的其他分類" : editorMode === "create" ? "料件已新增" : "料件已更新",
         description: `${record.manufacturer || "未指定廠商"} ${record.manufacturerPartNumber || record.name}`,
+        variant: "success",
       });
     } catch (error) {
       if (error instanceof WorkspaceMutationScopeChangedError) throw error;
@@ -5531,7 +5592,7 @@ export function MaterialRequestPage() {
     try {
       const { exportMaterialVisibleColumns } = await import("./materialRequestExport");
       const fileName = await exportMaterialVisibleColumns(snapshot, columns);
-      toast({ title: "顯示欄位已匯出", description: `${columns.length} 欄 · ${snapshot.rows.length} 筆明細 · ${fileName}` });
+      toast({ title: "顯示欄位已匯出", description: `${columns.length} 欄 · ${snapshot.rows.length} 筆明細 · ${fileName}`, variant: "success" });
     } catch (error) {
       toast({ title: "匯出失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
     } finally { setExportingVisibleColumns(false); }
@@ -5589,6 +5650,7 @@ export function MaterialRequestPage() {
       toast({
         title: "主管報表已匯出",
         description: `${fileName} · ${exportSnapshot.rows.length.toLocaleString()} 筆明細`,
+        variant: "success",
       });
     } catch (error) {
       toast({
@@ -5606,6 +5668,7 @@ export function MaterialRequestPage() {
     if (isSearchPending || isWorkspaceLoading) return;
 
     startSearchTransition(() => {
+      setNvBomTableLocation(null);
       setQuery(normalizedQuery);
       setExpandedKey(null);
       setPage(1);
@@ -5613,6 +5676,12 @@ export function MaterialRequestPage() {
   };
 
   const clearFilters = () => {
+    if (locatedBomCandidate) {
+      setNvBomTableLocation(null);
+      setExpandedKey(null);
+      setPage(1);
+      return;
+    }
     setQuery("");
     setSearchColumn("all");
     setSearchDraft("");
@@ -5625,7 +5694,9 @@ export function MaterialRequestPage() {
   };
 
   const removeFilterChip = (key: string) => {
-    if (key === "query") {
+    if (key === "nv-location") {
+      setNvBomTableLocation(null);
+    } else if (key === "query") {
       setQuery("");
       setSearchDraft("");
     } else if (key === "searchColumn") {
@@ -5645,6 +5716,21 @@ export function MaterialRequestPage() {
     setPage(1);
   };
 
+  const locateCurrentBom = (candidate: NvBomTableCandidate) => {
+    const group = canMatchNvBom && candidate.workspaceId === activeWorkspace.id
+      ? displayGroups.find(item => item.records.some(record => record.id === candidate.id))
+      : undefined;
+    if (!group) {
+      toast({ title: "無法定位這筆料件", description: "目前 BOM 版本或資料已變更。請回到版本管理重新確認。", variant: "destructive" });
+      return false;
+    }
+    setNvBomTableLocation(candidate);
+    setExpandedKey(group.key);
+    setPage(1);
+    if (isCompactLayout) setMobileView("table");
+    return true;
+  };
+
   const loadLatestBomData = async () => {
     const requestId = startWorkspaceLoad();
     try {
@@ -5654,7 +5740,7 @@ export function MaterialRequestPage() {
         requestId,
       });
       setRemoteSyncFailed(false);
-      toast({ title: "已載入最新資料", description: "搜尋、篩選與分頁條件皆已保留。" });
+      toast({ title: "已載入最新資料", description: "搜尋、篩選與分頁條件皆已保留。", variant: "success" });
     } catch {
       toast({ title: "載入最新資料失敗", description: "目前仍保留畫面中的資料與輸入內容。", variant: "destructive" });
     } finally {
@@ -5754,6 +5840,7 @@ export function MaterialRequestPage() {
   const activeFilterControls = activeFilterChips.length > 0 && (
     <div data-testid="material-active-filters" className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
       {activeFilterChips.map(chip => <button key={chip.key} type="button" onClick={() => removeFilterChip(chip.key)} aria-label={`移除篩選：${chip.label}`} className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 text-foreground lg:min-h-8"><span className="max-w-[20rem] truncate">{chip.label}</span><X className="h-3 w-3 shrink-0" /></button>)}
+      {locatedBomCandidate && <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)}>返回 NV 比對</Button>}
       <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="min-h-11 text-muted-foreground hover:text-foreground lg:min-h-8">全部清除</Button>
     </div>
   );
@@ -5847,6 +5934,9 @@ export function MaterialRequestPage() {
         seriesList={seriesList}
         exportedBy={user?.displayName || user?.username || ""}
         loadRecords={loadVersionRecords}
+        currentBomName={currentNvBomName}
+        matchCurrentBom={matchCurrentBom}
+        onLocateCurrentBom={locateCurrentBom}
         onView={(id) => { switchActiveBom(id); setBomManagerOpen(false); }}
         onSetCurrent={requestSetCurrentBomVersion}
         onUploadVersion={(series) => { uploadTargetSeriesRef.current = series.id; fileInputRef.current?.click(); }}
@@ -5942,7 +6032,10 @@ export function MaterialRequestPage() {
                   <DrawerClose asChild><Button type="button" variant="outline" data-testid="material-circuit-changes" className="mb-3 h-12 w-full justify-start gap-2" onClick={() => setCircuitChangesOpen(true)} disabled={!isCollaborativeReady}><Pencil className="h-4 w-4 text-primary" />線路修改<ChevronRight className="ml-auto h-4 w-4" /></Button></DrawerClose>
                   <div data-testid="material-mobile-actions" className="material-mobile-tool-list">
                     <DrawerClose asChild><Button type="button" variant="ghost" onClick={openPendingDialog}><TriangleAlert className="text-destructive" />待處理料<span>{pendingApplicationCount.toLocaleString()}</span><ChevronRight /></Button></DrawerClose>
-                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded}><Upload className="text-success" />{isImporting ? "讀取中..." : "上傳 BOM"}<ChevronRight /></Button></DrawerClose>
+                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded}>
+                      {isImporting && !uploadDialogOpen ? <Loader2 className="text-success motion-safe:animate-spin" aria-hidden="true" /> : <Upload className="text-success" aria-hidden="true" />}
+                      {isImporting && !uploadDialogOpen ? "讀取 Excel…" : "上傳 BOM"}<ChevronRight />
+                    </Button></DrawerClose>
                     <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading}><Download className="text-info" />匯出報表<ChevronRight /></Button></DrawerClose>
                     <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading}><FileSpreadsheet className="text-warning" />不建議料匯出<span>{discouragedMaterialCount.toLocaleString()}</span><ChevronRight /></Button></DrawerClose>
                   </div>
@@ -6014,9 +6107,10 @@ export function MaterialRequestPage() {
               variant="ghost"
               onClick={() => void applySearch()}
               aria-label={isSearchPending ? "搜尋中" : "搜尋"}
+              aria-busy={isSearchPending || undefined}
               className="h-11 w-11 rounded-xl p-0 text-primary"
             >
-              {isSearchPending ? <RotateCcw className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+              {isSearchPending ? <Loader2 aria-hidden="true" className="h-5 w-5 motion-safe:animate-spin" /> : <Search aria-hidden="true" className="h-5 w-5" />}
             </Button>
           </div>
 
@@ -6075,7 +6169,8 @@ export function MaterialRequestPage() {
               <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />{isExportingDiscouraged ? "匯出中…" : "不建議料匯出"} <strong className="ml-1">{discouragedMaterialCount.toLocaleString()}</strong>
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border-success/60 bg-success px-3 text-sm font-bold text-success-foreground hover:bg-success/85 hover:text-success-foreground disabled:cursor-not-allowed disabled:opacity-50">
-              <Upload className="mr-1 h-3.5 w-3.5" />{isImporting ? "讀取中..." : "上傳 BOM"}
+              {isImporting && !uploadDialogOpen ? <Loader2 className="mr-1 h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden="true" /> : <Upload className="mr-1 h-3.5 w-3.5" aria-hidden="true" />}
+              {isImporting && !uploadDialogOpen ? "讀取 Excel…" : "上傳 BOM"}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-9 border-info/60 bg-info px-3 text-sm font-bold text-info-foreground hover:bg-info/85 hover:text-info-foreground disabled:cursor-wait disabled:opacity-60">
               <Download className="mr-1 h-3.5 w-3.5" />匯出報表
@@ -6215,15 +6310,14 @@ export function MaterialRequestPage() {
         </div>
       )}
 
-      {isWorkspaceLoading && (
-        <div className="mt-2 flex items-center gap-2 rounded-xl border border-cyan-300/20 bg-[#0d2035] px-3 py-2" role="status" aria-live="polite">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300 motion-reduce:animate-none" />
-          <p className="text-sm font-bold text-cyan-100">正在切換 BOM</p>
-          <p className="truncate text-xs text-slate-400">只下載這份 BOM 的最新記錄，完成前不顯示其他 BOM 的舊資料。</p>
+      {(isWorkspaceLoading || (isCompactLayout && exportingVisibleColumns)) && (
+        <div className="mt-2 flex items-center gap-2 rounded-xl border border-info/30 bg-info/10 px-3 py-2 text-sm font-semibold text-info" role="status">
+          <Loader2 aria-hidden="true" className="size-4 shrink-0 motion-safe:animate-spin" />
+          {exportSnapshotRequested ? "正在準備匯出報表…" : isWorkspaceLoading ? "正在載入 BOM 資料…" : "正在匯出顯示欄位…"}
         </div>
       )}
 
-      <div data-material-results="true" className={cn("mt-2 transition-opacity", isWorkspaceLoading && "pointer-events-none opacity-35")} aria-busy={isWorkspaceLoading}>
+      <div ref={tableResultsRef} data-material-results="true" className={cn("mt-2 transition-opacity motion-reduce:transition-none", isWorkspaceLoading && "pointer-events-none opacity-35")} aria-busy={isWorkspaceLoading}>
         <div className="min-w-0">
       <section
         data-testid="material-table-card"
@@ -6259,7 +6353,7 @@ export function MaterialRequestPage() {
                 className="h-9 border-[#356985] bg-[#071522] pl-9 pr-9 text-sm text-slate-100 placeholder:text-[#a9c0d1] focus-visible:ring-cyan-400"
               />
               {isSearchPending && (
-                <RotateCcw className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-cyan-300" aria-label="搜尋中" />
+                <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-info motion-safe:animate-spin" role="status" aria-label="搜尋中" />
               )}
             </div>
             {activeFilterControls}
@@ -6277,7 +6371,10 @@ export function MaterialRequestPage() {
               </SelectContent>
             </Select>
             {tableSettingsControl}
-            <Button type="button" variant="outline" size="sm" data-testid="material-export-visible" className="material-action-highlight h-9 gap-1.5 px-2.5 text-xs" disabled={exportingVisibleColumns || !isFullDatasetLoaded || isWorkspaceLoading || isSearchPending} onClick={() => void exportVisibleColumns()} title="依目前顯示欄位與順序匯出所有符合篩選的廠商明細，不受分頁限制；狀態欄匯出文字"><Download className="h-3.5 w-3.5" />{exportingVisibleColumns ? "匯出中…" : "匯出顯示欄位"}</Button>
+            <Button type="button" variant="outline" size="sm" data-testid="material-export-visible" className="material-action-highlight h-9 gap-1.5 px-2.5 text-xs" disabled={exportingVisibleColumns || !isFullDatasetLoaded || isWorkspaceLoading || isSearchPending} aria-busy={exportingVisibleColumns || undefined} onClick={() => void exportVisibleColumns()} title="依目前顯示欄位與順序匯出所有符合篩選的廠商明細，不受分頁限制；狀態欄匯出文字">
+              {exportingVisibleColumns ? <Loader2 aria-hidden="true" className="h-3.5 w-3.5 motion-safe:animate-spin" /> : <Download aria-hidden="true" className="h-3.5 w-3.5" />}
+              {exportingVisibleColumns ? "匯出中…" : "匯出顯示欄位"}
+            </Button>
             <Button type="button" variant="outline" size="sm" data-testid="material-personal-marks-filter" className="material-personal-marks-button h-9 gap-1.5 px-2.5 text-xs" aria-label={`我的標記（${markedGroupCount}）`} aria-pressed={showMarkedOnly} disabled={!personalMarks.ready} onClick={() => setShowMarkedOnly(value => !value)} title="只顯示目前帳號勾選的料件，其他使用者看不到這些標記"><Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />我的標記 <span className="material-mark-count">{markedGroupCount}</span></Button>
             <span className="material-toolbar-count">
               {isPreviewDataset
@@ -6469,6 +6566,7 @@ export function MaterialRequestPage() {
                   row={row}
                   itemValue={getGroupItemValue(row.group, (page - 1) * pageSize + rowIndex + 1)}
                   expanded={expandedKey === row.group.key}
+                  locatedRecordId={locatedBomCandidate?.id}
                   editingNames={editingNames}
                   latestRecordUpdate={latestRecordUpdate}
                   latestUpdater={latestUpdater}

@@ -26,6 +26,7 @@ import {
   HardDrive,
   Layers3,
   LayoutDashboard,
+  LoaderCircle,
   Map,
   Menu,
   Minus,
@@ -3932,7 +3933,11 @@ export function DeploymentPlanningCenter() {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h1 className="truncate text-base font-semibold tracking-[-0.025em] text-white sm:text-[22px]">機房配置<span className="hidden sm:inline">與工作回報</span></h1>
-                <Badge data-dc-sync-state={sharedProjects.syncState} className="hidden border-emerald-300/20 bg-emerald-400/10 text-xs font-semibold text-emerald-100 shadow-none sm:inline-flex" role="status">{syncLabel}</Badge>
+                <Badge data-dc-sync-state={sharedProjects.syncState} className="hidden gap-1.5 border-emerald-300/20 bg-emerald-400/10 text-xs font-semibold text-emerald-100 shadow-none sm:inline-flex" role="status">
+                  {(sharedProjects.syncState === "loading" || sharedProjects.syncState === "saving") && <LoaderCircle aria-hidden="true" className="h-3 w-3 motion-safe:animate-spin" />}
+                  {sharedProjects.syncState === "synced" && <Check aria-hidden="true" className="h-3 w-3" />}
+                  {syncLabel}
+                </Badge>
               </div>
               <p className="mt-1 truncate text-xs text-slate-300">{sharedProjects.selectedProject?.name ?? "正在取得共用專案"} · {selectedSite.label}</p>
             </div>

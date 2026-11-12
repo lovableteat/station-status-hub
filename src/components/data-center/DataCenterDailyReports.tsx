@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ClipboardCheck, Cloud, Pencil, RefreshCw, Save, X } from "lucide-react";
+import { ArrowLeft, Check, ClipboardCheck, Cloud, LoaderCircle, Pencil, RefreshCw, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { User } from "@/components/auth/UserContext";
 import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
@@ -158,8 +158,15 @@ export function DataCenterDailyReports({ projectId, projectName, sites, selected
             </fieldset>
             {(saveError || storageError) && <p role="alert" className="dc-work-error">{saveError || storageError}</p>}
             <div className="dc-work-submit">
-              <p role="status">{receipt ? <><Check className="h-4 w-4" /> {receipt}</> : <><Save className="h-4 w-4" /> {storageError ? "草稿尚未暫存，請先保留文字" : hasText ? "草稿已暫存此瀏覽器，尚未提交" : "填寫時自動暫存草稿"}</>}</p>
-              <Button type="submit" disabled={!canEdit || saving || !draft.summary.trim()}><Cloud className="h-4 w-4" /> {saving ? "儲存中…" : previous ? "儲存修改" : "提交回報"}</Button>
+              <p role="status" data-state={saving ? "saving" : receipt ? "saved" : "draft"}>
+                {saving ? "正在提交工作回報…" : receipt
+                  ? <><Check aria-hidden="true" className="h-4 w-4" />{receipt}</>
+                  : <><Save aria-hidden="true" className="h-4 w-4" />{storageError ? "草稿尚未暫存，請先保留文字" : hasText ? "草稿已暫存此瀏覽器，尚未提交" : "填寫時自動暫存草稿"}</>}
+              </p>
+              <Button type="submit" disabled={!canEdit || saving || !draft.summary.trim()} pending={saving}>
+                {!saving && <Cloud aria-hidden="true" className="h-4 w-4" />}
+                {saving ? "儲存中…" : previous ? "儲存修改" : "提交回報"}
+              </Button>
             </div>
           </form>
 
@@ -175,7 +182,7 @@ export function DataCenterDailyReports({ projectId, projectName, sites, selected
             {chips.length > 0 && <div className="dc-work-filter-chips" aria-label="作用中的回報篩選">{chips.map(([key, label, value]) => <button key={key} type="button" aria-label={`清除${label}篩選`} onClick={() => updateFilters({ [key]: "" })}>{label}：{value}<X className="h-3.5 w-3.5" /></button>)}<button type="button" onClick={() => updateFilters({ search: "", site: "", status: "", owner: "", date: "" })}>全部清除</button></div>}
             <div className="dc-work-table-wrap">
               <table><thead><tr><th>日期／回報人</th><th>工作內容</th><th>狀態</th></tr></thead><tbody>
-                {reports.isPending ? <tr><td colSpan={3} role="status"><div className="dc-work-skeleton" />正在讀取共用回報…</td></tr>
+                {reports.isPending ? <tr><td colSpan={3}><div className="dc-work-loading" role="status"><LoaderCircle aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />正在讀取共用回報…</div></td></tr>
                   : reports.isError ? <tr><td colSpan={3}><p role="alert" className="dc-work-error">無法讀取回報：{errorText(reports.error)}</p><Button variant="outline" onClick={() => void reports.refetch()}>重試讀取</Button></td></tr>
                     : !filtered.length ? <tr><td colSpan={3} className="dc-work-empty"><ClipboardCheck className="mx-auto h-6 w-6" /><h4>{rows.length || chips.length ? "目前篩選條件沒有符合的回報" : "尚無工作回報"}</h4><p>{rows.length || chips.length ? "清除或調整上方條件即可查看其他紀錄。" : "在左側記錄今天完成的工作，提交後會出現在這裡。"}</p></td></tr>
                       : filtered.map(report => <tr key={report.id}><td><time>{report.report_date}</time><p>{report.author?.display_name ?? "未提供姓名"}</p><small>{siteName(report.site_id)}</small></td><td><p className="dc-work-summary">{report.summary}</p>{(report.next_steps || report.blockers) && <details><summary>查看下一步與阻礙</summary>{report.next_steps && <div><strong>下一步</strong><p>{report.next_steps}</p></div>}{report.blockers && <div><strong>需要協助</strong><p>{report.blockers}</p></div>}</details>}{canEdit && report.author_id === user?.userId && <button type="button" className="dc-work-edit" disabled={saving} onClick={() => edit(report)}><Pencil className="h-3.5 w-3.5" />修改我的回報</button>}</td><td><span className="dc-work-status" data-status={report.status}>{statusLabel(report.status)}</span></td></tr>)}

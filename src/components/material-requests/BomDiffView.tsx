@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from "react";
-import { ArrowLeftRight, ChevronDown, ChevronRight, Download, Search, X } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, ChevronRight, CircleAlert, CircleCheck, Download, LoaderCircle, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import type { BomSeries, BomSeriesVersion } from "./bomVersioning";
 import { formatBomVersionTitle } from "./bomVersioning";
 import { CHIP, CHIP_TONE, formatBomTimestamp } from "./bomVersionPresentation";
 import { BOM_DIFF_EMPTY_TEXT, EMPTY_BOM_DIFF_FILTERS, filterBomDiffEntries, type BomDiffFilters } from "./bomDiffFilters";
+import "./bomDiffView.css";
 
 const KIND_TONE: Record<BomChangeKind, keyof typeof CHIP_TONE> = {
   added: "success", removed: "danger", refDes: "warning", qty: "warning", primary: "danger", vendors: "warning", status: "primary", spec: "neutral",
@@ -109,7 +110,7 @@ export function BomDiffView({
   if (!filters.includeUnchanged) chips.push({ key: "unchanged", label: `隱藏未變更 ${unchangedCount.toLocaleString()} 筆`, clear: () => setFilters((current) => ({ ...current, includeUnchanged: true })) });
   const clearAll = () => setFilters({ ...EMPTY_BOM_DIFF_FILTERS, includeUnchanged: true });
 
-  const summary = result?.summary;
+  const summary = loading || error ? null : result?.summary;
   const kpis = summary ? [
     { label: "新增", value: summary.added, tone: "success" as const },
     { label: "移除", value: summary.removed, tone: "danger" as const },
@@ -119,37 +120,58 @@ export function BomDiffView({
   ] : [];
 
   return (
-    <section data-testid="bom-diff-view" className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onBack} className="h-9 px-2 text-sm">← 返回系列</Button>
-        <h3 className="min-w-0 truncate text-base font-bold text-foreground">{series.name}</h3>
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+    <section data-testid="bom-diff-view" className="bom-diff-view flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+      <div className="bom-diff-toolbar">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onBack} className="bom-diff-back h-9 shrink-0 px-2.5 text-sm">← 返回系列</Button>
+          <h3 className="min-w-0 truncate text-base font-bold text-foreground" title={series.name}>{series.name}</h3>
+        </div>
+        <div className="bom-diff-pickers">
           <Select value={before.workspace.id} onValueChange={onPickBefore}>
-            <SelectTrigger aria-label="舊版本" className="h-9 w-[12rem] text-sm"><span className="truncate">舊：<SelectValue /></span></SelectTrigger>
+            <SelectTrigger aria-label="舊版本" data-version-side="before" className="bom-diff-picker h-9 min-w-0 px-2.5 text-sm"><span className="truncate"><b>舊版</b> <SelectValue /></span></SelectTrigger>
             <SelectContent>{series.versions.map((item) => <SelectItem key={item.workspace.id} value={item.workspace.id}>{formatBomVersionTitle(item)}{item.isCurrent ? "（目前）" : ""}</SelectItem>)}</SelectContent>
           </Select>
-          <Button type="button" variant="outline" size="sm" onClick={onSwap} aria-label="交換新舊版本" title="交換新舊版本" className="h-9 w-9 p-0"><ArrowLeftRight className="h-4 w-4" /></Button>
+          <Button type="button" variant="outline" size="sm" onClick={onSwap} aria-label="交換新舊版本" title="交換新舊版本" className="bom-diff-swap h-9 w-9 p-0"><ArrowLeftRight className="h-4 w-4" aria-hidden="true" /></Button>
           <Select value={after.workspace.id} onValueChange={onPickAfter}>
-            <SelectTrigger aria-label="新版本" className="h-9 w-[12rem] text-sm"><span className="truncate">新：<SelectValue /></span></SelectTrigger>
+            <SelectTrigger aria-label="新版本" data-version-side="after" className="bom-diff-picker h-9 min-w-0 px-2.5 text-sm"><span className="truncate"><b>新版</b> <SelectValue /></span></SelectTrigger>
             <SelectContent>{series.versions.map((item) => <SelectItem key={item.workspace.id} value={item.workspace.id}>{formatBomVersionTitle(item)}{item.isCurrent ? "（目前）" : ""}</SelectItem>)}</SelectContent>
           </Select>
         </div>
       </div>
 
-      <div className="grid gap-1.5 text-xs text-muted-foreground sm:grid-cols-2">
-        <p className="truncate" title={before.workspace.payload.sourceFile}>舊 {formatBomVersionTitle(before)} · {before.workspace.payload.sourceFile} · {before.workspace.payload.recordCount.toLocaleString()} 筆 · {formatBomTimestamp(before.version.uploadedAt)}</p>
-        <p className="truncate" title={after.workspace.payload.sourceFile}>新 {formatBomVersionTitle(after)} · {after.workspace.payload.sourceFile} · {after.workspace.payload.recordCount.toLocaleString()} 筆 · {formatBomTimestamp(after.version.uploadedAt)}</p>
+      <div className="bom-diff-sources">
+        {([{ side: "before", label: "舊版來源", version: before }, { side: "after", label: "新版來源", version: after }] as const).map(({ side, label, version }) => (
+          <div key={side} className="bom-diff-source" data-version-side={side}>
+            <div className="flex min-w-0 items-baseline gap-2">
+              <span className="bom-diff-source-label">{label}</span>
+              <span className="truncate font-semibold text-foreground" title={version.workspace.payload.sourceFile}>{version.workspace.payload.sourceFile}</span>
+            </div>
+            <span className="truncate text-muted-foreground" title={formatBomTimestamp(version.version.uploadedAt)}>
+              {version.workspace.payload.recordCount.toLocaleString()} 筆 · {formatBomTimestamp(version.version.uploadedAt)}
+            </span>
+          </div>
+        ))}
       </div>
 
-      {summary && (
-        <div data-testid="bom-diff-summary" className="flex flex-wrap items-center gap-1.5">
-          {kpis.map((kpi) => <span key={kpi.label} className={cn(CHIP, "h-7 px-2 text-xs", CHIP_TONE[kpi.tone])}>{kpi.label} {kpi.value.toLocaleString()}</span>)}
-          <span className="text-xs text-muted-foreground">位號群組：舊 {summary.beforeGroups.toLocaleString()} · 新 {summary.afterGroups.toLocaleString()}</span>
-          {BOM_CHANGE_KINDS.filter((kind) => summary.kinds[kind.key] > 0).map((kind) => (
-            <span key={kind.key} className="text-xs text-muted-foreground">{kind.label} {summary.kinds[kind.key]}</span>
-          ))}
+      <div className="bom-diff-result-bar">
+        <div role="status" className={cn("min-w-0", !summary && "sr-only")}>
+          {loading && "正在載入兩個版本的料件並比對…"}
+          {summary && <span data-testid="bom-diff-complete" className="bom-diff-complete"><CircleCheck className="h-4 w-4 shrink-0" aria-hidden="true" />比對完成</span>}
         </div>
-      )}
+        {summary && (
+          <div data-testid="bom-diff-summary" className="bom-diff-summary flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            {kpis.map((kpi) => <span key={kpi.label} className={cn(CHIP, "h-7 px-2 text-xs", CHIP_TONE[kpi.tone])}>{kpi.label} {kpi.value.toLocaleString()}</span>)}
+            <span className="text-xs text-muted-foreground">位號群組：舊 {summary.beforeGroups.toLocaleString()} · 新 {summary.afterGroups.toLocaleString()}</span>
+            {BOM_CHANGE_KINDS.filter((kind) => summary.kinds[kind.key] > 0).map((kind) => (
+              <span key={kind.key} className="text-xs text-muted-foreground">{kind.label} {summary.kinds[kind.key]}</span>
+            ))}
+          </div>
+        )}
+        <Button type="button" variant="outline" size="sm" disabled={!summary || exporting || visible.length === 0} aria-busy={exporting || undefined} onClick={() => onExport(visible)} className="bom-diff-export h-9 shrink-0 gap-1.5 text-sm lg:h-8">
+          {exporting ? <LoaderCircle className="bom-diff-spinner h-4 w-4" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}
+          {exporting ? "匯出中…" : "匯出差異 Excel"}
+        </Button>
+      </div>
 
       {/* Persistent filter bar: directly above the results, order 搜尋 → 變更類型 → 影響 → 追蹤. */}
       <div data-testid="bom-diff-filters" className="flex flex-col gap-2 rounded-xl border border-border bg-background/40 p-2">
@@ -168,10 +190,7 @@ export function BomDiffView({
             <SelectContent><SelectItem value="all">全部影響</SelectItem>{BOM_CHANGE_IMPACTS.filter((impact) => impact.key !== "none").map((impact) => <SelectItem key={impact.key} value={impact.key}>{impact.label}</SelectItem>)}</SelectContent>
           </Select>
           <button type="button" aria-pressed={filters.trackingLostOnly} onClick={() => setFilters((current) => ({ ...current, trackingLostOnly: !current.trackingLostOnly }))} className={cn(CHIP, "h-9 cursor-pointer px-2 text-xs lg:h-8", filters.trackingLostOnly ? CHIP_TONE.danger : "border-border bg-transparent text-muted-foreground hover:bg-accent/40")}>追蹤未帶入</button>
-          <div className="ml-auto flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">{visible.length.toLocaleString()} / {entries.length.toLocaleString()} 群組</span>
-            <Button type="button" variant="outline" size="sm" disabled={!result || exporting || visible.length === 0} onClick={() => onExport(visible)} className="h-9 text-sm lg:h-8"><Download className="mr-1.5 h-4 w-4" />{exporting ? "匯出中…" : "匯出差異 Excel"}</Button>
-          </div>
+          {summary && <span className="ml-auto text-xs text-muted-foreground">{visible.length.toLocaleString()} / {entries.length.toLocaleString()} 群組</span>}
         </div>
         {chips.length > 0 && (
           <div data-testid="bom-diff-active-filters" className="flex flex-wrap items-center gap-1.5">
@@ -183,7 +202,7 @@ export function BomDiffView({
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-border" aria-busy={loading}>
+      <div className="bom-diff-results min-h-0 flex-1 overflow-auto rounded-xl border border-border" aria-busy={loading}>
         <table className="w-full min-w-[880px] border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-card text-left text-xs text-muted-foreground">
             <tr>
@@ -198,9 +217,9 @@ export function BomDiffView({
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className="px-3 py-10 text-center text-sm text-muted-foreground" role="status">正在載入兩個版本的料件並比對…</td></tr>
+              <tr><td colSpan={7} className="px-3 py-4"><span data-testid="bom-diff-loading" className="bom-diff-table-state"><LoaderCircle className="bom-diff-spinner h-4 w-4 shrink-0" aria-hidden="true" />正在載入兩個版本的料件並比對…</span></td></tr>
             ) : error ? (
-              <tr><td colSpan={7} className="px-3 py-10 text-center text-sm text-destructive" role="alert">{error}</td></tr>
+              <tr><td colSpan={7} className="px-3 py-4"><span className="bom-diff-table-state bom-diff-error" role="alert"><CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />{error}</span></td></tr>
             ) : visible.length === 0 ? (
               <tr><td colSpan={7} className="px-3 py-10 text-center text-sm text-muted-foreground">{BOM_DIFF_EMPTY_TEXT}</td></tr>
             ) : visible.map((entry) => {

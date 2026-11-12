@@ -48,6 +48,7 @@
 }
 
 .pcb-save-state {
+  gap: 5px;
   color: #cbd5e1;
 }
 
@@ -406,8 +407,10 @@
 }
 
 .pcb-3d-loading {
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   color: #9ec9d8;
   font-size: 12px;
 }
@@ -1554,6 +1557,11 @@
   border-color: rgb(71 85 105 / 45%);
   color: #74869d;
   background: rgb(15 23 42 / 38%);
+}
+.pcb-toolbar .pcb-tool-button.is-save[aria-busy="true"] {
+  border-color: hsl(var(--info) / .38);
+  color: hsl(var(--info));
+  background: hsl(var(--info) / .12);
 }
 
 .pcb-view-switch button:nth-child(1).is-active {

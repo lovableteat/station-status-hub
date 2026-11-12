@@ -8,6 +8,7 @@ import { MATERIAL_CE_FIELDS } from "./materialUploadContract.mjs";
 
 const require = createRequire(import.meta.url);
 const { React, create, act, loader, ui, deferred } = require("../../../tests/support/renderHarness.cjs");
+const isSaveButton = (node) => node.type === "stub" && React.Children.toArray(node.props.children).includes("儲存資料與追蹤");
 const baseRecord = {
   id: "part-A", name: "Original", refGroup: "C1", qty: 1, manufacturerPartNumberAlt: "", partNumber: "",
   manufacturerPartNumber: "MPN-A", trackingStatus: "處理中", trackingNote: "original note", trackingHistory: [],
@@ -49,7 +50,7 @@ function mountDialog(overrides = {}, uploadSpec = () => Promise.resolve({ name: 
     changeName(value) { act(() => root.root.findAllByProps({ id: "material-name" }).find((node) => node.type === "stub").props.onChange({ target: { value } })); },
     setTracking(patch) { act(() => { const editor = root.root.findByType(MaterialTrackingEditor); editor.props.onDraftChange({ ...editor.props.draft, ...patch }); }); },
     tracking: () => root.root.findByType(MaterialTrackingEditor).props.draft,
-    button: () => root.root.findAll((node) => node.type === "stub" && node.props.children === "儲存資料與追蹤")[0],
+    button: () => root.root.findAll(isSaveButton)[0],
     update(patch) { props = { ...props, ...patch }; act(() => root.update(React.createElement(MaterialRecordDialog, props))); },
     unmount() { act(() => root.unmount()); },
   };
@@ -320,7 +321,7 @@ test("view mode and in-flight image reads never invoke a record save", async () 
   assert.equal(editor.writes.length, 0);
   editor.update({ mode: "view" });
   assert.equal(editor.tracking().status, "已完成");
-  assert.equal(editor.root.root.findAll((node) => node.type === "stub" && node.props.children === "儲存資料與追蹤").length, 0);
+  assert.equal(editor.root.root.findAll(isSaveButton).length, 0);
   editor.unmount();
 });
 

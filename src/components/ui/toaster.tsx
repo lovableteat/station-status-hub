@@ -1,4 +1,5 @@
 import { useToast } from "@/hooks/use-toast"
+import { CircleAlert, CircleCheck, Info, TriangleAlert } from "lucide-react"
 import {
   Toast,
   ToastClose,
@@ -13,10 +14,12 @@ export function Toaster() {
 
   return (
     <ToastProvider>
-      {toasts.map(function ({ id, title, description, action, ...props }) {
+      {toasts.map(function ({ id, title, description, action, variant, ...props }) {
+        const Icon = variant === "success" ? CircleCheck : variant === "warning" ? TriangleAlert : variant === "destructive" ? CircleAlert : Info
         return (
-          <Toast key={id} {...props}>
-            <div className="grid gap-1">
+          <Toast key={id} variant={variant} {...props}>
+            <Icon className="platform-toast-icon" aria-hidden="true" />
+            <div className="grid min-w-0 flex-1 gap-1">
               {title && <ToastTitle>{title}</ToastTitle>}
               {description && (
                 <ToastDescription>{description}</ToastDescription>

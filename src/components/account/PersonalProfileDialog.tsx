@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ImagePlus, LoaderCircle, Trash2, UserRound } from "lucide-react";
+import { ImagePlus, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 
 import { useUser } from "@/components/auth/UserContext";
@@ -177,9 +177,8 @@ export function PersonalProfileDialog({ open, onOpenChange }: PersonalProfileDia
           <Button type="button" variant="ghost" disabled={saving} onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          <Button type="button" disabled={!selectedFile || saving} onClick={() => void saveAvatar()} className="disabled:!bg-none disabled:bg-muted disabled:text-muted-foreground disabled:!opacity-75 disabled:shadow-none">
-            {saving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
-            儲存大頭貼
+          <Button type="button" disabled={!selectedFile} pending={saving} onClick={() => void saveAvatar()} className="disabled:!bg-none disabled:bg-muted disabled:text-muted-foreground disabled:!opacity-75 disabled:shadow-none">
+            {saving ? "正在更新頭像…" : "儲存大頭貼"}
           </Button>
         </DialogFooter>
       </DialogContent>

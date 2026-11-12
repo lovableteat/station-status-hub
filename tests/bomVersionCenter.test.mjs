@@ -72,7 +72,7 @@ test("uploads are staged and confirmed with an explicit series target instead of
   assert.match(page, /carryBomTracking\(previousRecords, upload\.payload\.records\)/);
   assert.match(page, /isCurrent: false, currentChangedAt: stamp \}, \(\) => assertBomWriteCurrent\(writeScope\)\)/, "the previous current version is demoted in the same write scope");
   assert.match(page, /uploadBomSourceFile\(\{ workspaceId, file: upload\.file \}\)/);
-  assert.match(page, /title: "有追蹤紀錄沒有帶到新版本"/);
+  assert.match(page, /report\.push\(`有追蹤紀錄沒有帶到新版本/);
   assert.match(guide, /同一塊板再上傳即成為新版本/);
   assert.doesNotMatch(guide, /相同檔名重新上傳會更新原 BOM/);
 });

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Eye, EyeOff, KeyRound, LoaderCircle } from "lucide-react";
+import { Eye, EyeOff, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 
 import { useUser } from "@/components/auth/UserContext";
@@ -203,9 +203,8 @@ export function OwnCredentialsDialog({ open, onOpenChange }: OwnCredentialsDialo
 
           <DialogFooter className="gap-2 border-t border-border bg-background/20 px-5 py-4 sm:px-6">
             <Button type="button" variant="ghost" disabled={saving} onClick={() => onOpenChange(false)}>取消</Button>
-            <Button type="submit" disabled={saving} className="disabled:opacity-70">
-              {saving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
-              儲存變更
+            <Button type="submit" pending={saving}>
+              {saving ? "正在儲存…" : "儲存變更"}
             </Button>
           </DialogFooter>
         </form>

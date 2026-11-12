@@ -14,7 +14,7 @@ test("renders a platform-sized Test_Plan engineering file workspace", async () =
   );
   const styles = await source("src/components/test-plan/test-plan.css");
 
-  assert.match(workspace, /資料儲存/);
+  assert.match(workspace, /title="檔案上傳"/);
   assert.match(workspace, /所有檔案/);
   assert.doesNotMatch(workspace, /test-plan-format-strip|MaintenanceMetricStrip|<TestPlanOverview/);
   assert.match(workspace, /Excel/);
@@ -183,7 +183,7 @@ test("makes loading, empty, error, view-only, and destructive states explicit", 
     "src/components/test-plan/TestPlanWorkspace.tsx",
   );
 
-  assert.match(workspace, /正在載入資料儲存/);
+  assert.match(workspace, /<LoadingStatus label="正在讀取檔案清單…"/);
   assert.match(workspace, /尚未載入使用者空間/);
   assert.match(workspace, /唯讀/);
   assert.match(workspace, /error/);

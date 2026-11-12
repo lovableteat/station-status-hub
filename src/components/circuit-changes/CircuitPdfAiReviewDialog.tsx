@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, Clock3, Files, LoaderCircle, RotateCcw, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { loadSpecFillModels, type SpecFillModel } from "../material-requests/materialSpecFillService";
 import { CIRCUIT_AI_CATEGORY_LABELS, circuitPdfAiReviewKey, runCircuitPdfAiReview, type CircuitPdfAiFinding, type CircuitPdfAiReviewReport, type CircuitPdfReviewPage } from "./circuitPdfAiReview";
-import { buildCircuitPdfAiBatchPages, CIRCUIT_PDF_AI_BATCH_CONCURRENCY, runCircuitPdfAiBatchReview, type CircuitPdfAiBatchPage } from "./circuitPdfAiBatchReview";
+import { buildCircuitPdfAiBatchPages, CIRCUIT_PDF_AI_BATCH_CONCURRENCY, parseCircuitPdfAiPageSelection, runCircuitPdfAiBatchReview, type CircuitPdfAiBatchPage } from "./circuitPdfAiBatchReview";
 import "./circuitPdfAiReview.css";
 
 export interface CircuitPdfAiReviewProps {
@@ -63,6 +64,9 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
   const [result, setResult] = useState<CircuitPdfAiReviewReport | null>(null), [dirty, setDirty] = useState(false), [error, setError] = useState("");
   const [historyId, setHistoryId] = useState("");
   const [batch, setBatch] = useState<CircuitPdfAiBatchPage[]>([]), [batchRunning, setBatchRunning] = useState(false), [batchStopped, setBatchStopped] = useState(false);
+  const [batchScope, setBatchScope] = useState<"all" | "selected">("all");
+  const [pageInput, setPageInput] = useState("");
+  const selectionId = useId();
   const batchRef = useRef(batch);
   const [loadingPage, setLoadingPage] = useState(false);
   const [deadline, setDeadline] = useState<number | null>(null);
@@ -72,6 +76,13 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
   const model = models.find(item => item.id === modelId), busy = analysing || saving || batchRunning || loadingPage;
   const validPair = Boolean(official && working && official.id !== working.id);
   const validSources = Boolean(sourceOfficial && sourceWorking && sourceOfficial.id !== sourceWorking.id);
+  const workingCount = sourceWorking?.pdf.numPages ?? 0;
+  const officialCount = sourceOfficial?.pdf.numPages ?? 0;
+  const pageSelection = useMemo(() => parseCircuitPdfAiPageSelection(pageInput, workingCount), [pageInput, workingCount]);
+  const selectedPlan = useMemo(() => pageSelection.pages ? buildCircuitPdfAiBatchPages(officialCount, workingCount, officialOffset, pageSelection.pages) : [], [pageSelection, officialCount, workingCount, officialOffset]);
+  const selectedUnmatched = selectedPlan.filter(page => page.officialPage === null).length;
+  const batchLabel = batchScope === "selected" ? "指定頁面" : "全部頁面";
+  const stopBatchLabel = batchScope === "selected" ? "停止指定比對" : "停止全部比對";
   const savedCurrent = key === sourceKey ? savedReport : previousReports.find(item => item.key === key);
   const latestSaved = useRef(savedCurrent); latestSaved.current = savedCurrent;
   const completeCount = batch.filter(item => item.status === "complete").length;
@@ -83,9 +94,11 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
   const savingReview = saving || savingPages.length > 0;
   const unfinished = batch.some(item => !["complete", "unmatched"].includes(item.status));
   const canResumeDirty = dirty && result === batch.find(item => item.status === "unsaved" && item.report?.key === key)?.report;
+  const cannotStartBatch = !validSources || !allPages || !model || loadingModels || disabled || busy || dirty || unsavedCount > 0 || Boolean(historyId);
 
   useEffect(() => {
     setReviewPage(sourceWorking?.page ?? 1); setBatch([]); batchRef.current = []; setBatchRunning(false); setBatchStopped(false); setLoadingPage(false); setDeadline(null); setRetryAt(null);
+    setPageInput(""); setBatchScope("all");
     return () => { request.current?.abort(); };
   }, [sourceKey, officialOffset, open]);
 
@@ -124,10 +137,13 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
     catch (failure) { if (active.current && current.current === captured) setError(`初審結果尚未儲存：${failure instanceof Error ? failure.message : "請重試"}`); }
     finally { if (active.current && current.current === captured) setSaving(false); }
   }
-  async function analyseAll(resume = false) {
-    if (!sourceOfficial || !sourceWorking || !allPages || !model || disabled || busy || request.current || dirty && !(resume && canResumeDirty) || historyId) return;
+  async function analyseBatch(scope: "all" | "selected" | "resume") {
+    const resume = scope === "resume";
+    if (!sourceOfficial || !sourceWorking || !validSources || !allPages || !model || loadingModels || disabled || busy || request.current || (dirty && !(resume && canResumeDirty)) || (!resume && unsavedCount > 0) || historyId) return;
     const controller = new AbortController(), captured = key;
-    const pages = resume ? batchRef.current : buildCircuitPdfAiBatchPages(sourceOfficial.pdf.numPages, sourceWorking.pdf.numPages, officialOffset);
+    const pages = resume ? batchRef.current : scope === "selected" ? selectedPlan : buildCircuitPdfAiBatchPages(officialCount, workingCount, officialOffset);
+    if (scope === "selected" && (!pages.length || selectedUnmatched === pages.length)) return;
+    if (!resume) setBatchScope(scope);
     batchRef.current = pages; setBatch(pages); setBatchRunning(true); setBatchStopped(false); setError(""); setDeadline(null); setRetryAt(null); request.current = controller;
     let remainingPages = pages.filter(page => page.status !== "complete" && page.officialPage !== null).length;
     const startedAt = new Map<number, number>();
@@ -161,7 +177,7 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
         },
       });
     } catch (failure) {
-      if (active.current && current.current === captured && !controller.signal.aborted) setError(failure instanceof Error ? failure.message : "全部頁面比對暫停，已完成頁面仍保留。");
+      if (active.current && current.current === captured && !controller.signal.aborted) setError(failure instanceof Error ? failure.message : "批次比對暫停，已完成頁面仍保留。");
     } finally {
       if (request.current === controller) {
         request.current = null;
@@ -211,27 +227,37 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
   }
 
   return <Dialog open={open} onOpenChange={close}><DialogContent hideCloseButton className="circuit-pdf-ai-dialog" data-testid="circuit-pdf-ai-review" onInteractOutside={event => event.preventDefault()}>
-    <header className="circuit-pdf-ai-heading"><div><DialogTitle><Sparkles aria-hidden="true" />AI 比對新舊版</DialogTitle><DialogDescription>可比對目前頁面或全部頁面。完成後可逐項核對差異並儲存判讀。</DialogDescription></div><Button title="關閉 AI 比對；還沒儲存的判讀要先儲存" type="button" variant="ghost" aria-label="關閉 AI 比對" disabled={savingReview} onClick={() => close(false)}><X aria-hidden="true" /></Button></header>
+    <header className="circuit-pdf-ai-heading"><div><DialogTitle><Sparkles aria-hidden="true" />AI 比對新舊版</DialogTitle><DialogDescription>可比對目前頁面、指定頁面或全部頁面。完成後可逐項核對差異並儲存判讀。</DialogDescription></div><Button title="關閉 AI 比對；還沒儲存的判讀要先儲存" type="button" variant="ghost" aria-label="關閉 AI 比對" disabled={savingReview} onClick={() => close(false)}><X aria-hidden="true" /></Button></header>
     <section className="circuit-pdf-ai-targets" aria-label="本次比對來源"><p><strong>基準版</strong><span title={sourceOfficial?.name}>{sourceOfficial?.name ?? "尚未設定"}</span><b>{official ? `第 ${official.page} 頁` : "無對應頁"}</b></p><p><strong>比對版</strong><span title={working?.name}>{working?.name ?? "尚未選擇"}</span><b>第 {working?.page ?? "—"} 頁</b></p></section>
     <div className="circuit-pdf-ai-toolbar">
       <label>AI 服務<select title="選擇要用哪一個 AI 服務比對" aria-label="AI 初審服務" value={modelId} disabled={disabled || busy || loadingModels} onChange={event => setModelId(event.target.value)}><option value="">{loadingModels ? "讀取 AI 服務中…" : "選擇 AI 服務"}</option>{models.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
       <Button title="只比對目前這一頁" type="button" variant="outline" disabled={!validPair || !model || disabled || busy || dirty || Boolean(historyId)} onClick={() => void analyse()}><Sparkles aria-hidden="true" />{result ? "重新比對這一頁" : "只比對這一頁"}</Button>
-      <Button data-circuit-tone="ai" data-fill="solid" title="逐頁比對所選的兩份 PDF，每頁結果會自動儲存" type="button" disabled={!validSources || !allPages || !model || disabled || busy || dirty || Boolean(historyId)} onClick={() => void analyseAll()}><Files aria-hidden="true" />全部頁面比對</Button>
-      {(analysing || batchRunning) && <Button title="停止比對；已完成的頁面會保留" type="button" variant="outline" onClick={() => request.current?.abort()}>{batchRunning ? "停止全部比對" : "取消初審"}</Button>}
+      <Button title="逐頁比對所選的兩份 PDF，每頁結果會自動儲存" type="button" variant="outline" disabled={cannotStartBatch} onClick={() => void analyseBatch("all")}><Files aria-hidden="true" />全部頁面比對</Button>
+      {(analysing || batchRunning) && <Button title="停止比對；已完成的頁面會保留" type="button" variant="outline" onClick={() => request.current?.abort()}>{batchRunning ? stopBatchLabel : "取消初審"}</Button>}
       {previousReports.some(item => item.key === key && item.id !== savedCurrent?.id) && <label className="circuit-pdf-ai-history">歷次 AI 初審<select title="查看這一頁以前跑過的 AI 比對結果" aria-label="歷次 AI 初審" value={historyId} disabled={busy} onChange={event => { if (dirty) { setError("請先儲存人工判讀，再切換初審紀錄。"); return; } const id = event.target.value; setHistoryId(id); setError(""); if (id) setResult(previousReports.find(item => item.id === id && item.key === key) ?? null); }}><option value="">目前結果</option>{previousReports.filter(item => item.key === key && item.id !== savedCurrent?.id).map(item => <option key={item.id} value={item.id}>{new Date(item.createdAt).toLocaleString("zh-TW")} · {item.generatedBy} · {item.modelLabel}</option>)}</select></label>}
     </div>
     <main className="circuit-pdf-ai-body">
+      {allPages && validSources && <form className="circuit-pdf-ai-selection" onSubmit={event => { event.preventDefault(); void analyseBatch("selected"); }}>
+        <label htmlFor={selectionId}>指定比對頁碼</label>
+        <Input id={selectionId} value={pageInput} placeholder="例如 2, 5–8, 11" autoComplete="off" spellCheck={false}
+          aria-describedby={`${selectionId}-hint`} aria-invalid={Boolean(pageSelection.error)} disabled={disabled || busy || Boolean(historyId)}
+          onChange={event => setPageInput(event.target.value)} />
+        <Button data-circuit-tone="ai" data-fill="solid" type="submit" disabled={cannotStartBatch || selectedPlan.length === selectedUnmatched}><Sparkles aria-hidden="true" />比對指定頁面</Button>
+        <p id={`${selectionId}-hint`} aria-live="polite" data-invalid={Boolean(pageSelection.error)}>
+          {pageSelection.error ?? (selectedPlan.length ? `已選 ${selectedPlan.length} 頁，可比對 ${selectedPlan.length - selectedUnmatched} 頁${selectedUnmatched ? `；${selectedUnmatched} 頁無基準版對應，會略過` : ""}。` : `輸入比對版頁碼（1–${workingCount}），用逗號分隔，可混合單頁與範圍。`)}
+        </p>
+      </form>}
       {(analysing || batchRunning) && <ReviewCountdown deadline={deadline} retryAt={retryAt} batch={batchRunning} />}
-      {allPages && <div className="circuit-pdf-ai-batch-hint"><p>全部比對涵蓋比對版 {sourceWorking?.pdf.numPages ?? 0} 頁，沿用目前基準版的對應頁{officialOffset ? `（偏移 ${officialOffset > 0 ? "+" : ""}${officialOffset} 頁）` : ""}。最多同時比對 {CIRCUIT_PDF_AI_BATCH_CONCURRENCY} 頁，每頁完成後個別儲存。</p><label>查看頁面<select title="切換要查看哪一頁的比對結果" aria-label="查看初審頁面" value={reviewPage} disabled={busy} onChange={event => {
+      {allPages && <div className="circuit-pdf-ai-batch-hint"><p>指定與全部比對沿用目前基準版的對應頁{officialOffset ? `（偏移 ${officialOffset > 0 ? "+" : ""}${officialOffset} 頁）` : ""}。最多同時比對 {CIRCUIT_PDF_AI_BATCH_CONCURRENCY} 頁，每頁完成後個別儲存。</p><label>查看頁面<select title="切換要查看哪一頁的比對結果" aria-label="查看初審頁面" value={reviewPage} disabled={busy} onChange={event => {
         const page = Number(event.target.value), mapped = page + officialOffset;
         void selectPage({ workingPage: page, officialPage: mapped, status: "pending" });
       }}>{Array.from({ length: sourceWorking?.pdf.numPages ?? 0 }, (_, index) => {
         const page = index + 1, mapped = page + officialOffset, matched = mapped > 0 && mapped <= (sourceOfficial?.pdf.numPages ?? 0);
         return <option key={page} value={page} disabled={!matched}>比對版 {page} · {matched ? `基準版 ${mapped}` : "無對應頁"}</option>;
       })}</select></label></div>}
-      {batch.length > 0 && <section className="circuit-pdf-ai-batch" aria-label="全部頁面比對進度">
-        <header><div><h3>{batchRunning ? "全部頁面比對中" : batchStopped ? "已停止全部比對" : unfinished ? "部分頁面尚未完成" : "全部頁面比對已結束"}</h3><p role="status">已儲存 {completeCount}／{batch.length - unmatchedCount} 頁{failedCount > 0 && ` · 失敗 ${failedCount} 頁`}{unsavedCount > 0 && ` · 尚未儲存 ${unsavedCount} 頁`}{unmatchedCount > 0 && ` · 無對應 ${unmatchedCount} 頁`}{analysingPages.length > 0 && ` · 正在比對第 ${analysingPages.join("、")} 頁`}{savingPages.length > 0 && ` · 正在儲存第 ${savingPages.join("、")} 頁`}</p></div>
-          {!batchRunning && unfinished && <Button title="接著比對還沒完成的頁面" type="button" variant="outline" disabled={disabled || busy || !model || dirty && !canResumeDirty || Boolean(historyId)} onClick={() => void analyseAll(true)}>繼續未完成頁面</Button>}
+      {batch.length > 0 && <section className="circuit-pdf-ai-batch" aria-label={`${batchLabel}比對進度`}>
+        <header><div><h3>{batchRunning ? `${batchLabel}比對中` : batchStopped ? `已${stopBatchLabel}` : unfinished ? "部分頁面尚未完成" : `${batchLabel}比對已結束`}</h3><p role="status">已儲存 {completeCount}／{batch.length - unmatchedCount} 頁{failedCount > 0 && ` · 失敗 ${failedCount} 頁`}{unsavedCount > 0 && ` · 尚未儲存 ${unsavedCount} 頁`}{unmatchedCount > 0 && ` · 無對應 ${unmatchedCount} 頁`}{analysingPages.length > 0 && ` · 正在比對第 ${analysingPages.join("、")} 頁`}{savingPages.length > 0 && ` · 正在儲存第 ${savingPages.join("、")} 頁`}</p></div>
+          {!batchRunning && unfinished && <Button title="接著比對還沒完成的頁面" type="button" variant="outline" disabled={disabled || busy || !model || dirty && !canResumeDirty || Boolean(historyId)} onClick={() => void analyseBatch("resume")}>繼續未完成頁面</Button>}
           {!batchRunning && unsavedCount > 0 && <Button title="放棄還沒儲存的頁面結果" type="button" variant="ghost" disabled={busy} onClick={discardUnsaved}>捨棄未儲存結果</Button>}
         </header>
         <progress aria-label="已儲存頁面進度" value={completeCount} max={Math.max(1, batch.length - unmatchedCount)} />
@@ -240,12 +266,12 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
         {batch.find(item => item.workingPage === reviewPage)?.error && <p className="circuit-pdf-ai-error" role="alert">比對版第 {reviewPage} 頁：{batch.find(item => item.workingPage === reviewPage)?.error}</p>}
       </section>}
       <p className="circuit-pdf-ai-limits">檢查本頁可見的線段、連接標籤、Net 與元件／接腳名稱。PDF 影像不能證明完整電氣連通；連接性疑點仍需原生 netlist／ERC 核對。AI 結果不會自動勾選「本頁看過」或確認修改項目。</p>
-      {!validPair && <p role="status" className="circuit-pdf-ai-message">{validSources ? "目前這一頁沒有基準版對應頁。仍可比對全部頁面，沒有對應的頁面會另外列出。" : "請先在圖面區選擇兩份不同的 PDF 和對應頁碼。"}</p>}
+      {!validPair && <p role="status" className="circuit-pdf-ai-message">{validSources ? "目前這一頁沒有基準版對應頁。仍可指定其他頁面或比對全部，沒有對應的頁面會另外列出。" : "請先在圖面區選擇兩份不同的 PDF 和對應頁碼。"}</p>}
       {disabled && <p className="circuit-pdf-ai-message">目前只能查看已儲存初審；執行 AI 與儲存人工判讀需要料號申請編輯權限。</p>}
       {historyId && <p className="circuit-pdf-ai-message">正在查看歷史初審，內容唯讀。請在「歷次 AI 初審」選回「目前結果」，再執行初審或記錄人工判讀。</p>}
       {error && <p role="alert" className="circuit-pdf-ai-error">{error}</p>}
       {analysing && <p role="status" className="circuit-pdf-ai-progress"><LoaderCircle aria-hidden="true" />正在讀取兩份原始 PDF 頁面並進行 AI 初審…</p>}
-      {!result && !analysing && !batchRunning && validPair && <div className="circuit-pdf-ai-empty"><Sparkles aria-hidden="true" /><h3>還沒有比對結果</h3><p>選擇目前頁面或全部頁面開始比對。每頁都會保存比對結果、模型、時間與操作者。</p></div>}
+      {!result && !batch.length && !analysing && !batchRunning && validPair && <div className="circuit-pdf-ai-empty"><Sparkles aria-hidden="true" /><h3>還沒有比對結果</h3><p>選擇目前頁面、指定頁面或全部頁面開始比對。每頁都會保存比對結果、模型、時間與操作者。</p></div>}
       {result && <section className="circuit-pdf-ai-results" aria-label="本頁 AI 初審結果"><header><h3>比對版第 {result.workingPage} 頁 · 基準版第 {result.officialPage} 頁初審摘要</h3><p>{result.summary}</p><small>{result.generatedBy} · {new Date(result.createdAt).toLocaleString("zh-TW")} · {result.modelLabel}</small></header>
         <dl className="circuit-pdf-ai-checks">{result.checks.map(item => <div key={item.category} data-state={item.state}><dt>{CIRCUIT_AI_CATEGORY_LABELS[item.category]}<strong>{checkLabels[item.state]}</strong></dt><dd>{item.note}</dd></div>)}</dl>
         <h3>差異清單 <span>{result.findings.filter(item => item.decision === "pending").length} 項未判讀／共 {result.findings.length} 項</span></h3>

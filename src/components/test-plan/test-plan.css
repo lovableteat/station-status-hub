@@ -884,10 +884,16 @@
 /* Transfer panel: the percentage is the headline. */
 
 .file-library-transfers { position: fixed; right: 20px; bottom: 20px; z-index: 70; width: min(440px, calc(100vw - 24px)); overflow: hidden; border: 1px solid hsl(var(--primary) / .45); border-radius: 18px; background: hsl(var(--popover)); color: hsl(var(--foreground)); box-shadow: 0 28px 80px rgb(0 0 0 / .5); }
+.file-library-transfers[data-state="done"] { border-color: hsl(var(--success) / .50); }
+.file-library-transfers[data-state="error"] { border-color: hsl(var(--destructive) / .52); }
+.file-library-transfers[data-state="cancelled"] { border-color: hsl(var(--warning) / .48); }
 
 .file-library-transfers-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid hsl(var(--border)); font-size: 13px; }
 
 .file-library-transfers-head strong { font-weight: 700; }
+.file-library-transfers[data-state="done"] .file-library-transfers-head strong { color: hsl(var(--success)); }
+.file-library-transfers[data-state="error"] .file-library-transfers-head strong { color: hsl(var(--destructive)); }
+.file-library-transfers[data-state="cancelled"] .file-library-transfers-head strong { color: hsl(var(--warning)); }
 
 .file-library-transfers-head span { color: hsl(var(--muted-foreground)); font-variant-numeric: tabular-nums; }
 
@@ -956,12 +962,19 @@
 .file-library-transfer-row > button { grid-column: 4; grid-row: 1 / span 2; }
 
 @media (max-width: 1023px) {
-  .file-library-transfers { right: 12px; bottom: 12px; }
+  .file-library-transfers { right: 12px; bottom: calc(var(--mobile-shell-bottom, 0px) + 12px); }
   .file-library-transfer-percent { font-size: 56px; }
 }
 
+@keyframes file-library-feedback-enter { from { opacity: .72; translate: 0 4px; } to { opacity: 1; translate: 0 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  .file-library-transfers,
+  .file-library-transfer-lead.is-done .file-library-transfer-percent > svg,
+  .file-explorer :is(.test-plan-entry-list, .test-plan-entry-grid) { animation: file-library-feedback-enter 150ms ease-out; }
+}
 @media (prefers-reduced-motion: reduce) {
   .file-library-transfer-lead.is-indeterminate .file-library-transfer-bar > span { animation: none; }
+  :is(.file-library-transfer-bar, .file-library-transfer-row-bar) > span { transition: none; }
 }
 
 /* ==========================================================================
