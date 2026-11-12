@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import type { CircuitPdfDocument } from "./circuitPdf";
 import { loadCircuitPdfOfficialHistory, type CircuitPdfOfficialChange } from "./officialPdfStorage";
 import type { CircuitPdfModel } from "./useCircuitPdfs";
+import { CircuitBusyIcon, CircuitProgress, CircuitSpinner } from "./CircuitFeedback";
 import "./circuitOfficialVersions.css";
 
 const dateTime = (value: string) => value ? new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "";
@@ -86,18 +87,18 @@ export function CircuitOfficialVersions({ seriesId, pdfs, canEdit, onOpen }: {
       </div>
       {saved && <p className="circuit-official-note" role="status">{saved}</p>}
       {failure && <p className="circuit-official-error" role="alert">{failure}</p>}
-      {pdfs.uploading && <p className="circuit-official-note" role="status">正在上傳「{pdfs.uploading}」…上傳完成後確認即可設為官方版本。</p>}
+      {pdfs.uploading && <p className="circuit-official-note" role="status"><span className="circuit-wait-line"><CircuitSpinner />正在上傳「{pdfs.uploading}」…上傳完成後確認即可設為官方版本。</span><CircuitProgress /></p>}
       {choosing && canEdit && <section className="circuit-official-choose" aria-label="選擇新的官方版本">
         <header><h3>選擇要設為官方版本的 PDF</h3><Button data-circuit-tone="add" title="上傳一份 PDF，傳完再確認是否設為官方版本" type="button" variant="outline" disabled={saving || Boolean(pdfs.uploading)} onClick={() => fileInput.current?.click()}><FileUp aria-hidden="true" />上傳 PDF</Button></header>
         {choices.length ? <ul>{choices.map(row => <li key={row.id} data-candidate={candidate === row.id}>
           <div><strong>{row.name}</strong><small>{drawingDate(row)} · {row.pages} 頁 · {row.uploadedByName || "同仁"} 上傳{row.localOnly ? " · 僅本機可用" : ""}</small></div>
           {candidate === row.id
-            ? <span className="circuit-official-confirm"><Button title="不更換" type="button" variant="outline" disabled={saving} onClick={() => setCandidate("")}>取消</Button><Button data-circuit-tone="official" data-fill="solid" title="改用這份當官方版本，並記入更換紀錄" type="button" disabled={saving} onClick={() => void confirm(row)}>{saving ? "儲存中…" : "確定更換"}</Button></span>
+            ? <span className="circuit-official-confirm"><Button title="不更換" type="button" variant="outline" disabled={saving} onClick={() => setCandidate("")}>取消</Button><Button data-circuit-tone="official" data-fill="solid" title="改用這份當官方版本，並記入更換紀錄" type="button" disabled={saving} aria-busy={saving || undefined} onClick={() => void confirm(row)}><CircuitBusyIcon busy={saving}><ShieldCheck /></CircuitBusyIcon>{saving ? "儲存中…" : "確定更換"}</Button></span>
             : <Button title={row.localOnly || !row.path ? "只存在上傳者電腦的 PDF 不能當官方版本" : `改用「${row.name}」當官方版本`} type="button" variant="outline" disabled={saving || row.localOnly || !row.path} aria-label={`設為官方版本：${row.name}`} onClick={() => setCandidate(row.id)}>設為官方版本</Button>}
         </li>)}</ul> : <p className="circuit-official-empty">還沒有其他 PDF。按「上傳 PDF」加入一份。</p>}
       </section>}
       <section className="circuit-official-history" aria-label="官方版本更換紀錄">
-        <header><h3><History aria-hidden="true" />更換紀錄</h3><span role="status">{loading ? "讀取中…" : loadError ? "" : `${history.length} 筆紀錄`}</span></header>
+        <header><h3><History aria-hidden="true" />更換紀錄</h3><span role="status">{loading ? <span className="circuit-wait-line"><CircuitSpinner />讀取中…</span> : loadError ? "" : `${history.length} 筆紀錄`}</span></header>
         {loadError ? <p className="circuit-official-error" role="alert">{loadError}<Button title="重新讀取更換紀錄" type="button" variant="ghost" onClick={() => setReload(value => value + 1)}><RotateCcw aria-hidden="true" />重試</Button></p> : null}
         {history.length > 0 && <ol className="circuit-official-timeline">
           {history.map((change, index) => {

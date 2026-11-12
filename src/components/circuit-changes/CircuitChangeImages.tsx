@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from 
 import { Download, FileText, ImagePlus, Maximize2, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CircuitImageMarks } from "./CircuitImageMarks";
+import { CircuitProgress } from "./CircuitFeedback";
 import { CIRCUIT_IMAGE_SIDE_LABELS, type CircuitImage, type CircuitImageSide, type CircuitUploadFailure } from "./types";
 
 const sides = Object.keys(CIRCUIT_IMAGE_SIDE_LABELS) as CircuitImageSide[];
@@ -30,7 +31,7 @@ export function CircuitChangeImages({ view = "all", heading, hint, images, urls,
 }) {
   const retryable = failures.some(failure => !failure.permanent);
   const status = <>
-    {uploading && <p className="circuit-upload-progress" role="status">正在上傳 {progress.completed} / {progress.total} 張，已成功的圖片會保留</p>}
+    {uploading && <p className="circuit-upload-progress" role="status"><span>正在上傳 {progress.completed} / {progress.total} 張，已成功的圖片會保留</span><CircuitProgress value={progress.total ? progress.completed / progress.total : undefined} /></p>}
     {removed && !readOnly && <p className="circuit-upload-undo" role="status"><span>已刪除 {removed.name}</span><Button data-circuit-tone="done" title="把剛刪除的圖片放回來" type="button" variant="outline" onClick={onRestore}>還原</Button></p>}
     {warnings.length > 0 && <div className="circuit-upload-warning" role="status">{warnings.map((warning, index) => <p key={index}>{warning}</p>)}</div>}
     {failures.length > 0 && <div className="circuit-upload-failures" role="alert">
@@ -59,7 +60,7 @@ export function CircuitChangeImages({ view = "all", heading, hint, images, urls,
         {sides.map(key => <button title={`切換到${CIRCUIT_IMAGE_SIDE_LABELS[key]}`} type="button" key={key} aria-pressed={side === key} onClick={() => actions.onSide(key)}>{CIRCUIT_IMAGE_SIDE_LABELS[key]} <span>{images.filter(image => image.side === key).length}</span></button>)}
       </div>
     </div>
-    {uploading && <p className="circuit-upload-progress" role="status">正在上傳 {progress.completed} / {progress.total} 張，已成功的圖片會保留</p>}
+    {uploading && <p className="circuit-upload-progress" role="status"><span>正在上傳 {progress.completed} / {progress.total} 張，已成功的圖片會保留</span><CircuitProgress value={progress.total ? progress.completed / progress.total : undefined} /></p>}
     {removed && !readOnly && <p className="circuit-upload-undo" role="status"><span>已刪除 {removed.name}</span><Button data-circuit-tone="done" title="把剛刪除的圖片放回來" type="button" variant="outline" onClick={onRestore}>還原</Button></p>}
     {warnings.length > 0 && <div className="circuit-upload-warning" role="status">{warnings.map((warning, index) => <p key={index}>{warning}</p>)}</div>}
     {failures.length > 0 && <div className="circuit-upload-failures" role="alert">
@@ -130,7 +131,7 @@ function Pane({ side, images, urls, active, dropping, readOnly, busy, heading, h
       : shown ? <>
         <button type="button" className="circuit-image-stage" aria-label={`放大圖片 ${shown.name}`} title="放大查看、加上位置標記" onClick={() => onOpen(shown)}>
           {urls[shown.id]
-            ? <span className="circuit-image-frame" style={frame(shown)}><img src={urls[shown.id].thumbnail} alt={shown.caption || shown.name} /><CircuitImageMarks marks={shown.marks} /></span>
+            ? <span key={shown.id} className="circuit-image-frame" style={frame(shown)}><img src={urls[shown.id].thumbnail} alt={shown.caption || shown.name} /><CircuitImageMarks marks={shown.marks} /></span>
             : <span className="circuit-image-loading">載入圖片…</span>}
           <span className="circuit-image-zoom"><Maximize2 aria-hidden="true" />{readOnly ? "放大" : "放大／標記"}</span>
         </button>

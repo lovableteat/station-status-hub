@@ -2,6 +2,7 @@ import { ArchiveRestore, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { CIRCUIT_CHANGE_STATUS_LABELS, type CircuitChangeItem, type CircuitChangeStatus } from "./types";
+import { CircuitSkeletonRows } from "./CircuitFeedback";
 import "./circuitTrackingList.css";
 
 export const TRACKING_PAGE_SIZE = 25;
@@ -64,7 +65,8 @@ export function CircuitTrackingList({ items, total, counts, status, page, busy, 
               <td className="circuit-track-date">{Number.isFinite(updatedAt) ? <time dateTime={row.updatedAt}>{dateFormat.format(updatedAt)}</time> : "—"}</td>
             </tr>;
           })}
-          {!visibleItems.length && <tr><td className="circuit-empty" colSpan={5}>{loading ? "正在載入問題…" : total ? "目前篩選條件沒有符合的問題" : "這次改版還沒有記錄任何問題"}</td></tr>}
+          {!visibleItems.length && loading && <tr><td className="circuit-skeleton-cell" colSpan={5}><CircuitSkeletonRows label="正在載入問題…" /></td></tr>}
+          {!visibleItems.length && !loading && <tr><td className="circuit-empty" colSpan={5}>{loading ? "正在載入問題…" : total ? "目前篩選條件沒有符合的問題" : "這次改版還沒有記錄任何問題"}</td></tr>}
         </tbody>
       </table>
     </div>

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { ArchiveRestore, ArrowLeft, Check, Pencil, ChevronLeft, ChevronRight, Download, FileText, Filter, HelpCircle, ListChecks, MessageSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, ScanSearch, Search, ShieldCheck, Sparkles, Trash2, Upload, UserRound, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { ArchiveRestore, ArrowLeft, Check, CornerUpLeft, Pencil, Send, ChevronLeft, ChevronRight, Download, FileText, Filter, HelpCircle, ListChecks, MessageSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, ScanSearch, Search, ShieldCheck, Sparkles, Trash2, Upload, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -17,6 +17,8 @@ import { CircuitOfficialVersions } from "./CircuitOfficialVersions";
 import { CircuitTrackingList, TRACKING_PAGE_SIZE } from "./CircuitTrackingList";
 import { CIRCUIT_EVENT_LABELS, circuitSetLabel, groupCircuitChangeEvents, latestCircuitReturn } from "./presentation";
 import { CIRCUIT_CHANGE_FIELD_LIMITS, CIRCUIT_CHANGE_STATUS_LABELS, CIRCUIT_IMAGE_SIDE_LABELS, CIRCUIT_TASKS, circuitChangeMissingForReview, type CircuitTask, defaultCircuitChangeSet, isUnsavedCircuitChange, type CircuitChangeContext, type CircuitChangeContent, type CircuitChangeItem, type CircuitChangeStatus, type CircuitChangeTextField, type CircuitChangesModel, type CircuitImage, type CircuitImageSide } from "./types";
+import { CircuitBusyIcon, CircuitProgress, CircuitSkeletonRows, CircuitSpinner, CircuitToast, type CircuitToastMessage } from "./CircuitFeedback";
+import { playCircuitEnter } from "./circuitMotion";
 import "./circuitChanges.css";
 
 const sides = Object.keys(CIRCUIT_IMAGE_SIDE_LABELS) as CircuitImageSide[];
@@ -112,6 +114,12 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   const phonePushed = phoneScreen === "pdf" || phoneScreen === "detail";
   const phoneBackLabel = phoneScreen === "pdf" ? (mobileDetail ? "問題" : "問題清單") : detailOverPdf ? "圖面" : "問題清單";
   const fileInput = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // Which button's work is running ("submit", "approve", "delete", "restore:<id>", "export"…): that button shows a spinner.
+  const [pending, setPending] = useState("");
+  // The done note under the title bar.
+  const [toast, setToast] = useState<CircuitToastMessage | null>(null);
+  const toastSeq = useRef(0);
   const pdfInput = useRef<HTMLInputElement>(null);
   const pickerSide = useRef<CircuitImageSide>("before");
   const detailScroll = useRef<HTMLDivElement>(null);
@@ -207,6 +215,18 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   // A pasted screenshot goes to the picture the task is about: 問題截圖 in 線路 Review, 改好後截圖 in 改善追蹤.
   useEffect(() => { setSide(task === "track" ? "after" : "before"); }, [model.selectedItem?.id, task]);
   useEffect(() => { if (open) setMobilePdf(taskRef.current === "ai"); }, [open]);
+  useEffect(() => {
+    if (!toast || toast.leaving) return;
+    const leave = setTimeout(() => setToast(current => current && current.id === toast.id ? { ...current, leaving: true } : current), 2400);
+    return () => clearTimeout(leave);
+  }, [toast]);
+  useEffect(() => {
+    if (!toast?.leaving) return;
+    const gone = setTimeout(() => setToast(current => current && current.id === toast.id ? null : current), 150);
+    return () => clearTimeout(gone);
+  }, [toast]);
+  useEffect(() => { if (!open) { setToast(null); setPending(""); }
+  }, [open]);
   useEffect(() => { if (!open) { setMobileDetail(false); setMobilePdf(false); setDetailOverPdf(false); setNewSetOpen(false); setRemovedOpen(false); setRemoveTarget(null); setGuideOpen(false); setViewerId(""); } }, [open]);
   useEffect(() => { if (historyOpen && taskRef.current !== "track") historySection.current?.scrollIntoView({ block: "start" }); }, [historyOpen]);
   useEffect(() => { setHistoryOpen(task === "track"); }, [task]);
@@ -222,6 +242,18 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     return () => { current = false; clearInterval(renew); };
   }, [imageSources]);
 
+  function celebrate(text: string, detail?: string) { toastSeq.current += 1; setToast({ id: toastSeq.current, text, detail }); }
+  /** Runs one button's work with that button marked busy. */
+  function track(key: string, action: () => Promise<void>) {
+    setPending(key);
+    void run(action).finally(() => setPending(current => current === key ? "" : current));
+  }
+  function exportList() {
+    if (!selectedSet) return;
+    const set = selectedSet, rows = filtered;
+    track("export", async () => { await exportCircuitChangeList(set, rows); celebrate(`已匯出 ${rows.length} 個問題`, "Excel 已下載"); });
+  }
+  function announceUpload(count: number, name: string) { if (count) celebrate(count === 1 && name ? `已上傳「${name}」` : `已上傳 ${count} 份 PDF`, "已加到 PDF 清單"); }
   async function run(action: () => Promise<void>) {
     setNotice(""); setCloseBlocked(false); setWorking(true);
     try { await action(); } catch (error) { setNotice(error instanceof Error ? error.message : "操作失敗，請重試。"); }
@@ -288,7 +320,8 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   function submitNewSet(event: FormEvent) {
     event.preventDefault();
     if (working || !newTitle.trim()) return;
-    void run(async () => { await model.createSet(newTitle.trim(), fromLabel.trim(), toLabel.trim()); setTrackingPage(1); setNewSetOpen(false); });
+    const title = newTitle.trim();
+    track("set", async () => { await model.createSet(title, fromLabel.trim(), toLabel.trim()); setTrackingPage(1); setNewSetOpen(false); celebrate(`已建立「${title}」`, "之後的問題記在這份清單"); });
   }
   function changeLayout(patch: Partial<ReturnType<typeof readLayout>>) { setLayout(current => { const next = { ...current, ...patch }; writeLayout(next); return next; }); }
   function toggleDetail() {
@@ -327,7 +360,11 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
   function uploadPdfs(files: File[]) {
     if (!canEdit) { setNotice("目前為檢視權限，無法上傳 PDF。"); return; }
     showPdf();
-    void (async () => { for (const file of files) await pdfs.upload(file).catch(() => {}); })();
+    void (async () => {
+      let done = 0;
+      for (const file of files) { try { await pdfs.upload(file); done += 1; } catch { /* the PDF pane says why */ } }
+      announceUpload(done, files.length === 1 ? files[0].name : "");
+    })();
   }
   const captureBlocked = remotelyRemoved ? "這個問題已被刪除，先還原後才能加入截圖。" : snapshot ? "正在查看舊修訂，返回目前修訂後才能加入截圖。" : !canEdit ? "目前為檢視權限，無法加入截圖。"
     : locked ? "這項的內容已鎖定，先按「解除鎖定」再加入截圖。" : model.switching ? "正在載入修改項目…" : "";
@@ -404,11 +441,15 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     update({ images: next }); setRemoved(null);
   }
   function act(action: "submit" | "approve" | "request_changes" | "comment") {
-    void run(async () => {
+    track(action, async () => {
       if ((action === "request_changes" || action === "comment") && !reviewNote.trim()) setTimeout(() => detailPanel.current?.querySelector<HTMLTextAreaElement>(".circuit-note-box textarea")?.focus(), 0);
       if ((action === "request_changes" || action === "comment") && !reviewNote.trim()) throw new Error(action === "request_changes" ? "請先寫退回原因，畫線路的人才知道還要改哪裡。" : "請填寫留言內容。");
       if (action === "submit" && missing.length) throw new Error(`回報改善前還缺：${missing.join("、")}。`);
       await model.review(action, reviewNote.trim()); setReviewNote("");
+      if (action === "submit") celebrate("已回報改善", "等主管確認");
+      else if (action === "approve") celebrate("已結案");
+      else if (action === "request_changes") celebrate("已退回重改", "畫線路的人會在最上方看到原因");
+      else celebrate("留言已記到追蹤紀錄");
     });
   }
   const pdfCrops = useMemo<CircuitPdfCrop[]>(() => images.flatMap(image => image.source ? [{ id: image.id, side: image.side, documentId: image.source.documentId, page: image.source.page, rect: image.source.rect }] : []), [images]);
@@ -423,6 +464,23 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     return pages;
   }, [model.items, model.selectedItemId, model.draft, model.selectedItem, images, unsaved]);
   const targetLabel = unsaved || !item ? "新問題" : `${number(item.number)}${content?.title ? ` ${content.title.slice(0, 24)}` : ""}`;
+  const wasSaving = useRef(false);
+  const [savedPulse, setSavedPulse] = useState(0);
+  useEffect(() => {
+    if (wasSaving.current && !model.saving && !model.saveError && !model.dirty) setSavedPulse(value => value + 1);
+    wasSaving.current = model.saving;
+  }, [model.saving, model.saveError, model.dirty]);
+  // A state that changes on the problem on screen (回報改善, 確認結案, 退回重改) settles into place once.
+  const statusSeen = useRef({ id: "", status: "" });
+  const [changedStatus, setChangedStatus] = useState("");
+  useEffect(() => {
+    const id = model.selectedItem?.id || "", status = model.selectedItem?.status || "", previous = statusSeen.current;
+    statusSeen.current = { id, status };
+    if (!id || previous.id !== id || !previous.status || previous.status === status) return;
+    setChangedStatus(`${id}:${status}`);
+    const timer = setTimeout(() => setChangedStatus(""), 600);
+    return () => clearTimeout(timer);
+  }, [model.selectedItem?.id, model.selectedItem?.status]);
   const saveLabel = model.saving ? "儲存中…" : model.saveError ? (model.dirty ? "儲存失敗" : "操作未完成") : model.dirty ? "尚有未儲存修改" : unsaved ? "輸入後自動儲存" : "已儲存";
   const problemDone = Boolean(content?.title.trim());
   const fixDone = Boolean(content && (content.description.trim() || content.images.some(image => image.side === "after")));
@@ -433,6 +491,44 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     : reviewing ? "改善沒問題就按「確認結案」；還要改的話先寫意見再退回重改。"
     : item?.status === "approved" && !model.dirty ? "這個問題已結案。" : !problemDone ? "先在「問題」寫標題"
     : !fixDone ? "寫改善說明或加改好後截圖" : "可以回報改善了";
+  const screenDepth = !phone ? 0 : phoneScreen === "pdf" ? (mobileDetail ? 2 : 1) : phoneScreen === "detail" ? (detailOverPdf ? 3 : 1) : 0;
+  const screenKey = `${task}:${phoneScreen}:${detailOverPdf}:${showTrackingList}`;
+  const lastScreen = useRef({ key: "", depth: 0 });
+  // A deeper screen comes in from the right, going back comes in from the left, a sibling (another tab) fades in.
+  useLayoutEffect(() => {
+    const previous = lastScreen.current;
+    lastScreen.current = { key: screenKey, depth: screenDepth };
+    if (!open || !previous.key || previous.key === screenKey) return;
+    const root = dialogRef.current;
+    if (!root) return;
+    const target = phone && phoneScreen === "pdf" ? root.querySelector(".circuit-pdf-panel") : phone && phoneScreen === "detail" ? detailPanel.current : root.querySelector("#circuit-task-panel");
+    playCircuitEnter(target, screenDepth > previous.depth ? "push" : screenDepth < previous.depth ? "pop" : "fade");
+  }, [open, screenKey]);
+  // Phone: the note goes just above the lowest row of controls on screen (bottom buttons, tabs, page row).
+  useLayoutEffect(() => {
+    const root = dialogRef.current, region = root?.querySelector<HTMLElement>(".circuit-toast-region");
+    if (!toast || !root || !region) return;
+    const selector = ".circuit-detail-footer, .circuit-pdf-phone-bar, .circuit-pdf-overview, .circuit-phone-actions, .circuit-tasks, .circuit-tracking-pagination";
+    const place = () => {
+      const frame = root.getBoundingClientRect(), middle = frame.left + frame.width / 2;
+      // Only rows under the note count: on a wide screen the note is centred, so a footer in another column is not in its way.
+      const tops = [...root.querySelectorAll<HTMLElement>(selector)].map(node => node.getBoundingClientRect())
+        .filter(box => box.height > 0 && box.top > frame.top + frame.height * 0.4 && box.left < middle + 160 && box.right > middle - 160).map(box => box.top);
+      region.style.setProperty("--circuit-toast-bottom", `${Math.round(tops.length ? frame.bottom - Math.min(...tops) + 10 : 16)}px`);
+    };
+    place();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(place);
+    observer.observe(root);
+    root.querySelectorAll<HTMLElement>(selector).forEach(node => observer.observe(node));
+    return () => observer.disconnect();
+  }, [toast?.id, phone, phoneScreen, task, pdfOpen]);
+  const lastItem = useRef("");
+  useEffect(() => {
+    const id = model.selectedItemId, previous = lastItem.current;
+    lastItem.current = id;
+    if (open && wide && previous && id && previous !== id) playCircuitEnter(detailScroll.current, "fade");
+  }, [model.selectedItemId, open, wide]);
   const viewportStyle = viewport ? { "--circuit-viewport-height": `${viewport.height}px`, "--circuit-viewport-top": `${viewport.top}px` } as CSSProperties : undefined;
   const field = (key: CircuitChangeTextField, label: string, multiline = false, placeholder = "", mark = "") => <label className={`circuit-field circuit-field-${key}`} key={key}><span>{label}{mark && !readOnly && <em className="circuit-field-mark">{mark}</em>}</span>{multiline
     ? <Textarea aria-label={label} value={content?.[key] || ""} disabled={readOnly} maxLength={CIRCUIT_CHANGE_FIELD_LIMITS[key]} placeholder={readOnly ? "" : placeholder} onChange={event => update({ [key]: event.target.value })} />
@@ -459,11 +555,11 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
     <span>{reviewing ? "留言（退回重改時必填）" : "留言"}</span>
     <Textarea aria-label="留言" value={reviewNote} disabled={!canEdit || remotelyRemoved} maxLength={10000} placeholder={reviewing ? "退回時寫清楚還要改什麼；確認結案可以留空。" : "補充說明或討論，會記在追蹤紀錄。"} onChange={event => setReviewNote(event.target.value)} />
   </label>;
-  const returnButton = <Button data-circuit-tone="delete" title="寫好意見後退回給畫線路的人重改" type="button" variant="outline" disabled={busy} onClick={() => act("request_changes")}>退回重改</Button>;
-  const approveButton = <Button data-circuit-tone="done" data-fill="solid" title="改善沒問題，結案" type="button" disabled={busy} onClick={() => act("approve")}><Check aria-hidden="true" />確認結案</Button>;
-  const saveButton = <Button type="button" variant="outline" className="circuit-save-button" aria-label="儲存修改" title={model.dirty ? "立即儲存目前的修改" : `${saveLabel}；停止輸入後會自動儲存`} data-state={model.saving ? "saving" : model.dirty ? "dirty" : model.saveError ? "failed" : "saved"} disabled={busy || !model.dirty || remotelyRemoved} onClick={() => void run(() => model.saveDraft())}>{model.saving ? "儲存中…" : model.dirty ? (model.saveError ? "重新儲存" : "儲存修改") : <><Check aria-hidden="true" />{unsaved ? "自動儲存" : "已儲存"}</>}</Button>;
+  const returnButton = <Button data-circuit-tone="delete" title="寫好意見後退回給畫線路的人重改" type="button" variant="outline" disabled={busy} aria-busy={pending === "request_changes" || undefined} onClick={() => act("request_changes")}><CircuitBusyIcon busy={pending === "request_changes"}><CornerUpLeft /></CircuitBusyIcon>退回重改</Button>;
+  const approveButton = <Button data-circuit-tone="done" data-fill="solid" title="改善沒問題，結案" type="button" disabled={busy} aria-busy={pending === "approve" || undefined} onClick={() => act("approve")}><CircuitBusyIcon busy={pending === "approve"}><Check /></CircuitBusyIcon>確認結案</Button>;
+  const saveButton = <Button type="button" variant="outline" className="circuit-save-button" aria-label="儲存修改" title={model.dirty ? "立即儲存目前的修改" : `${saveLabel}；停止輸入後會自動儲存`} data-state={model.saving ? "saving" : model.dirty ? "dirty" : model.saveError ? "failed" : "saved"} disabled={busy || !model.dirty || remotelyRemoved} aria-busy={model.saving || undefined} onClick={() => void run(() => model.saveDraft())}>{model.saving ? <span className="circuit-save-state"><CircuitBusyIcon busy>{null}</CircuitBusyIcon>儲存中…</span> : model.dirty ? (model.saveError ? "重新儲存" : "儲存修改") : <span key={`saved:${savedPulse}`} className="circuit-save-state" data-just={savedPulse > 0 || undefined}><Check aria-hidden="true" />{unsaved ? "自動儲存" : "已儲存"}</span>}</Button>;
   const phoneProgress = phone && pdfs.active ? circuitPdfProgress(pdfs.registry, pdfs.active.id, pdfs.active.pages) : null;
-  const commentButton = <Button data-circuit-tone="edit" title="把意見記到追蹤紀錄，不改變狀態" type="button" variant="outline" disabled={busy || !canEdit || remotelyRemoved || !reviewNote.trim()} onClick={() => act("comment")}><MessageSquare aria-hidden="true" />新增留言</Button>;
+  const commentButton = <Button data-circuit-tone="edit" title="把意見記到追蹤紀錄，不改變狀態" type="button" variant="outline" disabled={busy || !canEdit || remotelyRemoved || !reviewNote.trim()} aria-busy={pending === "comment" || undefined} onClick={() => act("comment")}><CircuitBusyIcon busy={pending === "comment"}><MessageSquare /></CircuitBusyIcon>新增留言</Button>;
   const setPicker = model.sets.length > 1 && <label className="circuit-set-picker" title="每次改版各有一份問題清單"><span>改版清單</span>
     <select aria-label="選擇改版紀錄" value={model.selectedSetId} disabled={busy || model.loading} onChange={event => {
       const id = event.target.value;
@@ -492,7 +588,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
 
   return <>
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent hideCloseButton className="circuit-changes-dialog" style={viewportStyle} data-testid="circuit-changes-dialog" data-mobile-detail={mobileDetail} data-mobile-pdf={!wide && mobilePdf} data-phone-screen={phoneScreen || undefined} onPaste={paste}
+      <DialogContent ref={dialogRef} hideCloseButton className="circuit-changes-dialog" style={viewportStyle} data-testid="circuit-changes-dialog" data-mobile-detail={mobileDetail} data-mobile-pdf={!wide && mobilePdf} data-phone-screen={phoneScreen || undefined} onPaste={paste}
         onEscapeKeyDown={event => event.preventDefault()} onInteractOutside={event => event.preventDefault()}
         onDragOver={event => { if (carriesFiles(event)) { event.preventDefault(); if (!readOnly && content) setDragSide(side); } }}
         onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragSide(null); }} onDrop={drop}>
@@ -502,17 +598,17 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
           {phonePushed && <Button type="button" variant="ghost" className="circuit-phone-back" aria-label={`返回${phoneBackLabel}`} title={`回到${phoneBackLabel}`} onClick={phoneBack}><ChevronLeft aria-hidden="true" /><span>{phoneBackLabel}</span></Button>}
           {phonePushed && <div className="circuit-phone-title">{phoneScreen === "pdf"
             ? <><strong>圖面</strong>{mobileDetail && <small>截圖加到 {unsaved || !item ? "新問題" : number(item.number)}</small>}</>
-            : <><strong>{unsaved || !item ? "新問題" : number(item.number)}</strong>{!unsaved && item && <span className="circuit-list-status" data-status={item.status}>{CIRCUIT_CHANGE_STATUS_LABELS[item.status]}</span>}</>}</div>}
+            : <><strong>{unsaved || !item ? "新問題" : number(item.number)}</strong>{!unsaved && item && <span key={item.status} className="circuit-list-status" data-status={item.status} data-changed={changedStatus === `${item.id}:${item.status}` || undefined}>{CIRCUIT_CHANGE_STATUS_LABELS[item.status]}</span>}</>}</div>}
           <div className="circuit-title">
             <DialogTitle>線路修改</DialogTitle>
             <DialogDescription title={[context.projectName, context.workspaceName, setName].filter(Boolean).join(" / ")}>{context.projectName && `${context.projectName} / `}{context.workspaceName}{(setName) && ` · ${setName}`}</DialogDescription>
           </div>
           <div className="circuit-header-actions">
-            {wide && (task === "review" || task === "track") && <Button data-circuit-tone="done" type="button" className="circuit-action-export" variant="outline" aria-label="匯出問題清單" disabled={!selectedSet || !filtered.length || busy || model.dirty} title={model.dirty ? "尚有未儲存修改，儲存後可匯出" : `匯出目前篩選的全部 ${filtered.length} 個問題與追蹤紀錄`} onClick={() => void run(() => exportCircuitChangeList(selectedSet!, filtered))}><Download aria-hidden="true" /><span>匯出問題清單</span></Button>}
+            {wide && (task === "review" || task === "track") && <Button data-circuit-tone="done" type="button" className="circuit-action-export" variant="outline" aria-label="匯出問題清單" disabled={!selectedSet || !filtered.length || busy || model.dirty} title={model.dirty ? "尚有未儲存修改，儲存後可匯出" : `匯出目前篩選的全部 ${filtered.length} 個問題與追蹤紀錄`} aria-busy={pending === "export" || undefined} onClick={exportList}><CircuitBusyIcon busy={pending === "export"}><Download /></CircuitBusyIcon><span>匯出問題清單</span></Button>}
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild><Button title={canEdit && (task === "review" || task === "track") ? "使用說明、新增改版清單" : "使用說明"} type="button" variant="outline" className="circuit-action-more" aria-label="更多"><MoreHorizontal aria-hidden="true" /><span className="circuit-phone-word">更多</span></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="circuit-more-menu">
-                {phone && (task === "review" || task === "track") && <DropdownMenuItem title={model.dirty ? "尚有未儲存修改，儲存後可匯出" : `匯出目前篩選的全部 ${filtered.length} 個問題與追蹤紀錄`} disabled={!selectedSet || !filtered.length || busy || model.dirty} onSelect={() => void run(() => exportCircuitChangeList(selectedSet!, filtered))}><Download aria-hidden="true" />匯出問題清單</DropdownMenuItem>}
+                {phone && (task === "review" || task === "track") && <DropdownMenuItem title={model.dirty ? "尚有未儲存修改，儲存後可匯出" : `匯出目前篩選的全部 ${filtered.length} 個問題與追蹤紀錄`} disabled={!selectedSet || !filtered.length || busy || model.dirty} onSelect={exportList}><Download aria-hidden="true" />匯出問題清單</DropdownMenuItem>}
                 <DropdownMenuItem title="打開線路修改的操作說明" onSelect={() => setGuideOpen(true)}><HelpCircle aria-hidden="true" />使用說明</DropdownMenuItem>
                 {canEdit && (task === "review" || task === "track") && <DropdownMenuItem title="換到下一次改版（例如 V2 → V3）時，另開一份問題清單" disabled={busy || model.loading} onSelect={openNewSet}><Plus aria-hidden="true" />新增改版清單</DropdownMenuItem>}
                 {phone && phoneScreen === "detail" && canEdit && !snapshot && !unsaved && item && <DropdownMenuItem className="circuit-menu-danger" title="從清單刪除這個問題；追蹤紀錄與原圖保留，之後可以還原" disabled={busy || remotelyRemoved} onSelect={() => { setNotice(""); setRemoveTarget(item); }}><Trash2 aria-hidden="true" />刪除問題</DropdownMenuItem>}
@@ -559,7 +655,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                 <span className="circuit-item-title"><strong>{row.content.title || "未命名問題"}</strong><small>{[row.content.refs || row.content.net, row.content.owner].filter(Boolean).join(" · ") || "尚未補充位置"}{row.imageCount ? ` · ${row.imageCount} 張圖` : ""}</small></span>
                 <span className="circuit-list-status" data-status={row.status}>{CIRCUIT_CHANGE_STATUS_LABELS[row.status]}</span>
               </button>)}
-              {model.loading && !model.items.length ? <p className="circuit-empty">正在載入問題…</p>
+              {model.loading && !model.items.length ? <CircuitSkeletonRows label="正在載入問題…" />
                 : model.items.length > 0 && !filtered.length ? <p className="circuit-empty">目前篩選條件沒有符合的問題</p>
                 : !model.items.length ? <p className="circuit-empty">{phone ? (task === "review" && canEdit ? "還沒有問題。打開圖面，看到問題就截圖記下來；也可以按「新增問題」直接寫。" : task === "track" && canEdit ? "還沒有問題。到「線路 Review」標記問題後，這裡會列出來。" : "這次改版還沒有記錄任何問題") : unsaved && canEdit ? "還沒有問題；在右邊填寫就會建立第一項" : "這次改版還沒有記錄任何問題"}</p> : null}
             </div>
@@ -568,20 +664,21 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
               {/* 看圖面 also when every PDF was deleted: the PDF list, where they are restored, is inside the drawing. */}
               {pdfs.loading || pdfs.registry.documents.length > 0 || !canEdit
                 ? <Button data-circuit-tone="view" type="button" variant="outline" aria-label="看圖面" title="打開圖面，逐頁看、截圖記下問題" onClick={() => setMobilePdf(true)}><FileText aria-hidden="true" /><span>看圖面{phoneProgress && <small>已看 {phoneProgress.checked} / {phoneProgress.total} 頁</small>}</span></Button>
-                : <Button data-circuit-tone="add" type="button" variant="outline" title="選原理圖 PDF 上傳；上傳後逐頁看、截圖記下問題" disabled={Boolean(pdfs.uploading)} onClick={() => pdfInput.current?.click()}><Upload aria-hidden="true" /><span>上傳 PDF</span></Button>}
+                : <Button data-circuit-tone="add" type="button" variant="outline" title="選原理圖 PDF 上傳；上傳後逐頁看、截圖記下問題" disabled={Boolean(pdfs.uploading)} aria-busy={Boolean(pdfs.uploading) || undefined} onClick={() => pdfInput.current?.click()}><CircuitBusyIcon busy={Boolean(pdfs.uploading)}><Upload /></CircuitBusyIcon><span>{pdfs.uploading ? "上傳中…" : "上傳 PDF"}</span></Button>}
               {canEdit && <Button data-circuit-tone="add" data-fill="solid" type="button" title="不用圖面，直接寫一個問題" onClick={newItem} disabled={busy || model.loading}><Plus aria-hidden="true" /><span>新增問題</span></Button>}
             </div>}
             </>}
           </aside>}
           {pdfOpen && <CircuitPdfPanel mode={task === "ai" ? "ai" : "review"} captureSide={task === "track" ? "after" : "before"} pageReview={task === "review"} onAiReview={onAiReview} onSetupOfficial={() => chooseTask("official")} pdfs={pdfs} ink={pdfInk} canEdit={canEdit} captureBlocked={phone && !mobileDetail ? "" : captureBlocked} targetLabel={targetLabel} pageChanges={pageChanges} crops={pdfCrops} versionsOpen={versionsOpen} onVersionsOpenChange={setVersionsOpen} versionsOpener={versionsOpener}
             phone={phone} phoneContext={phone && task !== "ai" ? (mobileDetail ? "item" : "list") : undefined} onCaptureNew={phone && task === "review" && canEdit ? addCaptureAsNew : undefined}
-            onCapture={addCaptures} onSelectChange={phone ? openFromPdf : selectItem} />}
+            onUploaded={announceUpload} onCapture={addCaptures} onSelectChange={phone ? openFromPdf : selectItem} />}
           {task !== "ai" && <section ref={detailPanel} id="circuit-change-detail" className="circuit-detail" hidden={detailCollapsed} aria-label="問題內容" data-testid="circuit-change-detail" aria-busy={model.switching}>
+            {model.switching && <CircuitProgress />}
             {content && item && !(task === "track" && unsaved) ? <>
               {wide && <header className="circuit-detail-heading">
                 {task === "track" && <Button type="button" variant="outline" className="circuit-track-back" aria-label="返回問題清單" title="返回問題清單" onClick={returnToTrackingList}><ArrowLeft aria-hidden="true" /><span>返回問題清單</span></Button>}
                 <div>
-                  <strong>{unsaved ? "新問題" : number(item.number)}{!unsaved && <span className="circuit-list-status" data-status={item.status}>{CIRCUIT_CHANGE_STATUS_LABELS[item.status]}</span>}</strong>
+                  <strong>{unsaved ? "新問題" : number(item.number)}{!unsaved && <span key={item.status} className="circuit-list-status" data-status={item.status} data-changed={changedStatus === `${item.id}:${item.status}` || undefined}>{CIRCUIT_CHANGE_STATUS_LABELS[item.status]}</span>}</strong>
                   {!unsaved && <span data-revision title={`修訂 ${item.revision}${latestActor ? ` · ${latestActor}` : ""} · ${dateTime(item.updatedAt)}`}>{`修訂 ${item.revision}${latestActor ? ` · ${latestActor}` : ""}`}</span>}
                 </div>
                 <div className="circuit-item-navigation">
@@ -655,13 +752,13 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
                   {!snapshot && canEdit && !reviewing && (wide || !readOnly || (canSubmit && !unsaved && task === "track")) && <div>
                     {wide && saveButton}
                     {phone && !readOnly && <Button data-circuit-tone="view" type="button" variant="outline" className="circuit-phone-pdf" title={task === "track" ? "打開圖面，把改好後的地方截圖，加到改好後截圖" : "打開圖面，把有問題的地方截圖，加到問題截圖"} onClick={() => { if (task === "track") toggleTrackPdf(); else { setSide("before"); setMobilePdf(true); } }}><FileText aria-hidden="true" />從圖面截圖</Button>}
-                    {canSubmit && !unsaved && task === "track" && <Button data-circuit-tone="add" data-fill="solid" type="button" className="circuit-submit" data-ready={missing.length === 0} disabled={busy || model.conflict} title={missing.length ? `回報改善前還缺：${missing.join("、")}` : "交給主管確認"} onClick={() => act("submit")}>回報改善</Button>}
+                    {canSubmit && !unsaved && task === "track" && <Button data-circuit-tone="add" data-fill="solid" type="button" className="circuit-submit" data-ready={missing.length === 0} disabled={busy || model.conflict} title={missing.length ? `回報改善前還缺：${missing.join("、")}` : "交給主管確認"} aria-busy={pending === "submit" || undefined} onClick={() => act("submit")}><CircuitBusyIcon busy={pending === "submit"}><Send /></CircuitBusyIcon>回報改善</Button>}
                   </div>}
                 </div>
               </footer>
             </> : <div className="circuit-detail-empty">
               {wide && pdfOpen && <Button data-circuit-tone="edit" title="收合右邊的表單，讓圖面更寬" type="button" variant="outline" className="circuit-panel-toggle" aria-label="收合表單" aria-expanded={true} aria-controls="circuit-change-detail" onClick={toggleDetail}><PanelRightClose aria-hidden="true" /><span>收合表單</span></Button>}
-              <h3>{model.loading ? "正在載入線路修改…" : model.items.length ? (task === "track" ? "從左側選一個要改善的問題" : "從左側選一個問題") : "這塊板子還沒有問題紀錄"}</h3>
+              <h3>{model.loading ? <span className="circuit-wait-line"><CircuitSpinner />正在載入線路修改…</span> : model.items.length ? (task === "track" ? "從左側選一個要改善的問題" : "從左側選一個問題") : "這塊板子還沒有問題紀錄"}</h3>
               {!model.loading && !model.items.length && <p>{canEdit ? (task === "review" ? "按「新增問題」開始記錄。" : "到「線路 Review」標記問題後，這裡會列出來。") : "你目前是檢視權限；有編輯權限的同仁記錄後，這裡會列出每個問題的前後圖與改善狀態。"}</p>}
               {!model.loading && canEdit && task === "track" && !model.items.length && <Button data-circuit-tone="view" title="到「線路 Review」看圖、標記問題" type="button" variant="outline" onClick={() => chooseTask("review")}><ScanSearch aria-hidden="true" />到線路 Review 標記問題</Button>}
               {!model.loading && canEdit && task === "review" && <Button data-circuit-tone="add" data-fill="solid" title="記錄一個新問題" type="button" disabled={busy} onClick={newItem}><Plus aria-hidden="true" />新增問題</Button>}
@@ -669,13 +766,14 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
           </section>}
           {task !== "ai" && detailCollapsed && <aside className="circuit-list-rail circuit-detail-rail" aria-label="問題內容已收合"><Button data-circuit-tone="edit" type="button" variant="outline" className="circuit-panel-toggle" aria-label="展開表單" title="展開右邊的表單" aria-expanded={false} aria-controls="circuit-change-detail" onClick={toggleDetail}><PanelRightOpen aria-hidden="true" /><span>展開表單</span></Button></aside>}
         </div>}
+        <CircuitToast message={toast} />
       </DialogContent>
     </Dialog>
     <Dialog open={Boolean(removeTarget)} onOpenChange={value => { if (!value && !working) setRemoveTarget(null); }}>
       <DialogContent className="circuit-remove-dialog" style={viewportStyle}>
         <DialogTitle>刪除這個問題？</DialogTitle>
         <DialogDescription>「{removeTarget && `${number(removeTarget.number)} ${removeTarget.content.title || "未命名問題"}`}」會從問題清單刪除。已儲存的追蹤紀錄與原圖保留，之後可從「已刪除的問題」還原；未儲存的草稿會捨棄。</DialogDescription>
-        <div className="circuit-new-set-actions"><Button title="不刪除，回到問題" type="button" variant="outline" disabled={busy} onClick={() => setRemoveTarget(null)}>取消</Button><Button data-circuit-tone="delete" data-fill="solid" title="從清單刪除；追蹤紀錄與原圖保留，之後可以還原" type="button" variant="destructive" disabled={busy || !canEdit || !removeTarget} onClick={() => void run(async () => { await model.deleteItem(removeTarget!.id); setRemoveTarget(null); setMobileDetail(false); setDetailOverPdf(false); if (task === "track") returnToTrackingList(); })}>確認刪除</Button></div>
+        <div className="circuit-new-set-actions"><Button title="不刪除，回到問題" type="button" variant="outline" disabled={busy} onClick={() => setRemoveTarget(null)}>取消</Button><Button data-circuit-tone="delete" data-fill="solid" title="從清單刪除；追蹤紀錄與原圖保留，之後可以還原" type="button" variant="destructive" disabled={busy || !canEdit || !removeTarget} aria-busy={pending === "delete" || undefined} onClick={() => { const target = removeTarget!; track("delete", async () => { await model.deleteItem(target.id); setRemoveTarget(null); setMobileDetail(false); setDetailOverPdf(false); if (task === "track") returnToTrackingList(); celebrate(`已刪除 ${number(target.number)}`, "可在「已刪除的問題」還原"); }); }}><CircuitBusyIcon busy={pending === "delete"}><Trash2 /></CircuitBusyIcon>確認刪除</Button></div>
         {notice && <p role="alert">{notice}</p>}
       </DialogContent>
     </Dialog>
@@ -683,7 +781,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
       <DialogContent className="circuit-removed-dialog" style={viewportStyle}>
         <DialogTitle>已刪除的問題</DialogTitle>
         <DialogDescription>追蹤紀錄與原圖仍保留。還原後回到問題清單繼續查看。</DialogDescription>
-        <ul className="circuit-removed-list">{(model.removedItems ?? []).map(row => <li key={row.id}><div><strong>{number(row.number)} {row.content.title || "未命名問題"}</strong><span>{row.content.owner || "未指定負責人"}</span></div><Button data-circuit-tone="done" title="放回問題清單" type="button" variant="outline" disabled={busy || !canEdit} aria-label={`還原問題 ${number(row.number)}`} onClick={() => void run(() => model.restoreItem(row.id))}><ArchiveRestore aria-hidden="true" />還原</Button></li>)}{!model.removedItems?.length && <li className="circuit-removed-empty">沒有已刪除的問題</li>}</ul>
+        <ul className="circuit-removed-list">{(model.removedItems ?? []).map(row => <li key={row.id}><div><strong>{number(row.number)} {row.content.title || "未命名問題"}</strong><span>{row.content.owner || "未指定負責人"}</span></div><Button data-circuit-tone="done" title="放回問題清單" type="button" variant="outline" disabled={busy || !canEdit} aria-label={`還原問題 ${number(row.number)}`} aria-busy={pending === `restore:${row.id}` || undefined} onClick={() => track(`restore:${row.id}`, async () => { await model.restoreItem(row.id); celebrate(`已還原 ${number(row.number)}`, "回到問題清單"); })}><CircuitBusyIcon busy={pending === `restore:${row.id}`}><ArchiveRestore /></CircuitBusyIcon>還原</Button></li>)}{!model.removedItems?.length && <li className="circuit-removed-empty">沒有已刪除的問題</li>}</ul>
         {notice && <p role="alert">{notice}</p>}
         <div className="circuit-new-set-actions"><Button title="關閉這個清單" type="button" variant="outline" onClick={() => setRemovedOpen(false)} disabled={busy}>關閉</Button></div>
       </DialogContent>
@@ -699,7 +797,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
             <label>修改後版次<Input aria-label="修改後版次" value={toLabel} maxLength={80} placeholder="例如：V2 / Rev B" onChange={event => setToLabel(event.target.value)} /></label>
           </div>
           <p className="circuit-new-set-hint">只整理問題紀錄，不會改動 BOM 或 PDF。建立後名稱與版次目前不能修改，請先確認。</p>
-          <div className="circuit-new-set-actions"><Button title="不建立，回到線路修改" type="button" variant="outline" onClick={() => setNewSetOpen(false)} disabled={working}>取消</Button><Button data-circuit-tone="add" data-fill="solid" title="建立這份改版清單並切換過去" type="submit" disabled={working || !newTitle.trim()}>建立清單</Button></div>
+          <div className="circuit-new-set-actions"><Button title="不建立，回到線路修改" type="button" variant="outline" onClick={() => setNewSetOpen(false)} disabled={working}>取消</Button><Button data-circuit-tone="add" data-fill="solid" title="建立這份改版清單並切換過去" type="submit" aria-busy={pending === "set" || undefined} disabled={working || !newTitle.trim()}><CircuitBusyIcon busy={pending === "set"}><Plus /></CircuitBusyIcon>建立清單</Button></div>
           {notice && <p role="alert">{notice}</p>}
         </form>
       </DialogContent>
