@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "@/components/ui/sonner";
 import { ComparisonInputs, type RevisionInput } from "./ComparisonInputs";
 import { ComparisonResults } from "./ComparisonResults";
 import { ComparisonLibrary } from "./ComparisonLibrary";
@@ -86,7 +87,7 @@ export default function ComparisonWorkspace() {
   const [diagramSource, setDiagramSource] = useState<DiagramSource | null>(null);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState<{ message: string; tone: "info" | "success" } | null>(null);
+  const [notice, setNotice] = useState<{ message: string; tone: "info" | "success"; shownInToast?: boolean } | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [engine, setEngine] = useState<EngineSettings>(() => readEngineSettings());
   const runtimeRef = useRef<EngineRuntime>(createRuntime(engine));
@@ -211,7 +212,14 @@ export default function ComparisonWorkspace() {
       const old = sessions.find(item => item.id === id);
       const next: ComparisonSession = { version: 1, projectName: name, id, result, replies: { ...old?.replies }, history: [...(old?.history ?? [])], ...(old?.lastReviewKey ? { lastReviewKey: old.lastReviewKey } : {}), savedAt: new Date().toISOString(), libraryYaml };
       setCurrent(next); setLibraryEntries(result.library);
-      try { await persist(next, token); setChartSide("b"); if (mode === "single") update("tab", "power"); setNotice({ tone: "success", message: `${mode === "single" ? "單板圖已產生" : "比對完成"}，結果已儲存在此帳號的本機瀏覽器` }); }
+      try {
+        await persist(next, token);
+        setChartSide("b");
+        if (mode === "single") update("tab", "power");
+        const message = `${mode === "single" ? "單板圖已產生" : "比對完成"}，結果已儲存在此帳號的本機瀏覽器`;
+        setNotice({ tone: "success", message, shownInToast: compact });
+        if (compact) toast.success(message);
+      }
       catch (error) { scope.assertCurrent(token); throw new Error(`結果已產生，但本機儲存失敗；請立即匯出備份。${error instanceof Error ? error.message : String(error)}`); }
       return next;
     });
@@ -297,7 +305,7 @@ export default function ComparisonWorkspace() {
     <input ref={importInput} type="file" accept=".zip" className="sr-only" aria-label="匯入 AutoCheck 備份" onChange={event => { const file = event.target.files?.[0]; if (file) void importSession(file); event.target.value = ""; }} />
     {!!sessions.length && <div className="comparison-session-picker"><Label>已儲存的比對</Label><Select value={session?.id ?? "new"} disabled={busy} onValueChange={chooseSession}><SelectTrigger aria-label="已儲存的比對"><SelectValue placeholder="選擇比對" /></SelectTrigger><SelectContent>{!session && <SelectItem value="new" disabled>新比對</SelectItem>}{sessions.map(item => <SelectItem key={item.id} value={item.id}>{item.projectName} · {item.result.mode === "single" ? `單板 ${item.result.meta.b.label}` : `${item.result.meta.a.label} → ${item.result.meta.b.label}`}</SelectItem>)}</SelectContent></Select><span>儲存於目前帳號與瀏覽器</span></div>}
     {error && <div className="comparison-alert" role="alert"><TriangleAlert /><p>{error}</p><Button variant="ghost" size="icon" aria-label="關閉錯誤訊息" onClick={() => setError("")}>×</Button></div>}
-    {notice && <div className="comparison-notice" data-tone={notice.tone} role="status">{notice.tone === "success" ? <CheckCircle2 aria-hidden="true" /> : <Info aria-hidden="true" />}<p>{notice.message}</p></div>}
+    {notice && !(compact && notice.shownInToast) && <div className="comparison-notice" data-tone={notice.tone} role="status">{notice.tone === "success" ? <CheckCircle2 aria-hidden="true" /> : <Info aria-hidden="true" />}<p>{notice.message}</p></div>}
     {busy && <div className="comparison-progress"><div role="status"><span className="comparison-progress-indicator" aria-hidden="true" /><p>{progress || "正在處理…"}</p></div><Button variant="outline" onClick={() => runtimeRef.current.cancel()}><Square aria-hidden="true" />取消</Button></div>}
     {restoring ? <div className="comparison-loading" role="status"><span className="comparison-progress-indicator" aria-hidden="true" />正在讀取本機比對紀錄…</div> : <>
       {filters.tab === "compare" && <details key={session?.id ?? "new"} className="comparison-source-settings" open={!session} data-new={!session}>
