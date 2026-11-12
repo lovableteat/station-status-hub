@@ -220,3 +220,71 @@ jobs:
           path: |
             ${{ runner.temp }}/exact96-evidence/report.json
             ${{ runner.temp }}/exact96-evidence/*.png
+
+  exact80:
+    name: Exact latest80 and client-first (isolated research)
+    permissions:
+      contents: read
+      actions: read
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 49 && github.event.pull_request.head.ref == 'fix/legacy-pcb-protected-reads-20261112' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Set isolated research paths after runner allocation
+        run: |
+          echo "EXACT80_DIST=$RUNNER_TEMP/exact80-selected" >> "$GITHUB_ENV"
+          echo "EXACT80_EVIDENCE_DIR=$RUNNER_TEMP/exact80-evidence" >> "$GITHUB_ENV"
+          echo "AUDIT_QA_DIR=$RUNNER_TEMP/exact80-qa" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: node --test tests/exact80/exact80-server.test.cjs tests/exact80/exact80-fixtures.test.cjs tests/exact80ResearchWorkflow.test.mjs
+      - name: Read the pinned existing source artifact, without publishing its bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error --location --max-time 90 \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/lovableteat/station-status-hub/actions/artifacts/13932556496/zip \
+            --output "$RUNNER_TEMP/exact80-source.zip"
+          python tests/exact80/extract-exact80.py "$RUNNER_TEMP/exact80-source.zip" "$EXACT80_DIST" tests/exact80/exact80-manifest.json
+      - name: Read only the independently reviewed candidate commit
+        uses: actions/checkout@v4
+        with:
+          ref: f6fadefcf503d9326af88757a2d2d42a8dd45ad1
+          path: .exact80-candidate
+          persist-credentials: false
+      - name: Verify frozen candidate identity and identical locked dependencies
+        run: |
+          test "$(git -C .exact80-candidate rev-parse HEAD)" = f6fadefcf503d9326af88757a2d2d42a8dd45ad1
+          cmp package-lock.json .exact80-candidate/package-lock.json
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$GITHUB_WORKSPACE/.exact80-candidate/node_modules"
+      - name: Build and verify the pinned merged candidate static output
+        working-directory: .exact80-candidate
+        run: node "$GITHUB_WORKSPACE/tests/exact80/build-exact-candidate.mjs"
+      - name: Verify all browser inputs without launching
+        env:
+          EXACT80_BUILD_ONLY: '1'
+          EXACT80_CANDIDATE_DIST: ${{ github.workspace }}/.exact80-candidate/dist
+        run: node tests/exact80/exact80-crossrelease.browser.cjs
+      - run: npm install --prefix "$AUDIT_QA_DIR" --no-package-lock playwright@1.58.2
+      - run: "$AUDIT_QA_DIR/node_modules/.bin/playwright install --with-deps chromium"
+      - name: Real exact-old-document cutover with synthetic services
+        env:
+          EXACT80_CANDIDATE_DIST: ${{ github.workspace }}/.exact80-candidate/dist
+        run: timeout --signal=TERM --kill-after=10s 300s node tests/exact80/exact80-crossrelease.browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: exact80-crossrelease-synthetic-evidence
+          retention-days: 3
+          if-no-files-found: error
+          # Never add source ZIP, selected80, dist, traces, HAR or browser cache here.
+          path: |
+            ${{ runner.temp }}/exact80-evidence/report.json
+            ${{ runner.temp }}/exact80-evidence/*.png
