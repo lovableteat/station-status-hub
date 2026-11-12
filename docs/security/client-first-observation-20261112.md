@@ -19,3 +19,47 @@ The current compatible client reads sanitized profiles through the additive zero
 ## Evidence limitations
 
 The isolated network mocks prove application behavior against the modeled responses, not hosted authorization or real-service Realtime payload filtering. Desktop/mobile emulation is not proof for every device, file type, board, sleeping tab or browser cache. Known seed-name/hash scans are not exhaustive secret or business-data scans. Progress reports must separate tests completed, observed unsafe outcomes, unknown active clients and actions not performed.
+
+
+## Verified research baseline and next-client acceptance
+
+The frozen exact80 study at PR head `5f47f303fa40cc7e7b60db04dfd1648983dba3ef`
+ran against original source `80f2c4c071c3c88a85d247b7c3d48b303ccdd57c`
+and candidate `f6fadefcf503d9326af88757a2d2d42a8dd45ad1`. Audit run
+`43205261335` and Quality run `43205260364` completed successfully. This is
+successful execution of observations, **not** sixteen safe-cutover approvals:
+
+- Ten positive desktop/phone observations covered mounted old maintenance/PCB inputs,
+  limited warm Dashboard imports, and new-client healthy protected-profile reads.
+- Two old-client raw-denial observations lost the unsent maintenance input.
+- Four new-client protected-denial observations lost the maintenance note/File selection
+  or unapplied PCB project-settings values after the fail-closed gate unmounted them.
+- Each observation retained the document and blocked unapproved HTTP/Realtime traffic.
+  Synthetic interception does not establish hosted-service authorization behavior.
+
+The frozen study must retain these negative results. It must not be silently edited to
+certify later application code. The next client requires a separate current-source full
+bundle browser run and then a newly identified exact candidate for cross-release review.
+
+The narrow repair under review checkpoints maintenance note/File transactions and the
+seven raw PCB project-settings fields in actor/epoch-scoped, same-document RAM. It must
+remain fail-closed, never read raw permissions as a fallback, never autosend, and never
+persist this recovery state to browser/server storage. A global dirty warning must survive
+permission-induced editor unmounts. Original File objects and exact attempted message/file
+IDs must survive ambiguous responses; a read-only reconciliation is not proof that an
+absent request never executed. Only a verified receipt may clear the relevant generation.
+PCB settings require a true accepted local reducer receipt, not a cloud-save claim or an
+inference from equal content. Other dialogs, full reload, logout and crashes are outside
+this narrow recovery scope.
+
+Even after those acceptance tests pass, a client-only deployment can leave an old page
+unable to open a previously unloaded feature until its operator saves and refreshes.
+The earlier three-file warm Dashboard experiment is not a general asset-retention plan.
+Never publish an old entry point, vulnerable HTML preview, old Auth/Admin bundle or BOM
+seed to hide this limitation. Keep the existing raw grants and bucket behavior unchanged
+until the separate backend/session/Realtime transition gates are met.
+
+The version-observation proposal remains independent of this draft-repair change. Its
+bounded source-tree marker, if later adopted and tested, is private-channel self-report,
+not a server attestation or a saved-draft signal. Unknown, stale, editing, offline and
+unobserved clients must never count as upgraded; no aggregate can authorize revocation.

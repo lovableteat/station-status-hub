@@ -504,3 +504,110 @@ test("old-session legacy completion cannot change newer modern content or turn i
     assert.equal(remote.calls.at(-1)?.name, "save_pcb_designer_workspace_locked");
   } finally { await hook.close(); }
 });
+
+test('project-settings success receipt follows actual reducer adoption, with no new remote write', async () => {
+  const local = localDraft(), remote = cloud();
+  const hook = await mount(usePcbWorkspace, { canEdit: true, storage: local.storage, remoteClient: remote.client, editor, recoveryClientId });
+  const settings = load('src/components/pcb-designer/core/projectSettingsDraft.ts');
+  try {
+    await hook.flush();
+    const project = hook.value.activeProject;
+    const parsed = settings.parseProjectSettings({ ...settings.initialProjectSettings(project).values, name: 'Applied synthetic settings' });
+    assert.equal(typeof parsed, 'object');
+    const beforeWrites = remote.calls.filter(call => /save|delete/.test(call.name)).length;
+    let receipt!: Promise<boolean>;
+    await act(async () => { receipt = hook.value.updateProjectSettings(project.id, settings.projectSettingsRevision(project), parsed); });
+    assert.equal(await receipt, true);
+    assert.equal(hook.value.activeProject.name, 'Applied synthetic settings');
+    assert.equal(remote.calls.filter(call => /save|delete/.test(call.name)).length, beforeWrites);
+  } finally { await hook.close(); }
+});
+
+test('queued CAD edit wins over a stale project-settings action and returns a failed receipt', async () => {
+  const local = localDraft(), remote = cloud();
+  const hook = await mount(usePcbWorkspace, { canEdit: true, storage: local.storage, remoteClient: remote.client, editor, recoveryClientId });
+  const settings = load('src/components/pcb-designer/core/projectSettingsDraft.ts');
+  try {
+    await hook.flush();
+    const project = hook.value.activeProject;
+    const parsed = settings.parseProjectSettings({ ...settings.initialProjectSettings(project).values, name: 'Must not replace newer CAD' });
+    let receipt!: Promise<boolean>;
+    await act(async () => {
+      hook.value.commitProject({ ...project, description: 'Newer queued CAD edit' });
+      receipt = hook.value.updateProjectSettings(project.id, settings.projectSettingsRevision(project), parsed);
+    });
+    assert.equal(await receipt, false);
+    assert.equal(hook.value.activeProject.description, 'Newer queued CAD edit');
+    assert.equal(hook.value.activeProject.name, project.name);
+  } finally { await hook.close(); }
+});
+
+test('captured settings callback cannot apply after permission loss or owner switch', async () => {
+  const local = localDraft(), remote = cloud();
+  const initial = { canEdit: true, storage: local.storage, remoteClient: remote.client, editor, recoveryClientId };
+  const hook = await mount(usePcbWorkspace, initial);
+  const settings = load('src/components/pcb-designer/core/projectSettingsDraft.ts');
+  try {
+    await hook.flush();
+    const project = hook.value.activeProject, callback = hook.value.updateProjectSettings;
+    const args = [project.id, settings.projectSettingsRevision(project), settings.parseProjectSettings(settings.initialProjectSettings(project).values)] as const;
+    await hook.render({ ...initial, canEdit: false });
+    assert.equal(await callback(...args), false);
+    await hook.render({ ...initial, editor: { ...editor, userId: '22222222-2222-4222-8222-222222222222' } });
+    assert.equal(await callback(...args), false);
+    assert.equal(hook.value.activeProject.name, project.name);
+  } finally { await hook.close(); }
+});
+
+test('timestamp-only queued commit cannot impersonate acceptance of trimmed no-op settings', async () => {
+  const local = localDraft(), remote = cloud();
+  local.state.projects[0].projectGroup = ''; local.state.projects[0].revision = '1';
+  local.repository.saveRecovery(owner, local.state, '2026-11-12T01:00:00.000Z', recoveryClientId);
+  const hook = await mount(usePcbWorkspace, { canEdit: true, storage: local.storage, remoteClient: remote.client, editor, recoveryClientId });
+  const settings = load('src/components/pcb-designer/core/projectSettingsDraft.ts');
+  try {
+    await hook.flush();
+    const project = hook.value.activeProject;
+    const parsed = settings.parseProjectSettings({ ...settings.initialProjectSettings(project).values, name: `  ${project.name}  ` });
+    let receipt!: Promise<boolean>;
+    await act(async () => {
+      hook.value.commitProject({ ...project });
+      receipt = hook.value.updateProjectSettings(project.id, settings.projectSettingsRevision(project), parsed);
+    });
+    assert.equal(await receipt, false);
+    assert.equal(hook.value.projectSettingsReceipt.accepted, false);
+    assert.equal(hook.value.activeProject.name, project.name);
+    assert.notEqual(hook.value.activeProject.updatedAt, project.updatedAt);
+    assert.equal('projectSettingsReceipt' in hook.value.data, false);
+    assert.equal(remote.calls.some(call => /save|delete/.test(call.name)), false);
+  } finally { await hook.close(); }
+});
+
+test('queued hydration superseding settings resolves the exact receipt false and retains the raw checkpoint', async () => {
+  const local = localDraft(), remote = cloud();
+  local.repository.saveRecovery(owner, local.state, local.state.updatedAt, recoveryClientId);
+  const hook = await mount(usePcbWorkspace, { canEdit: true, storage: local.storage, remoteClient: remote.client, editor, recoveryClientId });
+  const settings = load('src/components/pcb-designer/core/projectSettingsDraft.ts');
+  const registry = load('src/lib/documentDrafts.ts'); registry.setDocumentDraftActor(owner);
+  try {
+    await hook.flush(); assert.equal(hook.value.canMutate, true); assert.equal(hook.value.hasUnsavedChanges, false);
+    const wait = deferred<unknown>(); remote.load(() => wait.promise);
+    let refreshing!: Promise<void>;
+    await act(async () => { refreshing = hook.value.refreshRemoteNow(); await new Promise(resolve => setImmediate(resolve)); });
+    const project = hook.value.activeProject, draft = new settings.ProjectSettingsSession(owner, project);
+    draft.write({ ...draft.draft.values, name: '  User pending settings  ', description: 'raw preserved description' });
+    const server = structuredClone(hook.value.data);
+    server.updatedAt = server.projects[0].updatedAt = '2099-01-01T00:00:00.000Z'; server.projects[0].name = 'Remote replacement';
+    let receipt!: Promise<boolean>;
+    await act(async () => {
+      receipt = hook.value.updateProjectSettings(project.id, settings.projectSettingsRevision(project), settings.parseProjectSettings(draft.draft.values));
+      wait.resolve(server); await refreshing;
+    });
+    const applied = await receipt; if (applied) draft.clear();
+    assert.equal(applied, false); assert.equal(hook.value.projectSettingsReceipt.accepted, false);
+    assert.equal(hook.value.activeProject.name, 'Remote replacement');
+    assert.equal(new settings.ProjectSettingsSession(owner, project).draft.values.name, '  User pending settings  ');
+    assert.equal('projectSettingsReceipt' in hook.value.data, false);
+    assert.equal(remote.calls.some(call => /save|delete/.test(call.name)), false);
+  } finally { await hook.close(); registry.setDocumentDraftActor(null); }
+});

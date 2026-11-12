@@ -1,3 +1,4 @@
+import type { ProjectSettings } from "./projectSettingsDraft.ts";
 import type {
   PcbDrcIssue,
   PcbLibraryComponent,
@@ -38,6 +39,8 @@ export interface SelectionSnapshot {
 
 export interface PcbWorkspaceState {
   data: PcbSaveState;
+  /** Ephemeral reducer receipt; never part of PcbSaveState or persisted history. */
+  projectSettingsReceipt?: { requestToken: string; accepted: boolean };
   activeProject: PcbProject;
   historyByProject: Record<string, HistoryState<PcbProject>>;
   pendingHistoryByProject: Record<string, HistoryState<PendingPlacement[]>>;
@@ -66,6 +69,7 @@ export type PcbWorkspaceAction =
   | { type: "project/delete"; projectId: string }
   | { type: "project/import"; project: PcbProject }
   | { type: "project/commit"; update: PcbProject }
+  | { type: "project/settings"; requestToken: string; projectId: string; baselineRevision: string; settings: ProjectSettings }
   | { type: "model/assign"; componentId: string; metadata: PcbModelAssetMetadata }
   | { type: "project/commit-with-bom"; update: PcbProject; pendingPlacements: PendingPlacement[] }
   | { type: "template/apply"; templateId: string }

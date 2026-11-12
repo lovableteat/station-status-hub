@@ -891,6 +891,9 @@ export function PcbDesignerWorkspace({
         dialog={dialog}
         onClose={() => setDialog(null)}
         onCreateProject={workspace.createProject}
+        draftActorId={user?.userId}
+        projectSettingsReady={workspace.canMutate && !workspace.ownerChanged}
+        currentProjects={workspace.data.projects}
         onUpdateProject={workspace.updateProjectSettings}
         onSaveTemplate={saveCurrentAsTemplate}
         onRenameTemplate={renameTemplate}

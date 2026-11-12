@@ -5,6 +5,7 @@ import { ImagePlus, Paperclip, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import type { ComposerFile } from './maintenanceComposerDraft';
 import type { FaultAttachment } from './maintenanceModel';
 import { maintenanceError } from './useMaintenanceData';
 
@@ -44,9 +45,29 @@ export function useFaultFiles() {
   };
   return { files, add, remove, upload, error };
 }
+/** Preview URLs belong only to this mounted view; checkpoints contain original Files. */
+export function useComposerFilePreviews(source: ComposerFile[], change: (update: (files: ComposerFile[]) => ComposerFile[]) => void) {
+  const [error, setError] = useState('');
+  const [files, setFiles] = useState<PendingFile[]>([]);
+  useEffect(() => {
+    const previews = source.map(item => ({ ...item, preview: item.file.type.startsWith('image/') ? URL.createObjectURL(item.file) : '' }));
+    setFiles(previews);
+    return () => { previews.forEach(item => { if (item.preview) URL.revokeObjectURL(item.preview); }); };
+  }, [source]);
+  const add = (incoming: FileList | File[]) => {
+    const accepted: ComposerFile[] = [], rejected: string[] = [];
+    for (const file of Array.from(incoming)) {
+      if (!file.size || file.size > 50 * 1024 * 1024) rejected.push(file.name);
+      else accepted.push({ id: crypto.randomUUID(), file });
+    }
+    change(previous => [...previous, ...accepted]);
+    setError(rejected.length ? `未加入：${rejected.join('、')}。每檔須為1 byte至50MB；其他檔案已保留。` : '');
+  };
+  return { files, add, remove: (id: string) => change(previous => previous.filter(item => item.id !== id)), error };
+}
 export type FaultFiles = ReturnType<typeof useFaultFiles>;
 
-export function FilePicker({ state, disabled }: { state: FaultFiles; disabled?: boolean }) {
+export function FilePicker({ state, disabled }: { state: Pick<FaultFiles, 'files' | 'add' | 'remove' | 'error'>; disabled?: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   return <div className="mf-files" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); if (!disabled) state.add(event.dataTransfer.files); }}>
     <input ref={input} type="file" multiple hidden disabled={disabled} onChange={event => { if (event.target.files) state.add(event.target.files); event.target.value = ''; }} />

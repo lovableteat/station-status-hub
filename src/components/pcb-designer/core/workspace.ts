@@ -1,3 +1,4 @@
+import { applyProjectSettings } from "./projectSettingsDraft.ts";
 import { createBlankProject, createId } from "../defaults.ts";
 import type {
   PcbProject,
@@ -272,6 +273,14 @@ export function reduceWorkspaceState(
   state: PcbWorkspaceState,
   action: PcbWorkspaceAction,
 ): PcbWorkspaceState {
+  if (action.type === "project/settings") {
+    const project = state.canEdit && !state.documentLocked && action.projectId === state.activeProject.id
+      ? applyProjectSettings(state.activeProject, action.baselineRevision, action.settings) : null;
+    return {
+      ...(project ? replaceProject(state, project) : state),
+      projectSettingsReceipt: { requestToken: action.requestToken, accepted: Boolean(project) },
+    };
+  }
   if (isMutation(action) && (!state.canEdit || state.documentLocked)
     && action.type !== "document/toggle-lock") {
     return state;
@@ -939,7 +948,10 @@ export function reduceWorkspaceState(
     case "permission/set":
       return { ...state, canEdit: action.canEdit };
     case "persistence/hydrate": {
-      const hydrated = createWorkspaceState(action.data, state.canEdit);
+      // A queued hydration can supersede an accepted local settings action before
+      // its receipt is observed. Resolve that token conservatively, retaining the raw draft.
+      const hydrated = { ...createWorkspaceState(action.data, state.canEdit),
+        projectSettingsReceipt: state.projectSettingsReceipt ? { ...state.projectSettingsReceipt, accepted: false } : undefined };
       const preserve = action.preserveView;
       if (!preserve) return hydrated;
       const requestedProject = preserve.activeProjectId

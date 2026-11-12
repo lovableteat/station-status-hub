@@ -1,3 +1,4 @@
+import { setDocumentDraftActor } from "@/lib/documentDrafts";
 import {
   createContext,
   type ReactNode,
@@ -147,6 +148,7 @@ function readStoredUser(): User | null {
 }
 
 function storeUser(user: User | null) {
+  setDocumentDraftActor(user?.userId ?? null);
   if (typeof window === "undefined") return;
   try {
     if (user) window.sessionStorage.setItem("user", JSON.stringify(user));
@@ -281,7 +283,11 @@ function isTerminalSessionError(error: unknown) {
 export function UserProvider({ children }: { children: ReactNode }) {
   const demoUser = useMemo(getDevDemoUser, []);
   const cachedUser = useMemo(() => (demoUser ? null : readStoredUser()), [demoUser]);
-  const [user, setUser] = useState<User | null>(demoUser ?? cachedUser);
+  const [user, setUser] = useState<User | null>(() => {
+    const initial = demoUser ?? cachedUser;
+    setDocumentDraftActor(initial?.userId ?? null);
+    return initial;
+  });
   const [sessionMode, setSessionMode] = useState<SessionMode>(
     demoUser ? "demo" : cachedUser ? "legacy" : "signed-out",
   );

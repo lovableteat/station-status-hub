@@ -10,15 +10,15 @@ assert.ok(store);
 const compiled = ts.transpileModule(store.getText(source), { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
 
 function fixture(blockStorage = false) {
-  const events = [];
+  const events = [], actors = [];
   const sessionStorage = {
     setItem() { if (blockStorage) throw Error('Blocked'); },
     removeItem() { if (blockStorage) throw Error('Blocked'); },
   };
   class CustomEvent { constructor(type, options) { this.type = type; this.detail = options.detail; } }
-  const context = vm.createContext({ window: { sessionStorage, dispatchEvent(event) { events.push(event); } }, CustomEvent });
+  const context = vm.createContext({ setDocumentDraftActor(actor) { actors.push(actor); }, window: { sessionStorage, dispatchEvent(event) { events.push(event); } }, CustomEvent });
   vm.runInContext(compiled, context);
-  return { events, storeUser: context.storeUser };
+  return { events, actors, storeUser: context.storeUser };
 }
 
 test('storing a user synchronously announces only their application identity', () => {
@@ -27,6 +27,7 @@ test('storing a user synchronously announces only their application identity', (
   assert.equal(state.events.length, 1);
   assert.equal(state.events[0].type, 'station-user-changed');
   assert.equal(state.events[0].detail, 'owner-a');
+  assert.deepEqual(state.actors, ['owner-a']);
 });
 
 test('local logout announces null without relying on a successful remote sign-out', () => {
@@ -35,6 +36,7 @@ test('local logout announces null without relying on a successful remote sign-ou
   assert.equal(state.events.length, 1);
   assert.equal(state.events[0].type, 'station-user-changed');
   assert.equal(state.events[0].detail, null);
+  assert.deepEqual(state.actors, [null]);
 });
 
 test('blocked browser storage cannot prevent the local account-change notification', () => {
@@ -42,4 +44,5 @@ test('blocked browser storage cannot prevent the local account-change notificati
   assert.doesNotThrow(() => state.storeUser(null));
   assert.equal(state.events.length, 1);
   assert.equal(state.events[0].detail, null);
+  assert.deepEqual(state.actors, [null]);
 });
