@@ -23,11 +23,18 @@ test('PCB browser runner is CI-only, loopback-only and preserves failure evidenc
     'save-denial-keeps-recovery', 'denied-lock-never-unlocks', 'stale-load-after-new-session',
     'stale-denial-after-new-session', 'stale-save-keeps-newer-draft', 'own-client-lease-renew-release',
     'dialog-cancel-and-history', 'normal-token-refresh-keeps-own-lease',
-    'actor-switch-preserves-original-owner']) assert.ok(source.includes(`'${scenario}'`), scenario);
+    'actor-switch-preserves-original-owner', 'view-denied', 'p0001-edit-denial-keeps-recovery']) assert.ok(source.includes(`'${scenario}'`), scenario);
   assert.match(source, /renewSession\('SIGNED_IN'\)/, 'Actual session invalidation, not routine token refresh, fences stale-response tests');
   assert.match(source, /Routine same-actor TOKEN_REFRESHED triggers no release, acquire, load or other RPC/);
   assert.match(source, /Original owner recovery bytes remain exactly intact/);
   assert.match(source, /No write is attempted in the new-owner namespace/);
+  assert.match(source, /page\.evaluateHandle\(\(\) => document\)/);
+  assert.match(source, /page\.evaluate\(original => document === original, originalDocument\)/);
+  assert.match(source, /documentLoads, 1/);
+  assert.match(source, /documentRequests, 1/);
+  assert.match(source, /documentIdentity, originalDocumentIdentity/);
+  assert.ok(!source.includes("performance.getEntriesByType('navigation')"),
+    'Clock-mocked empty performance entries cannot prove or disprove real browser reloads');
   assert.match(source, /width: 1280, height: 800/);
   assert.match(source, /width: 390, height: 844/);
 });
@@ -51,6 +58,13 @@ test('PCB fixture observes the real workspace and keeps production services out 
   assert.match(services, /useSyncExternalStore\(subscribeUser, getUser, getUser\)/,
     'Account-switch browser scenario rerenders the actual mounted workspace through a reactive user provider boundary');
   assert.match(services, /switchActor\(\)/);
+  assert.match(services, /code: 'P0001', message: mode === 'view-denied'\s*\? 'PCB workspace access denied' : 'PCB workspace edit access denied'/,
+    'Use exact backend permission errors without an HTTP authorization status shortcut');
+  const candidate = await read('docs/security-proposals/pcb-rpc-cutover-PENDING.sql');
+  for (const message of ['PCB workspace access denied', 'PCB workspace edit access denied']) {
+    assert.ok(candidate.includes(`'${message}'`), `Synthetic denial is grounded in the actual candidate: ${message}`);
+  }
+  assert.ok(!services.includes('PCB workspace view access denied'), 'Do not invent a view-specific backend message');
 });
 
 test('authorized PR workflow executes PCB browser contracts and retains synthetic artifacts', async () => {

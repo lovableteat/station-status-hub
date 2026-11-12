@@ -26,8 +26,8 @@ synthetic. No real account, real PCB data, credentials, service URL or server is
 
 ## Coverage
 
-Each of 14 scenarios runs in Chromium at 1280×800 and emulated mobile 390×844
-(28 browser cases total):
+Each of 16 scenarios runs in Chromium at 1280×800 and emulated mobile 390×844
+(32 browser cases total):
 
 1. Missing session, dirty recovery, blocked save and repeated retry.
 2. Expired session with the same protection.
@@ -46,6 +46,13 @@ Each of 14 scenarios runs in Chromium at 1280×800 and emulated mobile 390×844
 14. Mounted application-account/Auth-actor switch retains the original owner's
     recovery bytes and dirty draft. Retry, heartbeat, save and model requests cannot
     send the old workspace to the new account or write a new-owner recovery key.
+15. Load denial with the backend's exact `P0001` / `PCB workspace access denied`
+    response immediately pauses editing, preserves dirty recovery and avoids fallback.
+16. Locked-save denial with `P0001` / `PCB workspace edit access denied` pauses editing,
+    keeps the draft dirty and avoids unlocked-save or permissions fallback.
+
+The `P0001` fixtures deliberately contain no HTTP 401/403 status field, exercising
+the narrow message classification required by the existing server functions.
 
 Denied-state cases also verify that routine token refresh does not clear server
 denial without explicit retry. Stale-response cases use an actual synthetic
@@ -58,6 +65,10 @@ visible text. Explicit-save attribution metadata may be added by production code
 Saved revision, UTF-8 description, geometry and unrelated sentinel data are checked.
 Every scenario asserts no browser page errors, no forbidden request, no destructive
 storage writes, no auth mutation, no document reload and no document-width overflow.
+No-reload evidence uses the original `Document` handle, a per-document UUID,
+one native `DOMContentLoaded` event and exactly one intercepted document GET.
+Do not use navigation entries from `performance` here: Playwright's controlled
+clock intentionally returns an empty performance-entry list.
 
 ## Local permitted validation
 

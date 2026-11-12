@@ -53,7 +53,8 @@ export const fixture = window.pcbRecoveryFixture = {
   renders: [],
   calls: [], held: [], storageWrites: [], destructiveWrites: [],
   toasts: [], sessionReads: 0, permissionsReads: 0, authMutations: [],
-  controls: { load: initial === 'rpc401' ? '401' : initial === 'rpc42501' ? '42501' : 'ok', lock: initial === 'rpc401' ? '401' : initial === 'rpc42501' ? '42501' : 'ok', save: 'ok' },
+  controls: { load: initial === 'rpc401' ? '401' : initial === 'rpc42501' ? '42501' : initial === 'view-denied' ? 'view-denied' : 'ok',
+    lock: initial === 'rpc401' ? '401' : initial === 'rpc42501' ? '42501' : 'ok', save: 'ok' },
   session: initial === 'missing' ? null : {
     access_token: 'synthetic-token-1', refresh_token: 'synthetic-refresh-1',
     expires_at: Math.floor(Date.now() / 1000) + (initial === 'expired' ? -60 : 3600),
@@ -105,6 +106,13 @@ export const fixture = window.pcbRecoveryFixture = {
 };
 
 function response(name, args, mode) {
+  // The unchanged backend permission checks use P0001, not 42501. Deliberately
+  // omit HTTP status so only these exact production messages identify denial.
+  if (mode === 'view-denied' || mode === 'edit-denied') return {
+    data: null,
+    error: { code: 'P0001', message: mode === 'view-denied'
+      ? 'PCB workspace access denied' : 'PCB workspace edit access denied' },
+  };
   if (mode === '401' || mode === '42501') return {
     data: null,
     error: { code: mode === '401' ? 'PGRST301' : '42501', status: mode === '401' ? 401 : 403, message: 'Synthetic authorization denied' },

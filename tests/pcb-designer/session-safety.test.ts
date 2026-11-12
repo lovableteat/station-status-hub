@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createPcbAccountRemoteClient, type PcbAccountDatabase } from "../../src/components/pcb-designer/core/accountRemoteSync.ts";
 import { loadPcbRemote } from "../../src/components/pcb-designer/core/remoteSync.ts";
-import { PcbRemoteAccessError, type PcbSession, type PcbSessionSource } from "../../src/components/pcb-designer/core/remoteAccess.ts";
+import { isPcbAuthorizationError, PcbRemoteAccessError, type PcbSession, type PcbSessionSource } from "../../src/components/pcb-designer/core/remoteAccess.ts";
 import { createBlankProject } from "../../src/components/pcb-designer/defaults.ts";
 import type { PcbSaveState } from "../../src/components/pcb-designer/types.ts";
 
@@ -198,4 +198,58 @@ test("same-actor token refresh cannot override a server authorization denial", a
   assert.equal(f.client.getAccessSnapshot!().generation, generation);
   await assert.rejects(f.client.load!()); assert.equal(f.calls.length, 1);
   cleanup();
+});
+
+for (const message of ["PCB workspace access denied", "PCB workspace edit access denied"]) {
+  for (const rpc of [
+    "load_pcb_designer_workspace_shared", "load_pcb_designer_workspace",
+    "save_pcb_designer_workspace_locked", "save_pcb_designer_workspace_shared", "save_pcb_designer_workspace",
+    "acquire_pcb_designer_project_lock", "load_pcb_designer_project_lock",
+  ]) test(`known P0001 permission denial immediately blocks ${rpc}: ${message}`, async () => {
+    const f = fixture();
+    await f.client.load!(); // Same authenticated actor already had a healthy session.
+    assert.equal(f.client.getAccessSnapshot!().status, "ready");
+    f.calls.length = 0;
+    f.handle(async name => ({ data: null, error: name === rpc
+      ? { code: "P0001", message }
+      : { code: "PGRST202", message: `Could not find the function workspace.${name}(p_user_id) in the schema cache` } }));
+    if (rpc.startsWith("save_")) assert.equal(await f.client.save!(draft()), false);
+    else if (rpc === "acquire_pcb_designer_project_lock") await assert.rejects(f.client.acquireProjectLock!({ projectId: "board", projectName: "Synthetic" }));
+    else if (rpc === "load_pcb_designer_project_lock") await assert.rejects(f.client.loadProjectLock!("board"));
+    else await assert.rejects(f.client.load!());
+    assert.equal(f.calls.at(-1)?.name, rpc);
+    assert.equal(f.tableCalls(), 0);
+    assert.equal(f.client.getAccessSnapshot!().status, "denied");
+    const deniedCallCount = f.calls.length;
+    assert.equal(await f.client.save!(draft()), false);
+    assert.equal(f.calls.length, deniedCallCount); // No further writes or fallback before explicit retry.
+  });
+}
+
+test("ordinary P0001 validation/lock conflicts are not reclassified as authorization denials", async () => {
+  for (const message of [
+    "PCB project is locked by another editor", "PCB project edit lock required", "Invalid PCB workspace payload",
+    "PCB workspace access denied: unrelated suffix", "prefix PCB workspace edit access denied",
+  ]) assert.equal(isPcbAuthorizationError({ code: "P0001", message }), false);
+  assert.equal(isPcbAuthorizationError({ code: "OTHER", message: "PCB workspace edit access denied" }), false);
+  const f = fixture();
+  f.handle(async () => ({ data: null, error: { code: "P0001", message: "PCB project is locked by another editor" } }));
+  assert.equal(await f.client.save!(draft()), false);
+  assert.equal(f.client.getAccessSnapshot!().status, "ready");
+  assert.equal(f.tableCalls(), 0);
+});
+
+test("a transport failure during post-request session validation is an error, not a new auth generation", async () => {
+  const f = fixture();
+  let reads = 0;
+  f.auth.getSession = async () => ++reads % 2 === 0
+    ? { data: { session: null }, error: { status: 500, message: "Synthetic session service unavailable" } }
+    : { data: { session: session() }, error: null };
+  const generation = f.client.getAccessSnapshot!().generation;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await assert.rejects(f.client.load!());
+    assert.equal(f.client.getAccessSnapshot!().status, "error");
+    assert.equal(f.client.getAccessSnapshot!().generation, generation);
+  }
+  assert.equal(f.calls.length, 2);
 });

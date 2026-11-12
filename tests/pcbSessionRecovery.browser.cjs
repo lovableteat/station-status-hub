@@ -60,7 +60,7 @@ const { buildPcbRecoveryFixture } = require('./support/pcbRecoveryBrowser.cjs');
         });
         await context.addInitScript(() => {
           window.pcbBoundaryViolations = [];
-          window.pcbDocumentIdentity = 'single synthetic PCB document';
+          window.pcbDocumentIdentity = crypto.randomUUID();
           const deny = name => (...args) => {
             window.pcbBoundaryViolations.push({ name, args: args.map(String) });
             throw new Error(`Fixture blocked real side effect: ${name}`);
@@ -75,6 +75,8 @@ const { buildPcbRecoveryFixture } = require('./support/pcbRecoveryBrowser.cjs');
         const page = await context.newPage();
         page.setDefaultTimeout(8000);
         page.on('pageerror', error => errors.push(error.message));
+        let documentLoads = 0;
+        page.on('domcontentloaded', () => { documentLoads++; });
         await page.clock.install();
         const state = () => page.evaluate(() => pcbRecoveryFixture.state);
         const saved = async (label = 'draft') => {
@@ -108,6 +110,10 @@ const { buildPcbRecoveryFixture } = require('./support/pcbRecoveryBrowser.cjs');
         };
         try {
           await page.goto(`${origin}/pcb-recovery/?scenario=${initial}`, { waitUntil: 'load' });
+          // Playwright's installed clock intentionally replaces Performance
+          // entries with []. Keep real document/network evidence instead.
+          const originalDocument = await page.evaluateHandle(() => document);
+          const originalDocumentIdentity = await page.evaluate(() => pcbDocumentIdentity);
           await page.getByTestId('pcb-designer-workspace').waitFor();
           await page.waitForFunction(() => pcbRecoveryFixture.state?.hasUnsavedChanges);
           await body({ page, state, saved, unchanged, ready, denied, retry, screenshot, settings });
@@ -115,17 +121,23 @@ const { buildPcbRecoveryFixture } = require('./support/pcbRecoveryBrowser.cjs');
             networkOrBrowserStorageWrites: pcbBoundaryViolations,
             destructiveRepositoryWrites: pcbRecoveryFixture.destructiveWrites,
             permissionsReads: pcbRecoveryFixture.permissionsReads, authMutations: pcbRecoveryFixture.authMutations,
-            documentIdentity: pcbDocumentIdentity, navigations: performance.getEntriesByType('navigation').length,
+            documentIdentity: pcbDocumentIdentity,
             width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
           }));
+          result.safety.documentLoads = documentLoads;
+          result.safety.documentRequests = requests.filter(value => value === '/pcb-recovery/').length;
+          result.safety.originalDocumentRetained = await page.evaluate(original => document === original, originalDocument);
+          await originalDocument.dispose();
           assert.deepEqual(result.safety.networkOrBrowserStorageWrites, [], 'No real network, browser storage or IndexedDB operations');
           assert.deepEqual(result.safety.destructiveRepositoryWrites, [], 'No draft/baseline removal even in the isolated repository');
           assert.deepEqual(result.safety.authMutations, [], 'Recovery is read-only and never signs out or changes a login');
           assert.equal(result.safety.permissionsReads, 0, 'No fallback to legacy permissions snapshots');
           assert.equal(result.safety.width, viewport.width);
           assert.ok(result.safety.scrollWidth <= viewport.width, 'PCB recovery does not overflow the document');
-          assert.equal(result.safety.navigations, 1, 'Recovery does not reload or navigate away from the draft');
-          assert.equal(requests.filter(value => value === '/pcb-recovery/').length, 1);
+          assert.equal(result.safety.documentLoads, 1, 'Recovery does not load another document');
+          assert.equal(result.safety.documentRequests, 1, 'Exactly one real document request: no reload or replacement navigation');
+          assert.equal(result.safety.originalDocumentRetained, true, 'The actual original Document object survives recovery');
+          assert.equal(result.safety.documentIdentity, originalDocumentIdentity, 'The original per-document identity remains unchanged');
           assert.deepEqual(forbidden, []); assert.deepEqual(errors, []);
           await screenshot('passed'); result.status = 'passed';
         } catch (error) {
@@ -139,7 +151,7 @@ const { buildPcbRecoveryFixture } = require('./support/pcbRecoveryBrowser.cjs');
         } finally { report(); await context.close(); }
       }
 
-      for (const initial of ['missing', 'expired', 'rpc401', 'rpc42501']) await scenario(initial + '-draft-recovery', async ({ page, saved, unchanged, ready, denied, retry, screenshot }) => {
+      for (const initial of ['missing', 'expired', 'rpc401', 'rpc42501', 'view-denied']) await scenario(initial + '-draft-recovery', async ({ page, saved, unchanged, ready, denied, retry, screenshot }) => {
         await denied();
         assert.equal(await page.getByTestId('pcb-cloud-access').getAttribute('data-status'), ['missing', 'expired'].includes(initial) ? 'session-required' : 'denied');
         const draft = await saved();
@@ -157,7 +169,7 @@ const { buildPcbRecoveryFixture } = require('./support/pcbRecoveryBrowser.cjs');
         assert.ok(box && box.x >= 0 && box.x + box.width <= viewport.width && box.y >= 0 && box.y + box.height <= viewport.height,
           'Recovery action is visible and reachable at the target viewport');
         await page.evaluate(() => { pcbRecoveryFixture.controls.load = 'ok'; pcbRecoveryFixture.controls.lock = 'ok'; pcbRecoveryFixture.renewSession(); });
-        if (initial === 'rpc401' || initial === 'rpc42501') {
+        if (!['missing', 'expired'].includes(initial)) {
           await denied();
           assert.equal(await page.getByTestId('pcb-cloud-access').getAttribute('data-status'), 'denied', 'Routine token refresh cannot clear server denial');
           await retry().click();
@@ -174,9 +186,9 @@ const { buildPcbRecoveryFixture } = require('./support/pcbRecoveryBrowser.cjs');
           'A legitimately empty load does not claim the existing draft was saved');
       }, 'missing');
 
-      await scenario('save-denial-keeps-recovery', async ({ page, ready, denied, saved, unchanged }) => {
+      for (const [name, mode] of [['save-denial-keeps-recovery', '42501'], ['p0001-edit-denial-keeps-recovery', 'edit-denied']]) await scenario(name, async ({ page, ready, denied, saved, unchanged }) => {
         await ready(); const draft = await saved();
-        await page.evaluate(() => { pcbRecoveryFixture.controls.save = '42501'; });
+        await page.evaluate(mode => { pcbRecoveryFixture.controls.save = mode; }, mode);
         await page.getByRole('button', { name: '儲存', exact: true }).click();
         await page.waitForFunction(() => pcbRecoveryFixture.toasts.some(value => value.title.includes('失敗')));
         await denied();
