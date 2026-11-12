@@ -2,6 +2,59 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {chromium}=createRequire(path.resolve(process.env.AUDIT_QA_DIR||'../qa-tools','package.json'))('playwright');
 const evidence=path.resolve(process.env.CIRCUIT_AI_EVIDENCE_DIR||'../circuit-pdf-ai-review-evidence');
 
+async function runSelectedBatch(browser,origin,width) {
+  const context=await browser.newContext({viewport:{width,height:884},isMobile:width<768,hasTouch:width<768,reducedMotion:'reduce'});
+  await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+  try {
+    const page=await context.newPage(),errors=[];
+    page.on('pageerror',error=>errors.push(error.message));
+    await page.goto(origin+'/?allPages');
+    await page.getByRole('button',{name:'開啟本頁 AI 初審',exact:true}).click();
+    const dialog=page.getByTestId('circuit-pdf-ai-review');
+    await dialog.getByRole('combobox',{name:'AI 初審服務',exact:true}).selectOption('qa-vision');
+    const selection=dialog.getByRole('textbox',{name:'指定比對頁碼',exact:true});
+    const submit=dialog.getByRole('button',{name:'比對指定頁面',exact:true});
+    assert.equal(await submit.isDisabled(),true);
+    await selection.fill('1, 6');
+    assert.equal(await selection.getAttribute('aria-invalid'),'true');
+    assert.equal(await submit.isDisabled(),true);
+    assert.match(await selection.evaluate(node=>node.getAttribute('aria-describedby')?.split(/\s+/).map(id=>document.getElementById(id)?.textContent).join(' ')??''),/1\s*–\s*5/);
+    assert.equal(await page.evaluate(()=>window.__circuitAiQA.calls.length),0);
+
+    await selection.fill('5');
+    assert.equal(await submit.isDisabled(),true,'selection needs a page with a baseline counterpart');
+    await selection.fill('1、3–5，3');
+    assert.notEqual(await selection.getAttribute('aria-invalid'),'true');
+    assert.equal(await submit.isEnabled(),true);
+    assert.ok(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth+1));
+    await page.screenshot({path:path.join(evidence,`selected-range-${width}.png`)});
+    await page.evaluate(()=>window.__circuitAiQA.failPages=[3]);
+    if(width<768)await submit.tap();else await selection.press('Enter');
+    const progress=dialog.getByRole('region',{name:'指定頁面比對進度',exact:true});
+    const pageResult=number=>progress.getByRole('button',{name:`查看比對版第 ${number} 頁初審`,exact:true});
+    await progress.getByRole('button',{name:'繼續未完成頁面',exact:true}).waitFor();
+    assert.equal(await pageResult(2).count(),0);
+    assert.equal(await pageResult(3).getAttribute('data-status'),'failed');
+    assert.equal(await pageResult(5).getAttribute('data-status'),'unmatched');
+    assert.equal(await pageResult(5).isDisabled(),true);
+    assert.deepEqual(await page.evaluate(()=>window.__circuitAiQA.saveRecords.map(({workingPage})=>workingPage).sort()),[1,4]);
+
+    await page.evaluate(()=>window.__circuitAiQA.failPages=[]);
+    await progress.getByRole('button',{name:'繼續未完成頁面',exact:true}).click();
+    await progress.getByText('指定頁面比對已結束',{exact:true}).waitFor();
+    assert.deepEqual(await page.evaluate(()=>window.__circuitAiQA.calls.map(call=>call.target.workingPage).sort()),[1,3,3,4]);
+    assert.deepEqual(await page.evaluate(()=>window.__circuitAiQA.saveRecords.map(({workingPage,officialPage})=>[workingPage,officialPage]).sort()),[[1,2],[3,4],[4,5]]);
+    await pageResult(3).click();
+    await dialog.getByRole('heading',{name:'比對版第 3 頁 · 基準版第 4 頁初審摘要',exact:true}).waitFor();
+    assert.deepEqual(await page.evaluate(()=>window.__circuitAiQA.loads),[3]);
+    await page.screenshot({path:path.join(evidence,`selected-results-${width}.png`)});
+    assert.deepEqual(errors,[]);
+    return {width,checks:['invalid range cannot submit','selected pages deduplicated and mapped to baseline','resume retries only failed selected page','persisted selected result can be opened']};
+  } finally {
+    await context.close();
+  }
+}
+
 async function runParallelBatch(browser,origin,width) {
   const context=await browser.newContext({viewport:{width,height:884},isMobile:width<768,hasTouch:width<768,reducedMotion:'reduce'});
   await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
@@ -71,7 +124,9 @@ await page.waitForFunction(()=>{const box=document.querySelector('[data-testid="
 await dialog.locator('.circuit-pdf-ai-body').evaluate(node=>node.scrollTop=node.scrollHeight);const box=await dialog.boundingBox(),footer=await dialog.locator('.circuit-pdf-ai-footer').boundingBox();assert.ok(box.y>=-1&&box.y+box.height<=501);assert.ok(footer.y>=0&&footer.y+footer.height<=501);assert.ok(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth+1));await page.screenshot({path:path.join(evidence,`short-${width}.png`)});await page.setViewportSize({width,height:884});await dialog.locator('.circuit-pdf-ai-body').evaluate(node=>node.scrollTop=0);await page.screenshot({path:path.join(evidence,`review-${width}.png`)});await dialog.getByRole('button',{name:'關閉 AI 比對',exact:true}).click();await dialog.waitFor({state:'hidden'});await page.getByRole('button',{name:'切換檢視權限',exact:true}).click();await open.click();assert.equal(await dialog.getByRole('button',{name:'重新比對這一頁',exact:true}).isEnabled(),false);assert.deepEqual(errors,[]);results.push({width,result:'passed',checks:['real PDF images and coordinate text sent','manual review save/reopen','old AI runs read-only','cancellation and failure preserve reports','short viewport no clipping','read-only permissions respected']});await context.close();}
 const parallelBatch=[];
 for(const width of [1440,390])parallelBatch.push(await runParallelBatch(browser,origin,width));
-fs.writeFileSync(path.join(evidence,'browser-report.json'),JSON.stringify({result:'passed',checks:results,parallelBatch},null,2));console.log(JSON.stringify({checks:results,parallelBatch}));
+const selectedBatch=[];
+for(const width of [1440,390])selectedBatch.push(await runSelectedBatch(browser,origin,width));
+fs.writeFileSync(path.join(evidence,'browser-report.json'),JSON.stringify({result:'passed',checks:results,parallelBatch,selectedBatch},null,2));console.log(JSON.stringify({checks:results,parallelBatch,selectedBatch}));
 }finally{if(browser)await browser.close();await server.close()}})().catch(error=>{console.error(error);process.exitCode=1});
 
 

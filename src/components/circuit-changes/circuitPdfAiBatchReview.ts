@@ -13,11 +13,29 @@ export interface CircuitPdfAiBatchPage {
   error?: string;
 }
 
-/** Keep every working page visible, including pages without an official counterpart. */
-export function buildCircuitPdfAiBatchPages(officialCount: number, workingCount: number, officialOffset: number): CircuitPdfAiBatchPage[] {
+export function parseCircuitPdfAiPageSelection(input: string, workingCount: number): { pages: number[]; error?: never } | { error: string; pages?: never } {
+  const normalized = input.normalize("NFKC").replace(/、/g, ",").replace(/[–—−]/g, "-").trim();
+  if (!normalized) return { pages: [] };
+  const pages = new Set<number>();
+  for (const item of normalized.split(",")) {
+    const match = /^(\d+)(?:\s*-\s*(\d+))?$/.exec(item.trim());
+    if (!match) return { error: "請用逗號分隔頁碼或範圍，例如 2, 5–8, 11。" };
+    const start = Number(match[1]), end = Number(match[2] ?? match[1]);
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < 1 || start > workingCount || end > workingCount) {
+      return { error: `頁碼須在 1–${workingCount} 之間。` };
+    }
+    if (start > end) return { error: "範圍的起始頁不能大於結束頁。" };
+    for (let page = start; page <= end; page++) pages.add(page);
+  }
+  return { pages: [...pages].sort((a, b) => a - b) };
+}
+
+/** Keep requested working pages visible, including pages without an official counterpart. */
+export function buildCircuitPdfAiBatchPages(officialCount: number, workingCount: number, officialOffset: number, selectedPages?: readonly number[]): CircuitPdfAiBatchPage[] {
   const count = Number.isInteger(workingCount) && workingCount > 0 ? workingCount : 0;
-  return Array.from({ length: count }, (_, index) => {
-    const workingPage = index + 1, officialPage = workingPage + officialOffset;
+  const pages = selectedPages ?? Array.from({ length: count }, (_, index) => index + 1);
+  return pages.map(workingPage => {
+    const officialPage = workingPage + officialOffset;
     const matched = Number.isInteger(officialPage) && officialPage > 0 && officialPage <= officialCount;
     return { workingPage, officialPage: matched ? officialPage : null, status: matched ? "pending" : "unmatched" };
   });
