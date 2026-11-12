@@ -33,6 +33,8 @@ jobs:
         run: node --test tests/audit*.integration.cjs
       - name: Application and build configuration types
         run: npm run typecheck
+      - name: Historical migration cleanup preserves accounts and fails closed
+        run: PGLITE_MODULE="$AUDIT_QA_DIR/node_modules/@electric-sql/pglite/dist/index.js" node --test tests/historicalCredentialSanitization.postgres.mjs
       - name: Complete unit and source contracts
         run: npm test
       - name: Mobile workspace and query contracts
