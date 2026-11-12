@@ -160,3 +160,17 @@ test('native status label contains options but the scoped select retains its exa
  const source=fs.readFileSync(path.resolve(__dirname,'../src/components/pcb-designer/PcbDialogs.tsx'),'utf8');
  assert.match(source,/<label data-pcb-field-tone=\{values\.status \|\| "draft"\}[\s\S]*?狀態\s*<select/);
 });
+
+
+test('reopening PCB settings waits for an exposed responsive control instead of guessing from a transient missing desktop button',()=>{
+ const source=fs.readFileSync(path.resolve(__dirname,'currentClientDraftRecovery.browser.cjs'),'utf8');
+ const helper=source.split('async function openPcbSettings(page){')[1].split('const PCB_STATUS_SELECTOR=')[0];
+ assert.ok(helper.includes('settings.or(mobileActions).filter({visible:true})'));
+ assert.ok(helper.indexOf("await control.waitFor({state:'visible'})")<helper.indexOf('await control.count()'));
+ assert.ok(helper.indexOf('await control.count()')<helper.indexOf('await control.click()'));
+ assert.ok(helper.includes("getAttribute('aria-label')==='開啟 PCB 專案操作'"));
+ assert.ok(helper.includes("if(opensMenu)await page.getByRole('menuitem',{name:'專案設定',exact:true}).click()"));
+ assert.doesNotMatch(helper,/settings\.count\(|waitForTimeout|force:|\.first\(/);
+ assert.ok(source.includes("form=await openPcbSettings(h.page);assert.deepEqual(await pcbSnapshot(form),baseline)"),'Cancel must still reopen and compare the original baseline');
+ assert.ok(source.includes("assert.notDeepEqual(after,before"),'Success must still demonstrate that the invalid draft was cleared');
+});
