@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet, Loader2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { BOM_SERIES_NAME_LIMIT, BOM_VERSION_LABEL_LIMIT, BOM_VERSION_NOTE_LIMIT, nextBomVersionNumber, type BomSeries } from "./bomVersioning";
 import { CHIP, CHIP_TONE } from "./bomVersionPresentation";
 import type { MaterialWorkbookPayload } from "./materialRequestUtils";
+import "./bomUploadDialog.css";
 
 export const NEW_BOM_SERIES_TARGET = "__new-series__";
 
@@ -56,11 +57,11 @@ export function BomUploadDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next && !busy) onCancel(); }}>
-      <DialogContent data-testid="bom-upload-dialog" className="flex max-h-[92vh] w-[min(94vw,980px)] max-w-[min(94vw,980px)] flex-col gap-4 overflow-hidden p-5 sm:p-6">
-        <DialogHeader>
-          <DialogTitle className="text-xl">確認上傳 BOM</DialogTitle>
+      <DialogContent data-testid="bom-upload-dialog" hideCloseButton={busy} className="bom-upload-dialog flex max-h-[92dvh] w-[min(94vw,980px)] max-w-[min(94vw,980px)] flex-col gap-4 overflow-hidden p-4 sm:p-6">
+        <DialogHeader className="pr-10">
+          <DialogTitle className="flex items-center gap-2 text-xl"><FileSpreadsheet className="size-5 shrink-0 text-primary" aria-hidden="true" />確認上傳 BOM</DialogTitle>
           <DialogDescription>
-            每次上傳都會保存為獨立版本，不會覆蓋舊資料。同一塊板請選「作為既有系列的新版本」，RD 的追蹤紀錄會依位號與料號帶到新版；全新的板子請建立新系列{activeProjectName ? `（會歸入專案「${activeProjectName}」）` : ""}。
+            新板子建立新系列{activeProjectName ? `，歸入「${activeProjectName}」` : ""}。同一塊板選既有系列，保留舊版並依位號與料號帶入 RD 追蹤。
           </DialogDescription>
         </DialogHeader>
 
@@ -68,17 +69,17 @@ export function BomUploadDialog({
           {uploads.map((upload, index) => {
             const targetSeries = targets.find((series) => series.id === upload.target);
             return (
-              <div key={upload.key} className="rounded-xl border border-border bg-background/40 p-3">
+              <div key={upload.key} className="bom-upload-file min-w-0 rounded-xl border border-border bg-background/40 p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <FileSpreadsheet className="h-4 w-4 flex-none text-primary" aria-hidden="true" />
                   <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground" title={upload.file.name}>{upload.file.name}</p>
-                  <span className="text-xs text-muted-foreground">工作表 {upload.payload.sheetName} · {upload.payload.recordCount.toLocaleString()} 筆</span>
+                  <span className="max-w-full truncate text-xs text-muted-foreground" title={upload.payload.sheetName}>工作表 {upload.payload.sheetName} · {upload.payload.recordCount.toLocaleString()} 筆</span>
                 </div>
                 <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                  <div>
-                    <Label htmlFor={`bom-upload-target-${index}`} className="text-xs text-muted-foreground">這份檔案是</Label>
+                  <div className="min-w-0">
+                    <Label htmlFor={`bom-upload-target-${index}`} className="text-xs text-muted-foreground">上傳方式</Label>
                     <Select value={upload.target} onValueChange={(value) => update(upload.key, { target: value })} disabled={busy}>
-                      <SelectTrigger id={`bom-upload-target-${index}`} className="mt-1 h-10 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectTrigger id={`bom-upload-target-${index}`} className="mt-1 h-10 min-w-0 text-sm [&>span]:min-w-0 [&>span]:truncate"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value={NEW_BOM_SERIES_TARGET}>建立新 BOM 系列</SelectItem>
                         {targets.map((series) => (
@@ -95,7 +96,8 @@ export function BomUploadDialog({
                     </div>
                   ) : targetSeries ? (
                     <p className="self-end pb-2 text-xs text-foreground/80">
-                      會與 {targetSeries.current.displayNumber}（{targetSeries.current.workspace.payload.recordCount.toLocaleString()} 筆）比對並帶入追蹤；上傳後可在版本管理查看差異。
+                      <strong className="text-primary">{targetSeries.current.displayNumber} → V{nextBomVersionNumber(targetSeries)}</strong>
+                      {` · 依 ${targetSeries.current.workspace.payload.recordCount.toLocaleString()} 筆舊版明細比對並帶入追蹤。`}
                     </p>
                   ) : null}
                 </div>
@@ -120,9 +122,13 @@ export function BomUploadDialog({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button type="button" variant="ghost" disabled={busy} onClick={onCancel} className="h-10">取消</Button>
-          <Button type="button" disabled={!canConfirm} onClick={() => onConfirm({ label: label.trim(), note: note.trim() })} className="h-10">{busy ? "上傳中…" : uploads.length > 1 ? `確認上傳 ${uploads.length} 個檔案` : "確認上傳"}</Button>
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
+          <span className="sr-only" role="status">{busy ? "正在建立 BOM 版本…" : ""}</span>
+          <Button type="button" variant="outline" disabled={busy} onClick={onCancel} className="h-10">取消</Button>
+          <Button type="button" disabled={!canConfirm} data-pending={busy || undefined} onClick={() => onConfirm({ label: label.trim(), note: note.trim() })} className="bom-upload-confirm h-10 min-w-[11rem]">
+            {busy ? <Loader2 className="motion-safe:animate-spin" aria-hidden="true" /> : <Upload aria-hidden="true" />}
+            {busy ? "正在建立 BOM 版本…" : uploads.length > 1 ? `確認上傳 ${uploads.length} 個檔案` : "確認上傳"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

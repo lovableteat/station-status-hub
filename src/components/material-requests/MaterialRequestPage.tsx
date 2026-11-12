@@ -38,6 +38,7 @@ import {
   FilterX,
   History,
   Layers3,
+  Loader2,
   Minus,
   MoreHorizontal,
   Paperclip,
@@ -4817,34 +4818,42 @@ export function MaterialRequestPage() {
         totalRecords += workspace.payload.recordCount;
       }
 
-      await reloadBomWorkspaces(lastWorkspaceId);
+      await reloadBomWorkspaces(lastWorkspaceId).catch(() => {
+        report.push("版本已建立，但清單更新失敗。請重新載入頁面查看新版本。");
+      });
       if (!isBomWriteCurrent(writeScope)) return;
       setUploadDialogOpen(false);
       setPendingUploads([]);
       setActiveBomId(lastWorkspaceId);
       setExpandedKey(null);
       setPage(1);
-      toast({
-        title: uploads.length === 1 ? "BOM 版本已建立" : `${uploads.length} 個 BOM 版本已建立`,
-        description: `共 ${totalRecords.toLocaleString()} 筆廠商料明細；新系列 ${newSeriesCount} 個、新版本 ${newVersionCount} 個${importProject && newSeriesCount > 0 ? `，新系列已歸入專案「${importProject.projectName}」` : ""}。可在 BOM 管理比對版本差異。`,
-      });
       if (orphanedTotal > 0) {
-        toast({
-          title: "有追蹤紀錄沒有帶到新版本",
-          description: `${orphanedTotal.toLocaleString()} 筆舊版追蹤找不到對應的位號或料號，舊版本完整保留；請在 BOM 管理的差異檢視用「追蹤未帶入」確認。`,
-          duration: 30_000,
-        });
+        report.push(`有追蹤紀錄沒有帶到新版本：${orphanedTotal.toLocaleString()} 筆舊版追蹤找不到對應的位號或料號，請在版本差異的「追蹤未帶入」確認。`);
       }
-      if (report.length > 0) {
-        toast({ title: "上傳時有資料需要注意", description: report.join("；"), duration: 30_000 });
-      }
+      const hasWarnings = report.length > 0;
+      const createdTitle = uploads.length === 1 ? "BOM 版本已建立" : `${uploads.length} 個 BOM 版本已建立`;
+      const UploadResultIcon = hasWarnings ? TriangleAlert : CircleCheck;
+      toast({
+        className: cn("bom-upload-toast", hasWarnings && "bom-upload-toast--warning"),
+        title: <span className="bom-upload-toast-heading"><UploadResultIcon aria-hidden="true" />{createdTitle}{hasWarnings && "，有資料待確認"}</span>,
+        description: <span className="grid gap-1">
+          <span>{totalRecords.toLocaleString()} 筆廠商料明細 · 新系列 {newSeriesCount} 個 · 新版本 {newVersionCount} 個</span>
+          {importProject && newSeriesCount > 0 && <span>新系列已歸入「{importProject.projectName}」</span>}
+          {report.map((warning, index) => <span key={index}>{warning}</span>)}
+        </span>,
+        duration: hasWarnings ? 30_000 : undefined,
+      });
     } catch (error) {
       if (writeScope && !isBomWriteCurrent(writeScope)) return;
       await reloadBomWorkspaces(activeBomId).catch(() => undefined);
+      if (!isBomWriteCurrent(writeScope)) return;
+      const completedVersions = newSeriesCount + newVersionCount;
       toast({
-        title: "BOM 版本建立失敗",
+        className: completedVersions > 0 ? "bom-upload-toast bom-upload-toast--warning" : undefined,
+        title: completedVersions > 0 ? `已建立 ${completedVersions} 個 BOM 版本，其餘處理中斷` : "BOM 版本建立失敗",
         description: error instanceof Error ? error.message : "請稍後再試。",
-        variant: "destructive",
+        variant: completedVersions > 0 ? undefined : "destructive",
+        duration: completedVersions > 0 ? 30_000 : undefined,
       });
     } finally {
       if (!writeScope || isBomWriteCurrent(writeScope)) setIsImporting(false);
@@ -6010,7 +6019,10 @@ export function MaterialRequestPage() {
                   <DrawerClose asChild><Button type="button" variant="outline" data-testid="material-circuit-changes" className="mb-3 h-12 w-full justify-start gap-2" onClick={() => setCircuitChangesOpen(true)} disabled={!isCollaborativeReady}><Pencil className="h-4 w-4 text-primary" />線路修改<ChevronRight className="ml-auto h-4 w-4" /></Button></DrawerClose>
                   <div data-testid="material-mobile-actions" className="material-mobile-tool-list">
                     <DrawerClose asChild><Button type="button" variant="ghost" onClick={openPendingDialog}><TriangleAlert className="text-destructive" />待處理料<span>{pendingApplicationCount.toLocaleString()}</span><ChevronRight /></Button></DrawerClose>
-                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded}><Upload className="text-success" />{isImporting ? "讀取中..." : "上傳 BOM"}<ChevronRight /></Button></DrawerClose>
+                    <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded}>
+                      {isImporting && !uploadDialogOpen ? <Loader2 className="text-success motion-safe:animate-spin" aria-hidden="true" /> : <Upload className="text-success" aria-hidden="true" />}
+                      {isImporting && !uploadDialogOpen ? "讀取 Excel…" : "上傳 BOM"}<ChevronRight />
+                    </Button></DrawerClose>
                     <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading}><Download className="text-info" />匯出報表<ChevronRight /></Button></DrawerClose>
                     <DrawerClose asChild><Button type="button" variant="ghost" onClick={() => setNonPvlDialogOpen(true)} disabled={isWorkspaceLoading}><FileSpreadsheet className="text-warning" />不建議料匯出<span>{discouragedMaterialCount.toLocaleString()}</span><ChevronRight /></Button></DrawerClose>
                   </div>
@@ -6143,7 +6155,8 @@ export function MaterialRequestPage() {
               <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />{isExportingDiscouraged ? "匯出中…" : "不建議料匯出"} <strong className="ml-1">{discouragedMaterialCount.toLocaleString()}</strong>
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!canEdit || isImporting || !isCollaborativeReady || !isFullDatasetLoaded} className="h-9 border-success/60 bg-success px-3 text-sm font-bold text-success-foreground hover:bg-success/85 hover:text-success-foreground disabled:cursor-not-allowed disabled:opacity-50">
-              <Upload className="mr-1 h-3.5 w-3.5" />{isImporting ? "讀取中..." : "上傳 BOM"}
+              {isImporting && !uploadDialogOpen ? <Loader2 className="mr-1 h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden="true" /> : <Upload className="mr-1 h-3.5 w-3.5" aria-hidden="true" />}
+              {isImporting && !uploadDialogOpen ? "讀取 Excel…" : "上傳 BOM"}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={() => void prepareExportSnapshot()} disabled={isWorkspaceLoading} className="h-9 border-info/60 bg-info px-3 text-sm font-bold text-info-foreground hover:bg-info/85 hover:text-info-foreground disabled:cursor-wait disabled:opacity-60">
               <Download className="mr-1 h-3.5 w-3.5" />匯出報表

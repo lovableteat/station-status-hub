@@ -59,14 +59,31 @@ function startHarness() {
     await page.goto(`http://127.0.0.1:${PORT}/`);
     await page.getByRole('button', { name: /BOM 管理/ }).waitFor();
 
-    await page.locator('input[type="file"]').setInputFiles(writeV3(dir));
+    const file = writeV3(dir);
+    await page.locator('input[type="file"]').setInputFiles(file);
     const dialog = page.getByTestId('bom-upload-dialog');
     await dialog.waitFor();
     assert.match(await dialog.locator('#bom-upload-target-0').textContent(), /QA 主板.*V2 → V3/, 'the file stem preselects the series as the next version');
     assert.match(await dialog.textContent(), /12 筆/, 'parsed row count is shown before anything is written');
     await dialog.locator('#bom-upload-label').fill('EVT rev C');
+    await page.evaluate(() => {
+      window.__qaBomUploadSourceGate = new Promise(resolve => { window.__qaFinishBomUploadSource = resolve; });
+    });
     await dialog.getByRole('button', { name: '確認上傳' }).click();
+    const saving = dialog.getByRole('button', { name: '正在建立 BOM 版本…' });
+    await saving.waitFor();
+    assert.ok(await saving.isDisabled());
+    assert.equal(await dialog.locator('[data-ui="dialog-close"]').count(), 0, 'the writing dialog cannot be accidentally dismissed');
+    assert.equal(await page.getByText('BOM 版本已建立', { exact: true }).count(), 0, 'completion waits for the original workbook save');
+    if (process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH) await page.screenshot({ path: process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH.replace(/\.png$/, '-upload-loading.png') });
+    await page.evaluate(() => window.__qaFinishBomUploadSource());
     await dialog.waitFor({ state: 'detached' });
+    const uploadFeedback = page.locator('[data-ui="toast"]').filter({ hasText: 'BOM 版本已建立' });
+    await uploadFeedback.waitFor();
+    assert.match(await uploadFeedback.textContent(), /12 筆廠商料明細/);
+    assert.ok(await uploadFeedback.evaluate(element => element.classList.contains('bom-upload-toast') && !element.classList.contains('bom-upload-toast--warning')));
+    if (process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH) await page.screenshot({ path: process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH.replace(/\.png$/, '-upload-success.png') });
+    await uploadFeedback.locator('[toast-close]').click();
     const switcher = page.getByLabel('切換 BOM');
     await page.waitForFunction(() => document.querySelector('[aria-label="切換 BOM"]')?.textContent.includes('V3'));
     assert.equal(await page.getByTestId('material-historical-banner').count(), 0, 'the new version is current, not historical');
@@ -106,7 +123,7 @@ function startHarness() {
     assert.ok(detail.some((row) => row[0] === 'R10' && row[4] === 'phase out' && row[6] === 'PHASEOUT'));
     assert.equal(workbook.getWorksheet('新增料件').rowCount, 2);
     await page.getByTestId('bom-version-feedback').waitFor();
-    assert.match(await page.getByTestId('bom-version-feedback').textContent(), /已下載 BOM差異_/);
+    assert.match(await page.getByTestId('bom-version-feedback').textContent(), /已匯出 BOM差異_/);
 
     await page.getByRole('button', { name: '← 返回系列' }).click();
     await table.waitFor();
@@ -140,6 +157,23 @@ function startHarness() {
       await action.click({ trial: true });
     }
     if (process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH) await small.screenshot({ path: process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH, fullPage: true });
+    const [picker] = await Promise.all([
+      small.waitForEvent('filechooser'),
+      small.getByTestId('bom-series-detail').getByRole('button', { name: '上傳此系列新版' }).tap(),
+    ]);
+    await picker.setFiles(file);
+    const mobileUpload = small.getByTestId('bom-upload-dialog');
+    await mobileUpload.waitFor();
+    assert.ok(await mobileUpload.evaluate(element => element.scrollWidth <= element.clientWidth));
+    await mobileUpload.getByRole('combobox').tap();
+    await small.getByRole('option', { name: '建立新 BOM 系列', exact: true }).tap();
+    await mobileUpload.getByLabel('新系列名稱', { exact: true }).waitFor();
+    await mobileUpload.getByRole('combobox').tap();
+    await small.getByRole('option', { name: /QA 主板.*V2 → V3/ }).tap();
+    assert.ok(await mobileUpload.getByText('V2 → V3', { exact: true }).isVisible());
+    if (process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH) await small.screenshot({ path: process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH.replace(/\.png$/, '-upload-phone.png') });
+    await mobileUpload.getByRole('button', { name: '取消', exact: true }).tap();
+    await mobileUpload.waitFor({ state: 'detached' });
     await phone.close();
     console.log('BOM version flow: upload, carry-over, compare, export, switch and phone layout verified on QA data only');
   } catch (error) {

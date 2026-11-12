@@ -72,7 +72,7 @@ function SourcePicker({ side, value, busy, mapping, onMapping, onChange, onReadi
   return <section className="nv-bom-source" data-side={side} aria-label={label} onDragOver={event => { event.preventDefault(); }} onDrop={event => { event.preventDefault(); void accept(event.dataTransfer.files); }}>
     <div className="nv-bom-source-heading"><strong><span>{side === "before" ? "A" : "B"}</span>{label}</strong><Button type="button" variant="outline" disabled={busy || reading} onClick={() => input.current?.click()}><Upload aria-hidden="true" />{value ? "更換檔案" : "選擇檔案"}</Button></div>
     <input ref={input} type="file" accept=".xlsx,.xls,.xlsm,.csv" aria-label={`選擇${label}`} className="sr-only" disabled={busy || reading} onChange={event => { void accept(event.target.files); event.target.value = ""; }} />
-    {reading ? <p role="status"><LoaderCircle className="nv-spin" aria-hidden="true" />讀取 Excel 中…</p> : value ? <><p className="nv-bom-filename"><FileSpreadsheet aria-hidden="true" /><span title={value.file.name}>{value.file.name}</span></p><label>工作表<select aria-label={`${label}工作表`} value={value.sheet} disabled={busy} onChange={event => onChange({ ...value, sheet: Number(event.target.value) })}>{value.file.sheets.map((item, index) => <option key={item.name} value={index}>{item.name} · {item.rows.length.toLocaleString()} 列</option>)}</select></label></> : <button className="nv-bom-drop" type="button" disabled={busy} onClick={() => input.current?.click()}><FileSpreadsheet aria-hidden="true" /><span>將{side === "before" ? "舊版" : "新版"} Excel 拖入這裡</span><small>XLSX、XLS、XLSM 或 CSV</small></button>}
+    {reading ? <p role="status" className="nv-bom-pending nv-bom-file-reading"><LoaderCircle className="nv-spin" aria-hidden="true" />讀取 Excel 中…</p> : value ? <><p className="nv-bom-filename"><FileSpreadsheet aria-hidden="true" /><span title={value.file.name}>{value.file.name}</span></p><label>工作表<select aria-label={`${label}工作表`} value={value.sheet} disabled={busy} onChange={event => onChange({ ...value, sheet: Number(event.target.value) })}>{value.file.sheets.map((item, index) => <option key={item.name} value={index}>{item.name} · {item.rows.length.toLocaleString()} 列</option>)}</select></label></> : <button className="nv-bom-drop" type="button" disabled={busy} onClick={() => input.current?.click()}><FileSpreadsheet aria-hidden="true" /><span>將{side === "before" ? "舊版" : "新版"} Excel 拖入這裡</span><small>XLSX、XLS、XLSM 或 CSV</small></button>}
     {error && <p role="alert" className="nv-bom-error">{error}</p>}
     {sheet && <div className="nv-bom-mapping">
       <label>表頭在第幾列<input aria-label={`${label}表頭列`} type="number" min={1} max={Math.max(1, sheet.rows.length - 1)} value={mapping.headerRow} disabled={busy}
@@ -108,7 +108,7 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
   const [annotations, setAnnotations] = useState<Record<string, Record<string, NvBomAnnotation>>>(initialSession?.annotations ?? {});
   const [query, setQuery] = useState(initialSession?.query ?? ""), [kind, setKind] = useState<ReviewKind>(initialSession?.kind ?? "all"), [scope, setScope] = useState<ReviewScope>(initialSession?.scope ?? "all");
   const [checked, setChecked] = useState(initialSession?.checked ?? "all"), [page, setPage] = useState(initialSession?.page ?? 1);
-  const [notice, setNotice] = useState(""), [exporting, setExporting] = useState(false);
+  const [notice, setNotice] = useState<{ message: string; tone?: "success" | "error" } | null>(null), [exporting, setExporting] = useState(false);
   const [compareError, setCompareError] = useState("");
   const [unresolvedLimit, setUnresolvedLimit] = useState(PAGE_SIZE);
   const controller = useRef<AbortController | null>(null), mounted = useRef(true), started = useRef(false);
@@ -152,7 +152,7 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
     return counts;
   }, {} as Partial<Record<NvBomInterpretedChange["scope"], number>>), [interpretation]);
   function clearResults() {
-    setRuns({}); setAnnotations({}); setSelectedResult(""); setNotice(""); setCompareError(""); setMappingModel(""); setPage(1); setUnresolvedLimit(PAGE_SIZE);
+    setRuns({}); setAnnotations({}); setSelectedResult(""); setNotice(null); setCompareError(""); setMappingModel(""); setPage(1); setUnresolvedLimit(PAGE_SIZE);
   }
   function editMapping(side: "before" | "after", value: NvBomMapping) {
     (side === "before" ? setBeforeMap : setAfterMap)(value);
@@ -168,7 +168,7 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
   }
   async function run(ids = selected) {
     if (!beforeSheet || !afterSheet || controller.current || beforeReading || afterReading) return;
-    setCompareError(""); setNotice("");
+    setCompareError(""); setNotice(null);
     const targets = selectableModels.filter(model => ids.includes(model.id));
     const request = new AbortController(); controller.current = request;
     const current = () => mounted.current && controller.current === request;
@@ -182,7 +182,7 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
       const mappingFailures: string[] = [];
       if (!mappingModel && (sources.before || sources.after)) {
         for (const model of targets) {
-          setBusy(true); setNotice(`${model.label} 正在辨識 Excel 欄位…`);
+          setBusy(true); setNotice({ message: `${model.label} 正在辨識 Excel 欄位…` });
           try {
             const resolved = await resolveNvBomMappings({ sources, model, signal: request.signal });
             request.signal.throwIfAborted();
@@ -220,7 +220,7 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
       }
       const local = { ...comparison, modelId: LOCAL_RESULT, modelLabel: "本機比對", reviewed: 0 };
       const mappingNotice = mappingFailures.length ? `欄位辨識${mappingAssistant ? `由 ${mappingAssistant.label} 完成` : "沿用已確認的本機欄位"}。\n${mappingFailures.join("\n")}` : "";
-      setNotice(mappingNotice); setSettings(false); setPage(1);
+      setNotice(mappingNotice ? { message: mappingNotice } : null); setSettings(false); setPage(1);
       setSelectedResult(value => targets.some(model => model.id === value) ? value : targets[0]?.id ?? LOCAL_RESULT);
       setRuns(value => ({ ...(changed ? {} : value), [LOCAL_RESULT]: { state: "done", progress: "依已辨識欄位", result: local },
         ...Object.fromEntries(targets.map(model => [model.id, { state: "running", progress: "等待 AI 核對…", result: { ...local, modelId: model.id, modelLabel: model.label } }])) }));
@@ -244,7 +244,7 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
       await Promise.allSettled(Array.from({ length: Math.min(2, targets.length) }, worker));
     } catch (failure) {
       if (current()) {
-        setNotice(request.signal.aborted ? "已停止 AI 核對。" : "");
+        setNotice(request.signal.aborted ? { message: "已停止 AI 核對。" } : null);
         setSettings(true);
         if (!request.signal.aborted) setCompareError(failure instanceof Error ? failure.message : "無法比對，請核對新舊工作表和欄位。");
       }
@@ -263,12 +263,12 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
       runs: Object.fromEntries(Object.entries(runs).map(([id, run]) => [id, run.state === "running" ? { ...run, state: "cancelled", progress: "已停止" } : run])) });
   }
   async function copy(value: string) {
-    try { await navigator.clipboard.writeText(value); setNotice(`已複製 ${value}`); }
-    catch { setNotice("未能自動複製，請選取料號文字後按 Ctrl+C。"); }
+    try { await navigator.clipboard.writeText(value); setNotice({ message: `已複製 ${value}`, tone: "success" }); }
+    catch { setNotice({ message: "未能自動複製，請選取料號文字後按 Ctrl+C。", tone: "error" }); }
   }
   async function download() {
     if (!result || !before || !after || exporting) return;
-    setExporting(true); setNotice("");
+    setExporting(true); setNotice(null);
     try {
       await exportNvBomComparison({ diff: result.diff, annotations: notes, modelLabel: result.modelLabel, beforeName: `${before.file.name} · ${beforeSheet!.name}`, afterName: `${after.file.name} · ${afterSheet!.name}`,
         review: { currentBomName: currentBomName ?? "未選取", rows: Object.fromEntries((interpretation?.entries ?? []).map(entry => {
@@ -277,32 +277,57 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
           return [entry.change.id, { scope: NV_BOM_SCOPE_LABELS[entry.scope], action: NV_BOM_INTERPRETATION_LABELS[entry.kind], summary: entry.summary,
             removedRefs: entry.removedRefs.join("、"), addedRefs: entry.addedRefs.join("、"), mountedRefs: entry.mountedRefs.join("、"), unmountedRefs: entry.unmountedRefs.join("、"), currentMatch: [link && `${link.relatedMain ? "關聯主料 · " : ""}${NV_BOM_TABLE_LINK_LABELS[link.state]}`, ...candidates].filter(Boolean).join("\n") }];
         })) } });
-      setNotice("已匯出差異、目前表格對應、待人工核對項目與備註。");
+      setNotice({ message: "已匯出差異、目前表格對應、待人工核對項目與備註。", tone: "success" });
     }
-    catch (failure) { setNotice(failure instanceof Error ? failure.message : "匯出失敗，請重試。"); }
+    catch (failure) { setNotice({ message: failure instanceof Error ? failure.message : "匯出失敗，請重試。", tone: "error" }); }
     finally { if (mounted.current) setExporting(false); }
   }
   if (!active) return null;
+  const runNotice = <>
+    {busy && !notice?.tone && <LoaderCircle className="nv-spin" aria-hidden="true" />}
+    {notice?.tone === "success" && <Check aria-hidden="true" />}
+    {notice?.message || (busy ? "AI 核對中，可先查看本機結果。" : "")}
+  </>;
   return <section className="nv-bom-compare" data-testid="nv-bom-compare" aria-label="NV 原始 BOM 比對">
-    <div className="nv-bom-actions"><Button type="button" variant="ghost" onClick={() => { controller.current?.abort(); onBack(); }}><ArrowLeft aria-hidden="true" />返回版本管理</Button>{!result && <p>選擇新舊工作表，確認料號、用量與位號欄位。</p>}<Button type="button" variant="outline" disabled={!result || exporting} onClick={() => void download()}><Download aria-hidden="true" />{exporting ? "匯出中…" : selectedResult && selectedResult !== LOCAL_RESULT ? "匯出此 AI 結果" : "匯出比對結果"}</Button></div>
+    <div className="nv-bom-actions">
+      <Button type="button" variant="ghost" onClick={() => { controller.current?.abort(); onBack(); }}><ArrowLeft aria-hidden="true" />返回版本管理</Button>
+      {!result && <p>選擇新舊工作表，確認料號、用量與位號欄位。</p>}
+      <Button type="button" variant="outline" className="nv-bom-export" disabled={!result || exporting} onClick={() => void download()}>
+        {exporting ? <LoaderCircle className="nv-spin" aria-hidden="true" /> : <Download aria-hidden="true" />}
+        {exporting ? "匯出中…" : selectedResult && selectedResult !== LOCAL_RESULT ? "匯出此 AI 結果" : "匯出比對結果"}
+      </Button>
+    </div>
     <details className="nv-bom-settings" open={settings} onToggle={event => setSettings(event.currentTarget.open)}><summary><FileSpreadsheet aria-hidden="true" /><strong>比對來源與欄位</strong><span>{before?.file.name ?? "選擇舊版"} → {after?.file.name ?? "選擇新版"}</span></summary><div className="nv-bom-settings-content">
       <div className="nv-bom-sources">
         <SourcePicker side="before" value={before} busy={busy} mapping={beforeMap} onMapping={value => editMapping("before", value)} onReading={setBeforeReading} onChange={value => selectSource("before", value)} />
         <SourcePicker side="after" value={after} busy={busy} mapping={afterMap} onMapping={value => editMapping("after", value)} onReading={setAfterReading} onChange={value => selectSource("after", value)} />
       </div>
       <div className="nv-bom-model-heading"><strong>用 AI 幫忙核對（選用）</strong><Button type="button" variant="ghost" disabled={busy || loading || !selectableModels.length} onClick={() => setSelected(selectableModels.map(model => model.id))}>全選可用選項</Button><Button type="button" variant="ghost" disabled={busy || !selected.length} onClick={() => setSelected([])}>清除選取</Button><Button type="button" variant="outline" disabled={busy || loading} onClick={() => void loadModels()}>重查 AI</Button></div>
-      {loading && <p role="status">正在讀取 AI 設定及模型清單…</p>}{modelError && <p role="alert" className="nv-bom-error">{modelError}</p>}
+      {loading && <p role="status" className="nv-bom-pending"><LoaderCircle className="nv-spin" aria-hidden="true" />正在讀取 AI 設定及模型清單…</p>}
+      {modelError && <p role="alert" className="nv-bom-error">{modelError}</p>}
       {!loading && !modelError && !models.length && <p className="nv-bom-help">目前無可用的 AI 核對服務，可直接在本機比對。</p>}
       <div className="nv-bom-models" role="group" aria-label="BOM 比對 AI 服務">{models.map(model => <label key={model.id} data-availability={model.availability?.state}><input type="checkbox" disabled={busy || loading || model.availability?.state === "unavailable"} checked={selected.includes(model.id)} onChange={event => setSelected(current => event.target.checked ? [...current, model.id] : current.filter(id => id !== model.id))} /><span><strong>{model.label}</strong>{model.availability && <small>{model.availability.message}</small>}</span></label>)}</div>
       <p className="nv-bom-help">按「開始比對」就能找出新舊差異。勾選 AI 會另外核對差異，並在欄位需要辨識時協助讀取表頭。</p>
     </div></details>
-    {(!result || settings || busy) ? <div className="nv-bom-runbar"><Button type="button" disabled={busy || beforeReading || afterReading || !beforeSheet || !afterSheet} onClick={() => void run()}><Check aria-hidden="true" />開始比對{selected.length ? `（${selected.length} 項 AI 核對）` : ""}</Button>{busy && <Button type="button" variant="outline" onClick={() => controller.current?.abort()}>停止 AI 核對</Button>}<span role="status">{notice || (busy ? "AI 核對中，可先查看本機結果。" : "")}</span></div> : notice && <p className="nv-bom-help nv-bom-run-notice" role="status">{notice}</p>}
+    {(!result || settings || busy) ? <div className="nv-bom-runbar">
+      <Button type="button" className="nv-bom-start" disabled={busy || beforeReading || afterReading || !beforeSheet || !afterSheet} onClick={() => void run()}>
+        <Check aria-hidden="true" />開始比對{selected.length ? `（${selected.length} 項 AI 核對）` : ""}
+      </Button>
+      {busy && <Button type="button" variant="outline" className="nv-bom-stop" onClick={() => controller.current?.abort()}>停止 AI 核對</Button>}
+      <span role="status" className={busy && !notice?.tone ? "nv-bom-pending" : undefined} data-notice-tone={notice?.tone}>{runNotice}</span>
+    </div> : notice && <p className="nv-bom-help nv-bom-run-notice" role="status" data-notice-tone={notice.tone}>{runNotice}</p>}
     {compareError && <p role="alert" className="nv-bom-error">{compareError}</p>}
     {Object.keys(runs).length > 1 && <div className="nv-bom-results-tabs" role="tablist" aria-label="比對結果"><button type="button" role="tab" aria-selected={selectedResult === LOCAL_RESULT} onClick={() => changeFilter(setSelectedResult, LOCAL_RESULT)}><span>本機比對</span><small>直接讀取 Excel</small></button>{Object.entries(runs).filter(([id]) => id !== LOCAL_RESULT).map(([id, run]) => <button key={id} type="button" role="tab" data-run-state={run.state} aria-selected={selectedResult === id} onClick={() => changeFilter(setSelectedResult, id)}><span>{run.result?.modelLabel || models.find(model => model.id === id)?.label || id}</span><small>{run.state === "running" ? <LoaderCircle className="nv-spin" aria-hidden="true" /> : run.state === "done" ? <Check aria-hidden="true" /> : null}{run.progress}</small></button>)}</div>}
     {activeRun?.error && <div className="nv-bom-error"><p role="alert"><strong>AI 核對失敗</strong> {activeRun.error} 本機比對結果已保留。</p>{!busy && selectableModels.some(model => model.id === selectedResult) && <Button type="button" variant="outline" onClick={() => void run([selectedResult])}>重試這個 AI</Button>}</div>}
     {result ? <>
       <div className="nv-bom-summary">
-        <div className="nv-bom-summary-heading"><h3>{result.diff.changes.length.toLocaleString()} 筆差異</h3><span>未變更 {result.diff.unchanged.toLocaleString()} 組</span>{selectedResult !== LOCAL_RESULT && <small>AI 已核對 {result.reviewed}／{result.diff.changes.length} 筆</small>}</div>
+        <div className="nv-bom-summary-heading">
+          <h3>{result.diff.changes.length.toLocaleString()} 筆差異</h3>
+          <span>未變更 {result.diff.unchanged.toLocaleString()} 組</span>
+          {selectedResult === LOCAL_RESULT
+            ? <span className="nv-bom-complete" role="status"><Check aria-hidden="true" />本機比對完成</span>
+            : <small>AI 已核對 {result.reviewed}／{result.diff.changes.length} 筆</small>}
+        </div>
         {currentBomName && <p className="nv-bom-table-context"><strong>用來定位的網站 BOM</strong> <span>{currentBomName}</span></p>}
         <div className="nv-bom-scope-buttons" aria-label="項目類別">
           <button type="button" data-scope="all" aria-pressed={scope === "all"} onClick={() => changeFilter(setScope, "all")}>全部 <b>{result.diff.changes.length}</b></button>
