@@ -22,6 +22,8 @@ const metadata = new Set([
   "Level", "Item Type", "Version", "State", "Find #", "Find Num", "Find Number", "Alt Qty", "Alt Quantity", "Alternate Qty", "Alternate Quantity",
   "Primary", "Ordering Restrictions", "Sourcing Status", "Supplier Intent", "BOM Notes",
   "Parent Number", "Parent Part Number", "Parent PN", "Parent Item Number",
+  "Material Category", "S/D", "Mount Method", "Mounting Type", "Source", "Population", "Population Status", "Mount Status", "Fit Status",
+  "DNP", "DNI", "DNM", "Do Not Populate", "Do Not Mount", "Do Not Install",
 ].map(normalize));
 const blankMapping = (headerRow: number): NvBomMapping => ({ headerRow, partNumber: null, mpn: null, manufacturer: null, description: null, qty: null, refs: null });
 
