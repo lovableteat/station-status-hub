@@ -13,6 +13,8 @@ const rows = [record("openai", "openai", "gpt-5.4", "https://api.openai.com/v1")
 const mapping = { headerRow: 1, partNumber: 1, mpn: 2, manufacturer: 3, description: 4, qty: 5, refs: 6 };
 const before = { name: "Old", rows: [["NV PN", "MPN", "Maker", "Part", "Qty", "Refs"], ["001", "KEEP", "Maker", "Part", "1", "R1"], ["002", "OLD", "Maker", "Part", "1", "R2"]] };
 const after = { name: "New", rows: [before.rows[0], ["001", "KEEP", "Maker", "Part", "2", "R1,R3"], ["003", "NEW", "Maker", "Part", "1", "R4"]] };
+const { compareNvBomSheets } = loader({})("src/components/material-requests/nvBomCompare.ts");
+const comparison = { beforeMapping: mapping, afterMapping: mapping, diff: compareNvBomSheets(before, after, mapping, mapping) };
 function load({ queryError = null, discoveredModels = ["gpt-5.4", "gpt-6.1-sol"], transport = async () => { throw new Error("Unexpected provider call"); } } = {}) {
   return loader({ globals: { Response, Headers, TextEncoder, TextDecoder }, mocks: {
     "@/integrations/supabase/client": { supabase: database(() => ({ data: rows, error: queryError })) },
@@ -62,26 +64,29 @@ test("NV comparison keeps all saved providers while omitting an unverified synth
   assert.deepEqual(Array.from(new Set(models.map(item => item.record.id))), ["openai", "gemini", "claude", "custom"]);
 });
 
-test("every NV choice sends its own model with the original key id through mapping and difference review", async () => {
+test("each NV choice sends only confirmed differences for review using its own model and key", async () => {
   const calls = [];
   const service = load({ transport: async call => {
     calls.push(call);
     const body = JSON.parse(call.init.body), input = requestInput(call);
     if (call.provider === "gemini") {
       assert.ok(call.url.includes(`/models/${call.model}:generateContent`));
-      assert.equal(body.generationConfig?.responseMimeType, "application/json", "Gemini mapping and review both require JSON mode");
+      assert.equal(body.generationConfig?.responseMimeType, "application/json", "Gemini review requires JSON mode");
     } else {
       assert.equal(body.model, call.model);
       assert.equal(body.generationConfig, undefined, "Gemini options must not leak into other provider formats");
     }
-    return response(call.provider, input.items ? { items: input.items.map(item => ({ id: item.id, action: `核對 ${item.kind}`, note: "來源列核對" })) } : { before: mapping, after: mapping, warnings: [] });
+    assert.deepEqual(input.items.map(item => item.id), Array.from(comparison.diff.changes, item => item.id));
+    assert.equal(input.before, undefined);
+    assert.equal(input.after, undefined);
+    return response(call.provider, { items: input.items.map(item => ({ id: item.id, action: `核對 ${item.kind}`, note: "來源列核對" })) });
   } });
   const models = await service.loadNvBomModels();
   assert.equal(models.length, 7);
   for (const model of models) {
     const start = calls.length, partial = [];
-    const result = await service.runNvBomComparison({ before, after, model, signal: new AbortController().signal, onProgress() {}, onResult: value => partial.push(value) });
-    assert.equal(calls.length - start, 2);
+    const result = await service.runNvBomComparison({ comparison, model, signal: new AbortController().signal, onProgress() {}, onResult: value => partial.push(value) });
+    assert.equal(calls.length - start, 1);
     for (const call of calls.slice(start)) {
       assert.equal(call.apiKeyId, model.record.id); assert.equal(call.model, model.record.permissions.metadata.model);
       assert.equal(call.source, "ai-chat");
@@ -98,13 +103,13 @@ test("malformed Gemini review remains an explicit failure and retains the comput
   const calls = [], partial = [];
   const service = load({ transport: async call => {
     calls.push(call);
-    if (!requestInput(call).items) return response("gemini", { before: mapping, after: mapping, warnings: [] });
+    assert.ok(requestInput(call).items.length);
     return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "I reviewed the changes, but this response is not JSON." }] }, finishReason: "STOP" }] }), { status: 200 });
   } });
   const model = (await service.loadNvBomModels()).find(item => item.record.permissions.metadata.model === "gemini-3.5-flash-lite");
   assert.ok(model);
-  await assert.rejects(service.runNvBomComparison({ before, after, model, signal: new AbortController().signal, onProgress() {}, onResult: value => partial.push(value) }), /AI 沒有回傳可讀取的完整結果/);
-  assert.equal(calls.length, 2);
+  await assert.rejects(service.runNvBomComparison({ comparison, model, signal: new AbortController().signal, onProgress() {}, onResult: value => partial.push(value) }), /AI 沒有回傳可讀取的完整結果/);
+  assert.equal(calls.length, 1);
   for (const call of calls) assert.equal(JSON.parse(call.init.body).generationConfig?.responseMimeType, "application/json");
   assert.equal(partial.length, 1, "the comparison table is published before review, without claiming completion");
   assert.equal(partial[0].modelId, model.id); assert.equal(partial[0].reviewed, 0);
