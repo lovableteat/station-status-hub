@@ -6,8 +6,8 @@ The **twelve-RPC candidate remains pending**. The separately authorized
 [additive protected-read APIs](../security/applied-legacy-pcb-read-apis-20261112.md)
 are now applied as version `20261112064452`; that did not install this candidate
 or close raw permissions reads. No production board/model content is inspected by
-these synthetic tests. The three prior applied containment migrations and the new
-additive ledger remain immutable and must not be replayed.
+these synthetic tests. All six current applied ledger entries remain immutable and must not be replayed;
+use the main guide's six-ledger verifier before later promotion.
 
 `pcb-rpc-cutover-PENDING.sql` retains the reviewed 39,502 bytes, SHA-256
 `eb164dac09eba533cf2006c42c12d259608c64f9b42a668f16ed09881800a77a`.
@@ -44,7 +44,8 @@ per-statement timeout, not a total execution deadline.
    reconciliation before any retry. A duplicate candidate rejects intentionally.
 3. In the combined legacy route, complete the separately gated raw-column
    enforcement **before** broad stage 01; its published pending file still refuses
-   execution. Then promote `01-close-anonymous-access.sql` under its own gates.
+   execution. Then promote `01-close-anonymous-access-after-six-ledgers.sql` under its own gates.
+   The original stage01 is retained for historical tests, not this baseline.
    It preserves all twelve hardened PCB definitions/ACLs, but removes PUBLIC/anon
    from the mapping helper ACL. Running it before the narrow candidate invalidates
    the candidate's reviewed baseline and is rejected. Do not restore anonymous
