@@ -25,6 +25,31 @@ test("every working page retains its offset counterpart or an explicit unmatched
   assert.deepEqual(plain(build(10, 0, 0)), []);
 });
 
+test("selected ranges are normalized and deduplicated, and only matched selected pages run and save", async () => {
+  const { buildCircuitPdfAiBatchPages: build, parseCircuitPdfAiPageSelection: parse, runCircuitPdfAiBatchReview: run } = service();
+  const selection = parse("３、1，3–5, 3", 5);
+  assert.deepEqual(plain(selection), { pages: [1, 3, 4, 5] });
+  const pages = build(5, 5, 1, selection.pages);
+  assert.deepEqual(plain(pages).map(page => [page.workingPage, page.officialPage]), [[1, 2], [3, 4], [4, 5], [5, null]]);
+  const analysed = [], saved = [];
+  await run({ pages, signal: new AbortController().signal,
+    analyse: async page => { analysed.push(page.workingPage); return report(page); },
+    save: async value => { saved.push(value.workingPage); },
+    onUpdate: () => {},
+  });
+  assert.deepEqual(analysed, [1, 3, 4]);
+  assert.deepEqual(saved, [1, 3, 4]);
+});
+
+test("invalid selected input never creates a partial page selection", () => {
+  const { parseCircuitPdfAiPageSelection: parse } = service();
+  assert.deepEqual(plain(parse("   ", 56)), { pages: [] });
+  for (const input of ["1,6", "1,0", "5-3", "1,3-", "1,,3", "1.5", "1-1000000000000000"]) {
+    assert.equal(typeof parse(input, 5).error, "string", input);
+    assert.equal(parse(input, 5).pages, undefined, input);
+  }
+});
+
 test("three pages run concurrently and a slow page cannot block the other workers", async () => {
   const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run, CIRCUIT_PDF_AI_BATCH_CONCURRENCY } = service();
   const analysis = deferred(), persistence = deferred(), events = [], updates = [];
