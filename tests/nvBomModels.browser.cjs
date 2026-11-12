@@ -31,7 +31,8 @@ async function run(browser,origin,width){
   const labels=await models.locator('label').allTextContents();for(const model of expected)assert.ok(labels.some(label=>label.endsWith(model)),model+' is missing');
   assert.match(await page.locator('.nv-bom-model-heading strong').innerText(),/用 AI 幫忙核對/);
   await page.getByRole('button',{name:'重查 AI',exact:true}).click();
-  await page.waitForFunction(()=>window.__nvQA.discoveries.length===2);
+  await page.waitForFunction(()=>window.__nvQA.geminiDiscoveryCount===2);
+  assert.equal(await page.evaluate(()=>window.__nvQA.reads.length),2);
   assert.equal(await page.evaluate(()=>window.__nvQA.requests.length),0);
   await page.getByRole('button',{name:'全選可用選項',exact:true}).click();assert.equal(await models.locator('input:checked').count(),7);
   await page.getByRole('button',{name:'清除選取',exact:true}).click();assert.equal(await models.locator('input:checked').count(),0);
