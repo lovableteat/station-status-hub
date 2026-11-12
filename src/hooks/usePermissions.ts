@@ -1,3 +1,4 @@
+import { readSystemUserProfile } from "@/lib/systemUserProfiles";
 import {
   createContext,
   createElement,
@@ -96,11 +97,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           .from("user_page_permissions")
           .select("permission")
           .eq("user_id", userId),
-        supabase
-          .from("system_users")
-          .select("permissions, role, status")
-          .eq("id", userId)
-          .maybeSingle(),
+        readSystemUserProfile(userId),
       ]);
 
       if (userResult.error) throw userResult.error;

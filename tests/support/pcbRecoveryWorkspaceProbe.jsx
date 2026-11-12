@@ -14,7 +14,7 @@ export function usePcbWorkspace(options) {
     remoteError: workspace.remoteError, hasUnsavedChanges: workspace.hasUnsavedChanges,
     persistenceStatus: workspace.persistenceStatus, projectLockStatus: workspace.projectLock.status,
     projectLockCanEdit: workspace.projectLock.canEdit,
-    ownerChanged: workspace.ownerChanged,
+    ownerChanged: workspace.ownerChanged, legacyRecovery: workspace.legacyRecovery,
   };
   fixture.renders.push({ canEdit: workspace.canEdit, remoteReady: workspace.remoteReady,
     remoteAccessStatus: workspace.remoteAccessStatus, ownerChanged: workspace.ownerChanged });

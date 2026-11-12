@@ -1,0 +1,244 @@
+{
+  "columns": [
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "id",
+      "type": "uuid",
+      "not_null": true
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "username",
+      "type": "character varying(50)",
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "password_hash",
+      "type": "character varying(255)",
+      "not_null": true
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "role",
+      "type": "character varying(20)",
+      "not_null": true
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "permissions",
+      "type": "jsonb",
+      "not_null": false
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "status",
+      "type": "character varying(20)",
+      "not_null": false
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "created_by",
+      "type": "character varying(50)",
+      "not_null": false
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "not_null": true
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "not_null": true
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "display_name",
+      "type": "character varying(100)",
+      "not_null": false
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "auth_user_id",
+      "type": "uuid",
+      "not_null": false
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "auth_migrated_at",
+      "type": "timestamp with time zone",
+      "not_null": false
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "last_seen_at",
+      "type": "timestamp with time zone",
+      "not_null": false
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "registration_requested_at",
+      "type": "timestamp with time zone",
+      "not_null": false
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "approved_at",
+      "type": "timestamp with time zone",
+      "not_null": false
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "approved_by",
+      "type": "uuid",
+      "not_null": false
+    },
+    {
+      "acl": [
+        "authenticated=r/postgres"
+      ],
+      "name": "avatar_path",
+      "type": "text",
+      "not_null": false
+    }
+  ],
+  "relation": {
+    "acl": [
+      "postgres=arwdDxtm/postgres",
+      "service_role=arwdDxtm/postgres"
+    ],
+    "rls": true,
+    "kind": "r",
+    "name": "system_users",
+    "owner": "postgres",
+    "schema": "workspace",
+    "force_rls": false,
+    "replica_identity": "f"
+  },
+  "policies": [
+    {
+      "cmd": "SELECT",
+      "qual": "(workspace.current_system_user_id() IS NOT NULL)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "system_users",
+      "permissive": "PERMISSIVE",
+      "policyname": "system_users_authenticated_read",
+      "schemaname": "workspace",
+      "with_check": null
+    }
+  ],
+  "triggers": [
+    {
+      "name": "preserve_performance_account_identity",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER preserve_performance_account_identity BEFORE UPDATE OF display_name, username ON workspace.system_users FOR EACH ROW EXECUTE FUNCTION workspace.sync_performance_account_name()",
+      "function_md5": "56ee48ed0d06f6d362c50b82f6aa663c",
+      "function_args": "",
+      "function_name": "sync_performance_account_name",
+      "function_schema": "workspace"
+    },
+    {
+      "name": "sync_performance_account_name",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER sync_performance_account_name AFTER UPDATE OF display_name, username ON workspace.system_users FOR EACH ROW EXECUTE FUNCTION workspace.sync_performance_account_name()",
+      "function_md5": "56ee48ed0d06f6d362c50b82f6aa663c",
+      "function_args": "",
+      "function_name": "sync_performance_account_name",
+      "function_schema": "workspace"
+    },
+    {
+      "name": "test_plan_queue_account_cleanup_trigger",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER test_plan_queue_account_cleanup_trigger BEFORE DELETE ON workspace.system_users FOR EACH ROW EXECUTE FUNCTION test_plan_queue_account_cleanup()",
+      "function_md5": "bfe8cc0731fce9ca5a426bb56dc0a48f",
+      "function_args": "",
+      "function_name": "test_plan_queue_account_cleanup",
+      "function_schema": "public"
+    },
+    {
+      "name": "test_plan_sync_user_space",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER test_plan_sync_user_space AFTER INSERT OR UPDATE OF display_name, username, status ON workspace.system_users FOR EACH ROW EXECUTE FUNCTION file_library_private.sync_user_space()",
+      "function_md5": "3f1e4b528909c1cade3e1fe078c25bee",
+      "function_args": "",
+      "function_name": "sync_user_space",
+      "function_schema": "file_library_private"
+    },
+    {
+      "name": "update_system_users_updated_at",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER update_system_users_updated_at BEFORE UPDATE ON workspace.system_users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()",
+      "function_md5": "d720f4597fedee690403b9df0278efbf",
+      "function_args": "",
+      "function_name": "update_updated_at_column",
+      "function_schema": "public"
+    }
+  ],
+  "publications": [
+    {
+      "name": "supabase_realtime",
+      "table": "system_users",
+      "delete": true,
+      "insert": true,
+      "schema": "workspace",
+      "update": true,
+      "columns": [
+        "id",
+        "username",
+        "password_hash",
+        "role",
+        "permissions",
+        "status",
+        "created_by",
+        "created_at",
+        "updated_at",
+        "display_name",
+        "auth_user_id",
+        "auth_migrated_at",
+        "last_seen_at",
+        "registration_requested_at",
+        "approved_at",
+        "approved_by",
+        "avatar_path"
+      ],
+      "truncate": true,
+      "all_tables": false,
+      "row_filter": null
+    }
+  ]
+}

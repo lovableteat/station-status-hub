@@ -1,3 +1,4 @@
+const {profile,attachProfileRpc}=require('./support/sanitizedProfiles.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const path=require('node:path');
@@ -74,12 +75,12 @@ test('Chinese search, null/date ordering and PCB JSON/CSV exports retain scoped 
 
 test('workspace access fails closed for inactive accounts and while another account permissions are pending',async()=>{
  let user={userId:'A'},status='active',pending=null,current;
- const db=database(q=>q.table==='system_users'?(pending?.promise??ok({role:'engineer',status,permissions:{workspaceAccess:{'station-status':'edit'},pagePermissions:['dashboard_view','dashboard_edit']}})):ok([]));
+ const db=attachProfileRpc(database(()=>ok([])),q=>pending?.promise??ok(profile(q.filters.id,{role:'engineer',status,permissions:{workspaceAccess:{'station-status':'edit'},pagePermissions:['dashboard_view','dashboard_edit']}})));
  const load=loader({mocks:{'@/components/auth/UserContext':{useUser:()=>({user})},'@/integrations/supabase/client':{supabase:db}}});const {PermissionsProvider,usePermissions}=load('src/hooks/usePermissions.ts');const Probe=()=>{current=usePermissions();return null;};let root;
  try{
   await act(async()=>{root=create(React.createElement(PermissionsProvider,null,React.createElement(Probe)));});await flush();assert.equal(current.getWorkspaceAccess('dashboard'),'edit');
   pending=deferred();user={userId:'B'};await act(async()=>root.update(React.createElement(PermissionsProvider,null,React.createElement(Probe))));await flush();assert.equal(current.getWorkspaceAccess('dashboard'),'none');assert.equal(current.canEditModule('dashboard'),false);assert.equal(current.canViewModule('dashboard'),false);
-  await act(async()=>pending.resolve(ok({role:'super_admin',status:'inactive',permissions:{workspaceAccess:{'station-status':'edit'},performanceManager:true}})));await flush();assert.equal(current.getWorkspaceAccess('dashboard'),'none');assert.equal(current.isPerformanceManager,false);
+  await act(async()=>pending.resolve(ok(profile('B',{role:'super_admin',status:'inactive',permissions:{workspaceAccess:{'station-status':'edit'},performanceManager:true}}))));await flush();assert.equal(current.getWorkspaceAccess('dashboard'),'none');assert.equal(current.isPerformanceManager,false);
  }finally{await act(async()=>root?.unmount());}
 });
 

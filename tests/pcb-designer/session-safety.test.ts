@@ -60,9 +60,10 @@ for (const deniedStage of ["save_pcb_designer_workspace_locked", "save_pcb_desig
     f.handle(async (name) => ({ data: null, error: name === deniedStage
       ? { code: "42501", message: "Permission denied" } : { code: "PGRST202", message: `Could not find the function workspace.${name}(p_user_id) in the schema cache` } }));
     assert.equal(await f.client.save!(draft()), false);
-    assert.equal(f.calls.at(-1)?.name, deniedStage);
+    assert.equal(f.calls.at(-1)?.name, "save_pcb_designer_workspace_locked");
+    assert.equal(f.calls.length, 1);
     assert.equal(f.tableCalls(), 0);
-    assert.equal(f.client.getAccessSnapshot!().status, "denied");
+    assert.equal(f.client.getAccessSnapshot!().status, deniedStage.endsWith("_locked") ? "denied" : "ready");
   });
 }
 
@@ -180,11 +181,11 @@ for (const error of [
   assert.equal(f.calls.length, 1); assert.equal(f.tableCalls(), 0);
 });
 
-test("an explicitly missing SQL entry point permits the next deployed save RPC", async () => {
+test("an explicitly missing SQL locked-save entry point cannot permit an unlocked save RPC", async () => {
   const f = fixture(); f.handle(async name => ({ data: null, error: name === "save_pcb_designer_workspace_locked"
     ? { code: "42883", message: "function workspace.save_pcb_designer_workspace_locked(uuid, text, text, jsonb) does not exist" } : null }));
-  assert.equal(await f.client.save!(draft()), true);
-  assert.deepEqual(f.calls.map(call => call.name), ["save_pcb_designer_workspace_locked", "save_pcb_designer_workspace_shared"]);
+  assert.equal(await f.client.save!(draft()), false);
+  assert.deepEqual(f.calls.map(call => call.name), ["save_pcb_designer_workspace_locked"]);
   assert.equal(f.tableCalls(), 0);
 });
 
@@ -202,8 +203,8 @@ test("same-actor token refresh cannot override a server authorization denial", a
 
 for (const message of ["PCB workspace access denied", "PCB workspace edit access denied"]) {
   for (const rpc of [
-    "load_pcb_designer_workspace_shared", "load_pcb_designer_workspace",
-    "save_pcb_designer_workspace_locked", "save_pcb_designer_workspace_shared", "save_pcb_designer_workspace",
+    "load_pcb_designer_workspace_shared", "load_pcb_designer_legacy_workspace",
+    "save_pcb_designer_workspace_locked", "delete_pcb_designer_project_locked", "release_pcb_designer_project_lock",
     "acquire_pcb_designer_project_lock", "load_pcb_designer_project_lock",
   ]) test(`known P0001 permission denial immediately blocks ${rpc}: ${message}`, async () => {
     const f = fixture();
@@ -214,6 +215,8 @@ for (const message of ["PCB workspace access denied", "PCB workspace edit access
       ? { code: "P0001", message }
       : { code: "PGRST202", message: `Could not find the function workspace.${name}(p_user_id) in the schema cache` } }));
     if (rpc.startsWith("save_")) assert.equal(await f.client.save!(draft()), false);
+    else if (rpc.startsWith("delete_")) assert.equal(await f.client.deleteProject!("board"), false);
+    else if (rpc.startsWith("release_")) assert.equal(await f.client.releaseProjectLock!("board"), false);
     else if (rpc === "acquire_pcb_designer_project_lock") await assert.rejects(f.client.acquireProjectLock!({ projectId: "board", projectName: "Synthetic" }));
     else if (rpc === "load_pcb_designer_project_lock") await assert.rejects(f.client.loadProjectLock!("board"));
     else await assert.rejects(f.client.load!());

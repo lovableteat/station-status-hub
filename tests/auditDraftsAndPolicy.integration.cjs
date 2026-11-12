@@ -1,3 +1,4 @@
+const {profile,attachProfileRpc}=require('./support/sanitizedProfiles.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {React,act,create,child,deferred,browser,database,loader,flush}=require('./support/renderHarness.cjs');
@@ -70,7 +71,7 @@ test('read deadline aborts stalled network; a subsequent read succeeds',async()=
 test('permissions downgrade an open page, reject old-account responses and retain 30-second refresh recovery',async()=>{
   let user={userId:'admin'},current,delayed=null;
   let role='admin',settings={workspaceAccess:{'station-status':'edit'},pagePermissions:['dashboard_view','dashboard_edit']};
-  const db=database(q=>q.table==='system_users'?delayed?.promise ?? ok({role,status:'active',permissions:settings}):ok([]));
+  const db=attachProfileRpc(database(()=>ok([])),q=>delayed?.promise ?? ok(profile(q.filters.id,{role,status:'active',permissions:settings})));
   const win=browser();let tick;
   win.setInterval=(callback,ms)=>{assert.equal(ms,30000);tick=callback;return 1;};win.clearInterval=()=>{};
   const load=loader({window:win,mocks:{'@/components/auth/UserContext':{useUser:()=>({user})},'@/integrations/supabase/client':{supabase:db}}});
@@ -83,7 +84,7 @@ test('permissions downgrade an open page, reject old-account responses and retai
   delayed=deferred();let old;await act(async()=>{old=current.reloadPermissions();});
   const oldDeferred=delayed;delayed=null;user={userId:'other'};settings={workspaceAccess:{'station-status':'none'},pagePermissions:[]};
   await act(async()=>root.update(React.createElement(PermissionsProvider,null,React.createElement(Probe))));await flush();
-  await act(async()=>{oldDeferred.resolve(ok({role:'admin',status:'active',permissions:{}}));await old;});
+  await act(async()=>{oldDeferred.resolve(ok(profile('admin',{role:'admin',status:'active',permissions:{}})));await old;});
   assert.equal(current.canViewModule('dashboard'),false);assert.equal(current.isPerformanceManager,false);
   await act(async()=>root.unmount());assert.equal(db.channels.filter(c=>!c.removed).length,0);
 });

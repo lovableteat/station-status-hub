@@ -5,10 +5,12 @@ import React, { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import type { UsePcbWorkspaceOptions } from "../../src/components/pcb-designer/hooks/usePcbWorkspace.ts";
 import type { UsePcbPersistenceOptions } from "../../src/components/pcb-designer/hooks/usePcbPersistence.ts";
-import { PcbLocalRepository } from "../../src/components/pcb-designer/core/storage.ts";
+import { PcbLocalRepository, PCB_STORAGE_KEY, pcbOwnerStorageKey } from "../../src/components/pcb-designer/core/storage.ts";
+import * as pcbStorage from "../../src/components/pcb-designer/core/storage.ts";
 import { createPcbAccountRemoteClient, type PcbAccountDatabase } from "../../src/components/pcb-designer/core/accountRemoteSync.ts";
 import { createBlankProject } from "../../src/components/pcb-designer/defaults.ts";
 import type { PcbSaveState } from "../../src/components/pcb-designer/types.ts";
+import { envelope, LEGACY_KEY } from "./legacy-fixtures.ts";
 import type { PcbSession, PcbSessionSource } from "../../src/components/pcb-designer/core/remoteAccess.ts";
 
 const qa = createRequire(`${process.env.AUDIT_QA_DIR ?? "/tmp/station-release-qa"}/package.json`);
@@ -16,7 +18,7 @@ const { JSDOM } = qa("jsdom");
 const dom = new JSDOM("<!doctype html><body></body>", { url: "https://synthetic.invalid/" });
 Object.assign(globalThis, { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true });
 const { loader } = createRequire(import.meta.url)("../support/renderHarness.cjs");
-const load = loader({ window: dom.window, mocks: { react: React, "@/hooks/use-toast": { toast: () => undefined } } });
+const load = loader({ window: dom.window, mocks: { react: React, "../core/storage.ts": pcbStorage, "@/hooks/use-toast": { toast: () => undefined } } });
 const { usePcbWorkspace } = load("src/components/pcb-designer/hooks/usePcbWorkspace.ts");
 const { usePcbPersistence } = load("src/components/pcb-designer/hooks/usePcbPersistence.ts");
 const owner = "11111111-1111-4111-8111-111111111111";
@@ -34,7 +36,7 @@ function localDraft() {
   const project = { ...createBlankProject("Preserved synthetic draft"), updatedAt: "2026-11-12T03:00:00.000Z" };
   const state: PcbSaveState = { projects: [project], templates: [], library: [], activeProjectId: project.id, updatedAt: project.updatedAt };
   const repository = new PcbLocalRepository(storage);
-  repository.save(state);
+  repository.save(state, owner);
   repository.saveRecovery(owner, state, "2026-11-12T01:00:00.000Z", recoveryClientId);
   return { state, storage, repository };
 }
@@ -44,6 +46,7 @@ function cloud() {
   let permissionFailure: { rpc: string; message: string } | null = null;
   let rpcFailure: { error: unknown; throws: boolean } | null = null;
   let load: () => Promise<unknown> = async () => null;
+  let legacyLoad: (() => Promise<unknown>) | null = null;
   const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
   const listeners = new Set<(event: string, value: PcbSession | null) => void>();
   const auth: PcbSessionSource = {
@@ -56,6 +59,8 @@ function cloud() {
       if (rpcFailure?.throws) throw rpcFailure.error;
       if (rpcFailure) return { data: null, error: rpcFailure.error };
       if (denied) return { data: null, error: { code: "42501", message: "denied" } };
+      if (name === "load_pcb_designer_workspace_shared" && legacyLoad) return { data: null, error: { code: "PGRST202", message: "Could not find the function workspace.load_pcb_designer_workspace_shared(p_user_id) in the schema cache" } };
+      if (name === "load_pcb_designer_legacy_workspace") return { data: await legacyLoad?.(), error: null };
       if (permissionFailure?.rpc === name) return { data: null, error: { code: "P0001", message: permissionFailure.message } };
       return { error: null, data: name === "load_pcb_designer_workspace_shared" ? await load()
         : name.includes("project_lock") ? { available: true, acquired: true, lock: null } : true };
@@ -68,7 +73,8 @@ function cloud() {
     failAll: (error: unknown, throws = false) => { rpcFailure = error === null ? null : { error, throws }; },
     denyRpc: (rpc: string, message: string) => { permissionFailure = { rpc, message }; },
     session: (next: PcbSession | null, event?: string) => { current = next; if (event) listeners.forEach(listener => listener(event, next)); },
-    load: (next: typeof load) => { load = next; },
+    load: (next: typeof load) => { load = next; legacyLoad = null; },
+    legacy: (next: unknown | (() => Promise<unknown>)) => { legacyLoad = typeof next === "function" ? next as () => Promise<unknown> : async () => next; },
   };
 }
 async function mount<T, P>(hook: (props: P) => T, initial: P) {
@@ -313,5 +319,188 @@ test("a delayed transport error from the old session cannot pause the recovered 
     assert.equal(hook.value.canEdit, true);
     assert.equal(hook.value.hasUnsavedChanges, true);
     assert.deepEqual(local.repository.loadRecovery(owner, recoveryClientId), recovery);
+  } finally { await hook.close(); }
+});
+
+for (const storageFailure of ["quota", "unavailable"] as const) test(`actual PermissionsProvider/PermissionGuard removal retains only the same owner's memory draft after ${storageFailure}`, async () => {
+  let currentUser = { ...editor, role: "engineer" };
+  let profileDenied = false;
+  let failStorage = false;
+  let failedWrites = 0;
+  const values = new Map<string, string>();
+  const storage = {
+    getItem(key: string) { if (failStorage && storageFailure === "unavailable") throw new Error("Synthetic storage unavailable"); return values.get(key) ?? null; },
+    setItem(key: string, value: string) { if (failStorage) { failedWrites++; throw new Error("Synthetic quota exceeded"); } values.set(key, value); },
+  };
+  const repository = new PcbLocalRepository(storage);
+  const unclaimed = repository.load();
+  repository.save({ ...unclaimed, projects: [{ ...unclaimed.projects[0], name: "Unclaimed global private data" }] });
+  const originalGlobal = values.get(PCB_STORAGE_KEY);
+  const ownCloud = cloud(); const otherCloud = cloud(); otherCloud.session(null);
+  const otherOwner = "22222222-2222-4222-8222-222222222222";
+  const database = {
+    from(table: string) {
+      assert.equal(table, "user_page_permissions");
+      return { select: () => ({ eq: async () => ({ data: [{ permission: "pcb_designer_view" }, { permission: "pcb_designer_edit" }], error: null }) }) };
+    },
+    channel() { const channel = { on: () => channel, subscribe: () => channel }; return channel; },
+    removeChannel: async () => undefined,
+  };
+  const guardedLoad = loader({ window: dom.window, globals: { console: { ...console, error() {} } }, mocks: {
+    react: React, "../core/storage.ts": pcbStorage,
+    "@/components/ui/alert": { Alert: ({ children }) => createElement("aside", null, children), AlertDescription: ({ children }) => createElement("p", null, children) },
+    "lucide-react": { Shield: () => null },
+    "@/hooks/use-toast": { toast: () => undefined },
+    "@/components/auth/UserContext": { useUser: () => ({ user: currentUser }) },
+    "@/integrations/supabase/client": { supabase: database },
+    "@/lib/permissionRefresh.mjs": { watchPermissionRefresh: () => () => undefined },
+    "@/lib/systemUserProfiles": { readSystemUserProfile: async (id: string) => profileDenied
+      ? { data: null, error: new Error("Synthetic profile denied") }
+      : { data: { id, role: "engineer", status: "active", permissions: { workspaceAccess: { "pcb-designer": "edit" } } }, error: null } },
+  } });
+  const { PermissionsProvider, usePermissions } = guardedLoad("src/hooks/usePermissions.ts");
+  const { PermissionGuard } = guardedLoad("src/components/layout/PermissionGuard.tsx");
+  const { usePcbWorkspace: guardedWorkspace } = guardedLoad("src/components/pcb-designer/hooks/usePcbWorkspace.ts");
+  let api: ReturnType<typeof usePcbWorkspace>;
+  let mounted = false;
+  let recoveryId = "guarded-memory-client";
+  function Board() {
+    const permission = usePermissions();
+    api = guardedWorkspace({ canEdit: permission.canEditModule("pcb-designer"), storage, editor: currentUser,
+      remoteClient: currentUser.userId === owner ? ownCloud.client : otherCloud.client, recoveryClientId: recoveryId });
+    React.useEffect(() => { mounted = true; return () => { mounted = false; }; }, []);
+    return createElement("div", null, api.activeProject.name);
+  }
+  const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+  const render = async () => { await act(async () => root.render(createElement(PermissionsProvider, null, createElement(PermissionGuard, { module: "pcb-designer" }, createElement(Board))))); };
+  const refreshProfile = async () => { await act(async () => dom.window.dispatchEvent(new dom.window.CustomEvent("station-permissions-updated"))); };
+  try {
+    await render();
+    assert.equal(mounted, true);
+    assert.notEqual(api!.activeProject.name, "Unclaimed global private data");
+    assert.ok(values.has(pcbOwnerStorageKey(owner)));
+    failStorage = true;
+    await new Promise(resolve => setTimeout(resolve, 2));
+    await act(async () => api!.renameProject(api!.activeProject.id, "Owner A unsaved memory-only draft"));
+    assert.equal(api!.hasUnsavedChanges, true);
+    const checkpoint = structuredClone(api!.data);
+    assert.ok(failedWrites > 0);
+    assert.ok(repository.loadRecovery(owner, recoveryId));
+    const durableDraftKey = `${PCB_STORAGE_KEY}:draft:${owner}:${recoveryId}`;
+    assert.equal(values.get(durableDraftKey) ?? "", ""); // No false claim of durable storage.
+    profileDenied = true; await refreshProfile(); assert.equal(mounted, false);
+    const leaveWhileGuarded = new dom.window.Event("beforeunload", { cancelable: true });
+    dom.window.dispatchEvent(leaveWhileGuarded);
+    assert.equal(leaveWhileGuarded.defaultPrevented, true); // Survives the hook's true unmount.
+    profileDenied = false; await refreshProfile(); assert.equal(mounted, true);
+    assert.deepEqual(structuredClone(api!.data), checkpoint);
+    assert.equal(api!.hasUnsavedChanges, true);
+    assert.equal(api!.canEdit, true);
+    currentUser = { ...editor, userId: otherOwner, role: "engineer" }; await render();
+    assert.equal(mounted, true);
+    assert.equal(JSON.stringify(api!.data).includes("Owner A unsaved"), false);
+    assert.equal(repository.loadRecovery(otherOwner, recoveryId), null);
+    assert.ok(repository.loadRecovery(owner, recoveryId));
+    currentUser = { ...editor, role: "engineer" }; await render();
+    assert.deepEqual(structuredClone(api!.data), checkpoint);
+    profileDenied = true; await refreshProfile(); assert.equal(mounted, false);
+    recoveryId = "different-client"; profileDenied = false; await refreshProfile();
+    assert.equal(JSON.stringify(api!.data).includes("Owner A unsaved"), false);
+    assert.equal(repository.loadRecovery(owner, recoveryId), null);
+    assert.ok(repository.loadRecovery(owner, "guarded-memory-client"));
+    assert.equal(values.get(PCB_STORAGE_KEY), originalGlobal);
+  } finally {
+    await act(async () => root.unmount()); host.remove();
+    repository.clearRecovery(owner, "guarded-memory-client");
+    repository.clearRecovery(owner, "different-client");
+    repository.clearRecovery(otherOwner, "guarded-memory-client");
+    const leaveAfterClear = new dom.window.Event("beforeunload", { cancelable: true });
+    dom.window.dispatchEvent(leaveAfterClear);
+    assert.equal(leaveAfterClear.defaultPrevented, false);
+  }
+});
+
+test("successful own locked cloud save clears the memory-only warning even when disk stays unavailable", async () => {
+  const local = localDraft(); const remote = cloud();
+  local.storage.setItem = () => { throw new Error("Synthetic quota"); };
+  const hook = await mount(usePcbWorkspace, { canEdit: true, storage: local.storage, remoteClient: remote.client, editor, recoveryClientId });
+  try {
+    await hook.flush();
+    const before = new dom.window.Event("beforeunload", { cancelable: true }); dom.window.dispatchEvent(before);
+    assert.equal(before.defaultPrevented, true);
+    assert.equal(hook.value.hasUnsavedChanges, true);
+    await act(async () => assert.equal(await hook.value.saveNow(), true));
+    assert.equal(hook.value.hasUnsavedChanges, false);
+    assert.ok(remote.calls.some(call => call.name === "save_pcb_designer_workspace_locked"));
+    assert.equal(local.repository.loadRecovery(owner, recoveryClientId), null);
+    const after = new dom.window.Event("beforeunload", { cancelable: true }); dom.window.dispatchEvent(after);
+    assert.equal(after.defaultPrevented, false);
+  } finally { await hook.close(); local.repository.clearRecovery(owner, recoveryClientId); }
+});
+
+for (const ownPresent of [true, false]) test(`legacy recovery is read-only and unsaved on a fresh seed (own present: ${ownPresent})`, async () => {
+  const local = localDraft(); const remote = cloud();
+  local.repository.clearRecovery(owner, recoveryClientId);
+  const cleanSeed = new PcbLocalRepository({ getItem: () => null, setItem: () => undefined }).load();
+  local.repository.save(cleanSeed, owner);
+  remote.legacy(envelope([{ id: owner, permissions: { [LEGACY_KEY]: local.state } }], ownPresent ? owner : "missing-owner"));
+  const hook = await mount(usePcbWorkspace, { canEdit: true, storage: local.storage, remoteClient: remote.client, editor, recoveryClientId });
+  try {
+    await hook.flush();
+    assert.equal(hook.value.legacyRecovery, ownPresent ? "own" : "shared-only");
+    assert.equal(hook.value.activeProject.name, "Preserved synthetic draft");
+    assert.equal(hook.value.canEdit, false);
+    assert.equal(hook.value.canMutate, false);
+    assert.equal(hook.value.remoteReady, false);
+    assert.equal(hook.value.hasUnsavedChanges, true);
+    const beforeCalls = remote.calls.length;
+    await act(async () => assert.equal(await hook.value.saveNow(), false));
+    assert.equal(await remote.client.save!(hook.value.data), false);
+    assert.equal(await remote.client.deleteProject!(hook.value.activeProject.id), false);
+    assert.equal(remote.calls.length, beforeCalls);
+    assert.ok(local.repository.loadRecovery(owner, recoveryClientId));
+  } finally { await hook.close(); }
+});
+
+test("legacy recovery never applies stale tombstones to existing dirty or newer modern content", async () => {
+  for (const initiallyDirty of [true, false]) {
+    const local = localDraft(); const remote = cloud();
+    if (!initiallyDirty) local.repository.clearRecovery(owner, recoveryClientId);
+    remote.load(async () => local.state);
+    const hook = await mount(usePcbWorkspace, { canEdit: true, storage: local.storage, remoteClient: remote.client, editor, recoveryClientId });
+    try {
+      const current = structuredClone(hook.value.data);
+      const old = { ...local.state, updatedAt: "2020-01-01T00:00:00.000Z", remoteDeletions: { projects: [local.state.projects[0].id], templates: [], library: [] } };
+      remote.legacy(envelope([{ id: owner, permissions: { [LEGACY_KEY]: old } }], owner));
+      await act(async () => hook.value.retryRemote()); await hook.flush();
+      assert.equal(hook.value.legacyRecovery, "own");
+      assert.deepEqual(structuredClone(hook.value.data), current);
+      assert.equal(hook.value.hasUnsavedChanges, true);
+      assert.equal(hook.value.canEdit, false);
+      assert.ok(local.repository.loadRecovery(owner, recoveryClientId));
+      assert.equal(remote.calls.some(call => call.name.startsWith("save_")), false);
+    } finally { await hook.close(); }
+  }
+});
+
+test("old-session legacy completion cannot change newer modern content or turn its adapter read-only", async () => {
+  const local = localDraft(); const remote = cloud(); const pending = deferred<unknown>();
+  local.repository.clearRecovery(owner, recoveryClientId);
+  remote.legacy(() => pending.promise);
+  const hook = await mount(usePcbWorkspace, { canEdit: true, storage: local.storage, remoteClient: remote.client, editor, recoveryClientId });
+  try {
+    await act(async () => remote.session(null, "SIGNED_OUT"));
+    await act(async () => { remote.load(async () => local.state); remote.session(session(), "SIGNED_IN"); });
+    await hook.flush();
+    const modern = structuredClone(hook.value.data);
+    const old = { ...local.state, updatedAt: "2020-01-01T00:00:00.000Z" };
+    await act(async () => pending.resolve(envelope([{ id: owner, permissions: { [LEGACY_KEY]: old } }], owner)));
+    await hook.flush();
+    assert.equal(hook.value.legacyRecovery, null);
+    assert.equal(hook.value.remoteReady, true);
+    assert.equal(hook.value.canEdit, true);
+    assert.deepEqual(structuredClone(hook.value.data), modern);
+    await act(async () => assert.equal(await hook.value.saveNow(), true));
+    assert.equal(remote.calls.at(-1)?.name, "save_pcb_designer_workspace_locked");
   } finally { await hook.close(); }
 });

@@ -4,7 +4,7 @@ import {
   type PcbPersistenceStatus,
   type PcbRemoteClient,
 } from "../core/remoteSync.ts";
-import { PcbLocalRepository, type StorageLike } from "../core/storage.ts";
+import { getPcbBrowserStorage, PcbLocalRepository, type StorageLike } from "../core/storage.ts";
 import { pcbRecoveryClient } from "../core/recoveryClient.ts";
 import type { PcbSaveState } from "../types.ts";
 
@@ -29,24 +29,11 @@ export interface UsePcbPersistenceOptions {
 export interface PcbPersistenceControl {
   hasUnsavedChanges: boolean;
   markClean: (revision?: string) => void;
+  markDirty: () => void;
   saveNow: () => Promise<boolean>;
   status: PcbPersistenceStatus;
   lastSavedEditor: string | null;
   lastSavedProjectId: string | null;
-}
-
-const localOnlyStorage: StorageLike = {
-  getItem: () => null,
-  setItem: () => undefined,
-};
-
-function browserStorage(): StorageLike {
-  if (typeof window === "undefined") return localOnlyStorage;
-  try {
-    return window.localStorage;
-  } catch {
-    return localOnlyStorage;
-  }
 }
 
 /** Saves only on explicit user action; remote writes are serialized in click order. */
@@ -59,7 +46,7 @@ export function usePcbPersistence({
   initialSavedRevision,
   recoveryClientId = pcbRecoveryClient(),
 }: UsePcbPersistenceOptions): PcbPersistenceControl {
-  const repository = useMemo(() => new PcbLocalRepository(storage ?? browserStorage()), [storage]);
+  const repository = useMemo(() => new PcbLocalRepository(storage ?? getPcbBrowserStorage()), [storage]);
   const client = allowRemoteSync ? remoteClient ?? null : null;
   const stateRef = useRef(state);
   const syncPermissionRef = useRef({ client, remoteClient, generation: 0 });
@@ -123,6 +110,7 @@ export function usePcbPersistence({
     };
   }, [hasUnsavedChanges]);
 
+  const markDirty = useCallback(() => setSavedRevision(""), []);
   const markClean = useCallback((revision?: string) => {
     setSavedRevision(revision ?? stateRef.current.updatedAt);
   }, []);
@@ -142,7 +130,7 @@ export function usePcbPersistence({
     }
     // Keep a local recovery copy immediately, but only mark the document clean
     // after the shared cloud write confirms success.
-    repositoryRef.current.save(snapshot);
+    repositoryRef.current.save(snapshot, ownerId);
 
     if (!client && remoteClient) {
       // Cloud access/lease is unavailable. This is a recovery copy, not a local-mode save.
@@ -188,6 +176,7 @@ export function usePcbPersistence({
   return {
     hasUnsavedChanges,
     markClean,
+    markDirty,
     saveNow,
     status: status === "saving" ? "saving" : hasUnsavedChanges ? "unsaved" : status,
     lastSavedEditor,

@@ -1,3 +1,4 @@
+import { parsePcbLegacyWorkspace } from "./legacyWorkspace.ts";
 import { guardPcbRemoteClient, throwIfPcbAuthorizationError, type PcbSessionSource } from "./remoteAccess.ts";
 import type { PcbSaveState } from "../types.ts";
 import { isPcbSaveState, refreshBuiltInCatalog } from "./storage.ts";
@@ -11,42 +12,18 @@ import type {
   PcbProjectLock,
   PcbProjectLockResult,
   PcbRemoteClient,
+  PcbRemoteLoadResult,
 } from "./remoteSync.ts";
 
 type DatabaseError = { code?: string; message?: string; status?: number } | null;
 type DatabaseResult<T> = Promise<{ data: T; error: DatabaseError }>;
 
-interface SystemUserRecord {
-  id: string;
-  permissions: unknown;
-}
-
-interface SystemUserQuery {
-  maybeSingle: () => DatabaseResult<SystemUserRecord | null>;
-}
-
-interface SystemUserFilter {
-  eq: (column: "id", value: string) => SystemUserQuery;
-}
-
-interface SystemUserUpdateFilter {
-  eq: (column: "id", value: string) => DatabaseResult<unknown>;
-}
-
-interface SystemUserTable {
-  select(columns: "permissions"): SystemUserFilter;
-  select(columns: "id,permissions"): DatabaseResult<SystemUserRecord[]>;
-  update: (values: { permissions: Record<string, unknown> }) => SystemUserUpdateFilter;
-}
-
 export interface PcbAccountDatabase {
   rpc: (
     name:
       | "load_pcb_designer_workspace_shared"
-      | "save_pcb_designer_workspace_shared"
       | "save_pcb_designer_workspace_locked"
-      | "load_pcb_designer_workspace"
-      | "save_pcb_designer_workspace"
+      | "load_pcb_designer_legacy_workspace"
       | "acquire_pcb_designer_project_lock"
       | "load_pcb_designer_project_lock"
       | "release_pcb_designer_project_lock"
@@ -56,10 +33,7 @@ export interface PcbAccountDatabase {
       | "list_pcb_designer_model_assets",
     args: Record<string, unknown>,
   ) => DatabaseResult<unknown>;
-  from: (table: "system_users") => SystemUserTable;
 }
-
-export const PCB_REMOTE_FALLBACK_KEY = "pcbDesignerWorkspace";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -128,177 +102,25 @@ function parseCloudModelList(value: unknown): PcbModelAssetMetadata[] {
   return Array.isArray(value) ? value.filter(isPcbModelAssetMetadata) : [];
 }
 
-const LEGACY_LOCK_RESULT: PcbProjectLockResult = {
-  available: false,
-  acquired: true,
-  lock: null,
-};
-
-function revision(value: string | undefined): number {
-  const parsed = Date.parse(value ?? "");
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function stateFromPermissions(permissions: unknown): PcbSaveState | null {
-  return parseRemoteState(asRecord(permissions)[PCB_REMOTE_FALLBACK_KEY]);
-}
-
-/**
- * Older deployments store one workspace snapshot in each account's permission
- * document. Treat those snapshots as replicas of one team project catalog,
- * while retaining the current account's templates and active project. Custom
- * library records are merged here too for older installations without the
- * shared-library RPC migration.
- */
-export function mergePcbFallbackWorkspaces(
-  records: SystemUserRecord[],
-  userId: string,
-): PcbSaveState | null {
-  const snapshots = records
-    .map((record) => ({ id: record.id, state: stateFromPermissions(record.permissions) }))
-    .filter((entry): entry is { id: string; state: PcbSaveState } => Boolean(entry.state));
-  if (!snapshots.length) return null;
-
-  const ownState = snapshots.find((entry) => entry.id === userId)?.state;
-  const accountState = structuredClone(ownState ?? {
-    ...snapshots[0].state,
-    templates: [],
-    library: [],
-    modelAssets: {},
-    pendingPlacementsByProject: {},
-    remoteDeletions: { projects: [], templates: [], library: [] },
-  });
-  const deletedProjects = new Set(
-    snapshots.flatMap(({ state }) => state.remoteDeletions?.projects ?? []),
-  );
-  const projectMap = new Map<string, PcbSaveState["projects"][number]>();
-  const libraryMap = new Map<string, {
-    component: PcbSaveState["library"][number];
-    updatedAt: string;
-  }>();
-  const deletedLibrary = new Set(
-    snapshots.flatMap(({ state }) => state.remoteDeletions?.library ?? []),
-  );
-
-  for (const { state } of snapshots) {
-    for (const project of state.projects) {
-      if (deletedProjects.has(project.id)) continue;
-      const current = projectMap.get(project.id);
-      if (!current || revision(project.updatedAt) > revision(current.updatedAt)) {
-        projectMap.set(project.id, structuredClone(project));
-      }
-    }
-    for (const component of state.library) {
-      if (component.source === "built-in" || deletedLibrary.has(component.id)) continue;
-      const current = libraryMap.get(component.id);
-      if (!current || revision(state.updatedAt) >= revision(current.updatedAt)) {
-        libraryMap.set(component.id, {
-          component: structuredClone(component),
-          updatedAt: state.updatedAt,
-        });
-      }
-    }
-  }
-
-  const projects = [...projectMap.values()].sort((left, right) =>
-    revision(right.updatedAt) - revision(left.updatedAt) || left.id.localeCompare(right.id));
-  const projectIds = new Set(projects.map((project) => project.id));
-  const activeProjectId = accountState.activeProjectId
-    && projectIds.has(accountState.activeProjectId)
-    ? accountState.activeProjectId
-    : projects[0]?.id ?? null;
-  const updatedAt = snapshots.reduce(
-    (latest, entry) => revision(entry.state.updatedAt) > revision(latest)
-      ? entry.state.updatedAt
-      : latest,
-    accountState.updatedAt,
-  );
-  const pendingPlacementsByProject = Object.fromEntries(
-    Object.entries(accountState.pendingPlacementsByProject ?? {})
-      .filter(([projectId]) => projectIds.has(projectId)),
-  );
-
-  return refreshBuiltInCatalog({
-    ...accountState,
-    projects,
-    library: [...libraryMap.values()]
-      .map(({ component }) => component)
-      .sort((left, right) => left.name.localeCompare(right.name)),
-    activeProjectId,
-    pendingPlacementsByProject,
-    remoteDeletions: {
-      projects: [...deletedProjects].sort(),
-      templates: [...new Set(accountState.remoteDeletions?.templates ?? [])],
-      library: [...new Set(accountState.remoteDeletions?.library ?? [])],
-    },
-    updatedAt,
-  });
-}
-
-/**
- * Uses the dedicated RPC when the migration is available. The RPC combines the
- * site-wide shared project catalog with this account's templates and library.
- * The permissions JSON fallback remains for installations that have not yet
- * applied the workspace migrations. That fallback merges every account's
- * snapshot so projects are still shared site-wide.
- */
+/** Modern cloud data is authoritative. Protected legacy recovery is read-only. */
 export function createPcbAccountRemoteClient(
   database: PcbAccountDatabase,
   userId: string,
   clientId = `pcb-client-${userId}`,
   auth?: PcbSessionSource,
 ): PcbRemoteClient {
-  return guardPcbRemoteClient({
-    load: async () => {
-      const primary = await database.rpc("load_pcb_designer_workspace_shared", {
-        p_user_id: userId,
-      });
-      if (!primary.error) return readRemoteState(primary.data);
-      if (!isMissingRpc(primary.error, "load_pcb_designer_workspace_shared")) throw primary.error;
-
-      const legacy = await database.rpc("load_pcb_designer_workspace", {
-        p_user_id: userId,
-      });
-      if (legacy.error && !isMissingRpc(legacy.error, "load_pcb_designer_workspace")) throw legacy.error;
-      // The legacy RPC predates the shared library. Only its missing shared RPC
-      // permits the compatibility read below, never a denied/failed cloud load.
-      const legacyState = !legacy.error ? readRemoteState(legacy.data) : null;
-      const sharedFallback = await database
-        .from("system_users")
-        .select("id,permissions");
-      const fallbackState = !sharedFallback.error && sharedFallback.data
-        ? mergePcbFallbackWorkspaces(sharedFallback.data, userId)
-        : null;
-      throwIfPcbAuthorizationError(sharedFallback.error);
-      if (sharedFallback.error) throw sharedFallback.error;
-      if (legacyState) {
-        if (!fallbackState) return legacyState;
-        return refreshBuiltInCatalog({
-          ...legacyState,
-          library: fallbackState.library,
-          remoteDeletions: {
-            ...legacyState.remoteDeletions,
-            library: [...new Set([
-              ...(legacyState.remoteDeletions?.library ?? []),
-              ...(fallbackState.remoteDeletions?.library ?? []),
-            ])],
-          },
-        });
-      }
-      if (!sharedFallback.error && sharedFallback.data) {
-        return fallbackState;
-      }
-
-      const ownFallback = await database
-        .from("system_users")
-        .select("permissions")
-        .eq("id", userId)
-        .maybeSingle();
-      throwIfPcbAuthorizationError(ownFallback.error);
-      if (ownFallback.error) throw ownFallback.error;
-      if (!ownFallback.data) return null;
-      return stateFromPermissions(ownFallback.data.permissions);
-    },
+  const loadWithMetadata = async (): Promise<PcbRemoteLoadResult> => {
+    const primary = await database.rpc("load_pcb_designer_workspace_shared", { p_user_id: userId });
+    if (!primary.error) return { source: "modern", state: readRemoteState(primary.data) };
+    if (!isMissingRpc(primary.error, "load_pcb_designer_workspace_shared")) throw primary.error;
+    // Zero actor/owner parameters: the server derives both access and private ownership.
+    const legacy = await database.rpc("load_pcb_designer_legacy_workspace", {});
+    if (legacy.error) { throwIfPcbAuthorizationError(legacy.error); throw legacy.error; }
+    return parsePcbLegacyWorkspace(legacy.data);
+  };
+  const client = guardPcbRemoteClient({
+    loadWithMetadata,
+    load: async () => (await loadWithMetadata()).state,
     save: async (state) => {
       const locked = await database.rpc("save_pcb_designer_workspace_locked", {
         p_user_id: userId,
@@ -308,35 +130,9 @@ export function createPcbAccountRemoteClient(
       });
       if (!locked.error) return true;
       // A lock rejection must never fall through to an unlocked legacy write.
-      if (!isMissingRpc(locked.error, "save_pcb_designer_workspace_locked")) return false;
-
-      const primary = await database.rpc("save_pcb_designer_workspace_shared", {
-        p_user_id: userId,
-        p_payload: state,
-      });
-      if (!primary.error) return true;
-      if (!isMissingRpc(primary.error, "save_pcb_designer_workspace_shared")) return false;
-
-      const legacy = await database.rpc("save_pcb_designer_workspace", {
-        p_user_id: userId,
-        p_payload: state,
-      });
-      if (!legacy.error) return true;
-      if (!isMissingRpc(legacy.error, "save_pcb_designer_workspace")) return false;
-
-      const table = database.from("system_users");
-      const current = await table
-        .select("permissions")
-        .eq("id", userId)
-        .maybeSingle();
-      throwIfPcbAuthorizationError(current.error);
-      if (current.error || !current.data) return false;
-
-      const permissions = asRecord(current.data.permissions);
-      permissions[PCB_REMOTE_FALLBACK_KEY] = structuredClone(state);
-      const updated = await table.update({ permissions }).eq("id", userId);
-      throwIfPcbAuthorizationError(updated.error);
-      return !updated.error;
+      // Missing locked-save support also fails closed; recovery is not a write API.
+      throwIfPcbAuthorizationError(locked.error);
+      return false;
     },
     acquireProjectLock: async ({ projectId, projectName }) => {
       const result = await database.rpc("acquire_pcb_designer_project_lock", {
@@ -346,7 +142,6 @@ export function createPcbAccountRemoteClient(
         p_editor_client_id: clientId,
         p_lease_seconds: 30,
       });
-      if (isMissingRpc(result.error, "acquire_pcb_designer_project_lock")) return LEGACY_LOCK_RESULT;
       if (result.error) throw result.error;
       return parseProjectLock(result.data)
         ?? { available: true, acquired: false, lock: null };
@@ -356,7 +151,6 @@ export function createPcbAccountRemoteClient(
         p_user_id: userId,
         p_project_id: projectId,
       });
-      if (isMissingRpc(result.error, "load_pcb_designer_project_lock")) return LEGACY_LOCK_RESULT;
       if (result.error) throw result.error;
       return parseProjectLock(result.data)
         ?? { available: true, acquired: false, lock: null };
@@ -367,7 +161,8 @@ export function createPcbAccountRemoteClient(
         p_project_id: projectId,
         p_editor_client_id: clientId,
       });
-      return isMissingRpc(result.error, "release_pcb_designer_project_lock") || !result.error;
+      throwIfPcbAuthorizationError(result.error);
+      return !result.error;
     },
     deleteProject: async (projectId) => {
       const result = await database.rpc("delete_pcb_designer_project_locked", {
@@ -418,6 +213,8 @@ export function createPcbAccountRemoteClient(
       return parseCloudModelList(result.data);
     },
   }, auth);
+  // Keep the original load API while routing every caller through source/actor fencing.
+  return { ...client, load: async () => (await client.loadWithMetadata!()).state };
 }
 
 export function isDatabaseUserId(value: string | null | undefined): value is string {

@@ -43,6 +43,7 @@ async function buildPcbRecoveryFixture() {
     'src/components/pcb-designer/hooks/usePcbProjectLock.ts',
     'src/components/pcb-designer/hooks/usePcbRemoteAccess.ts',
     'src/components/pcb-designer/core/accountRemoteSync.ts',
+    'src/components/pcb-designer/core/legacyWorkspace.ts',
     'src/components/pcb-designer/core/remoteAccess.ts',
     'src/components/pcb-designer/core/remoteSync.ts',
     'src/components/pcb-designer/core/storage.ts',
