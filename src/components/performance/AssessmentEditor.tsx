@@ -1,7 +1,7 @@
 import { AssessmentAttachments } from "./AssessmentAttachments";
 import { cancelAssessmentDraftWrite, readAssessmentDraft, keepAssessmentDraft, forgetAssessmentDraft } from './assessmentDrafts.mjs';
 import { useEffect, useRef, useState } from "react";
-import { FileArchive, Link2, Send, Upload, X } from "lucide-react";
+import { Check, FileArchive, Link2, Send, Upload, X } from "lucide-react";
 import { PerformanceCopyPanel } from './PerformanceCopyPanel';
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
@@ -325,7 +325,8 @@ export function AssessmentEditor({
     target?.focus({ preventScroll: true });
   }, [focusCategory, focusEntryId]);
   const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [pendingAction, setPendingAction] = useState<AssessmentAction | null>(null);
+  const saving = pendingAction !== null;
   const [imageJobs, setImageJobs] = useState(0);
   const [submitStatus, setSubmitStatus] = useState("");
   const [returnTarget, setReturnTarget] = useState<{ category: Category; entryId: string } | null>(null);
@@ -421,7 +422,8 @@ export function AssessmentEditor({
       return;
     }
     submitting.current = true;
-    setSaving(true);
+    setPendingAction(action);
+    setSubmitStatus("");
     if (draftKey) cancelAssessmentDraftWrite(draftKey);
     setError("");
     try {
@@ -443,7 +445,7 @@ export function AssessmentEditor({
       );
     } finally {
       submitting.current = false;
-      setSaving(false);
+      setPendingAction(null);
     }
   };
   return (
@@ -1209,8 +1211,8 @@ export function AssessmentEditor({
               ? "尚未填完可先儲存草稿；確認三類實績與佐證後，再按「提交」送交直屬主管。"
               : "送出主管評分後，這份個人考核即完成；課務彙整請另至「部門績效總覽」處理。"}
           </p>
-          <p className="rd2-draft-status" role="status">
-            {submitStatus}
+          <p className="rd2-draft-status" role="status" data-saved={!!submitStatus || undefined}>
+            {submitStatus && <span><Check aria-hidden="true" />{submitStatus}</span>}
           </p>
           <div className="rd2-actions">
             {mode === "self" && (
@@ -1218,9 +1220,10 @@ export function AssessmentEditor({
                 type="button"
                 variant="outline"
                 disabled={!canSubmit || saving || !!imageJobs}
+                pending={pendingAction === "draft"}
                 onClick={() => void submit("draft")}
               >
-                {saving ? "儲存中…" : "儲存草稿"}
+                {pendingAction === "draft" ? "儲存中…" : "儲存草稿"}
               </Button>
             )}
             {mode === "manager" && (
@@ -1228,20 +1231,20 @@ export function AssessmentEditor({
                 type="button"
                 variant="outline"
                 disabled={!canSubmit || saving || !!imageJobs}
+                pending={pendingAction === "return"}
                 className="rd2-return-action"
                 onClick={() => void submit("return")}
               >
-                退回勾選實績（{selectedReturnEntries(form).length}）
+                {pendingAction === "return" ? "退回中…" : `退回勾選實績（${selectedReturnEntries(form).length}）`}
               </Button>
             )}
             <Button
               type="submit"
               disabled={!canSubmit || saving || !!imageJobs}
+              pending={pendingAction === "submit"}
             >
-              <Send data-icon="inline-start" />
-              {saving
-                ? "提交中…"
-                : "提交"}
+              {pendingAction !== "submit" && <Send data-icon="inline-start" aria-hidden="true" />}
+              {pendingAction === "submit" ? "提交中…" : "提交"}
             </Button>
           </div>
         </footer>

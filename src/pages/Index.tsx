@@ -35,7 +35,8 @@ import { MobileWorkspaceDock } from "@/components/layout/MobileWorkspaceDock";
 import { PermissionGuard } from "@/components/layout/PermissionGuard";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { WorkspaceEntrance } from "@/components/layout/WorkspaceEntrance";
-import { MaintenanceLoading } from "@/components/maintenance/MaintenanceLoading";
+import { Button } from "@/components/ui/button";
+import { LoadingStatus } from "@/components/ui/loading-status";
 import { MaintenanceLoading as MaintenanceLoadingStatus } from "@/components/maintenance/MaintenanceFeedback";
 import "@/components/maintenance/maintenanceShell.css";
 import { ProjectScopeBar } from "@/components/test-projects/ProjectScopeBar";
@@ -808,13 +809,17 @@ const Index = () => {
               : "min-h-0"
         )}
       >
-        {navigationPending && <div role="status" className="flex flex-wrap items-center gap-3 p-3 text-sm">正在載入目標功能，目前畫面仍可操作。<button type="button" className="min-h-11 rounded-lg border border-border px-4" onClick={cancelModuleNavigation}>取消切換</button></div>}
+        <div key={activeWorkspace ?? "workspace-home"} className="platform-workspace-arrival" aria-hidden="true" />
+        {navigationPending && (
+          <div data-workspace-switch="pending" className="platform-workspace-pending">
+            <LoadingStatus label="正在載入工作區，目前畫面仍可操作" />
+            <Button type="button" size="sm" variant="outline" onClick={cancelModuleNavigation}>取消切換</Button>
+          </div>
+        )}
         {(navigationRetry || historyRetry) && <ModuleLoadRecovery onRetry={navigationRetry ?? historyRetry!} onCancel={() => { cancelModuleNavigation(); setHistoryRetry(null); }} />}
         <React.Suspense
           fallback={
-            <div className="p-3">
-              <MaintenanceLoading label="正在載入工作區" />
-            </div>
+            <div className="platform-workspace-loading"><LoadingStatus label="正在載入工作區" /></div>
           }
         >
           {renderWorkspaceContent()}

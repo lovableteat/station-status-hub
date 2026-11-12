@@ -11,6 +11,11 @@ window.fetch=async(input,init)=>{
   if(new URL(url,location.href).origin===location.origin)return localFetch(input,init);
   const provider=url.startsWith('https://generativelanguage.googleapis.com/v1beta/')?'gemini':url==='https://api.anthropic.com/v1/messages'?'anthropic':url==='https://compatible.invalid/v1/chat/completions'?'openai-compatible':null;
   if(!provider)throw new Error('External request blocked');
+  if(provider==='gemini'&&new URL(url).pathname==='/v1beta/models'){
+    qa.geminiDiscoveryCount=(qa.geminiDiscoveryCount??0)+1;
+    const models=['gemini-2.5-flash','gemini-3.5-flash-lite','gemini-3.8-flash'].map(model=>({name:`models/${model}`,supportedGenerationMethods:['generateContent']}));
+    return Response.json({models});
+  }
   const body=JSON.parse(init.body), model=body.model??decodeURIComponent(url.match(/models\/([^/:]+):/)[1]);
   const result=await providerReply(provider,model,body,url);
   return new Response(JSON.stringify(result.payload),{status:result.status,headers:{'Content-Type':'application/json'}});

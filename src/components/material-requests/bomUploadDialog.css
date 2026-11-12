@@ -1,0 +1,53 @@
+.bom-upload-dialog .bom-upload-file {
+  border-color: hsl(var(--primary) / 0.28);
+  background: hsl(var(--primary) / 0.065);
+}
+
+.bom-upload-dialog .bom-upload-confirm[data-ui="button"]:not(:disabled),
+.bom-upload-dialog .bom-upload-confirm[data-ui="button"][data-pending="true"] {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  opacity: 1;
+}
+
+.bom-upload-dialog .bom-upload-confirm[data-ui="button"]:not(:disabled):hover {
+  background: color-mix(in srgb, hsl(var(--primary)) 88%, hsl(var(--foreground)));
+}
+
+.bom-upload-toast[data-ui="toast"]:not(.destructive) {
+  --bom-upload-toast-tone: var(--success);
+  align-items: flex-start;
+  border-color: hsl(var(--bom-upload-toast-tone) / 0.45);
+  border-inline-start: 3px solid hsl(var(--bom-upload-toast-tone));
+  background: linear-gradient(hsl(var(--bom-upload-toast-tone) / 0.10), hsl(var(--bom-upload-toast-tone) / 0.10)), hsl(var(--popover));
+  overflow-wrap: anywhere;
+}
+
+.bom-upload-toast--warning[data-ui="toast"]:not(.destructive) {
+  --bom-upload-toast-tone: var(--warning);
+}
+
+.bom-upload-toast [toast-close] {
+  opacity: 1;
+}
+
+.bom-upload-toast .bom-upload-toast-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.bom-upload-toast .bom-upload-toast-heading svg {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  color: hsl(var(--bom-upload-toast-tone));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bom-upload-dialog[data-ui="dialog"],
+  .bom-upload-toast[data-ui="toast"] {
+    animation: none;
+  }
+}

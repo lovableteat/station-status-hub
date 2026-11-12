@@ -12,10 +12,29 @@ export interface NvBomSheet { name: string; rows: string[][] }
 export interface NvBomFile { name: string; sheets: NvBomSheet[] }
 /** Rows and columns are one-based, matching Excel. */
 export type NvBomMapping = { headerRow: number } & Record<NvBomField, number | null>;
-export interface NvBomPart extends Record<NvBomField, string> { sourceRows: number[] }
+const NV_BOM_SOURCE_METADATA = {
+  level: ["LEVEL"], parentNumber: ["PARENT NUMBER", "PARENT PART NUMBER"], materialCategory: ["MATERIAL CATEGORY"],
+  mountMethod: ["S/D", "MOUNT METHOD", "MOUNTING TYPE"], source: ["SOURCE"], itemType: ["ITEM TYPE"],
+  primary: ["PRIMARY"], findNumber: ["FIND #", "FIND NUM", "FIND NUMBER"],
+  population: ["POPULATION", "POPULATION STATUS", "MOUNT STATUS", "FIT STATUS", "DNP", "DNI", "DNM", "DO NOT POPULATE", "DO NOT MOUNT", "DO NOT INSTALL"],
+} as const;
+type NvBomSourceField = keyof typeof NV_BOM_SOURCE_METADATA;
+const trackedMetadata = ["population", "primary", "source"] as const;
+type NvBomTrackedMetadata = typeof trackedMetadata[number];
+export interface NvBomPartMetadata extends Partial<Record<NvBomSourceField, string>> {
+  sourceRow: number;
+  qty: string;
+  refs: string;
+  sourceRole?: "alternate" | "aml";
+  relatedSourceRows?: number[];
+  relatedPlacement?: Pick<NvBomPartMetadata, "sourceRow" | "level" | "materialCategory" | "mountMethod" | "itemType" | "refs">
+    & Pick<NvBomPart, "partNumber" | "mpn" | "manufacturer" | "description">;
+}
+export interface NvBomPart extends Record<NvBomField, string> { sourceRows: number[]; metadata?: NvBomPartMetadata[] }
 export interface NvBomChange {
   id: string; kind: "added" | "removed" | "changed";
   before?: NvBomPart; after?: NvBomPart; changedFields: NvBomField[];
+  changedMetadata?: NvBomTrackedMetadata[];
   advice?: string; aiNote?: string;
 }
 export interface NvBomUnresolved { id: string; side: "before" | "after"; part: NvBomPart; reason: string }
@@ -30,6 +49,13 @@ const known = (value: string) => {
   return emptyIdentity.has(normalized) ? "" : normalized;
 };
 const order = new Intl.Collator("zh-TW", { numeric: true, sensitivity: "base" });
+
+export function getNvBomParentLocationLayout(header: readonly string[]) {
+  const headings = header.map(identity);
+  const required = ["LEVEL", "PARENT NUMBER", "PART NUMBER", "PART DESCRIPTION", "MANUFACTURER", "MANUFACTURER PART NUMBER", "QTY", "LOCATION"];
+  if (!required.every(label => headings.includes(label))) return null;
+  return { levelIndex: headings.indexOf("LEVEL"), parentIndex: headings.indexOf("PARENT NUMBER") };
+}
 
 export async function readNvBomFile(file: File): Promise<NvBomFile> {
   if (!/\.(xlsx?|xlsm|csv)$/i.test(file.name)) throw new Error("請選擇 Excel（XLSX、XLS、XLSM）或 CSV 原始 BOM。");
@@ -69,7 +95,7 @@ export function validateNvBomMapping(value: unknown, sheet: NvBomSheet): NvBomMa
 const splitRefs = (value: string) => identity(value).split(/[\s,，;；、]+/).filter(Boolean);
 const refTokens = (value: string) => [...new Set(splitRefs(value))].sort(order.compare);
 const isPlacement = (ref: string) => /^[A-Z][A-Z0-9_]*\d[A-Z0-9_]*$/.test(ref) && !ref.startsWith("SBOM");
-function placementRefs(value: string) {
+export function placementRefs(value: string) {
   const tokens = splitRefs(value);
   // Placeholders, sub-BOM labels, and unexpanded ranges do not identify an individual board location.
   return tokens.every(isPlacement) && new Set(tokens).size === tokens.length ? tokens.sort(order.compare) : [];
@@ -88,18 +114,130 @@ function quantityTotal(values: string[]) {
   const formatted = digits ? `${absolute.slice(0, -digits)}.${absolute.slice(-digits)}`.replace(/\.?0+$/, "") : absolute;
   return `${sum < 0n ? "-" : ""}${formatted}`;
 }
+
+function findGreenFactorSummary(rows: string[][], headerRow: number) {
+  const layout = getNvBomParentLocationLayout(rows[headerRow - 1]);
+  if (!layout) return null;
+  const { levelIndex, parentIndex } = layout;
+  const hasOnlySummaryColumns = (cells: string[]) => cells.every((value, index) => index === levelIndex || index === parentIndex || !text(value));
+  const start = rows.findIndex((cells, index) => {
+    if (index < headerRow || identity(cells[levelIndex]) !== "GREEN FACTOR TYPE SUMMARY" || text(cells[parentIndex]) || !hasOnlySummaryColumns(cells)) return false;
+    const next = rows[index + 1];
+    return next && ["GREEN FACTOR TYPE", "GREEN FACTOR"].includes(identity(next[levelIndex])) && identity(next[parentIndex]) === "COUNT" && hasOnlySummaryColumns(next);
+  });
+  if (start < 0) return null;
+  let end = start + 2;
+  while (end < rows.length) {
+    const cells = rows[end];
+    const category = identity(cells[levelIndex]);
+    if (!category || /^(?:\d+|[A-Z])$/.test(category) || !isDecimalQuantity(text(cells[parentIndex])) || !hasOnlySummaryColumns(cells)) break;
+    end++;
+  }
+  return { start, end };
+}
+
+function sourceMetadataColumns(header: string[]) {
+  const headings = header.map(identity);
+  return (Object.keys(NV_BOM_SOURCE_METADATA) as NvBomSourceField[]).flatMap(field => {
+    const labels: readonly string[] = NV_BOM_SOURCE_METADATA[field];
+    const indices = headings.flatMap((label, index) => labels.includes(label) ? [index] : []);
+    return indices.length === 1 ? [{ field, index: indices[0], label: headings[indices[0]] }] : [];
+  });
+}
+
+function readSourceMetadata(part: NvBomPart, cells: string[], columns: ReturnType<typeof sourceMetadataColumns>) {
+  const metadata: NvBomPartMetadata = { sourceRow: part.sourceRows[0], refs: part.refs, qty: part.qty };
+  for (const { field, index, label } of columns) {
+    const value = text(cells[index]);
+    if (field === "population" && /^(?:DNP|DNI|DNM|DO NOT )/.test(label)) {
+      const flag = identity(value);
+      metadata.population = /^(?:TRUE|YES|Y|1|✓)$/.test(flag) ? "DNP" : /^(?:FALSE|NO|N|0)$/.test(flag) ? "MOUNTED" : value;
+    } else {
+      metadata[field] = value;
+    }
+  }
+  return metadata;
+}
+
+function sourcePlacement(part: NvBomPart, row: NvBomPartMetadata): NonNullable<NvBomPartMetadata["relatedPlacement"]> {
+  const { sourceRow, level, materialCategory, mountMethod, itemType, refs } = row;
+  const { partNumber, mpn, manufacturer, description } = part;
+  return { sourceRow, level, materialCategory, mountMethod, itemType, refs, partNumber, mpn, manufacturer, description };
+}
+
+function linkSourceRows(parts: NvBomPart[], header: string[]) {
+  const samePlacement = new Map<string, Array<{ part: NvBomPart; metadata: NvBomPartMetadata; vendor: string }>>();
+  const hasParentLocationLayout = Boolean(getNvBomParentLocationLayout(header));
+  let previous: NvBomPartMetadata | undefined;
+  let mainPart: NvBomPart | undefined;
+  let assembly = "";
+  for (const part of parts) {
+    const metadata = part.metadata?.[0];
+    if (!metadata) continue;
+    const level = identity(metadata.level);
+    if (hasParentLocationLayout) {
+      if (level === "A") {
+        metadata.sourceRole = "alternate";
+        const main = mainPart?.metadata?.[0];
+        if (mainPart && main && previous?.sourceRow === metadata.sourceRow - 1 && known(main.parentNumber ?? "") && identity(metadata.parentNumber) === identity(main.parentNumber)) {
+          metadata.relatedSourceRows = [main.sourceRow];
+          metadata.relatedPlacement = sourcePlacement(mainPart, main);
+        } else mainPart = undefined;
+      } else {
+        mainPart = /^\d+$/.test(level) ? part : undefined;
+      }
+      previous = metadata;
+    }
+    if (/^[01]$/.test(level) && /PROJECT PART|ASSEMBLY/i.test(metadata.itemType ?? "")) assembly = known(part.partNumber);
+    const refs = placementRefs(part.refs);
+    if (!refs.length || !known(part.partNumber) || !known(part.mpn) || !known(metadata.findNumber ?? "") || !known(metadata.itemType ?? "") || !/^\d+$/.test(level)) continue;
+    const key = JSON.stringify([assembly, level, known(metadata.findNumber ?? ""), known(part.partNumber), refs]);
+    const candidates = samePlacement.get(key) ?? [];
+    candidates.push({ part, metadata, vendor: JSON.stringify([known(part.mpn), known(part.manufacturer)]) });
+    samePlacement.set(key, candidates);
+  }
+  return samePlacement;
+}
+
+function markSharedSourceRows(before: ReturnType<typeof linkSourceRows>, after: ReturnType<typeof linkSourceRows>) {
+  for (const [key, beforeRows] of before) {
+    const afterRows = after.get(key);
+    const hasDistinctSources = (rows: typeof beforeRows) => new Set(rows.map(row => row.vendor)).size > 1;
+    if (!afterRows || !(hasDistinctSources(beforeRows) || hasDistinctSources(afterRows))) continue;
+    for (const rows of [beforeRows, afterRows]) for (const row of rows) {
+      const peers = rows.filter(peer => peer.vendor !== row.vendor);
+      row.metadata.sourceRole = "aml";
+      row.metadata.relatedSourceRows = peers.map(peer => peer.metadata.sourceRow);
+      if (peers.length === 1) row.metadata.relatedPlacement = sourcePlacement(peers[0].part, peers[0].metadata);
+    }
+  }
+}
+
+function sourceMetadataSignature(part: NvBomPart, field: NvBomTrackedMetadata) {
+  const rows = part.metadata ?? [];
+  const values = [...new Set(rows.map(row => identity(row[field])))];
+  if (values.length <= 1) return values[0] ?? "";
+  return JSON.stringify(rows.map(row => [identity(row[field]), refTokens(row.refs)]).sort((left, right) => order.compare(JSON.stringify(left), JSON.stringify(right))));
+}
+
 function group(sheet: NvBomSheet, mapping: NvBomMapping, keys: NvBomField[], side: NvBomUnresolved["side"]) {
   validateNvBomMapping(mapping, sheet);
   const rows = new Map<string, NvBomPart[]>(), unresolved: NvBomUnresolved[] = [];
   const referenceUse = new Map<string, number>();
   const header = sheet.rows[mapping.headerRow - 1];
+  const summary = findGreenFactorSummary(sheet.rows, mapping.headerRow);
+  const columns = sourceMetadataColumns(header);
+  const rawParts: NvBomPart[] = [];
   const selectedColumns = NV_BOM_FIELDS.flatMap(({ key }) => mapping[key] === null ? [] : [mapping[key]! - 1]);
   let skipped = 0;
   for (let row = mapping.headerRow; row < sheet.rows.length; row++) {
+    if (summary && row >= summary.start && row < summary.end) continue;
     const cells = sheet.rows[row];
     if (!cells.some(value => text(value)) || selectedColumns.every(column => identity(cells[column]) === identity(header[column]))) continue;
     const part = { sourceRows: [row + 1] } as NvBomPart;
     for (const { key } of NV_BOM_FIELDS) part[key] = mapping[key] ? text(cells[mapping[key]! - 1]) : "";
+    if (columns.length) part.metadata = [readSourceMetadata(part, cells, columns)];
+    rawParts.push(part);
     for (const ref of splitRefs(part.refs).filter(isPlacement)) referenceUse.set(ref, (referenceUse.get(ref) ?? 0) + 1);
     if (!keys.some(field => field !== "manufacturer" && known(part[field]))) {
       skipped++;
@@ -118,11 +256,12 @@ function group(sheet: NvBomSheet, mapping: NvBomMapping, keys: NvBomField[], sid
       continue;
     }
     const part = { ...parts[0], sourceRows: parts.flatMap(item => item.sourceRows) };
+    if (part.metadata) part.metadata = parts.flatMap(item => item.metadata ?? []);
     part.refs = refTokens(parts.map(item => item.refs).join(", ")).join(", ");
     part.qty = quantityTotal(parts.map(item => item.qty));
     merged.set(key, part);
   }
-  return { parts: merged, skipped, unresolved, referenceUse, count: rows.size };
+  return { parts: merged, skipped, unresolved, referenceUse, count: rows.size, samePlacement: linkSourceRows(rawParts, header), metadataFields: new Set(columns.map(column => column.field)) };
 }
 
 function canCombine(parts: NvBomPart[]) {
@@ -165,6 +304,8 @@ export function compareNvBomSheets(before: NvBomSheet, after: NvBomSheet, before
   if (!identifiers.length) throw new Error("新舊 BOM 沒有可共同核對的 NV／來源料號或 MPN，請調整欄位對應。");
   const keys = identifiers.includes("mpn") && shared.includes("manufacturer") ? [...identifiers, "manufacturer" as const] : identifiers;
   const a = group(before, beforeMapping, keys, "before"), b = group(after, afterMapping, keys, "after");
+  markSharedSourceRows(a.samePlacement, b.samePlacement);
+  const sharedMetadata = trackedMetadata.filter(field => a.metadataFields.has(field) && b.metadataFields.has(field));
   const changes: NvBomChange[] = [];
   const unresolved = [...a.unresolved, ...b.unresolved];
   const beforeRemaining = new Set(a.parts.values()), afterRemaining = new Set(b.parts.values());
@@ -172,8 +313,10 @@ export function compareNvBomSheets(before: NvBomSheet, after: NvBomSheet, before
   const pair = (oldPart: NvBomPart, newPart: NvBomPart) => {
     beforeRemaining.delete(oldPart); afterRemaining.delete(newPart);
     const changedFields = shared.filter(field => identity(oldPart[field]) !== identity(newPart[field]));
-    if (!changedFields.length) unchanged++;
-    else changes.push({ id: `changed:${oldPart.sourceRows[0]}:${newPart.sourceRows[0]}`, kind: "changed", before: oldPart, after: newPart, changedFields });
+    const changedMetadata = sharedMetadata.filter(field => sourceMetadataSignature(oldPart, field) !== sourceMetadataSignature(newPart, field));
+    if (!changedFields.length && !changedMetadata.length) unchanged++;
+    else changes.push({ id: `changed:${oldPart.sourceRows[0]}:${newPart.sourceRows[0]}`, kind: "changed", before: oldPart, after: newPart, changedFields,
+      ...(changedMetadata.length ? { changedMetadata } : {}) });
   };
   for (const [key, part] of a.parts) {
     const match = b.parts.get(key);
@@ -249,8 +392,9 @@ export function compareNvBomSheets(before: NvBomSheet, after: NvBomSheet, before
   return { changes, unresolved, beforeCount: a.count, afterCount: b.count, unchanged, warnings, identityFields: keys };
 }
 
-export async function exportNvBomComparison({ diff, annotations, modelLabel, beforeName, afterName }: {
+export async function exportNvBomComparison({ diff, annotations, modelLabel, beforeName, afterName, review }: {
   diff: NvBomDiff; annotations: Record<string, NvBomAnnotation>; modelLabel: string; beforeName: string; afterName: string;
+  review?: { currentBomName: string; rows: Record<string, { scope: string; action: string; summary: string; removedRefs: string; addedRefs: string; mountedRefs: string; unmountedRefs: string; currentMatch: string }> };
 }) {
   const { Workbook } = await import("exceljs");
   const book = new Workbook();
@@ -260,6 +404,7 @@ export async function exportNvBomComparison({ diff, annotations, modelLabel, bef
     ["舊版", beforeName], ["新版", afterName], ["AI", modelLabel],
     ["比對方式", `優先核對 ${identityLabels.join(" + ")}。只有一致且位號不重疊的用料才合併。無法確認的來源另列待核對。`],
     ["未變更料件", diff.unchanged], ["待核對來源", diff.unresolved.length],
+    ...(review ? [["對照的料號申請表", review.currentBomName]] : []),
     ...diff.warnings.map(note => ["待核對", note]),
   ]);
   meta.getColumn(1).width = 18; meta.getColumn(2).width = 100;
@@ -268,11 +413,13 @@ export async function exportNvBomComparison({ diff, annotations, modelLabel, bef
     "差異", "NV／來源料號", "MPN", "廠商", "料名／描述", "舊數量", "新數量", "舊位號", "新位號", "舊版來源列", "新版來源列",
     "AI 手動修改建議", "AI 核對說明", "已核對", "人工備註", "變更欄位",
     "舊 NV／來源料號", "新 NV／來源料號", "舊 MPN", "新 MPN", "舊廠商", "新廠商", "舊料名／描述", "新料名／描述",
+    ...(review ? ["項目類別", "實際變更", "變更摘要", "移除位號", "新增位號", "目前料號申請表對應", "改上件位號", "改不上件位號"] : []),
   ]);
   for (const item of diff.changes) {
     const { before, after } = item;
     const part = (after ?? before)!;
     const changedLabels = NV_BOM_FIELDS.filter(field => item.changedFields.includes(field.key)).map(field => field.label);
+    const details = review?.rows[item.id];
     sheet.addRow([
       NV_BOM_CHANGE_LABELS[item.kind], part.partNumber, part.mpn, part.manufacturer, part.description,
       before?.qty ?? "", after?.qty ?? "", before?.refs ?? "", after?.refs ?? "",
@@ -280,11 +427,12 @@ export async function exportNvBomComparison({ diff, annotations, modelLabel, bef
       item.aiNote ?? "", annotations[item.id]?.checked ? "是" : "否", annotations[item.id]?.note ?? "", changedLabels.join("、"),
       before?.partNumber ?? "", after?.partNumber ?? "", before?.mpn ?? "", after?.mpn ?? "",
       before?.manufacturer ?? "", after?.manufacturer ?? "", before?.description ?? "", after?.description ?? "",
+      ...(review ? [details?.scope, details?.action, details?.summary, details?.removedRefs, details?.addedRefs, details?.currentMatch, details?.mountedRefs, details?.unmountedRefs] : []),
     ]);
   }
   sheet.getRow(1).font = { bold: true }; sheet.views = [{ state: "frozen", ySplit: 1 }];
-  sheet.autoFilter = { from: "A1", to: "X1" };
-  sheet.columns.forEach((column, index) => { column.width = [16, 26, 30, 24, 40, 12, 12, 35, 35, 20, 20, 45, 45, 12, 40, 30, 26, 26, 30, 30, 24, 24, 40, 40][index]; column.alignment = { vertical: "top", wrapText: true }; });
+  sheet.autoFilter = { from: "A1", to: review ? "AF1" : "X1" };
+  sheet.columns.forEach((column, index) => { column.width = [16, 26, 30, 24, 40, 12, 12, 35, 35, 20, 20, 45, 45, 12, 40, 30, 26, 26, 30, 30, 24, 24, 40, 40, 16, 22, 45, 35, 35, 55, 35, 35][index]; column.alignment = { vertical: "top", wrapText: true }; });
   if (diff.unresolved.length) {
     const manual = book.addWorksheet("待核對來源");
     manual.addRow(["版本", "Excel 來源列", ...NV_BOM_FIELDS.map(field => field.label), "需核對原因"]);

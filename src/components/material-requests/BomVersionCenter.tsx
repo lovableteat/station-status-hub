@@ -1,6 +1,6 @@
 import { recoverableLazy } from "@/components/common/recoverableLazy";
 import { Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronDown, Download, FileArchive, GitCompareArrows, Layers3, Pencil, Search, Upload, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, CircleAlert, CircleCheck, Download, FileArchive, GitCompareArrows, Layers3, LoaderCircle, Pencil, Search, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -20,11 +20,26 @@ import {
 import { CHIP, CHIP_TONE, formatBomRelativeTime, formatBomTimestamp } from "./bomVersionPresentation";
 import { groupBomWorkspacesByProject } from "./materialRequestPresentation";
 import type { MaterialWorkbookRecord } from "./materialRequestUtils";
+import type { NvBomChange } from "./nvBomCompare";
+import type { NvBomTableCandidate, NvBomTableLink } from "./nvBomTableMatch";
+import type { NvBomCompareSession } from "./NvBomComparePanel";
 import "./bomVersionCenter.css";
 
 const UNASSIGNED_VALUE = "__unassigned__";
 const NvBomCompare = recoverableLazy(() => import("./NvBomComparePanel"));
 export const BOM_SERIES_EMPTY_TEXT = "找不到符合條件的 BOM 系列";
+
+const ACTION_LABELS = {
+  rename: "正在儲存系列名稱…",
+  project: "正在更新所屬專案…",
+  version: "正在儲存版本說明…",
+};
+type VersionAction = keyof typeof ACTION_LABELS;
+type DiffLoad = { key: string; result: BomDiffResult; error?: never } | { key: string; result?: never; error: string };
+
+function VersionActivity({ children }: { children: string }) {
+  return <p role="status" className="bom-version-activity"><LoaderCircle className="bom-version-spinner" aria-hidden="true" />{children}</p>;
+}
 
 function UploadTimestamp({ value }: { value: string }) {
   const date = new Date(value);
@@ -52,6 +67,9 @@ export interface BomVersionCenterProps {
   seriesList: BomSeries[];
   exportedBy: string;
   loadRecords: (workspaceId: string) => Promise<MaterialWorkbookRecord[]>;
+  currentBomName?: string;
+  matchCurrentBom?: (change: NvBomChange) => NvBomTableLink;
+  onLocateCurrentBom?: (candidate: NvBomTableCandidate) => boolean;
   onView: (workspaceId: string) => void;
   onSetCurrent: (version: BomSeriesVersion, series: BomSeries) => void;
   onUploadVersion: (series: BomSeries) => void;
@@ -79,7 +97,7 @@ function useCompact() {
   return compact;
 }
 
-function VersionEditor({ version, busy, onSave, onCancel }: { version: BomSeriesVersion; busy: boolean; onSave: (patch: { label: string; note: string }) => void; onCancel: () => void }) {
+function VersionEditor({ version, busy, saving, onSave, onCancel }: { version: BomSeriesVersion; busy: boolean; saving: boolean; onSave: (patch: { label: string; note: string }) => void; onCancel: () => void }) {
   const [label, setLabel] = useState(version.version.label);
   const [note, setNote] = useState(version.version.note);
   return (
@@ -93,7 +111,7 @@ function VersionEditor({ version, busy, onSave, onCancel }: { version: BomSeries
         <Textarea id={`bom-version-note-${version.workspace.id}`} value={note} maxLength={BOM_VERSION_NOTE_LIMIT} disabled={busy} onChange={(event) => setNote(event.target.value)} rows={2} className="mt-1 min-h-9 text-sm" />
       </div>
       <div className="flex items-end gap-1">
-        <Button type="button" size="sm" disabled={busy} onClick={() => onSave({ label: label.trim(), note: note.trim() })} className="h-9">儲存</Button>
+        <Button type="button" size="sm" disabled={busy} aria-busy={saving || undefined} onClick={() => onSave({ label: label.trim(), note: note.trim() })} className="h-9 min-w-24">{saving && <LoaderCircle className="bom-version-spinner" aria-hidden="true" />}{saving ? "儲存中…" : "儲存"}</Button>
         <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onCancel} className="h-9">取消</Button>
       </div>
     </div>
@@ -107,7 +125,7 @@ function VersionEditor({ version, busy, onSave, onCancel }: { version: BomSeries
 export function BomVersionCenter(props: BomVersionCenterProps) {
   const {
     open, onOpenChange, canEdit, ready, busy = false, activeBomId, activeProjectId, activeProjectName, projects, projectNames, seriesList, exportedBy,
-    loadRecords, onView, onSetCurrent, onUploadVersion, onUploadNew, onAssignProject, onRenameSeries, onUpdateVersion, onSetArchived, onDeleteVersion, onDeleteSeries, onOpenPageTracker, onDownloadSource,
+    loadRecords, currentBomName, matchCurrentBom, onLocateCurrentBom, onView, onSetCurrent, onUploadVersion, onUploadNew, onAssignProject, onRenameSeries, onUpdateVersion, onSetArchived, onDeleteVersion, onDeleteSeries, onOpenPageTracker, onDownloadSource,
   } = props;
   const compact = useCompact();
   const [query, setQuery] = useState("");
@@ -118,18 +136,19 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
   const [mode, setMode] = useState<"series" | "diff" | "nv">("series");
   const [nvVisited, setNvVisited] = useState(false);
+  const [nvBomTargetId, setNvBomTargetId] = useState<string | null>(null);
+  const [nvSession, setNvSession] = useState<NvBomCompareSession>();
+  const nvLocateClosing = useRef(false);
   const [diffPair, setDiffPair] = useState<{ before: string; after: string } | null>(null);
-  const [diffResult, setDiffResult] = useState<BomDiffResult | null>(null);
-  const [diffLoading, setDiffLoading] = useState(false);
-  const [diffError, setDiffError] = useState<string | null>(null);
+  const [diffLoad, setDiffLoad] = useState<DiffLoad | null>(null);
   const [exporting, setExporting] = useState(false);
   const [editingVersionId, setEditingVersionId] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
-  const [pending, setPending] = useState(false);
-  const [feedback, setFeedback] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [pendingAction, setPendingAction] = useState<VersionAction | null>(null);
+  const pending = pendingAction !== null;
+  const [feedback, setFeedback] = useState<{ view: "series" | "diff"; tone: "ok" | "error"; text: string } | null>(null);
   const recordsCache = useRef(new Map<string, Promise<MaterialWorkbookRecord[]>>());
-  const diffRequest = useRef(0);
 
   const activeSeries = useMemo(() => findBomSeriesByWorkspace(seriesList, activeBomId), [seriesList, activeBomId]);
   const liveSeries = useMemo(() => seriesList.filter((series) => !series.archive), [seriesList]);
@@ -139,15 +158,23 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const selectedProjectName = selectedSeries?.project
     ? projectNames.get(selectedSeries.project.projectId) || selectedSeries.project.projectName || "未指定專案"
     : "未指定專案";
-  const description = mode === "nv" ? "選擇兩份 NV 原始 BOM 與要使用的 AI，查看新增、刪除與變更。"
+  const description = mode === "nv" ? "比較兩份 NV 原始 BOM，查看實際變更並定位目前料號申請表。"
     : `工作區專案：${activeProjectName ?? "未選擇"} · 所選 BOM 專案：${selectedProjectName} · 全部 ${seriesList.length} 個系列 · ${totalVersions} 個版本${archivedSeries.length > 0 ? ` · 已封存 ${archivedSeries.length} 個` : ""} · 使用中：${activeSeries ? `${activeSeries.series.name} ${activeSeries.version.displayNumber}` : "未選擇"}`;
-  const nvCompareButton = <Button type="button" variant="outline" size="sm" data-testid="bom-nv-compare-entry" onClick={() => { setNvVisited(true); setMode("nv"); }} title="另選兩份 NV 原始 Excel 比對，不受此系列版本數限制" className="bom-nv-compare-entry h-9 gap-2 border-primary/40 text-primary"><GitCompareArrows aria-hidden="true" className="h-4 w-4" />NV 原始 BOM 比對</Button>;
+  const nvCompareButton = <Button type="button" variant="outline" size="sm" data-testid="bom-nv-compare-entry" onClick={() => { setNvBomTargetId(activeBomId); setNvVisited(true); setMode("nv"); }} title="另選兩份 NV 原始 Excel 比對，不受此系列版本數限制" className="bom-nv-compare-entry h-9 gap-2 border-primary/40 text-primary"><GitCompareArrows aria-hidden="true" className="h-4 w-4" />NV 原始 BOM 比對</Button>;
+  const nvCanLocateCurrentBom = nvBomTargetId === activeBomId;
+  const locateNvResult = (candidate: NvBomTableCandidate, session: NvBomCompareSession) => {
+    if (!nvCanLocateCurrentBom || !onLocateCurrentBom?.(candidate)) return;
+    setNvSession(session);
+    nvLocateClosing.current = true;
+    onOpenChange(false);
+  };
 
   useEffect(() => {
     if (!open) return;
-    setMode("series");
+    setMode(nvSession && nvCanLocateCurrentBom ? "nv" : "series");
+    if (!nvCanLocateCurrentBom) setNvSession(undefined);
     setDiffPair(null);
-    setDiffResult(null);
+    setDiffLoad(null);
     setEditingVersionId(null);
     setRenaming(false);
     setFeedback(null);
@@ -178,6 +205,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
 
   const openDiff = (series: BomSeries, before: BomSeriesVersion, after: BomSeriesVersion) => {
     setSelectedSeriesId(series.id);
+    if (diffLoad?.error) setDiffLoad(null);
     setDiffPair({ before: before.workspace.id, after: after.workspace.id });
     setMode("diff");
   };
@@ -185,40 +213,41 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const diffSeries = selectedSeries;
   const diffBefore = diffSeries?.versions.find((item) => item.workspace.id === diffPair?.before) ?? null;
   const diffAfter = diffSeries?.versions.find((item) => item.workspace.id === diffPair?.after) ?? null;
+  const diffKey = diffBefore && diffAfter && JSON.stringify([diffBefore.workspace.id, diffBefore.workspace.updatedAt, diffAfter.workspace.id, diffAfter.workspace.updatedAt]);
+  const currentDiff = diffLoad?.key === diffKey ? diffLoad : null;
+  const diffResult = currentDiff?.result ?? null;
   useEffect(() => {
-    if (mode !== "diff" || !diffBefore || !diffAfter) return;
-    const request = ++diffRequest.current;
-    setDiffLoading(true);
-    setDiffError(null);
-    setDiffResult(null);
+    if (!open || mode !== "diff" || !diffKey || !diffBefore || !diffAfter) return;
+    let current = true;
     Promise.all([cachedRecords(diffBefore), cachedRecords(diffAfter)])
       .then(([beforeRecords, afterRecords]) => {
-        if (request !== diffRequest.current) return;
-        setDiffResult(diffBomRecords(beforeRecords, afterRecords));
+        if (current) setDiffLoad({ key: diffKey, result: diffBomRecords(beforeRecords, afterRecords) });
       })
       .catch((error) => {
-        if (request !== diffRequest.current) return;
-        setDiffError(error instanceof Error ? error.message : "載入版本料件失敗，請稍後再試。");
-      })
-      .finally(() => { if (request === diffRequest.current) setDiffLoading(false); });
-  }, [mode, diffBefore?.workspace.id, diffBefore?.workspace.updatedAt, diffAfter?.workspace.id, diffAfter?.workspace.updatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+        if (current) setDiffLoad({ key: diffKey, error: error instanceof Error ? error.message : "載入版本料件失敗，請稍後再試。" });
+      });
+    return () => { current = false; };
+  }, [open, mode, diffKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const runAction = async (action: () => Promise<void>, success: string) => {
-    setPending(true);
+  const runAction = async (kind: VersionAction, action: () => Promise<void>, success: string) => {
+    setPendingAction(kind);
     setFeedback(null);
     try {
       await action();
-      setFeedback({ tone: "ok", text: success });
+      setFeedback({ view: "series", tone: "ok", text: success });
+      return true;
     } catch (error) {
-      setFeedback({ tone: "error", text: error instanceof Error ? error.message : "操作失敗，請稍後再試。" });
+      setFeedback({ view: "series", tone: "error", text: error instanceof Error ? error.message : "操作失敗，請稍後再試。" });
+      return false;
     } finally {
-      setPending(false);
+      setPendingAction(null);
     }
   };
 
   const exportDiff = async (visibleEntries: BomDiffEntry[]) => {
     if (!diffResult || !diffSeries || !diffBefore || !diffAfter) return;
     setExporting(true);
+    setFeedback(null);
     try {
       const describe = (version: BomSeriesVersion) => ({ title: formatBomVersionTitle(version), sourceFile: version.workspace.payload.sourceFile, uploadedAt: formatBomTimestamp(version.version.uploadedAt), recordCount: version.workspace.payload.recordCount });
       const fileName = await exportBomDiffExcel(diffResult, {
@@ -229,9 +258,9 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         exportedAt: new Date().toISOString(),
         visibleEntries: visibleEntries.length === diffResult.entries.length ? undefined : visibleEntries,
       });
-      setFeedback({ tone: "ok", text: `已下載 ${fileName}` });
+      setFeedback({ view: "diff", tone: "ok", text: `已匯出 ${fileName}` });
     } catch (error) {
-      setFeedback({ tone: "error", text: error instanceof Error ? error.message : "差異 Excel 匯出失敗。" });
+      setFeedback({ view: "diff", tone: "error", text: error instanceof Error ? error.message : "差異 Excel 匯出失敗。" });
     } finally {
       setExporting(false);
     }
@@ -273,14 +302,14 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   };
 
   const detail = selectedSeries && (
-    <section data-testid="bom-series-detail" className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+    <section key={selectedSeries.id} data-testid="bom-series-detail" className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
       {compact && <Button type="button" variant="ghost" size="sm" onClick={() => setMobilePane("list")} className="h-10 w-fit px-2 text-sm lg:hidden"><ArrowLeft className="mr-1 h-4 w-4" />返回清單</Button>}
       <div className="bom-series-summary flex flex-wrap items-start gap-2">
         <div className="min-w-0 flex-1">
           {renaming ? (
             <div className="flex flex-wrap items-center gap-2">
               <Input value={renameDraft} maxLength={BOM_SERIES_NAME_LIMIT} aria-label="系列名稱" disabled={pending} onChange={(event) => setRenameDraft(event.target.value)} className="h-9 max-w-[24rem] text-sm" />
-              <Button type="button" size="sm" disabled={pending || !renameDraft.trim()} onClick={() => void runAction(() => onRenameSeries(selectedSeries, renameDraft.trim()), "系列名稱已更新").then(() => setRenaming(false))} className="h-9">儲存名稱</Button>
+              <Button type="button" size="sm" disabled={pending || !renameDraft.trim()} aria-busy={pendingAction === "rename" || undefined} onClick={() => void runAction("rename", () => onRenameSeries(selectedSeries, renameDraft.trim()), "系列名稱已更新").then(saved => { if (saved) setRenaming(false); })} className="h-9 min-w-24">{pendingAction === "rename" && <LoaderCircle className="bom-version-spinner" aria-hidden="true" />}{pendingAction === "rename" ? "儲存中…" : "儲存名稱"}</Button>
               <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={() => setRenaming(false)} className="h-9">取消</Button>
             </div>
           ) : (
@@ -293,8 +322,8 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         </div>
         <div className="bom-series-project">
         <Label htmlFor={`${projectGroupId}-assignment`}>此 BOM 所屬專案</Label>
-        <Select value={selectedSeries.project?.projectId ?? UNASSIGNED_VALUE} disabled={!canEdit || !ready || pending} onValueChange={(value) => void runAction(() => onAssignProject(selectedSeries, value === UNASSIGNED_VALUE ? null : value), "專案歸屬已更新")}>
-          <SelectTrigger id={`${projectGroupId}-assignment`} aria-label={`${selectedSeries.name} 所屬專案`} className="h-9 w-[12rem] text-sm"><SelectValue placeholder="指定專案" /></SelectTrigger>
+        <Select value={selectedSeries.project?.projectId ?? UNASSIGNED_VALUE} disabled={!canEdit || !ready || pending} onValueChange={(value) => void runAction("project", () => onAssignProject(selectedSeries, value === UNASSIGNED_VALUE ? null : value), "專案歸屬已更新")}>
+          <SelectTrigger id={`${projectGroupId}-assignment`} aria-label={`${selectedSeries.name} 所屬專案`} aria-busy={pendingAction === "project" || undefined} className="h-9 w-[12rem] text-sm"><SelectValue placeholder="指定專案" /></SelectTrigger>
           <SelectContent>
             <SelectItem value={UNASSIGNED_VALUE}>未指定專案</SelectItem>
             {(selectedSeries.project && !projects.some((project) => project.id === selectedSeries.project?.projectId) ? [...projects, { id: selectedSeries.project.projectId, name: selectedSeries.project.projectName }] : projects).map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}
@@ -304,22 +333,22 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
       </div>
 
       <div className="bom-series-actions flex flex-wrap items-center gap-1.5">
-        <Button type="button" size="sm" disabled={!canEdit || !ready || busy} onClick={() => onUploadVersion(selectedSeries)} title={`將新版 Excel 加入「${selectedSeries.name}」，保留既有版本與追蹤`} className="h-9"><Upload className="mr-1.5 h-4 w-4" />上傳此系列新版</Button>
+        <Button type="button" size="sm" disabled={!canEdit || !ready || busy} aria-busy={busy || undefined} onClick={() => onUploadVersion(selectedSeries)} title={`將新版 Excel 加入「${selectedSeries.name}」，保留既有版本與追蹤`} className="bom-version-action-upload h-9"><Upload aria-hidden="true" className="h-4 w-4" />上傳此系列新版</Button>
         <div className="bom-version-compare-actions" role="group" aria-label="BOM 比對工具">
         <Button type="button" variant="outline" size="sm" disabled={selectedSeries.versions.length < 2} title={selectedSeries.versions.length < 2 ? "需要兩個以上版本才能比對" : "比對目前版本與前一版"} onClick={() => {
           const current = selectedSeries.current;
           const previous = [...selectedSeries.versions].reverse().find((item) => item !== current && item.version.versionNumber <= current.version.versionNumber) ?? selectedSeries.versions.find((item) => item !== current)!;
           openDiff(selectedSeries, previous, current);
-        }} className="h-9"><GitCompareArrows className="mr-1.5 h-4 w-4" />比對版本</Button>
+        }} className="bom-version-action-compare h-9"><GitCompareArrows aria-hidden="true" className="h-4 w-4" />比對版本</Button>
         {nvCompareButton}
         </div>
         <div className="ml-auto flex items-center gap-1">
-          <Button type="button" variant="ghost" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onSetArchived(selectedSeries, !selectedSeries.archive)} title={selectedSeries.archive ? "回到清單" : "整個系列移到封存區，資料保留"} className="h-9 text-sm">{selectedSeries.archive ? "解除封存" : "封存系列"}</Button>
+          <Button type="button" variant="ghost" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onSetArchived(selectedSeries, !selectedSeries.archive)} title={selectedSeries.archive ? "回到清單" : "整個系列移到封存區，資料保留"} className="bom-version-action-archive h-9 text-sm">{selectedSeries.archive ? "解除封存" : "封存系列"}</Button>
           <Button type="button" variant="ghost" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onDeleteSeries(selectedSeries)} className="h-9 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive">刪除系列</Button>
         </div>
       </div>
 
-      <div className="bom-version-table-scroll min-h-0 flex-1 overflow-auto rounded-xl border border-border">
+      <div className="bom-version-table-scroll min-h-0 flex-1 overflow-auto rounded-xl border border-border" role="region" tabIndex={0} aria-label="版本表格，可橫向捲動查看完整欄位">
         <table data-testid="bom-version-table" className="w-full min-w-[960px] border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-card text-left text-xs text-muted-foreground">
             <tr>
@@ -342,7 +371,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
                 ? [...otherVersions].reverse()[0]
                 : selectedSeries.current;
               return [
-                <tr key={item.workspace.id} data-version-id={item.workspace.id} className={cn("border-t border-border/60 align-top", item.isCurrent && "bg-primary/5")}>
+                <tr key={item.workspace.id} data-version-id={item.workspace.id} data-current={item.isCurrent} className="border-t border-border/60 align-top">
                   <td className="px-2 py-2 whitespace-nowrap"><span className={cn("inline-flex h-9 min-w-14 items-center justify-center rounded-md border px-2 font-mono text-base font-bold tabular-nums", item.isCurrent ? "border-primary bg-primary text-primary-foreground" : "border-primary/40 bg-primary/10 text-foreground")}>{item.displayNumber}</span></td>
                   <td className="px-2 py-2 text-xs">
                     <span className="bom-version-chip-row flex gap-1">
@@ -384,7 +413,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
                 </tr>,
                 editingVersionId === item.workspace.id && (
                   <tr key={`${item.workspace.id}:edit`}><td colSpan={8} className="px-2 pb-2">
-                    <VersionEditor version={item} busy={pending} onCancel={() => setEditingVersionId(null)} onSave={(patch) => void runAction(() => onUpdateVersion(item, selectedSeries, patch), "版本說明已更新").then(() => setEditingVersionId(null))} />
+                    <VersionEditor version={item} busy={pending} saving={pendingAction === "version"} onCancel={() => setEditingVersionId(null)} onSave={(patch) => void runAction("version", () => onUpdateVersion(item, selectedSeries, patch), "版本說明已更新").then(saved => { if (saved) setEditingVersionId(null); })} />
                   </td></tr>
                 ),
               ];
@@ -392,30 +421,40 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
           </tbody>
         </table>
       </div>
-      <p className="bom-version-footnote text-xs text-muted-foreground"><strong>歷史版本唯讀</strong><span>料件與追蹤在目前版本維護。上傳新版時帶入既有追蹤，未帶入項目可在差異檢視查看。</span></p>
+      <p className="bom-version-footnote text-xs text-muted-foreground"><strong>歷史版本唯讀</strong><span>料件與追蹤在目前版本維護。上傳新版時帶入既有追蹤，未帶入項目可在差異檢視查看。</span><span className="bom-version-scroll-hint">← 左右捲動查看完整欄位 →</span></p>
     </section>
   );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="bom-version-center" className="bom-version-center flex flex-col overflow-hidden">
+      <DialogContent data-testid="bom-version-center" data-view={mode} data-mobile-pane={mobilePane} className="bom-version-center flex flex-col overflow-hidden" onCloseAutoFocus={event => {
+        if (!nvLocateClosing.current) return;
+        nvLocateClosing.current = false;
+        event.preventDefault();
+      }}>
         <DialogHeader className="bom-version-header">
           <div className="flex flex-wrap items-center gap-3"><DialogTitle className="text-xl">{mode === "nv" ? "NV 原始 BOM 比對" : "BOM 版本管理"}</DialogTitle>{mode !== "nv" && !selectedSeries && nvCompareButton}</div>
           <DialogDescription className="sr-only">{description}</DialogDescription>
-          <div className="bom-version-overview">{mode !== "nv" && selectedSeries && <span className="bom-version-project" title={`「${selectedSeries.name}」所屬專案：${selectedProjectName}`}><Layers3 aria-hidden="true" />所選 BOM 專案：{selectedProjectName}</span>}<span className="bom-version-workspace" title="目前工作區的導覽專案，不會改變所選 BOM 的專案歸屬">工作區專案：{activeProjectName ?? "未選擇"}</span><span>全部 {seriesList.length} 個系列</span><span>{totalVersions} 個版本</span>{archivedSeries.length > 0 && <span className="bom-version-archived">已封存 {archivedSeries.length} 個</span>}</div>
+          {mode !== "nv" && <div className="bom-version-overview">{selectedSeries && <span className="bom-version-project" title={`「${selectedSeries.name}」所屬專案：${selectedProjectName}`}><Layers3 aria-hidden="true" />所選 BOM 專案：{selectedProjectName}</span>}<span className="bom-version-workspace" title="目前工作區的導覽專案，不會改變所選 BOM 的專案歸屬">工作區專案：{activeProjectName ?? "未選擇"}</span><span>全部 {seriesList.length} 個系列</span><span>{totalVersions} 個版本</span>{archivedSeries.length > 0 && <span className="bom-version-archived">已封存 {archivedSeries.length} 個</span>}</div>}
         </DialogHeader>
-        {/* Action feedback lives above both modes so an export started from the diff view is acknowledged there too. */}
-        {feedback && <p role="status" data-testid="bom-version-feedback" className={cn("rounded-lg border px-3 py-1.5 text-xs", feedback.tone === "ok" ? "border-success/35 bg-success/10 text-success" : "border-destructive/35 bg-destructive/10 text-destructive")}>{feedback.text}</p>}
+        {feedback?.view === mode && <p role={feedback.tone === "ok" ? "status" : "alert"} data-testid="bom-version-feedback" data-tone={feedback.tone} className="bom-version-feedback">{feedback.tone === "ok" ? <CircleCheck aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}<span>{feedback.text}</span></p>}
+        {pendingAction && mode === "series" && <VersionActivity>{ACTION_LABELS[pendingAction]}</VersionActivity>}
+        {busy && mode === "series" && <VersionActivity>正在讀取 BOM 檔案…</VersionActivity>}
 
-        {nvVisited && <Suspense fallback={mode === "nv" ? <p role="status">正在開啟 NV 原始 BOM 比對…</p> : null}><NvBomCompare active={open && mode === "nv"} onBack={() => setMode("series")} /></Suspense>}
+        {nvVisited && <Suspense fallback={mode === "nv" ? <VersionActivity>正在開啟 NV 原始 BOM 比對…</VersionActivity> : null}>
+          <NvBomCompare key={nvBomTargetId} active={open && mode === "nv"} onBack={() => setMode("series")} currentBomName={currentBomName}
+            initialSession={nvCanLocateCurrentBom ? nvSession : undefined}
+            matchCurrentBom={nvCanLocateCurrentBom ? matchCurrentBom : undefined}
+            onLocateCurrentBom={nvCanLocateCurrentBom && onLocateCurrentBom ? locateNvResult : undefined} />
+        </Suspense>}
         {mode === "nv" ? null : mode === "diff" && diffSeries && diffBefore && diffAfter ? (
           <BomDiffView
             series={diffSeries}
             before={diffBefore}
             after={diffAfter}
             result={diffResult}
-            loading={diffLoading}
-            error={diffError}
+            loading={!currentDiff}
+            error={currentDiff?.error ?? null}
             exporting={exporting}
             onPickBefore={(workspaceId) => setDiffPair((current) => ({ before: workspaceId, after: current?.after === workspaceId ? (current?.before ?? workspaceId) : (current?.after ?? workspaceId) }))}
             onPickAfter={(workspaceId) => setDiffPair((current) => ({ after: workspaceId, before: current?.before === workspaceId ? (current?.after ?? workspaceId) : (current?.before ?? workspaceId) }))}
@@ -427,7 +466,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
           <div className="bom-version-columns grid min-h-0 min-w-0 flex-1">
             <aside data-testid="bom-series-list" className={cn("bom-series-sidebar flex min-h-0 min-w-0 flex-col", compact && mobilePane === "detail" && "hidden")}>
               <div className="bom-series-tools-wrap"><div className="bom-series-tools">
-              {canEdit && <Button type="button" variant="outline" size="sm" disabled={!ready || busy} onClick={onUploadNew} title="先選擇 Excel，再確認建立新系列或加入既有系列；不會立即儲存" className="bom-upload-entry h-9 justify-start"><Upload className="mr-1.5 h-4 w-4" />匯入 BOM 檔案</Button>}
+              {canEdit && <Button type="button" variant="outline" size="sm" disabled={!ready || busy} aria-busy={busy || undefined} onClick={onUploadNew} title="先選擇 Excel，再確認建立新系列或加入既有系列；不會立即儲存" className="bom-upload-entry h-9 justify-start"><Upload className="mr-1.5 h-4 w-4" />匯入 BOM 檔案</Button>}
               <div className="bom-series-search relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋專案、系列或版本" title="搜尋系列、專案、來源檔或版本說明" aria-label="搜尋 BOM 系列" className="h-10 rounded-xl pl-9 text-sm lg:h-9" />

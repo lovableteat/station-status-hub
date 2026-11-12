@@ -67,6 +67,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LoadingStatus } from "@/components/ui/loading-status";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MobileCommandBar, MobileToolsSheet, type MobileToolsItem, type MobileToolsSection } from "@/components/layout/mobile";
 import {
@@ -2192,8 +2193,8 @@ export function TestPlanWorkspace() {
             );
           })}
         </nav>
-        <Button type="button" variant="ghost" size="icon" aria-label="重新整理" title="重新整理" disabled={loading || busy} onClick={() => void refreshWorkspace(activeSpaceId)}>
-          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+        <Button type="button" variant="ghost" size="icon" aria-label="重新整理" title="重新整理" pending={loading} disabled={busy} onClick={() => void refreshWorkspace(activeSpaceId)}>
+          {!loading && <RefreshCw className="h-4 w-4" aria-hidden="true" />}
         </Button>
         <div className="file-explorer-search" role="search">
           <Search className="h-4 w-4" aria-hidden="true" />
@@ -2436,10 +2437,7 @@ export function TestPlanWorkspace() {
                       </div>
                     )}
                     {loading ? (
-                      <div className="test-plan-loading">
-                        <RefreshCw className="h-5 w-5 animate-spin" />
-                        正在載入資料儲存…
-                      </div>
+                      <div className="test-plan-loading"><LoadingStatus label="正在讀取檔案清單…" /></div>
                     ) : visibleEntries.length === 0 ? (
                       <div className="test-plan-empty is-compact">
                         <FolderOpen className="h-8 w-8" />

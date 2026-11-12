@@ -2118,6 +2118,11 @@ html { color-scheme: dark; }
   height: 52px;
 }
 .material-table-crosshair > tbody > tr[data-material-kind] > td { vertical-align: middle; }
+.material-table-crosshair tr[data-nv-bom-located] {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
+  scroll-margin-top: 5rem;
+}
 .material-table-crosshair [data-testid="material-identity-trigger"] {
   max-height: 44px;
   overflow-y: auto;

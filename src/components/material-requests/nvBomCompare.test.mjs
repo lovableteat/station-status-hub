@@ -15,6 +15,31 @@ test("new and removed original NV parts retain source rows and leading zeros", (
   assert.deepEqual(diff.changes[0].before.sourceRows, [3]);
   assert.deepEqual(diff.changes[1].after.sourceRows, [2]);
 });
+
+test("an NV Green Factor summary stays out of material results and preserves real source rows", () => {
+  const headers = ["Level", "Parent Number", "Part Number", "Part Description", "Manufacturer", "Manufacturer Part Number", "Qty", "Location"];
+  const nvMapping = { headerRow: 2, partNumber: 3, description: 4, manufacturer: 5, mpn: 6, qty: 7, refs: 8 };
+  const keep = ["A", "QA-PARENT", "QA-KEEP", "Alternate", "QA maker", "QA-MPN-KEEP", "1", ""];
+  const before = { name: "QA", rows: [["Report"], headers, ["2", "QA-PARENT", "QA-OLD", "Resistor", "QA maker", "QA-MPN-OLD", "1", "R1"], keep, [],
+    ["Green Factor Type Summary"], ["Green Factor", "Count"], ["Compliant", "2"]] };
+  const same = compareNvBomSheets(before, before, nvMapping, nvMapping);
+  assert.equal(same.unchanged, 2);
+  assert.deepEqual(same.changes, []);
+  assert.deepEqual(same.unresolved, []);
+
+  const replacement = ["2", "QA-PARENT", "QA-REPLACEMENT", "Resistor", "QA maker", "QA-MPN-REPLACEMENT", "1", "R1"];
+  const diff = compareNvBomSheets(before, { ...before, rows: before.rows.map((row, index) => index === 2 ? replacement : row) }, nvMapping, nvMapping);
+  assert.deepEqual(diff.changes.map(change => [change.kind, change.before?.sourceRows, change.after?.sourceRows]), [["changed", [3], [3]]]);
+  assert.deepEqual(diff.unresolved, []);
+
+  const removed = compareNvBomSheets(before, { ...before, rows: before.rows.filter((_, index) => index !== 2) }, nvMapping, nvMapping);
+  assert.deepEqual(removed.changes.map(change => [change.kind, change.before?.sourceRows]), [["removed", [3]]]);
+  assert.deepEqual(removed.unresolved, []);
+
+  const malformedMaterial = { ...before, rows: [...before.rows, ["2", "QA-PARENT"]] };
+  const incomplete = compareNvBomSheets(malformedMaterial, malformedMaterial, nvMapping, nvMapping);
+  assert.deepEqual(incomplete.unresolved.map(row => row.part.sourceRows), [[9], [9]]);
+});
 test("different header order is mapped without changing source values", () => {
   const after = { name: "New", rows: [["Title"], ["MPN", "Ref Des", "NV PN", "Qty", "Description", "Manufacturer"], ["A", "R2, R1", "001", "2", "Part", "Maker"]] };
   const other = { headerRow: 2, partNumber: 3, mpn: 1, manufacturer: 6, description: 5, qty: 4, refs: 2 };

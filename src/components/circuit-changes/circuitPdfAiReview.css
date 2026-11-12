@@ -29,6 +29,14 @@
 }
 .circuit-pdf-ai-countdown > svg { width: 16px; height: 16px; color: hsl(var(--primary)); }
 .circuit-pdf-ai-countdown strong { color: hsl(var(--primary)); font-size: 14px; font-variant-numeric: tabular-nums; }
+.circuit-pdf-ai-selection { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; margin-bottom: 14px; padding: 10px 12px; border: 1px solid hsl(var(--info) / .35); border-radius: 8px; background: hsl(var(--info) / .06); }
+.circuit-pdf-ai-selection label, .circuit-pdf-ai-selection p { grid-column: 1 / -1; }
+.circuit-pdf-ai-selection label { font-size: 13px; font-weight: 600; }
+.circuit-pdf-ai-selection input { min-width: 0; min-height: 44px; font-size: 16px; }
+.circuit-pdf-ai-selection button { min-height: 44px; }
+.circuit-pdf-ai-selection p { color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 18px; }
+.circuit-pdf-ai-selection p[data-invalid="true"] { color: hsl(var(--destructive)); }
+.circuit-pdf-ai-selection input[aria-invalid="true"] { border-color: hsl(var(--destructive) / .8); }
 .circuit-pdf-ai-batch-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; color: hsl(var(--muted-foreground)); font-size: 12px; }
 .circuit-pdf-ai-batch-hint > p { flex: 1; min-width: 200px; }
 .circuit-pdf-ai-batch-hint > label { display: flex; align-items: center; gap: 8px; }

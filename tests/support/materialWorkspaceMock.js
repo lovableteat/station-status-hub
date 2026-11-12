@@ -47,7 +47,11 @@ export const supabase = { ...baseSupabase, from(table) {
   return { select() { return this; }, order() { return this; }, range(a,b) { range=[a,b]; return this; }, abortSignal() { return this; },
     then(resolve,reject) { return Promise.resolve({data:structuredClone(supplierSearchContacts.slice(range[0],range[1]+1)),error:null}).then(resolve,reject); } };
 }, rpc: async name => name === "list_active_collaboration_members" ? { data: [{user_id:user.userId, username:user.username, display_name:user.displayName}, {user_id:"00000000-0000-4000-8000-000000000002", username:"ce", display_name:"CE 王同學"}], error:null } : { data: [], error:null }, storage: { from() { return {
-  async upload(path, file) { files.set(path, file); return { error: null }; },
+  async upload(path, file) {
+    if (path.includes('/_bom-source/')) await globalThis.__qaBomUploadSourceGate;
+    files.set(path, file);
+    return { error: null };
+  },
   async createSignedUrl(path) { return files.has(path) ? { data: { signedUrl: URL.createObjectURL(files.get(path)) } } : { error: new Error('QA file not found') }; },
   async remove(paths) { paths.forEach(path => files.delete(path)); return { error: null }; },
 }; } } };
@@ -207,6 +211,7 @@ export const saveBomWorkspaceTableColorTheme = async (id, theme) => {
 };
 export const removeBomWorkspace = async (id) => { if (safetyMode) window.__qaBomSafety.writes.push({ method: 'delete', id }); store.delete(id); fullRecords.delete(id); };
 export const saveBomWorkspaceRecord = async (target, record) => {
+  if (globalThis.__qaBomRecordSaveGate) await globalThis.__qaBomRecordSaveGate;
   const list = fullRecords.get(target.id) ?? [];
   const index = list.findIndex(item => item.id === record.id);
   if (liveRecords && index >= 0 && target.recordMeta?.[record.id]?.updatedAt !== store.get(target.id).recordMeta[record.id]?.updatedAt) throw new BomRecordConflictError('QA record revision conflict');

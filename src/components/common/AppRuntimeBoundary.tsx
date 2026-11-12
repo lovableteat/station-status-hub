@@ -2,6 +2,8 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, RefreshCw, RotateCcw } from "lucide-react";
 
 import { requestApplicationUpdate } from "@/lib/applicationUpdate";
+import { PlatformLogoMark } from "@/components/brand/PlatformLogoMark";
+import { LoadingStatus } from "@/components/ui/loading-status";
 
 interface AppRuntimeBoundaryProps {
   children: ReactNode;
@@ -79,25 +81,9 @@ export class AppRuntimeBoundary extends Component<
 
 export function AppLoadingScreen({ label = "正在載入工作平台" }: { label?: string }) {
   return (
-    <main
-      className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,hsl(214_95%_60%/0.2),transparent_32rem),linear-gradient(145deg,#071827,#0b2033_60%,#0d2a3f)] px-5 text-slate-50"
-      role="status"
-      aria-live="polite"
-    >
-      <div className="w-full max-w-md rounded-2xl border border-sky-400/35 bg-[#0d2237] p-6">
-        <div className="flex items-center gap-4">
-          <div className="relative flex h-12 w-12 items-center justify-center rounded-xl bg-sky-400 text-slate-950">
-            <div className="h-4 w-4 animate-pulse rounded-full bg-slate-950" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-base font-bold sm:text-lg">{label}</p>
-            <p className="mt-1 text-sm text-sky-100">正在取得最新模組與專案資料</p>
-          </div>
-        </div>
-        <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-[#071827]">
-          <div className="h-full w-2/5 animate-pulse rounded-full bg-sky-300" />
-        </div>
-      </div>
+    <main className="platform-startup">
+      <PlatformLogoMark size="lg" className="text-primary" />
+      <LoadingStatus label={label} />
     </main>
   );
 }

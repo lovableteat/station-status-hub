@@ -26,6 +26,7 @@ function execute(name,h,overrides={}){
   setIsImporting:effect('busy'),setBomWorkspaces:effect('state'),setActiveBomId:effect('selection'),setExpandedKey:effect('expand'),setPage:effect('page'),setEditorOpen:effect('editor'),setHiddenColumns:effect('columns'),setColumnWidths:effect('widths'),DEFAULT_COLUMN_WIDTHS:[],
   setPendingUploads:effect('staged'),setUploadDialogOpen:effect('upload-dialog'),setBomManagerOpen:effect('manager'),
   replaceBomWorkspace:effect('optimistic'),toast:effect('toast'),console,
+  React,CircleCheck:'svg',TriangleAlert:'svg',cn:(...classes)=>classes.filter(Boolean).join(' '),
   parseMaterialWorkbookFile:async()=>({recordCount:1,records:[record],sheetName:'Sheet',importNotes:[]}),
   seriesList:[],uploadTargetSeriesRef:{current:null},inferBomSeriesForFile:()=>null,bomFileBaseName:n=>n,NEW_BOM_SERIES_TARGET:'__new-series__',
   pendingUploads:[upload('A-private.xlsx'),upload('second.xlsx')],buildBomSeriesList:()=>[],nextBomVersionNumber:()=>1,createBomSeriesId:()=>'series:new',createBomVersionWorkspaceId:(name,n)=>`bom:${name}:v${n}`,
@@ -44,7 +45,7 @@ function execute(name,h,overrides={}){
   ...overrides,
  };
  assert.ok(handlers.has(name),name);
- vm.runInNewContext(ts.transpileModule('var run='+handlers.get(name),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,context);
+ vm.runInNewContext(ts.transpileModule('var run='+handlers.get(name),{fileName:'handler.tsx',compilerOptions:{target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React}}).outputText,context);
  return {run:context.run,writes,effects,context,record};
 }
 const fileEvent=()=>({target:{files:[{name:'A-private.xlsx',size:10,lastModified:1},{name:'second.xlsx',size:10,lastModified:1}],value:'file'}});
@@ -80,7 +81,7 @@ test('completed BOM version write after account replacement has no new-account U
  }finally{await h.unmount();}
 });
 test('legitimate current-account BOM upload still writes every file as its own version and updates the directory',async()=>{
- const h=await mount();try{const c=execute('confirmBomUploads',h);await c.run({label:'EVT',note:''});assert.equal(fileWrites(c).length,2);assert.ok(c.writes.includes('version'));assert.ok(c.effects.includes('optimistic'));assert.ok(c.effects.includes('reload'));assert.ok(c.effects.includes('selection'));assert.ok(c.effects.includes('audit'));}finally{await h.unmount();}
+ const h=await mount();try{const c=execute('confirmBomUploads',h);await c.run({label:'EVT',note:''});assert.equal(fileWrites(c).length,2);assert.ok(c.writes.includes('version'));assert.ok(c.effects.includes('optimistic'));assert.ok(c.effects.includes('reload'));assert.ok(c.effects.includes('selection'));assert.ok(c.effects.includes('audit'));assert.equal(c.effects.filter(effect=>effect==='toast').length,1);}finally{await h.unmount();}
 });
 // Table settings mix one shared write (the BOM's colours) with personal choices (which columns show, their widths).
 const sharedColours={theme:{primary:'#changed'},hiddenColumns:['note'],resetWidths:true};

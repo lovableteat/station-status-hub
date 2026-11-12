@@ -57,6 +57,7 @@ interface ToolButtonProps {
   showLabel?: boolean;
   icon: ComponentType<{ className?: string }>;
   disabled?: boolean;
+  pending?: boolean;
   active?: boolean;
   onClick: () => void;
   tone?: "save" | "import";
@@ -85,6 +86,7 @@ function ToolButton({
   showLabel,
   icon: Icon,
   disabled,
+  pending,
   active,
   onClick,
   tone,
@@ -104,11 +106,12 @@ function ToolButton({
               tone && `is-${tone}`,
             )}
             disabled={disabled}
+            pending={pending}
             onClick={onClick}
             aria-label={label}
             aria-keyshortcuts={shortcut}
           >
-            <Icon className="h-4 w-4" />
+            {!pending && <Icon className="h-4 w-4" />}
             {showLabel && <span>{label}</span>}
             {showLabel && shortcut && <kbd>{shortcut}</kbd>}
           </Button>
@@ -222,6 +225,7 @@ export function PcbToolbar({
             tone="save"
             icon={Save}
             disabled={!canSave || isSaving}
+            pending={isSaving}
             onClick={() => void onSave()}
           />
           <ToolButton
