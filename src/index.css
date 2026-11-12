@@ -2758,3 +2758,12 @@ body {
 }
 /* 28. 待處理料: the title and its actions share one row. */
 .pending-materials-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 16px; padding-right: 40px; }
+@media (max-width: 639px) {
+  .pending-materials-head { padding-right: 0; }
+  .pending-materials-head > :first-child { flex-basis: 100%; padding-right: 40px; }
+  .pending-materials-actions { display: grid; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pending-materials-actions > button { min-width: 0; padding-inline: 6px; }
+}
+@media (max-width: 359px) {
+  .pending-materials-actions > button { font-size: 12px; }
+}
