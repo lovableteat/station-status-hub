@@ -22,7 +22,7 @@ async function snapshot(db) {
   return JSON.stringify({
     data,
     policies: await rows("select * from pg_policies where schemaname in ('workspace','public','storage') order by schemaname,tablename,policyname"),
-    relations: await rows("select n.nspname,c.relname,c.relacl::text,c.relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('workspace','public','storage') order by 1,2"),
+    relations: await rows("select n.nspname,c.relname,c.relacl::text,c.relowner::regrole::text,c.relrowsecurity,c.relforcerowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('workspace','public','storage') order by 1,2"),
     columns: await rows("select n.nspname,c.relname,a.attname,a.attacl::text from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('workspace','public','storage') and a.attnum>0 order by 1,2,3"),
     functions: await rows("select n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args,p.proacl::text,p.proowner::regrole::text owner,p.prosecdef security_definer,pg_get_functiondef(p.oid) definition from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('workspace','public','storage') and p.prokind='f' order by 1,2,3"),
     schemas: await rows("select nspname,nspowner::regrole::text,nspacl::text from pg_namespace where nspname in ('workspace','public','storage') order by 1"),
@@ -411,4 +411,280 @@ test('final delete postflight independently rejects missing signatures and defin
       }
     }
   });
+});
+
+
+// login_audit's anonymous boundary is already applied. These tests never load
+// audit production rows or execute hosted login/delete RPCs.
+const auditAccessClosed = async db => {
+  assert.deepEqual((await db.query(`select
+    has_table_privilege('anon','workspace.login_audit','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN') table_access,
+    has_any_column_privilege('anon','workspace.login_audit','SELECT,INSERT,UPDATE,REFERENCES') column_access
+  `)).rows, [{ table_access: false, column_access: false }]);
+};
+
+test('applied login audit table, column, PUBLIC and inherited access drift fails without silent repair', async () => {
+  await isolated(async db => {
+    await auditAccessClosed(db);
+    await db.exec('create role fixture_audit_inherited; grant fixture_audit_inherited to anon');
+    for (const role of ['anon', 'public', 'fixture_audit_inherited']) {
+      for (const privilege of ['select','insert','update','delete','truncate','references','trigger','maintain']) {
+        await db.exec(`grant ${privilege} on workspace.login_audit to ${role}`);
+        await rejectedAndRolledBack(db, proposals[0], /Applied login audit baseline drift: anonymous table or column access/);
+        await db.exec(`revoke ${privilege} on workspace.login_audit from ${role}`);
+      }
+      for (const privilege of ['select','insert','update','references']) {
+        await db.exec(`grant ${privilege} (note) on workspace.login_audit to ${role}`);
+        await rejectedAndRolledBack(db, proposals[0], /Applied login audit baseline drift: anonymous table or column access/);
+        await db.exec(`revoke ${privilege} (note) on workspace.login_audit from ${role}`);
+      }
+    }
+    await auditAccessClosed(db);
+  });
+});
+
+test('login audit prerequisites retain owner, RLS, maintenance access and the login definer contract', async () => {
+  await isolated(async db => {
+    for (const [mutation, restoration, error] of [
+      ['alter table workspace.login_audit owner to service_role', 'alter table workspace.login_audit owner to postgres; grant all privileges on workspace.login_audit to service_role', /owner or RLS/],
+      ['alter table workspace.login_audit disable row level security', 'alter table workspace.login_audit enable row level security', /owner or RLS/],
+      ['alter table workspace.login_audit force row level security', 'alter table workspace.login_audit no force row level security', /owner or RLS/],
+      ['revoke select on workspace.login_audit from authenticated', 'grant select on workspace.login_audit to authenticated', /authenticated read access missing/],
+      ['revoke update on workspace.login_audit from service_role', 'grant update on workspace.login_audit to service_role', /maintenance access missing/],
+    ]) {
+      await db.exec(mutation);
+      await rejectedAndRolledBack(db, proposals[0], error);
+      await db.exec(restoration);
+    }
+    for (const schema of ['public', 'workspace']) {
+      const signature = schema + '.authenticate_user(text,text)';
+      for (const [mutation, restoration] of [
+        [`alter function ${signature} security invoker`, `alter function ${signature} security definer`],
+        [`alter function ${signature} owner to service_role`, `alter function ${signature} owner to postgres`],
+      ]) {
+        await db.exec(mutation);
+        await rejectedAndRolledBack(db, proposals[0], /login owner or SECURITY DEFINER/);
+        await db.exec(restoration);
+      }
+    }
+  });
+});
+
+test('missing login audit table or either login signature is a failed prerequisite', async () => {
+  for (const mutation of [
+    'drop table workspace.login_audit',
+    'drop function public.authenticate_user(text,text)',
+    'drop function workspace.authenticate_user(text,text)',
+  ]) {
+    await isolated(async db => {
+      await db.exec(mutation);
+      await rejectedAndRolledBack(db, proposals[0], /Applied login audit baseline missing/);
+    });
+  }
+});
+
+test('audit postflight rejects reopening after preflight and before baseline capture', async () => {
+  await isolated(async db => {
+    await db.exec('create role fixture_late_audit_access; grant fixture_late_audit_access to anon');
+    const proposal = proposals[0];
+    const capture = proposal.indexOf('  create temporary table security_proposal_login_audit_baseline');
+    const sweep = proposal.indexOf('do $anonymous_table_grants$');
+    assert.ok(capture > proposal.indexOf('do $login_audit_preflight$'));
+    assert.ok(sweep > proposal.indexOf('$login_audit_preflight$;'));
+    for (const offset of [capture, sweep]) {
+      for (const drift of [
+        ...['select', 'insert', 'update', 'delete', 'truncate', 'references', 'trigger', 'maintain']
+          .map(privilege => `grant ${privilege} on workspace.login_audit to anon;`),
+        'grant all on workspace.login_audit to public;',
+        'grant select (note) on workspace.login_audit to anon;',
+        'grant update (note) on workspace.login_audit to public;',
+        'grant select on workspace.login_audit to fixture_late_audit_access;',
+        'grant select (note) on workspace.login_audit to fixture_late_audit_access;',
+      ]) {
+        const changed = proposal.slice(0, offset) + drift + '\n' + proposal.slice(offset);
+        await rejectedAndRolledBack(db, changed, /Applied login audit postflight drift: anonymous table or column access/);
+        await auditAccessClosed(db);
+      }
+    }
+  });
+});
+
+test('audit postflight preserves login definitions and all non-browser grants without freezing signed-in writes', async () => {
+  await isolated(async db => {
+    const proposal = proposals[0];
+    const offset = proposal.indexOf('do $login_audit_postflight$');
+    const capture = proposal.indexOf('  create temporary table security_proposal_login_audit_baseline');
+    for (const [drift, expected] of [
+      ['alter table workspace.login_audit owner to service_role;', /postflight drift: owner or RLS/],
+      ['alter table workspace.login_audit disable row level security;', /postflight drift: owner or RLS/],
+      ['alter table workspace.login_audit force row level security;', /postflight drift: owner or RLS/],
+      ['revoke select on workspace.login_audit from authenticated;', /postflight drift: authenticated read access missing/],
+      ['revoke insert on workspace.login_audit from service_role;', /postflight drift: maintenance access missing/],
+      ['alter function workspace.authenticate_user(text,text) security invoker;', /postflight drift: login owner or SECURITY DEFINER/],
+      ['alter function public.authenticate_user(text,text) owner to service_role;', /postflight drift: login owner or SECURITY DEFINER/],
+    ]) {
+      for (const point of [capture, offset]) {
+        await rejectedAndRolledBack(db, proposal.slice(0, point) + drift + '\n' + proposal.slice(point),
+          point === capture && drift.includes('disable row level security') ? /workspace table without RLS/ : expected);
+      }
+    }
+    for (const [drift, expected] of [
+      ['grant select on workspace.login_audit to service_role with grant option;', /baseline changed: retained table ACL/],
+      ['grant select (note) on workspace.login_audit to service_role;', /baseline changed: retained column ACL/],
+      ['alter function workspace.authenticate_user(text,text) set search_path = public;', /baseline changed: login metadata or definition/],
+      ['revoke execute on function public.authenticate_user(text,text) from authenticated;', /baseline changed: login metadata or definition/],
+      ['alter policy fixture_permissive on workspace.login_audit using (false);', /baseline changed: legacy policy predicates/],
+      ['grant insert on workspace.login_audit to authenticated;', /authenticated write access remains/],
+      ['grant update (note) on workspace.login_audit to authenticated;', /authenticated write access remains/],
+    ]) {
+      await rejectedAndRolledBack(db, proposal.slice(0, offset) + drift + '\n' + proposal.slice(offset), expected);
+    }
+  });
+});
+
+test('stage 01 permits narrower authenticated audit ACLs and removes only their direct column writes', async () => {
+  await isolated(async db => {
+    // A previously narrowed signed-in role is a valid baseline. Only SELECT is
+    // required for the approved own/admin read scope. Preserve grant options.
+    await db.exec('revoke insert,update,delete,truncate,references,trigger on workspace.login_audit from authenticated; grant select on workspace.login_audit to authenticated with grant option; grant select (note),insert (note),update (note),references (note) on workspace.login_audit to authenticated; grant select (note) on workspace.login_audit to service_role with grant option');
+    const retained = async () => (await db.query(`
+      select a.attname, permission.* from pg_attribute a, lateral aclexplode(a.attacl) permission
+      where a.attrelid='workspace.login_audit'::regclass
+        and (permission.grantee='service_role'::regrole or permission.privilege_type='SELECT')
+      order by a.attname, permission.grantee, permission.privilege_type
+    `)).rows;
+    const before = await retained();
+    await db.exec(proposals[0]);
+    assert.deepEqual(await retained(), before);
+    assert.equal((await db.query("select has_table_privilege('authenticated','workspace.login_audit','SELECT WITH GRANT OPTION') allowed")).rows[0].allowed, true);
+    assert.equal((await db.query("select has_any_column_privilege('authenticated','workspace.login_audit','INSERT,UPDATE,REFERENCES') allowed")).rows[0].allowed, false);
+    await auditAccessClosed(db);
+  });
+});
+
+test('inherited signed-in audit write grants stop stage 01 rather than widening its grant-edit scope', async () => {
+  await isolated(async db => {
+    await db.exec('create role fixture_audit_writer; grant fixture_audit_writer to authenticated; grant insert (note) on workspace.login_audit to fixture_audit_writer');
+    await rejectedAndRolledBack(db, proposals[0], /authenticated write access remains/);
+  });
+});
+
+test('an old rollback cannot reopen anonymous audit access and transaction rollback retains the applied baseline', async () => {
+  await isolated(async db => {
+    await auditAccessClosed(db);
+    const proposal = proposals[0];
+    const postflight = proposal.indexOf('do $login_audit_postflight$');
+    // Synthetic stand-in for obsolete pre-cutover ACL recovery, not a loaded
+    // private snapshot and never a production rollback invocation.
+    const obsoleteRollback = 'grant all privileges on table workspace.login_audit to public, anon;';
+    await rejectedAndRolledBack(db, proposal.slice(0, postflight) + obsoleteRollback + '\n' + proposal.slice(postflight),
+      /Applied login audit postflight drift: anonymous table or column access/);
+    await auditAccessClosed(db);
+    await db.exec(proposal);
+    await auditAccessClosed(db);
+  });
+});
+
+
+test('audit checks effective postgres maintenance rights and effective login caller EXECUTE', async () => {
+  await isolated(async db => {
+    await modelNonSuperuserPostgres(db);
+    await db.exec('alter table workspace.login_audit owner to postgres; alter function public.authenticate_user(text,text) owner to postgres; alter function workspace.authenticate_user(text,text) owner to postgres');
+    const proposal = proposals[0];
+    const capture = proposal.indexOf('  create temporary table security_proposal_login_audit_baseline');
+    const postflight = proposal.indexOf('do $login_audit_postflight$');
+    await db.exec('revoke select on workspace.login_audit from postgres');
+    assert.equal((await db.query("select has_table_privilege('postgres','workspace.login_audit','SELECT') allowed")).rows[0].allowed, false);
+    await rejectedAndRolledBack(db, proposal, /Applied login audit baseline drift: maintenance access missing/);
+    await db.exec('grant select on workspace.login_audit to postgres');
+    for (const offset of [capture, postflight]) {
+      const changed = proposal.slice(0, offset) + 'revoke select on workspace.login_audit from postgres;\n' + proposal.slice(offset);
+      await rejectedAndRolledBack(db, changed, /Applied login audit postflight drift: maintenance access missing/);
+    }
+    for (const schema of ['public', 'workspace']) {
+      const signature = schema + '.authenticate_user(text,text)';
+      for (const role of ['anon', 'authenticated', 'service_role', 'postgres']) {
+        const drift = `revoke execute on function ${signature} from public, ${role};`;
+        await db.exec(drift);
+        assert.equal((await db.query("select has_function_privilege($1,$2,'EXECUTE') allowed", [role, signature])).rows[0].allowed, false);
+        await rejectedAndRolledBack(db, proposal, /Applied login audit baseline drift: login caller access missing/);
+        await db.exec(`grant execute on function ${signature} to public, ${role}`);
+        const changed = proposal.slice(0, postflight) + drift + '\n' + proposal.slice(postflight);
+        await rejectedAndRolledBack(db, changed, /Applied login audit postflight drift: login caller access missing/);
+      }
+    }
+  });
+});
+
+test('audit read-only checks reject lost effective schema USAGE without changing login or table grants', async () => {
+  await isolated(async db => {
+    await modelNonSuperuserPostgres(db);
+    await db.exec('alter table workspace.login_audit owner to postgres; alter function public.authenticate_user(text,text) owner to postgres; alter function workspace.authenticate_user(text,text) owner to postgres');
+    const check = proposals[0].match(/do \$login_audit_preflight\$[\s\S]*?\$login_audit_preflight\$;/)?.[0];
+    assert.ok(check);
+    for (const schema of ['public', 'workspace']) {
+      for (const role of ['anon', 'authenticated', 'service_role', 'postgres']) {
+        const sharedUsage = (await db.query(`
+          select case when permission.grantee=0 then 'public' else permission.grantee::regrole::text end grantee
+          from pg_namespace n, lateral aclexplode(n.nspacl) permission
+          where n.nspname=$1 and permission.privilege_type='USAGE'
+            and permission.grantee in (0,'pg_database_owner'::regrole::oid)
+        `, [schema])).rows;
+        await db.exec(`revoke usage on schema ${schema} from public, pg_database_owner, ${role}`);
+        assert.equal((await db.query("select has_schema_privilege($1,$2,'USAGE') allowed", [role, schema])).rows[0].allowed, false);
+        // Other applied-RPC checks also guard shared schema privileges. Isolate
+        // this readonly audit check so it cannot accidentally depend on them.
+        await rejectedAndRolledBack(db, 'begin;\n' + check + '\ncommit;', /Applied login audit baseline drift: (login caller|maintenance|authenticated read) access missing/);
+        await db.exec(`grant usage on schema ${schema} to ${role}`);
+        for (const { grantee } of sharedUsage) await db.exec(`grant usage on schema ${schema} to ${grantee}`);
+      }
+    }
+  });
+});
+
+
+test('audit cutover retains authenticated SELECT and MAINTAIN including existing grant options', async () => {
+  for (const { maintain, withGrantOption } of [
+    { maintain: true, withGrantOption: false },
+    { maintain: true, withGrantOption: true },
+    { maintain: false, withGrantOption: false },
+  ]) {
+    await isolated(async db => {
+      if (!maintain) await db.exec('revoke maintain on workspace.login_audit from authenticated');
+      if (withGrantOption) await db.exec('grant select, maintain on workspace.login_audit to authenticated with grant option');
+      const retained = async () => (await db.query(`
+        select permission.* from pg_class c, lateral aclexplode(c.relacl) permission
+        where c.oid='workspace.login_audit'::regclass
+          and permission.grantee='authenticated'::regrole
+          and permission.privilege_type in ('SELECT','MAINTAIN')
+        order by permission.grantor, permission.privilege_type
+      `)).rows;
+      const before = await retained();
+      assert.equal(before.length, maintain ? 2 : 1);
+      assert.ok(before.every(grant => grant.is_grantable === withGrantOption));
+      const proposal = proposals[0];
+      const postflight = proposal.indexOf('do $login_audit_postflight$');
+      for (const drift of [
+        maintain ? 'revoke maintain on workspace.login_audit from authenticated;'
+          : 'grant maintain on workspace.login_audit to authenticated;',
+        ...(withGrantOption ? [
+          'revoke grant option for select on workspace.login_audit from authenticated;',
+          'revoke grant option for maintain on workspace.login_audit from authenticated;',
+        ] : [
+          'grant select on workspace.login_audit to authenticated with grant option;',
+          'grant maintain on workspace.login_audit to authenticated with grant option;',
+        ]),
+      ]) {
+        await rejectedAndRolledBack(db, proposal.slice(0, postflight) + drift + '\n' + proposal.slice(postflight),
+          /Applied login audit baseline changed: retained table ACL/);
+        assert.deepEqual(await retained(), before);
+      }
+      await db.exec(proposal);
+      assert.deepEqual(await retained(), before, 'ordinary cutover retains exact signed-in read/maintenance grants');
+      assert.equal((await db.query("select has_table_privilege('authenticated','workspace.login_audit','MAINTAIN') allowed")).rows[0].allowed, maintain,
+        'an absent MAINTAIN baseline is accepted and never widened');
+      assert.equal((await db.query("select has_table_privilege('authenticated','workspace.login_audit','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') allowed")).rows[0].allowed, false);
+      await auditAccessClosed(db);
+    });
+  }
 });

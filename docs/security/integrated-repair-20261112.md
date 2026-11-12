@@ -110,3 +110,8 @@ The follow-up synchronizes the exact already-applied server migration and adjust
 ## Anonymous-delete baseline synchronization
 
 After the already-green `f8259c405f2dcdb5f3de1d84a335f6b50a5d957c` baseline, the existing server ledger entry `20261112013540_restrict_anonymous_delete_test_system_execution` was read independently and copied exactly (3,036 bytes, SHA-256 `adacc5680f243956c685c29b6f7c99f2932947431141d09ab15080b4371443a8`). It is immutable applied history, not a second production operation. Stages 01/02 now treat both delete aliases' anonymous-denied/authenticated-allowed ACLs as preconditions, preserve them without repeated revocation, and keep stage 02's still-pending station-edit body guards. No frontend, Edge, bucket, row, credential, schedule or history change occurs during this repository reconciliation. Configuration snapshots are not full backups. The new head requires its own CI result.
+
+
+## Login-audit baseline synchronization
+
+The subsequently applied server entry `20261112022029_restrict_anonymous_login_audit_access` is synchronized without re-execution: 4,521 bytes, SHA-256 `6f0a61cb237f41df51239433a3112257ccef4480a635cc43c7c9d653c5ba49c5`. See [applied scope, immutable history and recovery boundaries](applied-login-audit-cutover-20261112.md). The pending stage 01 still performs its separate authenticated audit restrictions; its failure recovery must retain the already-closed anonymous boundary. No frontend, production SQL, Edge, bucket, session, row or historical-data operation is performed during reconciliation.
