@@ -49,7 +49,7 @@ function AnnotatedPage({ source: { pdf, page }, side, report, onFinding }: {
         if (!rect) return null;
         return <button key={item.id} type="button" className="circuit-pdf-ai-annotation-box"
           data-certainty={item.certainty ?? "suspected"} aria-label={`${label} ${item.id}：${item.title}`} title={item.title}
-          style={{ left: `${rect.x * 100}%`, top: `${rect.y * 100}%`, width: `${rect.width * 100}%`, height: `${rect.height * 100}%` }}
+          style={{ left: `${rect.x * 100}%`, top: `${rect.y * 100}%`, width: `${rect.width * 100}%`, height: `${rect.height * 100}%`, minHeight: 0 }}
           onClick={() => onFinding(item.id)}><span aria-hidden="true">{item.id}</span></button>;
       })}
     </div>
