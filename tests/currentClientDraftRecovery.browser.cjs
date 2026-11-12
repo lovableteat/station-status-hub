@@ -168,10 +168,19 @@ async function openPcbSettings(page){
  if(!(await settings.count())){await page.getByRole('button',{name:'開啟 PCB 專案操作',exact:true}).click();settings=page.getByRole('menuitem',{name:'專案設定',exact:true});}
  await settings.click();const form=page.locator('form[data-pcb-dialog-form="project-settings"]');await form.waitFor();return form;
 }
-async function pcbSnapshot(form){return{raw:await Promise.all(LABELS.map(label=>form.getByLabel(label,{exact:true}).inputValue())),errors:await form.getByRole('alert').allTextContents()};}
+const PCB_STATUS_SELECTOR='label[data-pcb-field-tone] > select';
+function pcbStatusLabel(select){
+ if(select?.tagName!=='SELECT'||select.labels?.length!==1)return null;
+ return Array.from(select.labels[0].childNodes).filter(node=>node.nodeType===3).map(node=>node.textContent).join('').trim();
+}
+function pcbField(form,label){return label==='狀態'?form.locator(PCB_STATUS_SELECTOR):form.getByLabel(label,{exact:true});}
+async function pcbSnapshot(form){
+ const status=pcbField(form,'狀態');assert.equal(await status.count(),1);assert.equal(await status.evaluate(pcbStatusLabel),'狀態');
+ return{raw:await Promise.all(LABELS.map(label=>pcbField(form,label).inputValue())),errors:await form.getByRole('alert').allTextContents()};
+}
 async function pcbCase(h,mode,rawWidth){
  let form=await openPcbSettings(h.page);const baseline=await pcbSnapshot(form);
- for(let i=0;i<LABELS.length;i++){const field=form.getByLabel(LABELS[i],{exact:true});if(i===6)await field.selectOption(PCB_RAW[i]);else if(i===4){await field.fill('');await field.pressSequentially(rawWidth);}else await field.fill(PCB_RAW[i]);}
+ for(let i=0;i<LABELS.length;i++){const field=pcbField(form,LABELS[i]);if(i===6)await field.selectOption(PCB_RAW[i]);else if(i===4){await field.fill('');await field.pressSequentially(rawWidth);}else await field.fill(PCB_RAW[i]);}
  assert.equal(await form.getByLabel('寬度 (mm)',{exact:true}).inputValue(),rawWidth,'Keyboard tokens must remain raw, not coerce to a number');
  assert.equal(await form.evaluate(node=>node.checkValidity()),true,'Raw width must reach the custom validator, not fail native validation');
  await form.getByRole('button',{name:'儲存',exact:true}).click();await form.getByRole('alert').filter({hasText:PCB_ERROR}).waitFor();
@@ -230,5 +239,5 @@ async function main(env=process.env){
  }catch(error){report.status='failed';throw error;}
  finally{if(browser)await browser.close();report.transport={mode:'loopback-deny-proxy-and-DNS-deny',blockedAttempts:sink.attempts};write();if(sink.server.listening)await new Promise(resolve=>sink.server.close(resolve));assert.ok(fs.readdirSync(evidence).every(x=>/\.(?:json|png)$/.test(x)),'Evidence must contain only JSON and PNG');}
 }
-module.exports={executionMode,outside,sourceIdentity,assertSourceStable,inventoryFor,servablePath,collectFiles,assertSyntheticBundle,buildCurrent,createCurrentServer,main,LABELS,PCB_ERROR,PCB_RAW,SCENARIOS};
+module.exports={executionMode,outside,sourceIdentity,assertSourceStable,inventoryFor,servablePath,collectFiles,assertSyntheticBundle,buildCurrent,createCurrentServer,main,LABELS,PCB_ERROR,PCB_RAW,SCENARIOS,PCB_STATUS_SELECTOR,pcbStatusLabel};
 if(require.main===module)main().catch(error=>{console.error(redactEvidence(error?.stack||error));process.exitCode=1;});
