@@ -3,6 +3,20 @@ import test from 'node:test';
 import { fixture,addAccount,as,snapshot,metadata,uid,fields,read } from './fixtures/legacy-pcb-security/database.mjs';
 import { installSequenceContext } from './fixtures/legacy-pcb-security/sequence-database.mjs';
 const additive=await read('../../../docs/security-proposals/legacy-pcb/01-add-read-apis-PENDING.sql');
+const appliedVersion='20261112064452';
+const appliedName='add_protected_profile_and_legacy_pcb_read_apis';
+const appliedAdditive=await read('../../../supabase/migrations/'+appliedVersion+'_'+appliedName+'.sql');
+const appliedVerifier=await read('../../../docs/security-proposals/legacy-pcb/verify-applied-read-apis.sql');
+const ledgerRows=async db=>(await db.query('select * from supabase_migrations.schema_migrations order by version')).rows;
+// Throwaway fixtures only: model the migration service transaction + ledger write.
+async function applyRecordedAdditive(db,version=appliedVersion) {
+ await db.exec('begin');
+ try {
+  await db.exec(appliedAdditive);
+  await db.query('insert into supabase_migrations.schema_migrations values($1,$2,$3)',[version,appliedName,[appliedAdditive]]);
+  await db.exec('commit');
+ } catch(error) {await db.exec('rollback');throw error;}
+}
 const enforcement=await read('../../../docs/security-proposals/legacy-pcb/02-close-raw-permissions-PENDING.sql');
 const narrow=await read('../../../docs/security-proposals/pcb-rpc-cutover-PENDING.sql');
 import { isolatedEnforcementBody } from './fixtures/legacy-pcb-security/release-gate.mjs';
@@ -247,7 +261,7 @@ test('Exact API identities reject overloads and aliases before either stage can 
  }finally{await db.close();}
 });
 
-test('Full additive -> twelve PCB -> raw body -> broad 01 -> station-only 02 -> 03 sequence',async t=>{
+test('Full applied additive ledger -> twelve PCB -> raw body -> broad 01 -> station-only 02 -> 03 sequence',async t=>{
  const db=await seeded();
  try {
   await installSequenceContext(db);
@@ -258,11 +272,13 @@ test('Full additive -> twelve PCB -> raw body -> broad 01 -> station-only 02 -> 
   let protectedFunctions;
   const apiConfig=async()=>(await db.query("select n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args,pg_get_userbyid(p.proowner) owner,pg_get_functiondef(p.oid) definition,p.proacl::text from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='workspace' and (p.proname like '%pcb_designer%' or p.proname='list_system_user_profiles') order by 1,2,3")).rows;
   for(const [index,[label,sql]] of [
-   ['additive APIs',additive],['twelve PCB guards',narrow],['isolated raw enforcement body',body],
+   ['exact applied additive APIs and ledger',appliedAdditive],['twelve PCB guards',narrow],['isolated raw enforcement body',body],
    ['broad stage 01',stage01],['station-only stage 02',stationOnly],['private attachments stage 03',stage03]
   ].entries())await t.test(label+' preserves protected APIs, setter, snapshots and ordinary operations',async()=>{
    const before=await snapshot(db);
-   await db.exec(sql);
+   if(index===0)await applyRecordedAdditive(db);else await db.exec(sql);
+   await db.exec(appliedVerifier);
+   assert.deepEqual((await ledgerRows(db)).find(row=>row.version===appliedVersion),{version:appliedVersion,name:appliedName,statements:[appliedAdditive]});
    assert.deepEqual(await snapshot(db),before,'stage DDL changes no account, permission or application row');
    assert.deepEqual(await legacyRows(),fiveSnapshots);
    assert.deepEqual((await db.query('select * from storage.objects order by id')).rows,originalObjects);
@@ -314,4 +330,53 @@ test('Full additive -> twelve PCB -> raw body -> broad 01 -> station-only 02 -> 
   });
   assert.deepEqual((await db.query('select * from storage.buckets order by id')).rows,[{id:'issue-attachments',public:false},{id:'task-attachments',public:false},{id:'unrelated',public:true}]);
  }finally{await db.close();}
+});
+
+
+test('Exact applied additive transport, ledger and read-only reconciliation stay atomic',async t=>{
+ const db=await seeded(),reference=await seeded();
+ try {
+  const before=await snapshot(db),config=await metadata(db),oldLedger=await ledgerRows(db);
+  await t.test('Read-only reconciliation rejects an unapplied database without changing rows or metadata',async()=>{
+   await rejected(db,appliedVerifier,/Applied legacy PCB ledger mismatch/);
+   assert.deepEqual(await ledgerRows(db),oldLedger);
+  });
+  await t.test('A late runner ledger failure rolls back both new APIs and all ACL effects',async()=>{
+   await assert.rejects(applyRecordedAdditive(db,'20261112001122'),error=>error.code==='23505');
+   assert.deepEqual(await snapshot(db),before);assert.deepEqual(await metadata(db),config);assert.deepEqual(await ledgerRows(db),oldLedger);
+  });
+  await t.test('Fresh synthetic install of exact server transport matches candidate functions and ACLs',async()=>{
+   await db.exec('begin');await db.exec(appliedAdditive);await db.exec('rollback');
+   assert.deepEqual(await metadata(db),config);assert.deepEqual(await snapshot(db),before);
+   await applyRecordedAdditive(db);await reference.exec(additive);
+   assert.deepEqual(await metadata(db),await metadata(reference));assert.deepEqual(await snapshot(db),before);
+   assert.deepEqual(await ledgerRows(db),[...oldLedger,{version:appliedVersion,name:appliedName,statements:[appliedAdditive]}]);
+  });
+  await t.test('Read-only applied verifier preserves all rows, metadata and exact ledger statements',async()=>{
+   const current=await metadata(db),ledger=await ledgerRows(db);
+   await db.exec(appliedVerifier);
+   assert.deepEqual(await snapshot(db),before);assert.deepEqual(await metadata(db),current);assert.deepEqual(await ledgerRows(db),ledger);
+  });
+  await t.test('Both applied transport and historical candidate reject replay rather than replacing APIs',async()=>{
+   const ledger=await ledgerRows(db);
+   await assert.rejects(applyRecordedAdditive(db),/already present|collision/);
+   await rejected(db,additive,/already present|collision/);
+   assert.deepEqual(await ledgerRows(db),ledger);assert.deepEqual(await snapshot(db),before);
+  });
+  await t.test('Read-only verifier rejects ledger/name/statement and new API ACL/body drift',async()=>{
+   const current=await metadata(db),ledger=await ledgerRows(db);
+   for(const drift of [
+    `update supabase_migrations.schema_migrations set name='synthetic_drift' where version='${appliedVersion}'`,
+    `update supabase_migrations.schema_migrations set statements=array[statements[1]||chr(10)] where version='${appliedVersion}'`,
+    'grant execute on function workspace.load_pcb_designer_legacy_workspace() to anon',
+    'alter function workspace.list_system_user_profiles() security invoker',
+    "create or replace function workspace.load_pcb_designer_legacy_workspace() returns jsonb language sql security definer as $$select null::jsonb$$"
+   ]) {
+    await db.exec('begin;'+drift);
+    try {await assert.rejects(db.exec(appliedVerifier),/Applied legacy PCB ledger mismatch|Legacy PCB API drift/);}
+    finally {await db.exec('rollback');}
+    assert.deepEqual(await snapshot(db),before);assert.deepEqual(await metadata(db),current);assert.deepEqual(await ledgerRows(db),ledger);
+   }
+  });
+ }finally{await db.close();await reference.close();}
 });

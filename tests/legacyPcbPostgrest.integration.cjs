@@ -191,6 +191,25 @@ test('real PostgREST and SDK enforce sanitized profiles and protected legacy PCB
         const r = await http(endpoint,null,{method:'POST',headers:{'content-type':'application/json'},body:'{}'}); assert.ok([401,403].includes(r.status));
       }
     });
+    await t.test('scalar HEAD is not an authorization probe; anonymous GET and POST remain denied', async () => {
+      // A no-body HEAD can let PostgreSQL omit an unused scalar expression.
+      // Do not treat its status as evidence that the RPC actually executed.
+      const endpoint = '/rpc/load_pcb_designer_legacy_workspace';
+      const head = await http(endpoint, null, { method:'HEAD' });
+      assert.ok([200,401,403].includes(head.status));
+      assert.equal(await head.text(), '');
+      for (const method of ['GET','POST']) {
+        const options = method === 'POST'
+          ? { method, headers:{'content-type':'application/json'}, body:'{}' }
+          : { method };
+        const response = await http(endpoint, null, options);
+        assert.ok([401,403].includes(response.status));
+        const error = await response.json();
+        assert.equal(error.code, '42501');
+        assert.equal(JSON.stringify(error).includes('PRIVATE-'), false);
+      }
+      console.log(JSON.stringify({ syntheticScalarHeadStatus:head.status, headIsNotAuthorizationEvidence:true }));
+    });
     await t.test('all HTTP reads and denials preserve every synthetic account and snapshot', async () => {
       assert.equal(psql('select jsonb_agg(to_jsonb(u) order by id) from workspace.system_users u'), before);
     });

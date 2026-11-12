@@ -8,9 +8,9 @@ const enforcement=await read('../docs/security-proposals/legacy-pcb/02-close-raw
 const gate=JSON.parse(await read('fixtures/legacy-pcb-security/release-gate.json'));
 const fields='id,username,display_name,role,status,permissions,created_by,created_at,updated_at,registration_requested_at,approved_at,approved_by,auth_user_id,auth_migrated_at,last_seen_at,avatar_path'.split(',');
 
-test('Legacy PCB proposals remain outside automatic migrations and contain no source-data mutation',async()=>{
+test('Only the exact applied additive ledger is promoted; pending legacy enforcement stays outside migrations',async()=>{
  const names=await readdir(new URL('../supabase/migrations',import.meta.url));
- assert.equal(names.some(name=>/legacy.*pcb|pcb.*legacy/.test(name)),false);
+ assert.deepEqual(names.filter(name=>/legacy.*pcb|pcb.*legacy/.test(name)),['20261112064452_add_protected_profile_and_legacy_pcb_read_apis.sql']);
  for(const sql of [additive,enforcement])assert.doesNotMatch(sql,/^\s*(?:UPDATE\s+(?:workspace\.)?system_users|DELETE\s+FROM\s+(?:workspace\.)?system_users|TRUNCATE|INSERT\s+INTO\s+(?:workspace\.)?system_users)\b/im);
 });
 test('Two new zero-argument APIs are additive and use exact existing sixteen profile columns',async()=>{
