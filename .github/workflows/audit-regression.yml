@@ -35,6 +35,8 @@ jobs:
         run: npm run typecheck
       - name: Historical migration cleanup preserves accounts and fails closed
         run: PGLITE_MODULE="$AUDIT_QA_DIR/node_modules/@electric-sql/pglite/dist/index.js" node --test tests/historicalCredentialSanitization.postgres.mjs
+      - name: PCB verified identity, data preservation and staged cutover
+        run: PGLITE_MODULE="$AUDIT_QA_DIR/node_modules/@electric-sql/pglite/dist/index.js" node --test tests/pcbRpcSecurity.postgres.mjs
       - name: Complete unit and source contracts
         run: npm test
       - name: Mobile workspace and query contracts
@@ -62,6 +64,11 @@ jobs:
         id: install-browser
         if: ${{ !cancelled() && steps.qa-dependencies.outcome == 'success' }}
         run: '"$AUDIT_QA_DIR/node_modules/.bin/playwright" install --with-deps chromium'
+      - name: PCB session recovery, authorization denial and draft preservation
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && steps.install-browser.outcome == 'success' }}
+        env:
+          PCB_RECOVERY_EVIDENCE_DIR: ${{ runner.temp }}/pcb-session-recovery
+        run: timeout --signal=TERM --kill-after=10s 240s node tests/pcbSessionRecovery.browser.cjs
       - name: Browser history cancellation
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         run: timeout --signal=TERM --kill-after=10s 180s node tests/auditHistory.browser.cjs
@@ -117,5 +124,6 @@ jobs:
             ${{ runner.temp }}/bom-version-phone*.png
             ${{ runner.temp }}/short-landscape/
             ${{ runner.temp }}/deployment-recovery/
+            ${{ runner.temp }}/pcb-session-recovery/
           if-no-files-found: ignore
           retention-days: 3

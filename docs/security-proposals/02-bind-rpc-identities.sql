@@ -1,7 +1,25 @@
 -- PREPARED ONLY. No data-changing RPC is invoked by this script.
+-- HISTORICAL REGRESSION INPUT, NOT THE NEW PROMOTION PATH. After the twelve-RPC
+-- PCB candidate and stage 01, use 02-bind-station-delete-identities-after-pcb.sql.
 begin;
 set local lock_timeout = '1s';
 set local statement_timeout = '20s';
+
+-- The independent twelve-RPC candidate preserves the existing lock/save bodies.
+-- These older four PCB replacements are not a valid successor to that cutover.
+-- Detect a verified-system-actor dependency before ANY replacement. A reviewed
+-- station-only rebase must retain all twelve guarded definitions/ACLs unchanged.
+do $pcb_rpc_sequence_preflight$
+begin
+  if exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'workspace' and p.proname like '%pcb_designer%'
+      and p.prosrc ~ 'current_system_user_id[[:space:]]*\('
+  ) then
+    raise exception 'PCB RPC sequence conflict: rebase stage 02 without its four PCB replacements; preserve all twelve verified-actor guards';
+  end if;
+end;
+$pcb_rpc_sequence_preflight$;
 
 -- Already applied by 20261112001122_restrict_internal_stats_cleanup_execution.
 -- Read metadata only: never invoke, redefine or repair these internal RPCs here.

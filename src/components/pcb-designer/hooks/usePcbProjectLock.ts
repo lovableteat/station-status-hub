@@ -1,3 +1,4 @@
+import { usePcbRemoteAccess } from "./usePcbRemoteAccess.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
@@ -20,13 +21,18 @@ export function usePcbProjectLock({
   permissionCanEdit,
   projectId,
   projectName,
+  enabled = true,
 }: {
   client: PcbRemoteClient | null;
   clientId: string;
   permissionCanEdit: boolean;
   projectId: string;
   projectName: string;
+  enabled?: boolean;
 }) {
+  const access = usePcbRemoteAccess(client);
+  const accessBlocked = access.status === "denied" || access.status === "session-required";
+  const scopeRef = useRef<{ client: PcbRemoteClient | null; projectId: string; clientId: string } | null>(null);
   const [result, setResult] = useState<PcbProjectLockResult>(EMPTY_RESULT);
   const [status, setStatus] = useState<PcbProjectLockStatus>(client ? "acquiring" : "local");
   const generationRef = useRef(0);
@@ -38,6 +44,14 @@ export function usePcbProjectLock({
     let disposed = false;
     let running = false;
     let acquiredThisProject = false;
+    scopeRef.current = { client, projectId, clientId };
+
+    if (!enabled) {
+      setResult(EMPTY_RESULT);
+      setStatus("error");
+      refreshRef.current = async () => undefined;
+      return;
+    }
 
     if (!client || !projectId) {
       setResult({ available: false, acquired: permissionCanEdit, lock: null });
@@ -46,6 +60,13 @@ export function usePcbProjectLock({
       return () => {
         disposed = true;
       };
+    }
+
+    if (accessBlocked) {
+      setResult(EMPTY_RESULT);
+      setStatus("error");
+      refreshRef.current = async () => undefined;
+      return;
     }
 
     const refresh = async () => {
@@ -91,13 +112,18 @@ export function usePcbProjectLock({
       window.clearInterval(heartbeat);
       window.removeEventListener("beforeunload", release);
       refreshRef.current = async () => undefined;
-      if (acquiredThisProject) release();
+      // Session revalidation keeps the same client's lease. Releasing here can
+      // race its replacement heartbeat and revoke a freshly renewed lease.
+      if (acquiredThisProject && (!client.getAccessSnapshot
+        || client.getAccessSnapshot().generation === access.generation)) release();
     };
-  }, [client, clientId, permissionCanEdit, projectId, projectName]);
+  }, [client, clientId, permissionCanEdit, projectId, projectName, access.generation, accessBlocked, enabled]);
 
   const refresh = useCallback(() => refreshRef.current(), []);
-  const canEdit = permissionCanEdit
-    && (!client || !result.available || result.acquired);
+  const sameProject = scopeRef.current?.client === client
+    && scopeRef.current?.projectId === projectId && scopeRef.current?.clientId === clientId;
+  const canEdit = enabled && permissionCanEdit && access.status === "ready"
+    && (!client || (sameProject && (!result.available || result.acquired)));
   const lock: PcbProjectLock | null = result.lock;
 
   return {
