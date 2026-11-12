@@ -12,6 +12,8 @@ The application account ID and Supabase Auth user ID are different identity doma
 - Distinguish a successful empty cloud workspace from a failed load. A denied or malformed response cannot hydrate an empty workspace, mark a draft clean or declare cloud readiness.
 - Preserve unsaved data and its recovery owner across rejected loads/saves, session changes, delayed responses and retries. A different account must not receive or upload the mounted previous account's draft.
 - Permit legacy compatibility only when the required RPC is genuinely missing. HTTP 401/403, SQLSTATE 42501, invalid sessions, transport failures and malformed responses must never fall through to a legacy permissions snapshot or an unlocked save.
+- Existing PCB permission functions also use SQLSTATE P0001 with exactly `PCB workspace access denied` or `PCB workspace edit access denied`. Treat these as immediate access denials; other P0001 validation or lock-conflict errors retain their original behavior.
+- Ordinary transport/server errors pause access without rebuilding polling effects into an immediate request loop. Existing eight-second checks and explicit retry remain; a delayed error from an earlier session cannot replace a recovered state.
 - Retry is a request to check the existing session and cloud access again, not a successful login. The PCB module must not force reload, sign the user out, rotate credentials, revoke sessions or discard recovery data.
 - Preserve legitimate view/edit roles and own-client lock acquire, heartbeat, save and release. A rejected save stays unsaved. Queued and late requests must respect the current session/client/gate, without letting an old result clear a newer draft.
 

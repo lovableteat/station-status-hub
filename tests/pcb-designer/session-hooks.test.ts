@@ -41,6 +41,8 @@ function localDraft() {
 function cloud() {
   let current: PcbSession | null = session();
   let denied = false;
+  let permissionFailure: { rpc: string; message: string } | null = null;
+  let rpcFailure: { error: unknown; throws: boolean } | null = null;
   let load: () => Promise<unknown> = async () => null;
   const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
   const listeners = new Set<(event: string, value: PcbSession | null) => void>();
@@ -51,7 +53,10 @@ function cloud() {
   const database = {
     rpc: async (name: string, args: Record<string, unknown>) => {
       calls.push({ name, args });
+      if (rpcFailure?.throws) throw rpcFailure.error;
+      if (rpcFailure) return { data: null, error: rpcFailure.error };
       if (denied) return { data: null, error: { code: "42501", message: "denied" } };
+      if (permissionFailure?.rpc === name) return { data: null, error: { code: "P0001", message: permissionFailure.message } };
       return { error: null, data: name === "load_pcb_designer_workspace_shared" ? await load()
         : name.includes("project_lock") ? { available: true, acquired: true, lock: null } : true };
     },
@@ -60,6 +65,8 @@ function cloud() {
   return {
     client: createPcbAccountRemoteClient(database, owner, "synthetic-tab", auth), calls,
     deny: (next: boolean) => { denied = next; },
+    failAll: (error: unknown, throws = false) => { rpcFailure = error === null ? null : { error, throws }; },
+    denyRpc: (rpc: string, message: string) => { permissionFailure = { rpc, message }; },
     session: (next: PcbSession | null, event?: string) => { current = next; if (event) listeners.forEach(listener => listener(event, next)); },
     load: (next: typeof load) => { load = next; },
   };
@@ -194,5 +201,117 @@ test("normal same-actor token refresh retains the lease and dirty recovery witho
     assert.equal(hook.value.hasUnsavedChanges, true);
     assert.equal(local.repository.loadRecovery(owner, recoveryClientId)?.savedRevision, "2026-11-12T01:00:00.000Z");
     assert.equal(hook.value.activeProject.name, "Preserved synthetic draft");
+  } finally { await hook.close(); }
+});
+
+for (const message of ["PCB workspace access denied", "PCB workspace edit access denied"]) {
+  for (const operation of ["load", "save", "lock"] as const) test(`P0001 ${operation} denial pauses editing immediately and preserves dirty recovery: ${message}`, async () => {
+    const local = localDraft(); const remote = cloud();
+    const hook = await mount(usePcbWorkspace, { canEdit: true, storage: local.storage, remoteClient: remote.client, editor, recoveryClientId });
+    try {
+      assert.equal(hook.value.canEdit, true);
+      const before = local.repository.loadRecovery(owner, recoveryClientId);
+      const target = operation === "load" ? "load_pcb_designer_workspace_shared"
+        : operation === "save" ? "save_pcb_designer_workspace_locked" : "acquire_pcb_designer_project_lock";
+      remote.denyRpc(target, message);
+      await act(async () => {
+        if (operation === "load") await hook.value.retryRemote();
+        else if (operation === "save") assert.equal(await hook.value.saveNow(), false);
+        else await hook.value.projectLock.refresh();
+      });
+      await hook.flush(); // No eight-second heartbeat wait is needed.
+      assert.equal(hook.value.remoteAccessStatus, "denied");
+      assert.equal(hook.value.remoteReady, false);
+      assert.equal(hook.value.canEdit, false);
+      assert.equal(hook.value.canMutate, false);
+      assert.equal(hook.value.hasUnsavedChanges, true);
+      assert.equal(hook.value.activeProject.name, "Preserved synthetic draft");
+      assert.deepEqual(local.repository.loadRecovery(owner, recoveryClientId), before);
+      assert.equal(remote.calls.some(call => ["save_pcb_designer_workspace_shared", "save_pcb_designer_workspace", "load_pcb_designer_workspace"].includes(call.name)), false);
+    } finally { await hook.close(); }
+  });
+}
+
+function intervalClock() {
+  const originalSet = window.setInterval;
+  const originalClear = window.clearInterval;
+  let now = 0;
+  let nextId = 1;
+  const timers = new Map<number, { callback: () => void; delay: number; next: number }>();
+  window.setInterval = ((handler: () => void, delay = 0) => {
+    const id = nextId++;
+    timers.set(id, { callback: handler, delay, next: now + delay });
+    return id;
+  }) as typeof window.setInterval;
+  window.clearInterval = id => { timers.delete(id); };
+  return {
+    async advance(milliseconds: number) {
+      now += milliseconds;
+      await act(async () => {
+        for (const timer of [...timers.values()]) {
+          while (timer.next <= now) { timer.next += timer.delay; timer.callback(); }
+        }
+        await new Promise(resolve => setImmediate(resolve));
+      });
+    },
+    restore() { window.setInterval = originalSet; window.clearInterval = originalClear; },
+  };
+}
+
+for (const failure of ["server-500", "transport"] as const) test(`persistent ${failure} pauses editing and retries only on the eight-second cadence or explicit retry`, async () => {
+  const local = localDraft(); const remote = cloud(); const clock = intervalClock();
+  remote.failAll(failure === "server-500" ? { status: 500, message: "Synthetic server unavailable" }
+    : new TypeError("Failed to fetch"), failure === "transport");
+  const hook = await mount(usePcbWorkspace, { canEdit: true, storage: local.storage, remoteClient: remote.client, editor, recoveryClientId });
+  try {
+    const recovery = local.repository.loadRecovery(owner, recoveryClientId);
+    const generation = remote.client.getAccessSnapshot!().generation;
+    for (let pass = 0; pass < 3; pass++) await hook.flush();
+    assert.equal(remote.calls.length, 2); // One initial workspace read and one lease attempt.
+    assert.equal(hook.value.remoteAccessStatus, "error");
+    assert.equal(hook.value.remoteReady, false);
+    assert.equal(hook.value.canEdit, false);
+    assert.equal(hook.value.canMutate, false);
+    assert.equal(hook.value.hasUnsavedChanges, true);
+    await clock.advance(7_999);
+    assert.equal(remote.calls.length, 2);
+    await clock.advance(1);
+    assert.equal(remote.calls.length, 4);
+    await hook.flush();
+    assert.equal(remote.calls.length, 4);
+    assert.equal(remote.client.getAccessSnapshot!().generation, generation);
+    assert.deepEqual(local.repository.loadRecovery(owner, recoveryClientId), recovery);
+    await act(async () => { remote.failAll(null); await hook.value.retryRemote(); });
+    await hook.flush();
+    assert.equal(remote.calls.length, 6);
+    assert.equal(hook.value.remoteReady, true);
+    assert.equal(hook.value.canEdit, true);
+    assert.equal(hook.value.hasUnsavedChanges, true);
+    assert.deepEqual(local.repository.loadRecovery(owner, recoveryClientId), recovery);
+  } finally { await hook.close(); clock.restore(); }
+});
+
+test("a delayed transport error from the old session cannot pause the recovered session or clear its draft", async () => {
+  const local = localDraft(); const remote = cloud(); const pending = deferred<unknown>();
+  remote.load(async () => { await pending.promise; throw new TypeError("Old session transport failure"); });
+  const hook = await mount(usePcbWorkspace, { canEdit: true, storage: local.storage, remoteClient: remote.client, editor, recoveryClientId });
+  try {
+    const recovery = local.repository.loadRecovery(owner, recoveryClientId);
+    await act(async () => remote.session(null, "SIGNED_OUT"));
+    await act(async () => { remote.load(async () => null); remote.session(session(), "SIGNED_IN"); });
+    await hook.flush();
+    assert.equal(hook.value.remoteReady, true);
+    assert.equal(hook.value.canEdit, true);
+    const generation = remote.client.getAccessSnapshot!().generation;
+    const calls = remote.calls.length;
+    await act(async () => pending.resolve(null));
+    await hook.flush();
+    assert.equal(remote.client.getAccessSnapshot!().generation, generation);
+    assert.equal(remote.client.getAccessSnapshot!().status, "ready");
+    assert.equal(remote.calls.length, calls);
+    assert.equal(hook.value.remoteReady, true);
+    assert.equal(hook.value.canEdit, true);
+    assert.equal(hook.value.hasUnsavedChanges, true);
+    assert.deepEqual(local.repository.loadRecovery(owner, recoveryClientId), recovery);
   } finally { await hook.close(); }
 });

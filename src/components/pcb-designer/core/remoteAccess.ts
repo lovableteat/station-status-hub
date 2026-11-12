@@ -33,6 +33,11 @@ export function isPcbAuthorizationError(error: unknown): boolean {
   const value = error as { code?: string; status?: number; message?: string };
   return value.status === 401 || value.status === 403
     || ["42501", "PGRST301", "PGRST302", "PGRST303"].includes(value.code ?? "")
+    // Existing PCB permission checks use RAISE EXCEPTION's default P0001.
+    // Only these exact server messages are access failures, not lock conflicts
+    // or invalid payloads that also use P0001.
+    || (value.code === "P0001" && (value.message === "PCB workspace access denied"
+      || value.message === "PCB workspace edit access denied"))
     || /(?:jwt|token).*(?:expired|invalid)|(?:expired|invalid).*(?:jwt|token)|permission denied|not authorized/i.test(value.message ?? "");
 }
 
@@ -57,7 +62,10 @@ export function guardPcbRemoteClient(client: PcbRemoteClient, auth?: PcbSessionS
     listeners.forEach((listener) => listener());
   };
   const fail = (status: PcbRemoteAccessError["status"]) => {
-    publish(status, snapshot.status !== status);
+    // Transport/server failures pause access but must not rebuild the polling
+    // effects: doing so immediately retries a failing endpoint in a tight loop.
+    // Auth boundaries still invalidate every in-flight result.
+    publish(status, status !== "error" && snapshot.status !== status);
     return new PcbRemoteAccessError(status);
   };
   const execute = async <T>(operation: () => Promise<T>): Promise<T> => {
@@ -77,7 +85,8 @@ export function guardPcbRemoteClient(client: PcbRemoteClient, auth?: PcbSessionS
       // Also fence clients used without a mounted subscription. getSession reads
       // the SDK's current session; it does not create a new login for legacy mode.
       const current = await auth.getSession();
-      if (current.error || !validSession(current.data.session)) throw new PcbRemoteAccessError("session-required");
+      if (current.error) throw new PcbRemoteAccessError(isPcbAuthorizationError(current.error) ? "session-required" : "error");
+      if (!validSession(current.data.session)) throw new PcbRemoteAccessError("session-required");
       if (current.data.session!.user.id !== verifiedActor) throw new PcbRemoteAccessError("denied");
       if (generation !== snapshot.generation) throw new Error("PCB session changed during request");
       return result;
