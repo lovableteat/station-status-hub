@@ -161,11 +161,12 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.number == 49 && github.event.pull_request.head.ref == 'fix/legacy-pcb-protected-reads-20261112' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      EXACT96_DIST: ${{ runner.temp }}/exact96-selected
-      EXACT96_EVIDENCE_DIR: ${{ runner.temp }}/exact96-evidence
-      AUDIT_QA_DIR: ${{ runner.temp }}/exact96-qa
     steps:
+      - name: Set isolated research paths after runner allocation
+        run: |
+          echo "EXACT96_DIST=$RUNNER_TEMP/exact96-selected" >> "$GITHUB_ENV"
+          echo "EXACT96_EVIDENCE_DIR=$RUNNER_TEMP/exact96-evidence" >> "$GITHUB_ENV"
+          echo "AUDIT_QA_DIR=$RUNNER_TEMP/exact96-qa" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
           persist-credentials: false

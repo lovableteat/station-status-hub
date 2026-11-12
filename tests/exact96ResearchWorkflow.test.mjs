@@ -25,6 +25,14 @@ test('exact-old research is restricted to this same-repository PR, without deplo
   assert.ok(workflow.includes('EXACT96_CANDIDATE_DIST: ${{ github.workspace }}/.exact96-candidate/dist'));
 
 });
+test('runner-dependent paths are initialized in a step, not unsupported job-level expressions', () => {
+  const jobConfiguration = workflow.split('    steps:\n')[0];
+  assert.doesNotMatch(jobConfiguration, /runner\./);
+  for (const [variable, directory] of [['EXACT96_DIST', 'exact96-selected'], ['EXACT96_EVIDENCE_DIR', 'exact96-evidence'], ['AUDIT_QA_DIR', 'exact96-qa']]) {
+    assert.ok(workflow.includes(`echo "${variable}=$RUNNER_TEMP/${directory}" >> "$GITHUB_ENV"`));
+  }
+  assert.ok(workflow.indexOf('Set isolated research paths') < workflow.indexOf('npm ci'));
+});
 test('only the pinned original artifact and candidate hashes are accepted; source bytes are never uploaded', () => {
   assert.equal(createHash('sha256').update(manifestText).digest('hex'), 'd82671ae9fb3da32229d9372416fa753719973f033e005331000b88bdf307d53');
   assert.equal(manifest.candidateCommit, '34419778a95132a3ee73251bbde8b4327b6cd493');
