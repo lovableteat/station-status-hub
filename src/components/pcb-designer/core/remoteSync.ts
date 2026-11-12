@@ -1,3 +1,4 @@
+import type { PcbRemoteAccessSnapshot } from "./remoteAccess.ts";
 import type { PcbSaveState } from "../types.ts";
 import { createBlankProject } from "../defaults.ts";
 import type { PcbModelAsset, PcbModelAssetMetadata } from "../types.ts";
@@ -37,6 +38,9 @@ type RemoteTable = {
 };
 
 export interface PcbRemoteClient {
+  getAccessSnapshot?: () => PcbRemoteAccessSnapshot;
+  subscribeAccess?: (listener: () => void) => () => void;
+  retryAccess?: () => void;
   load?: () => Promise<PcbSaveState | null>;
   save?: (state: PcbSaveState) => Promise<boolean>;
   acquireProjectLock?: (input: PcbProjectLockRequest) => Promise<PcbProjectLockResult>;
@@ -179,11 +183,9 @@ export async function syncPcbRemote(client: PcbRemoteClient, state: PcbSaveState
 }
 
 export async function loadPcbRemote(client: PcbRemoteClient): Promise<PcbSaveState | null> {
-  try {
-    return client.load ? await client.load() : null;
-  } catch {
-    return null;
-  }
+  if (!client.load) throw new Error("PCB remote loader is unavailable");
+  // Only a successful empty response is null. Denials and outages are not empty workspaces.
+  return client.load();
 }
 
 type Sync = (state: PcbSaveState) => Promise<boolean>;

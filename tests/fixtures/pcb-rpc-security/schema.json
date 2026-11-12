@@ -1,0 +1,307 @@
+{
+  "columns": [
+    {
+      "acl": null,
+      "name": "id",
+      "type": "text",
+      "table": "workspace.pcb_designer_model_assets",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "metadata",
+      "type": "jsonb",
+      "table": "workspace.pcb_designer_model_assets",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "compressed_payload",
+      "type": "bytea",
+      "table": "workspace.pcb_designer_model_assets",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "updated_by",
+      "type": "uuid",
+      "table": "workspace.pcb_designer_model_assets",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "table": "workspace.pcb_designer_model_assets",
+      "default": "now()",
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "table": "workspace.pcb_designer_model_assets",
+      "default": "now()",
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "project_id",
+      "type": "text",
+      "table": "workspace.pcb_designer_project_locks",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "project_name",
+      "type": "text",
+      "table": "workspace.pcb_designer_project_locks",
+      "default": "''::text",
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "editor_user_id",
+      "type": "uuid",
+      "table": "workspace.pcb_designer_project_locks",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "editor_client_id",
+      "type": "text",
+      "table": "workspace.pcb_designer_project_locks",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "heartbeat_at",
+      "type": "timestamp with time zone",
+      "table": "workspace.pcb_designer_project_locks",
+      "default": "clock_timestamp()",
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "lease_expires_at",
+      "type": "timestamp with time zone",
+      "table": "workspace.pcb_designer_project_locks",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "id",
+      "type": "text",
+      "table": "workspace.pcb_designer_shared_library",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "payload",
+      "type": "jsonb",
+      "table": "workspace.pcb_designer_shared_library",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "component_updated_at",
+      "type": "timestamp with time zone",
+      "table": "workspace.pcb_designer_shared_library",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "updated_by",
+      "type": "uuid",
+      "table": "workspace.pcb_designer_shared_library",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "table": "workspace.pcb_designer_shared_library",
+      "default": "now()",
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "table": "workspace.pcb_designer_shared_library",
+      "default": "now()",
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "table": "workspace.pcb_designer_shared_library",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "id",
+      "type": "text",
+      "table": "workspace.pcb_designer_shared_projects",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "payload",
+      "type": "jsonb",
+      "table": "workspace.pcb_designer_shared_projects",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "project_updated_at",
+      "type": "timestamp with time zone",
+      "table": "workspace.pcb_designer_shared_projects",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "updated_by",
+      "type": "uuid",
+      "table": "workspace.pcb_designer_shared_projects",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "table": "workspace.pcb_designer_shared_projects",
+      "default": "now()",
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "table": "workspace.pcb_designer_shared_projects",
+      "default": "now()",
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "table": "workspace.pcb_designer_shared_projects",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "owner_id",
+      "type": "uuid",
+      "table": "workspace.pcb_designer_workspaces",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "payload",
+      "type": "jsonb",
+      "table": "workspace.pcb_designer_workspaces",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "table": "workspace.pcb_designer_workspaces",
+      "default": "now()",
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "table": "workspace.pcb_designer_workspaces",
+      "default": "now()",
+      "not_null": true
+    }
+  ],
+  "policies": null,
+  "relations": [
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwd/postgres"
+      ],
+      "rls": true,
+      "name": "workspace.pcb_designer_model_assets",
+      "owner": "postgres",
+      "force_rls": false,
+      "anon_select": false,
+      "authenticated_select": false
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwd/postgres"
+      ],
+      "rls": true,
+      "name": "workspace.pcb_designer_project_locks",
+      "owner": "postgres",
+      "force_rls": false,
+      "anon_select": false,
+      "authenticated_select": false
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwd/postgres"
+      ],
+      "rls": true,
+      "name": "workspace.pcb_designer_shared_library",
+      "owner": "postgres",
+      "force_rls": false,
+      "anon_select": false,
+      "authenticated_select": false
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwd/postgres"
+      ],
+      "rls": true,
+      "name": "workspace.pcb_designer_shared_projects",
+      "owner": "postgres",
+      "force_rls": false,
+      "anon_select": false,
+      "authenticated_select": false
+    },
+    {
+      "acl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwd/postgres"
+      ],
+      "rls": true,
+      "name": "workspace.pcb_designer_workspaces",
+      "owner": "postgres",
+      "force_rls": false,
+      "anon_select": false,
+      "authenticated_select": false
+    }
+  ]
+}
