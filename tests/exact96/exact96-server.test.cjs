@@ -63,3 +63,10 @@ test('renamed vulnerable 741 executables stay vetoed and 741 browser coverage is
  assert.equal(m.additionalRevokedExecutables.length,4);
  for(const item of m.additionalRevokedExecutables){assert.ok(REVOKED.has(item.sha256));assert.ok(!Object.values(m.candidateFiles).includes(item.sha256));}
 });
+
+test('PCB boot does not inherit station module routing precedence',()=>{
+ const {workspaceQuery,PROJECT,ISSUE}=require('./exact96-fixtures.cjs');
+ assert.deepEqual(Object.fromEntries(workspaceQuery('pcb-designer')),{project:PROJECT,workspace:'pcb-designer'});
+ assert.deepEqual(Object.fromEntries(workspaceQuery('station-status')),{project:PROJECT,workspace:'station-status',module:'issues',openIssue:ISSUE});
+ assert.throws(()=>workspaceQuery('unmodeled-workspace'),/Unmodeled/);
+});

@@ -64,8 +64,7 @@ async function createHarness(browser,viewport,inventory,{extras=false}={}){
  h.page.on('domcontentloaded',()=>h.documentLoads++);
  h.identity=()=>h.page.evaluate(()=>window.__crossReleaseDocument);
  h.boot=async workspace=>{
-  const query=new URLSearchParams({project:fixture.PROJECT,workspace,module:'issues'});
-  if(workspace==='station-status')query.set('openIssue',fixture.ISSUE);
+  const query=fixture.workspaceQuery(workspace);
   await h.page.goto(h.origin+BASE+'?'+query,{waitUntil:'load'});
   await h.page.locator('[data-mobile-app-header]').waitFor();
   if(workspace==='station-status')await h.page.locator('#mf-new-note').waitFor();
@@ -87,11 +86,17 @@ async function createHarness(browser,viewport,inventory,{extras=false}={}){
  h.close=async()=>{await h.context.close();await new Promise(r=>h.server.close(r));};
  return h;
 }
-async function selectWorkspace(page,label,viewport){
+async function selectWorkspace(page,label,viewport,workspaceId){
  let button=page.getByRole('button',{name:label,exact:true}).filter({visible:true});
  if(await button.count()){await button.first().click();return;}
- if(viewport.width<500)await page.locator('[data-mobile-dock-id="more"]').click();
- else await page.locator('header').getByRole('button',{name:'更多',exact:true}).filter({visible:true}).click();
+ if(viewport.width<500){
+  await page.locator('[data-mobile-dock-id="more"]').click();
+  const sheet=page.locator('[data-mobile-more-sheet="true"]');await sheet.waitFor();
+  const target=sheet.locator(`[data-mobile-more-id="${workspaceId}"]`);
+  assert.ok((await target.innerText()).includes(label),'Original drawer item includes label plus description');
+  await target.click();await sheet.waitFor({state:'hidden'});return;
+ }
+ await page.locator('header').getByRole('button',{name:'更多',exact:true}).filter({visible:true}).click();
  const item=page.getByRole('menuitem',{name:label,exact:true}).filter({visible:true});
  if(await item.count())await item.click();else await page.getByRole('button',{name:label,exact:true}).filter({visible:true}).click();
 }
@@ -118,7 +123,7 @@ const cases=[
   assert.deepEqual(before.previews,[{name:'synthetic-unsent.png',bytes:syntheticPng.length,sha256:sha(syntheticPng)}]);
   assert.equal(h.responses.filter(r=>r.filename===PCB).length,0,'Destination PCB was genuinely not loaded');
   h.cutover();await h.checkResident(MAINT,module);
-  const recovery=await navigationFailure(h,()=>selectWorkspace(h.page,'PCB Designer',viewport));
+  const recovery=await navigationFailure(h,()=>selectWorkspace(h.page,'PCB Designer',viewport,'pcb-designer'));
   assert.deepEqual(await maintenanceSnapshot(h.page),before);
   await recovery.getByRole('button',{name:'重試載入此功能',exact:true}).click();await recovery.waitFor();
   assert.deepEqual(await maintenanceSnapshot(h.page),before);
