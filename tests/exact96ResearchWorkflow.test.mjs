@@ -3,13 +3,16 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 const read = name => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
-const workflow = read('.github/workflows/exact96-crossrelease.yml');
+const fullWorkflow = read('.github/workflows/audit-regression.yml');
+const workflow = fullWorkflow.slice(fullWorkflow.indexOf('  exact96:\n'));
+assert.ok(fullWorkflow.indexOf('  exact96:\n') > 0, 'Research must be an independent job in the existing isolated workflow');
 const browser = read('tests/exact96/exact96-crossrelease.browser.cjs');
 const manifestText = read('tests/exact96/exact96-manifest.json');
 const manifest = JSON.parse(manifestText);
 
 test('exact-old research is restricted to this same-repository PR, without deploy or production secrets', () => {
-  assert.match(workflow, /pull_request:\n\s+branches: \[main\]/);
+  assert.match(fullWorkflow, /pull_request:\n\s+branches: \[main\]/);
+  assert.match(workflow, /github\.event_name == 'pull_request'/);
   assert.match(workflow, /github\.event\.pull_request\.number == 49/);
   assert.ok(workflow.includes("github.event.pull_request.head.ref == 'fix/legacy-pcb-protected-reads-20261112'"));
   assert.match(workflow, /head\.repo\.full_name == github\.repository/);
