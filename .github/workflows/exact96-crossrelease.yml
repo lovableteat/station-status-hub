@@ -1,0 +1,71 @@
+# Pinned PR49 research only. Never deploy or publish original executable bytes.
+name: Exact old-document cutover (isolated research)
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  actions: read # Only to read the already-existing same-repository Pages artifact.
+jobs:
+  exact96:
+    if: github.event.pull_request.number == 49 && github.event.pull_request.head.ref == 'fix/legacy-pcb-protected-reads-20261112' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXACT96_DIST: ${{ runner.temp }}/exact96-selected
+      EXACT96_EVIDENCE_DIR: ${{ runner.temp }}/exact96-evidence
+      AUDIT_QA_DIR: ${{ runner.temp }}/exact96-qa
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: node --test tests/exact96/exact96-server.test.cjs tests/exact96ResearchWorkflow.test.mjs
+      - name: Read the pinned existing source artifact, without publishing its bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error --location --max-time 90 \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/lovableteat/station-status-hub/actions/artifacts/13915914694/zip \
+            --output "$RUNNER_TEMP/exact96-source.zip"
+          python tests/exact96/extract-exact96.py "$RUNNER_TEMP/exact96-source.zip" "$EXACT96_DIST" tests/exact96/exact96-manifest.json
+      - name: Read only the independently reviewed candidate commit
+        uses: actions/checkout@v4
+        with:
+          ref: 34419778a95132a3ee73251bbde8b4327b6cd493
+          path: .exact96-candidate
+          persist-credentials: false
+      - name: Verify frozen candidate identity and identical locked dependencies
+        run: |
+          test "$(git -C .exact96-candidate rev-parse HEAD)" = 34419778a95132a3ee73251bbde8b4327b6cd493
+          cmp package-lock.json .exact96-candidate/package-lock.json
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$GITHUB_WORKSPACE/.exact96-candidate/node_modules"
+      - name: Build and verify the pinned merged candidate static output
+        working-directory: .exact96-candidate
+        run: node "$GITHUB_WORKSPACE/tests/exact96/build-exact-candidate.mjs"
+      - name: Verify all browser inputs without launching
+        env:
+          EXACT96_BUILD_ONLY: '1'
+          EXACT96_CANDIDATE_DIST: ${{ github.workspace }}/.exact96-candidate/dist
+        run: node tests/exact96/exact96-crossrelease.browser.cjs
+      - run: npm install --prefix "$AUDIT_QA_DIR" --no-package-lock playwright@1.58.2
+      - run: "$AUDIT_QA_DIR/node_modules/.bin/playwright install --with-deps chromium"
+      - name: Real exact-old-document cutover with synthetic services
+        env:
+          EXACT96_CANDIDATE_DIST: ${{ github.workspace }}/.exact96-candidate/dist
+        run: timeout --signal=TERM --kill-after=10s 300s node tests/exact96/exact96-crossrelease.browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: exact96-crossrelease-synthetic-evidence
+          retention-days: 3
+          if-no-files-found: error
+          # Never add source ZIP, selected96, dist, traces, HAR or browser cache here.
+          path: |
+            ${{ runner.temp }}/exact96-evidence/report.json
+            ${{ runner.temp }}/exact96-evidence/*.png
