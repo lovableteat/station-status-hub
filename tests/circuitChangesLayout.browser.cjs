@@ -123,6 +123,8 @@ async function phoneGeometry(page, dialog, width, height) {
         // Beside the drawing the form is 標記問題; its 問題說明 is what collapsing must keep.
         const note = dialog.getByRole('textbox', { name: '問題說明', exact: true });
         await note.fill('請補上修改後的接線位置，並核對訊號名稱。'.repeat(8));
+        // The reload further down must find the problem stored, so the 0.8 s auto-save has to land first.
+        await page.waitForFunction(() => document.querySelector('.circuit-detail-footer [role="status"]')?.textContent === '已儲存');
         let collapse;
         if (width >= 1024) {
           const detail = dialog.getByTestId('circuit-change-detail');

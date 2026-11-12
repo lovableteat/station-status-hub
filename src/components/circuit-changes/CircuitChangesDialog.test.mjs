@@ -22,7 +22,9 @@ function mount(overrides = {}, search = "?workspace=material-requests&project=A"
   const all = { open: true, onOpenChange: value => calls.push(["open", value]), context: { seriesId: "board", workspaceId: "bom", workspaceName: "Board.xlsx", versionLabel: "V1" }, canEdit: true, model, pdfs, ...props };
   let root; act(() => { root = create(React.createElement(CircuitChangesDialog, all)); });
   const text = () => JSON.stringify(root.toJSON());
-  const button = label => root.root.findAll(node => node.type === "stub" && typeof node.props.onClick === "function" && node.props.children === label)[0];
+  // A button's words: plain text, or the text parts beside its icon.
+  const words = children => typeof children === "string" ? children : Array.isArray(children) ? children.filter(part => typeof part === "string").join("") : "";
+  const button = label => root.root.findAll(node => node.type === "stub" && typeof node.props.onClick === "function" && words(node.props.children) === label)[0];
   const pane = side => root.root.findByProps({ "data-side": side, className: "circuit-image-column" });
   const update = patch => act(() => root.update(React.createElement(CircuitChangesDialog, { ...all, model: { ...model, ...patch } })));
   return { root, model, props: all, calls, window, text, button, pane, update, origins };

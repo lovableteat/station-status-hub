@@ -1,0 +1,153 @@
+/* 線路修改: buttons, transitions, loading and success (2026-11-12).
+   The user: 「按鈕，轉場，LOADING。SUCCES，都要設計一下啊，細節決定一切」.
+   One motion language for the whole window, the same numbers as 維修中心 (a30615e6) where they meet the motion tokens:
+     100 ms  press, icon → spinner delay, reduced-motion fades
+     150 ms  small enters (a new bottom row, a note, a status that changed), exits
+     200 ms  a screen or a list that comes in, a progress step
+     300 ms  the flash on a frame that was just captured
+   Enter eases out, exit eases in; only transform and opacity move; no bounce. Every animated state also has words or an icon,
+   so nothing depends on seeing the motion. With prefers-reduced-motion: reduce, the bottom of this file removes all movement. */
+.circuit-changes-dialog, .circuit-remove-dialog, .circuit-removed-dialog, .circuit-new-set-dialog, .circuit-guide-dialog, .circuit-image-viewer-dialog {
+  --circuit-ease-out: cubic-bezier(.16, 1, .3, 1);
+  --circuit-ease-in: cubic-bezier(.7, 0, .84, 0);
+}
+
+@keyframes circuit-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes circuit-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes circuit-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes circuit-pop { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
+@keyframes circuit-settle { from { opacity: .55; transform: scale(.92); } to { opacity: 1; transform: none; } }
+@keyframes circuit-grow-x { from { transform: scaleX(0); } to { transform: none; } }
+@keyframes circuit-cell-done { from { opacity: .4; transform: scaleY(.45); } to { opacity: 1; transform: none; } }
+@keyframes circuit-flash { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(1.04); } }
+@keyframes circuit-spin { to { transform: rotate(360deg); } }
+@keyframes circuit-shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes circuit-sweep { from { transform: translateX(-110%); } to { transform: translateX(260%); } }
+
+/* ---------- Buttons ---------- */
+/* Press: the button gives under the finger (97 %) for as long as it is held, and comes back in 100 ms. Large surfaces (list
+   rows, drop areas, page previews, the tabs) dim instead, since shrinking a whole row reads as a jump. */
+:is(.circuit-changes-dialog, .circuit-remove-dialog, .circuit-removed-dialog, .circuit-new-set-dialog, .circuit-guide-dialog, .circuit-image-viewer-dialog) button {
+  transition: scale 100ms var(--circuit-ease-out), opacity 100ms ease-out;
+}
+:is(.circuit-changes-dialog, .circuit-remove-dialog, .circuit-removed-dialog, .circuit-new-set-dialog, .circuit-guide-dialog, .circuit-image-viewer-dialog) button:enabled:active:not(.circuit-item, .circuit-track-item, .circuit-image-empty, .circuit-pdf-empty, .circuit-image-stage, .circuit-image-preview, .circuit-pdf-version-open, .circuit-task, .circuit-pdf-archived-toggle) {
+  scale: .97;
+}
+.circuit-changes-dialog :is(.circuit-item, .circuit-track-item, .circuit-image-empty, .circuit-pdf-empty, .circuit-image-stage, .circuit-image-preview, .circuit-pdf-version-open, .circuit-pdf-archived-toggle):enabled:active { opacity: .78; }
+/* Focus: a ring in the button's own colour, so the keyboard position reads as the same kind of action. */
+:is(.circuit-changes-dialog, .circuit-remove-dialog, .circuit-removed-dialog, .circuit-new-set-dialog) button[data-circuit-tone]:focus-visible {
+  outline: 2px solid hsl(var(--tone) 62% 72%) !important;
+  outline-offset: 2px;
+}
+:is(.circuit-changes-dialog, .circuit-remove-dialog, .circuit-removed-dialog, .circuit-new-set-dialog) button[data-circuit-tone]:disabled { cursor: not-allowed; }
+/* Working: the icon turns into a spinner (after 100 ms), the button keeps its size and says it is busy. */
+.circuit-busy-icon { position: relative; display: inline-grid; flex: none; width: 16px; height: 16px; place-items: center; }
+.circuit-busy-icon > svg { width: 16px; height: 16px; }
+.circuit-busy-icon > .circuit-spinner { position: absolute; inset: 0; width: 16px; height: 16px; animation: circuit-fade-in 100ms ease-out 100ms backwards, circuit-spin 750ms linear infinite; }
+.circuit-busy-icon[data-busy] > svg { animation: circuit-fade-out 100ms ease-in 100ms forwards; }
+:is(.circuit-changes-dialog, .circuit-remove-dialog, .circuit-removed-dialog, .circuit-new-set-dialog) button[aria-busy="true"] { cursor: progress; }
+:is(.circuit-changes-dialog, .circuit-remove-dialog, .circuit-removed-dialog, .circuit-new-set-dialog) button[aria-busy="true"]:disabled { opacity: 1 !important; }
+.circuit-spinner { display: inline-block; flex: none; width: 14px; height: 14px; border: 2px solid color-mix(in srgb, currentColor 26%, transparent); border-top-color: currentColor; border-radius: 50%; animation: circuit-spin 750ms linear infinite; }
+
+/* Phone tabs: the bar over the tab you are on grows from its middle, the tab's tint fades in. */
+@media (max-width: 1023px) {
+  .circuit-changes-dialog > .circuit-tasks > .circuit-task[aria-selected="true"]::before { animation: circuit-grow-x 200ms var(--circuit-ease-out); }
+  .circuit-changes-dialog > .circuit-tasks > .circuit-task[aria-selected="true"] { animation: circuit-fade-in 150ms ease-out; }
+  .circuit-changes-dialog > .circuit-tasks > .circuit-task:active { opacity: .78; }
+}
+
+/* ---------- Transitions ---------- */
+/* Screens (phone push / back, tab switches, opening another problem) are animated from code (circuitMotion.ts) because the
+   same panes are shown and hidden; the pieces below enter when they are created. */
+.circuit-pdf-phone-mode { display: grid; gap: 6px; animation: circuit-rise 150ms var(--circuit-ease-out) backwards; }
+.circuit-pdf-version-list { animation: circuit-rise 200ms var(--circuit-ease-out) backwards; }
+.circuit-changes-dialog .circuit-message { animation: circuit-rise 150ms var(--circuit-ease-out) backwards; }
+.circuit-pdf-confirm, .circuit-official-confirm { animation: circuit-fade-in 150ms ease-out backwards; }
+.circuit-image-frame { animation: circuit-fade-in 150ms ease-out backwards; }
+.circuit-history > article, .circuit-history-earlier > ul { animation: circuit-fade-in 150ms ease-out backwards; }
+
+/* ---------- Loading ---------- */
+/* Skeleton: the shape of what is coming, shown only after 100 ms; a light sweep crosses each block. */
+.circuit-skeleton { display: grid; animation: circuit-fade-in 150ms ease-out 100ms backwards; }
+.circuit-skeleton-row { display: grid; min-height: 64px; grid-template-columns: 40px minmax(0, 1fr) 56px; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid hsl(var(--border)); }
+.circuit-skeleton-text { display: grid; gap: 7px; }
+.circuit-skel { position: relative; display: block; height: 12px; overflow: hidden; border-radius: 4px; background: hsl(var(--foreground) / .08); }
+.circuit-skel[data-shape="number"] { width: 30px; height: 10px; }
+.circuit-skel[data-shape="meta"] { height: 9px; background: hsl(var(--foreground) / .05); }
+.circuit-skel[data-shape="status"] { justify-self: end; width: 48px; height: 22px; border-radius: 6px; }
+.circuit-skel::after, .circuit-pdf-skeleton-page::after { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, hsl(var(--foreground) / .07), transparent); content: ""; animation: circuit-shimmer 1.5s ease-in-out infinite; }
+@media (max-width: 1023px) { .circuit-skeleton-row { min-height: 68px; padding-inline: 16px; } }
+.circuit-tracking-table td.circuit-skeleton-cell { padding: 0; }
+
+/* The drawing that is opening: a blank sheet the size of an A3 page, with a spinner and what is happening under it. */
+.circuit-pdf-skeleton { display: grid; min-height: 100%; align-content: start; justify-items: center; padding: 12px 0; animation: circuit-fade-in 150ms ease-out 100ms backwards; }
+.circuit-pdf-skeleton-page { position: relative; display: grid; width: min(100%, 760px); aspect-ratio: 1.414; place-items: center; overflow: hidden; border: 1px solid hsl(var(--foreground) / .1); border-radius: 4px; background: hsl(var(--foreground) / .06); }
+.circuit-pdf-skeleton-label { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border: 1px solid hsl(var(--foreground) / .12); border-radius: 999px; background: hsl(var(--card) / .9); color: hsl(var(--foreground) / .86); font-size: 13px; }
+.circuit-pdf-skeleton-label > .circuit-spinner { color: hsl(170 60% 70%); }
+.circuit-pdf-skeleton-page > i { position: absolute; left: 6%; right: 6%; height: 1px; background: hsl(var(--foreground) / .07); }
+.circuit-wait-line { display: inline-flex; align-items: center; gap: 8px; color: hsl(var(--muted-foreground)); font-size: 13px; }
+/* A page being drawn again (another page, another zoom): after 200 ms a small chip says so over the dimmed page. */
+.circuit-pdf-rendering { position: absolute; top: 12px; left: 50%; z-index: 3; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid hsl(var(--foreground) / .14); border-radius: 999px; background: hsl(var(--popover) / .94); color: hsl(var(--popover-foreground)); font-size: 12px; white-space: nowrap; transform: translateX(-50%); pointer-events: none; animation: circuit-fade-in 150ms ease-out 200ms backwards; }
+.circuit-pdf-rendering > .circuit-spinner { width: 12px; height: 12px; color: hsl(170 60% 70%); }
+/* Progress bars: filled when the amount is known (pictures n / m), a sweeping bar when it is not (a PDF upload). */
+.circuit-progress { position: relative; display: block; height: 4px; margin-top: 8px; overflow: hidden; border-radius: 2px; background: hsl(202 30% 50% / .18); }
+.circuit-progress > span { position: absolute; inset: 0; border-radius: inherit; background: hsl(202 64% 66%); transform-origin: left center; transition: transform 200ms var(--circuit-ease-out); }
+.circuit-progress[data-indeterminate] > span { right: auto; width: 38%; animation: circuit-sweep 1.2s ease-in-out infinite; }
+.circuit-detail > .circuit-progress { position: absolute; z-index: 4; top: 0; right: 0; left: 0; margin: 0; border-radius: 0; animation: circuit-fade-in 150ms ease-out 100ms backwards; }
+.circuit-detail { position: relative; }
+.circuit-image-loading, .circuit-image-preview > span:only-child { position: relative; display: block; width: 100%; height: 100%; min-height: 96px; overflow: hidden; border-radius: 6px; background: hsl(var(--foreground) / .06); color: transparent !important; font-size: 0 !important; }
+.circuit-image-loading::after, .circuit-image-preview > span:only-child::after { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, hsl(var(--foreground) / .07), transparent); content: ""; animation: circuit-shimmer 1.5s ease-in-out infinite; }
+.circuit-upload-progress { display: grid; }
+.circuit-pdf-phone-note > .circuit-progress, .circuit-official-note > .circuit-progress, .circuit-pdf-empty-note > .circuit-progress { flex: 1 0 100%; }
+.circuit-pdf-phone-note[data-waiting] { flex-wrap: wrap; color: hsl(202 64% 80%); }
+
+/* ---------- Success ---------- */
+/* The window's "done" line. On a phone it sits just above the lowest row of controls of the screen (measured when it shows),
+   over content and never over a button, near where the finger just was; on a wide screen at the bottom centre. It rises in
+   with a check that pops, and sinks away after 2.4 s. It never takes taps. */
+@keyframes circuit-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes circuit-toast-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(4px); } }
+.circuit-toast-region { position: absolute; z-index: 60; right: 12px; bottom: var(--circuit-toast-bottom, 24px); left: 12px; display: flex; justify-content: center; pointer-events: none; }
+.circuit-toast { display: inline-flex; max-width: 100%; align-items: center; gap: 10px; margin: 0; padding: 9px 16px 9px 10px; border: 1px solid hsl(144 46% 58% / .55); border-radius: 12px; background: color-mix(in srgb, hsl(var(--card)), hsl(144 46% 40%) 18%); box-shadow: 0 8px 24px hsl(0 0% 0% / .35); color: hsl(var(--foreground)); animation: circuit-toast-in 200ms var(--circuit-ease-out) backwards; }
+.circuit-toast[data-leaving] { animation: circuit-toast-out 150ms var(--circuit-ease-in) forwards; }
+.circuit-toast-check { display: inline-grid; flex: none; width: 26px; height: 26px; place-items: center; border-radius: 50%; background: hsl(144 46% 58%); color: hsl(144 40% 8%); animation: circuit-pop 150ms var(--circuit-ease-out) 50ms backwards; }
+.circuit-toast-check > svg { width: 16px; height: 16px; stroke-width: 3; }
+.circuit-toast-text { display: grid; min-width: 0; gap: 1px; }
+.circuit-toast-text > strong { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.circuit-toast-text > small { overflow: hidden; color: hsl(var(--muted-foreground)); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+/* Saved: the check beside 已儲存 pops in once, right after a save, not every time a problem is opened. */
+.circuit-save-state { display: inline-flex; align-items: center; gap: 6px; }
+.circuit-save-state[data-just] > svg { animation: circuit-pop 150ms var(--circuit-ease-out); }
+/* A state that has just changed (待改善 → 待確認 → 已結案) settles into place. */
+.circuit-list-status[data-changed] { animation: circuit-settle 200ms var(--circuit-ease-out); }
+/* A page marked as seen: its cell in the strip fills from the middle, and 已看過 shows its check. */
+.circuit-pdf-strip > [data-just] { animation: circuit-cell-done 200ms var(--circuit-ease-out); }
+.circuit-pdf-seen[data-just] > svg { animation: circuit-pop 150ms var(--circuit-ease-out); }
+/* A frame that was just captured flashes once where it was taken, then stays as the dashed mark. */
+.circuit-pdf-flash { position: absolute; z-index: 2; border: 2px solid hsl(144 52% 50%); border-radius: 2px; background: hsl(144 52% 50% / .14); pointer-events: none; animation: circuit-flash 300ms var(--circuit-ease-in) 150ms forwards; }
+.circuit-pdf-crop { animation: circuit-fade-in 150ms ease-out backwards; }
+/* Notes that confirm work in the drawing (已記下新問題…, 已加到…) come up with their check. */
+.circuit-pdf-phone-note, .circuit-pdf-actions[role="status"] > span { animation: circuit-rise 150ms var(--circuit-ease-out) backwards; }
+.circuit-pdf-phone-note:not([data-waiting]) > svg, .circuit-pdf-actions[role="status"] svg { animation: circuit-pop 150ms var(--circuit-ease-out) 50ms backwards; }
+.circuit-pdf-actions[role="status"] > span { display: inline-flex; align-items: center; gap: 6px; color: hsl(144 52% 70%); }
+.circuit-pdf-actions[role="status"] > span > svg { width: 16px; height: 16px; }
+
+/* ---------- Reduced motion ---------- */
+/* Nothing moves: enters become a 100 ms fade at most, spinners and sweeps stop (the words beside them still say what is
+   happening), and pressed buttons only dim. */
+@media (prefers-reduced-motion: reduce) {
+  :is(.circuit-changes-dialog, .circuit-remove-dialog, .circuit-removed-dialog, .circuit-new-set-dialog, .circuit-guide-dialog, .circuit-image-viewer-dialog) button { transition: opacity 100ms ease-out; }
+  :is(.circuit-changes-dialog, .circuit-remove-dialog, .circuit-removed-dialog, .circuit-new-set-dialog, .circuit-guide-dialog, .circuit-image-viewer-dialog) button:enabled:active { scale: none !important; opacity: .78; }
+  .circuit-pdf-phone-mode, .circuit-pdf-version-list, .circuit-changes-dialog .circuit-message, .circuit-toast, .circuit-pdf-phone-note, .circuit-pdf-actions[role="status"] > span,
+  .circuit-changes-dialog > .circuit-tasks > .circuit-task[aria-selected="true"] { animation: circuit-fade-in 100ms ease-out backwards; }
+  .circuit-toast[data-leaving] { animation: circuit-fade-out 100ms ease-in forwards; }
+  .circuit-changes-dialog > .circuit-tasks > .circuit-task[aria-selected="true"]::before, .circuit-toast-check, .circuit-save-state[data-just] > svg, .circuit-list-status[data-changed],
+  .circuit-pdf-strip > [data-just], .circuit-pdf-seen[data-just] > svg, .circuit-pdf-phone-note > svg, .circuit-pdf-actions[role="status"] svg,
+  .circuit-pdf-confirm, .circuit-official-confirm, .circuit-image-frame, .circuit-history > article, .circuit-history-earlier > ul, .circuit-pdf-crop { animation: none; }
+  .circuit-pdf-flash { animation: circuit-fade-out 100ms ease-in 300ms forwards; }
+  .circuit-spinner, .circuit-busy-icon > .circuit-spinner { animation: none; border-right-color: currentColor; }
+  .circuit-busy-icon[data-busy] > svg { animation: none; opacity: 0; }
+  .circuit-skel::after, .circuit-pdf-skeleton-page::after, .circuit-image-loading::after, .circuit-image-preview > span:only-child::after { animation: none; display: none; }
+  .circuit-progress[data-indeterminate] > span { width: 100%; opacity: .45; animation: none; }
+  .circuit-progress > span { transition: none; }
+}
