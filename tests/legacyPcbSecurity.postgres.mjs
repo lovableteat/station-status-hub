@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { fixture,addAccount,as,snapshot,metadata,uid,fields,read } from './fixtures/legacy-pcb-security/database.mjs';
 import { installSequenceContext } from './fixtures/legacy-pcb-security/sequence-database.mjs';
+import { installAppliedTableContext } from './fixtures/applied-anonymous-tables/database.mjs';
+import { applyTableLedgerFixtures,executePendingStage } from './fixtures/legacy-pcb-security/six-ledger-sequence.mjs';
 const additive=await read('../../../docs/security-proposals/legacy-pcb/01-add-read-apis-PENDING.sql');
 const appliedVersion='20261112064452';
 const appliedName='add_protected_profile_and_legacy_pcb_read_apis';
@@ -21,7 +23,8 @@ const enforcement=await read('../../../docs/security-proposals/legacy-pcb/02-clo
 const narrow=await read('../../../docs/security-proposals/pcb-rpc-cutover-PENDING.sql');
 import { isolatedEnforcementBody } from './fixtures/legacy-pcb-security/release-gate.mjs';
 const body=isolatedEnforcementBody(enforcement);
-const stage01=await read('../../../docs/security-proposals/01-close-anonymous-access.sql');
+const stage01=await read('../../../docs/security-proposals/01-close-anonymous-access-after-six-ledgers.sql');
+const sixVerifier=await read('../../../docs/security-proposals/verify-applied-six-ledger-baseline.sql');
 const stationOnly=await read('../../../docs/security-proposals/02-bind-station-delete-identities-after-pcb.sql');
 const stage03=await read('../../../docs/security-proposals/03-private-attachments.sql');
 const rawSnapshot=n=>({projects:[{id:'project-'+n,updatedAt:'2026-01-01T00:00:00Z',name:'Synthetic board '+n}],library:[{id:'component-'+n,name:'Synthetic part '+n,source:n%2?'custom':'bom'},{id:'builtin-'+n,source:'built-in'}],templates:[{id:'PRIVATE-TEMPLATE-'+n}],activeProjectId:'project-'+n,pendingPlacementsByProject:{['project-'+n]:[{private:'PRIVATE-PENDING-'+n}]},modelAssets:{['PRIVATE-MODEL-'+n]:{}},unknownPrivate:'PRIVATE-UNKNOWN-'+n,remoteDeletions:{projects:['deleted-project-'+n],library:['deleted-component-'+n],templates:['PRIVATE-TOMBSTONE-'+n]},updatedAt:'2026-01-01T00:00:00Z'});
@@ -261,10 +264,12 @@ test('Exact API identities reject overloads and aliases before either stage can 
  }finally{await db.close();}
 });
 
-test('Full applied additive ledger -> twelve PCB -> raw body -> broad 01 -> station-only 02 -> 03 sequence',async t=>{
+test('Full six-ledger baseline -> twelve PCB -> raw body -> broad 01 v2 -> station-only 02 -> 03 sequence',async t=>{
  const db=await seeded();
  try {
   await installSequenceContext(db);
+  await installAppliedTableContext(db);
+  const publicationBefore=(await db.query('select * from pg_publication_tables order by pubname,schemaname,tablename')).rows;
   const legacyRows=async()=>(await db.query(`select id,permissions->'pcbDesignerWorkspace' value from workspace.system_users where id<= '${uid(5)}' order by id`)).rows;
   const fiveSnapshots=await legacyRows();
   assert.equal(fiveSnapshots.length,5);assert.equal(new Set(fiveSnapshots.map(r=>JSON.stringify(r.value))).size,5);
@@ -272,14 +277,38 @@ test('Full applied additive ledger -> twelve PCB -> raw body -> broad 01 -> stat
   let protectedFunctions;
   const apiConfig=async()=>(await db.query("select n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args,pg_get_userbyid(p.proowner) owner,pg_get_functiondef(p.oid) definition,p.proacl::text from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='workspace' and (p.proname like '%pcb_designer%' or p.proname='list_system_user_profiles') order by 1,2,3")).rows;
   for(const [index,[label,sql]] of [
-   ['exact applied additive APIs and ledger',appliedAdditive],['twelve PCB guards',narrow],['isolated raw enforcement body',body],
-   ['broad stage 01',stage01],['station-only stage 02',stationOnly],['private attachments stage 03',stage03]
+   ['six applied ledgers and protected APIs',appliedAdditive],['twelve PCB guards',narrow],['isolated raw enforcement body',body],
+   ['broad stage 01 v2',stage01],['station-only stage 02',stationOnly],['private attachments stage 03',stage03]
   ].entries())await t.test(label+' preserves protected APIs, setter, snapshots and ordinary operations',async()=>{
    const before=await snapshot(db);
-   if(index===0)await applyRecordedAdditive(db);else await db.exec(sql);
-   await db.exec(appliedVerifier);
+   if(index===0){await applyRecordedAdditive(db);await applyTableLedgerFixtures(db);}
+   else if(index===3)await executePendingStage(db,sql);else await db.exec(sql);
+   await db.exec(sixVerifier);
+   assert.deepEqual((await db.query('select * from pg_publication_tables order by pubname,schemaname,tablename')).rows,publicationBefore);
+   for(const table of ['tasks','test_progress_audit']){
+    await assert.rejects(as(db,'anon',null,`select id from workspace.${table}`),e=>e.code==='42501');
+    assert.equal((await as(db,'authenticated',103,`select count(*)::int n from workspace.${table}`)).rows[0].n,before[table].length);
+    assert.equal((await as(db,'service_role',null,`select count(*)::int n from workspace.${table}`)).rows[0].n,before[table].length);
+   }
    assert.deepEqual((await ledgerRows(db)).find(row=>row.version===appliedVersion),{version:appliedVersion,name:appliedName,statements:[appliedAdditive]});
    assert.deepEqual(await snapshot(db),before,'stage DDL changes no account, permission or application row');
+   // Exercise real captured definer trigger and normal authenticated/service CRUD
+   // inside a rollback-only synthetic transaction at every stage.
+   await db.exec('begin');
+   try {
+    for(const actor of ['authenticated','service_role']) {
+     await as(db,actor,101,"insert into workspace.tasks(title) values('synthetic staged task')");
+     await as(db,actor,101,"update workspace.tasks set title=title where title='synthetic staged task'");
+     await as(db,actor,101,"delete from workspace.tasks where title='synthetic staged task'");
+     await as(db,actor,101,'update workspace.test_progress_audit set change_type=change_type');
+    }
+    await as(db,'authenticated',101,`insert into workspace.test_progress(id,system_id,station_id,item_id,started_at,status,actual_hours) values('${uid(500)}','${uid(2)}','${uid(3)}','${uid(4)}',now(),'On-going',0)`);
+    await as(db,'authenticated',101,`update workspace.test_progress set status='Done',completed_at=now(),actual_hours=1 where id='${uid(500)}'`);
+    await as(db,'service_role',null,`delete from workspace.test_progress where id='${uid(500)}'`);
+    assert.equal((await db.query('select count(*)::int n from workspace.test_progress_audit')).rows[0].n,before.test_progress_audit.length+3);
+   } finally {await db.exec('rollback');}
+   assert.deepEqual(await snapshot(db),before,'rollback-only compatibility probes preserve every existing row');
+
    assert.deepEqual(await legacyRows(),fiveSnapshots);
    assert.deepEqual((await db.query('select * from storage.objects order by id')).rows,originalObjects);
    if(index===1)protectedFunctions=await apiConfig();
@@ -379,4 +408,62 @@ test('Exact applied additive transport, ledger and read-only reconciliation stay
    }
   });
  }finally{await db.close();await reference.close();}
+});
+
+
+test('Six-ledger verifier and v2 stage01 refuse reopening without changing the recovery baseline',async t=>{
+ const db=await seeded();
+ const fullState=async()=>({
+  data:await snapshot(db),metadata:await metadata(db),ledger:await ledgerRows(db),
+  tables:(await db.query("select n.nspname,c.relname,c.relacl::text,c.relowner::regrole::text,c.relrowsecurity,c.relforcerowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('workspace','storage') order by 1,2")).rows,
+  policies:(await db.query("select * from pg_policies where schemaname in ('workspace','storage') order by schemaname,tablename,policyname")).rows,
+  columns:(await db.query("select n.nspname,c.relname,a.attname,a.attacl::text from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='workspace' and a.attnum>0 order by 1,2,3")).rows,
+  triggers:(await db.query("select tgrelid::regclass::text,tgname,tgenabled,pg_get_triggerdef(oid) definition from pg_trigger where not tgisinternal order by 1,2")).rows,
+  publication:(await db.query('select * from pg_publication_tables order by pubname,schemaname,tablename')).rows,
+ });
+ async function rejectCurrent(sql,pattern){const before=await fullState();await assert.rejects(executePendingStage(db,sql),pattern);assert.deepEqual(await fullState(),before);}
+ try {
+  await installSequenceContext(db);await installAppliedTableContext(db);await applyRecordedAdditive(db);await applyTableLedgerFixtures(db);
+  await t.test('All six exact ledgers and effective boundaries verify without source access',async()=>{const before=await fullState();await db.exec(sixVerifier);assert.deepEqual(await fullState(),before);});
+  const coreDrifts=[
+   ['login table reopening','grant select on workspace.login_audit to anon'],
+   ['login column reopening','grant select(note) on workspace.login_audit to anon'],
+   ['internal anon execution','grant execute on function workspace.cleanup_old_notifications() to anon'],
+   ['internal authenticated execution','grant execute on function public.calculate_daily_production_stats() to authenticated'],
+   ['internal maintenance loss','revoke execute on function workspace.cleanup_old_notifications() from service_role'],
+   ['delete alias anonymous execution','grant execute on function public.delete_test_system(uuid) to public'],
+   ['delete alias authenticated loss','revoke execute on function workspace.delete_test_system(uuid) from authenticated'],
+   ['tasks table reopening','grant select on workspace.tasks to anon'],
+   ['progress audit PUBLIC reopening','grant select on workspace.test_progress_audit to public'],
+   ['progress audit column reopening','grant select(id) on workspace.test_progress_audit to anon'],
+   ['tasks inherited reopening','create role fixture_inherited_reader;grant select on workspace.tasks to fixture_inherited_reader;grant fixture_inherited_reader to anon'],
+   ['new applied ledger mismatch',"update supabase_migrations.schema_migrations set statements=array['synthetic mismatch'] where version='20261112073518'"]
+  ];
+  for(const [label,drift] of coreDrifts)await t.test('Read-only six-ledger verifier rejects '+label,async()=>{
+   const before=await fullState();await db.exec('begin;'+drift);
+   try {await assert.rejects(db.exec(sixVerifier),/Applied (?:internal RPC|delete RPC|login audit|legacy PCB ledger|anonymous table)/);}
+   finally {await db.exec('rollback');}
+   assert.deepEqual(await fullState(),before);
+  });
+  await t.test('v2 stage01 cannot skip the twelve PCB guards',async()=>rejectCurrent(stage01,/Hardened PCB baseline drift/));
+  await db.exec(narrow);
+  await t.test('v2 stage01 cannot skip raw-column enforcement',async()=>rejectCurrent(stage01,/requires prior protected raw-column enforcement/));
+  await db.exec(body);
+  for(const [label,drift] of coreDrifts)await t.test('v2 stage01 rejects '+label+' rather than repairing it',async()=>rejectCurrent(drift+';\n'+stage01,/Applied (?:internal RPC|delete RPC|login audit|legacy PCB ledger|anonymous table)/));
+  for(const [label,drift] of [
+   ['writer trigger loss','alter table workspace.test_progress disable trigger log_test_progress_trigger'],
+   ['publication loss','alter publication supabase_realtime drop table workspace.tasks'],
+   ['retained authenticated CRUD loss','revoke update on workspace.tasks from authenticated'],
+   ['anonymous subscriber',"insert into realtime.subscription(entity,claims_role) values('workspace.tasks'::regclass,'anon'::regrole)"],
+  ])await t.test('v2 stage01 rejects dependency drift: '+label,async()=>rejectCurrent(drift+';\n'+stage01,/Audit writer trigger drift|Tasks publication drift|retained privilege lost|current anonymous Realtime subscriber/));
+  const boundary='-- BEGIN UNCHANGED V1 BODY (only applied-table sweep exclusions extended).';
+  for(const [label,drift] of [['table','grant select on workspace.tasks to anon;'],['column','grant select(id) on workspace.test_progress_audit to anon;'],['PUBLIC','grant select on workspace.tasks to public;']])
+   await t.test('Late '+label+' reopening after capture fails instead of being silently revoked',async()=>rejectCurrent(stage01.replace(boundary,drift+'\n'+boundary),/Six-ledger applied anonymous boundary reopened/));
+  await t.test('Late runner ledger failure rolls back the complete v2 stage and retains all six boundaries',async()=>rejectCurrent(stage01+"\ninsert into supabase_migrations.schema_migrations values('20261112073518','synthetic duplicate',array['synthetic']);",e=>e.code==='23505'));
+  await t.test('Retired rollback cannot reopen either table or replace current data',async()=>{
+   const sentinel=await read('../../../docs/security-proposals/anonymous-table-rollback-RETIRED.sql');
+   const before=await fullState();try {await assert.rejects(db.exec(sentinel),/Anonymous table rollback retired/);}finally{await db.exec('rollback');}
+   assert.deepEqual(await fullState(),before);
+  });
+ }finally{await db.close();}
 });

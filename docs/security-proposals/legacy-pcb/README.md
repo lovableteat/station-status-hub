@@ -26,7 +26,8 @@ those snapshots and modern PCB tables is assumed, and no reimport is performed.
 still waiting to run. The applied server statement removes only its outer
 BEGIN/COMMIT for the migration runner; it has no SET ROLE and no body/ACL changes.
 Do not execute either copy against a target where the ledger/API already exists.
-Use `verify-applied-read-apis.sql` for the standalone read-only metadata check.
+The current standalone read-only check is `../verify-applied-six-ledger-baseline.sql`;
+`verify-applied-read-apis.sql` remains the frozen historical four-ledger check.
 
 Adds only two zero-argument, authenticated RPCs. It rejects name/overload collisions
 rather than replacing an existing API. Default PUBLIC/anon/service grants on these
@@ -127,7 +128,8 @@ No legacy permissions-write fallback is permitted.
    schema, table/column ACLs, six authorization/setter definitions and ACLs, and
    the absence of unexpected API role inheritance/bypass.
 2. Reconcile and skip the already-applied additive version `20261112064452`.
-   The read-only applied verifier checks all four immutable ledgers and the two
+   The current six-ledger verifier checks all six immutable records, their effective
+   authorization boundaries, and the two
    exact API definitions/owners/ACLs without reading account/PCB content. It is
    not submitted to the migration tool and does not replace later release gates.
    A fresh isolated database can rehearse the exact transport with a runner-owned
@@ -147,8 +149,8 @@ No legacy permissions-write fallback is permitted.
 5. Resolve every enforcement gate, produce/review a release-specific artifact, and
    only then consider the one-column cutover. The published pending file must still
    fail as-is. The compatible API functions become part of the recovery baseline.
-6. Only after enforcement, the unchanged later proposals follow in this order:
-   broad `01-close-anonymous-access.sql` →
+6. Only after enforcement, the current later proposals follow in this order:
+   `01-close-anonymous-access-after-six-ledgers.sql` →
    `02-bind-station-delete-identities-after-pcb.sql` → `03-private-attachments.sql`.
    Each retains its own release gates. Stage 01 changes the mapping helper's ACL
    and therefore must not precede these exact original-baseline legacy proposals.
@@ -206,11 +208,13 @@ metadata drift fail instead of silently granting access or overwriting functions
 
 ## Local verification
 
-On 2026-11-12, the SQL/real-parser suite passed **120/120** on each of PostgreSQL
+On 2026-11-12, the SQL/real-parser suite passed **157/157** on each of PostgreSQL
 17.5 and 18.3. New source contracts passed **6/6**; combined with frozen PCB
-contracts and all four applied-migration byte suites, **27/27** passed.
-The original 113 SQL cases remain covered; seven additional cases reconcile the
-exact applied transport, ledger and read-only verifier.
+contracts, all six applied-migration byte contracts and successor checks, **37/37**
+passed.
+The previous 120 SQL cases remain covered; the new cases reconcile the six-ledger
+effective boundaries, reject reopened grants/dependency drift and verify stage01 v2
+late failure without losing the recovery baseline.
 These are local results. The separate actual PostgREST HTTP/SDK CI run must report
 its own outcome, and is not implied by these SQL passes.
 
@@ -241,8 +245,8 @@ and real SQL envelopes consumed by the
 actual frontend parser for revision/tie/tombstone/absence behavior. Existing modern
 PCB and deployment recovery suites remain separate required regressions.
 
-The sequence regression executes **exact applied additive transport + ledger → frozen twelve-RPC candidate
-→ isolated enforcement body → unchanged broad 01 → station-only 02 → 03** in one
+The sequence regression executes **six exact applied records → frozen twelve-RPC candidate
+→ isolated enforcement body → six-ledger broad 01 v2 → station-only 02 → 03** in one
 fresh database. After every stage it checks protected profile/legacy reads, every
 other profile field, ordinary machine access, authorized/denied permission setters,
 and all five original synthetic snapshots. Each SQL stage leaves all account and
