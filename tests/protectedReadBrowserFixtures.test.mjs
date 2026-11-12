@@ -124,3 +124,15 @@ test('PR workflow independently executes both protected read suites and preserve
     assert.ok(workflow.includes(`180s node tests/${script}.browser.cjs`), `Existing browser step retained: ${script}`);
   }
 });
+
+test('phone permissions footer hides only informational copy, never failed-read recovery', () => {
+  const component = read('src/components/admin/UserPermissionsDialog.tsx');
+  const css = read('src/components/admin/admin-panel.css');
+  assert.match(component, /data-load-retry=\{!isReading && loadedUserId !== userId \? "true" : undefined\}/);
+  assert.match(css, /\.admin-permissions-footer\[data-load-retry="true"\]\s*\{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(css, /\.admin-permissions-footer\[data-load-retry="true"\] > div:first-child\s*\{\s*display: block;/);
+  const browser = read('tests/sanitizedProfiles.browser.cjs');
+  assert.match(browser, /width: 844, height: 390/);
+  assert.match(browser, /retry\.waitFor\(\{ state: 'visible' \}\)/);
+  assert.match(browser, /retry\.isEnabled\(\)/);
+});

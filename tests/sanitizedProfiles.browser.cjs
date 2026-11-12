@@ -150,8 +150,23 @@ test('dialog-target-switch-delayed-load-and-retry-guard', 'dialog', async ({ pag
   for (const radio of await page.getByRole('radio').all()) assert.equal(await radio.isDisabled(), true);
   await screenshot('pending');
   await page.evaluate(() => sanitizedProfilesFixture.resolveHeld(sanitizedProfilesFixture.second, 'error'));
-  await page.getByRole('button', { name: '重新載入權限' }).waitFor();
+  const retry = page.getByRole('button', { name: '重新載入權限' });
+  await retry.waitFor({ state: 'visible' });
+  assert.equal(await retry.isEnabled(), true);
+  assert.equal(await page.getByRole('button', { name: '取消', exact: true }).isEnabled(), true);
   assert.equal(await save(page).isDisabled(), true);
+  const initialViewport = page.viewportSize();
+  // The same failed read must remain recoverable after rotating to a short landscape viewport.
+  for (const viewport of [initialViewport, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport);
+    await retry.scrollIntoViewIfNeeded();
+    assert.equal(await retry.isVisible(), true);
+    const box = await retry.boundingBox();
+    assert.ok(box.width > 0 && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width + 1 && box.y + box.height <= viewport.height + 1, 'Retry is reachable without horizontal overflow');
+    assert.equal(await save(page).isDisabled(), true);
+    await screenshot(viewport === initialViewport ? 'retry-error' : 'retry-landscape');
+  }
+  await page.setViewportSize(initialViewport);
   assert.equal(await page.evaluate(() => sanitizedProfilesFixture.writes.length), 0);
   await page.evaluate(() => { sanitizedProfilesFixture.modes[sanitizedProfilesFixture.second] = 'ok'; });
   await page.getByRole('button', { name: '重新載入權限' }).click(); await dialogReady(page);

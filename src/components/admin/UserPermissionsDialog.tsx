@@ -615,7 +615,7 @@ export function UserPermissionsDialog({
           </div>
         </div>
 
-        <div className="admin-permissions-footer flex items-center justify-between gap-3 border-t border-border/70 bg-card/95 px-4 py-3 sm:px-5">
+        <div data-load-retry={!isReading && loadedUserId !== userId ? "true" : undefined} className="admin-permissions-footer flex items-center justify-between gap-3 border-t border-border/70 bg-card/95 px-4 py-3 sm:px-5">
           <div className="text-xs text-muted-foreground">
             {isReading ? "正在讀取此帳號的最新權限…" : loadedUserId !== userId ? (
               <Button variant="outline" size="sm" onClick={() => void loadUserPermissions()}>

@@ -1707,6 +1707,18 @@
     display: none;
   }
 
+  /* Informational copy may hide on phones, but a failed read must remain recoverable. */
+  .admin-permissions-footer[data-load-retry="true"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .admin-permissions-footer[data-load-retry="true"] > div:first-child {
+    display: block;
+    min-width: 0;
+  }
+
   .admin-permissions-footer > div:last-child {
     display: grid;
     width: 100%;
