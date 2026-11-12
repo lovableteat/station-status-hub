@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { subscribeDocumentDraft } from "@/lib/documentDrafts";
 import { Box, Ruler } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import type { TabularImportError } from "./core/tabular.ts";
 import type { NewProjectInput, TemplateInput } from "./core/workspace.ts";
-import { resizeBoard } from "./core/resizeBoard.ts";
+import { ProjectSettingsSession, parseProjectSettings, projectSettingsConflict, type ProjectSettings } from "./core/projectSettingsDraft.ts";
 import { boardSurfacePath } from "./core/boardOutline.ts";
 import type {
   ImportedComponent,
@@ -55,7 +56,10 @@ interface PcbDialogsProps {
   dialog: PcbDialogState | null;
   onClose: () => void;
   onCreateProject: (input: NewProjectInput) => void;
-  onUpdateProject: (project: PcbProject) => void;
+  draftActorId?: string | null;
+  projectSettingsReady?: boolean;
+  currentProjects?: PcbProject[];
+  onUpdateProject: (projectId: string, baselineRevision: string, settings: ProjectSettings) => Promise<boolean>;
   onSaveTemplate: (input: TemplateInput) => void;
   onRenameTemplate: (templateId: string, name: string) => void;
   onSaveComponent: (
@@ -86,14 +90,28 @@ export function PcbDialogs({
   onClose,
   onCreateProject,
   onUpdateProject,
+  draftActorId,
+  projectSettingsReady = false,
+  currentProjects = [],
   onSaveTemplate,
   onRenameTemplate,
   onSaveComponent,
 }: PcbDialogsProps) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+  const [applying, setApplying] = useState(false);
+  const settingsSession = useRef<ProjectSettingsSession | null>(null);
+  useSyncExternalStore(subscribeDocumentDraft, () => settingsSession.current?.current ?? false, () => false);
+  const activeDialog = useRef(dialog);
+  activeDialog.current = dialog;
+  const readyRef = useRef(projectSettingsReady);
+  readyRef.current = projectSettingsReady;
+  const mounted = useRef(true);
+  useLayoutEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    settingsSession.current = null;
+    setApplying(false);
     setError("");
     if (!dialog) {
       setValues({});
@@ -102,15 +120,10 @@ export function PcbDialogs({
     if (dialog.kind === "new-project") {
       setValues({ name: "", description: "", width: "100", height: "80", projectGroup: "", revision: "1" });
     } else if (dialog.kind === "project-settings") {
-      setValues({
-        name: dialog.project.name,
-        projectGroup: dialog.project.projectGroup ?? "",
-        revision: dialog.project.revision ?? "1",
-        description: dialog.project.description,
-        width: String(dialog.project.board.width),
-        height: String(dialog.project.board.height),
-        status: dialog.project.status,
-      });
+      const session = new ProjectSettingsSession(draftActorId, dialog.project);
+      settingsSession.current = session;
+      setValues(session.current ? session.draft.values : {});
+      setError(session.current ? session.draft.error : "");
     } else if (dialog.kind === "save-template") {
       setValues({ name: "", category: "", description: "" });
     } else if (dialog.kind === "rename-template") {
@@ -129,15 +142,62 @@ export function PcbDialogs({
         shape: component.shape === "circle" ? "circle" : "rectangle",
       });
     }
-  }, [dialog]);
+  }, [dialog, draftActorId]);
 
+  const renderedSession = settingsSession.current;
   const update = (field: string, value: string) => {
-    setValues((current) => ({ ...current, [field]: value }));
+    if (dialog?.kind === "project-settings") {
+      if (!mounted.current || activeDialog.current !== dialog || settingsSession.current !== renderedSession) return;
+      const session = renderedSession;
+      if (!projectSettingsReady || !session?.current) return;
+      const next = { ...session.draft.values, [field]: value };
+      if (session.write(next)) setValues(next);
+    } else setValues((current) => ({ ...current, [field]: value }));
+  };
+  const cancel = () => {
+    // Explicit close/cancel discards; a permission-gate unmount never calls this.
+    if (dialog?.kind === "project-settings") {
+      if (!mounted.current || activeDialog.current !== dialog || settingsSession.current !== renderedSession) return;
+      renderedSession?.cancel();
+    }
+    onClose();
+  };
+  const submitProjectSettings = async () => {
+    const session = renderedSession;
+    if (!mounted.current || activeDialog.current !== dialog || settingsSession.current !== session || !session?.current || !projectSettingsReady || applying) return;
+    const openedDialog = dialog;
+    const current = currentProjects.find(project => project.id === session.draft.projectId);
+    const parsed = parseProjectSettings(session.draft.values);
+    const message = projectSettingsConflict(session.draft, current) || (typeof parsed === "string" ? parsed : "");
+    if (message) { session.write(session.draft.values, message); setError(message); return; }
+    if (typeof parsed === "string") return;
+    const generation = session.generation;
+    setApplying(true);
+    try {
+      const applied = await onUpdateProject(session.draft.projectId, session.draft.baselineRevision, parsed);
+      if (!mounted.current || activeDialog.current !== openedDialog || settingsSession.current !== session || !session.current || !readyRef.current) return;
+      // A late completion may not discard edits made since this submit.
+      if (session.generation !== generation) return;
+      if (applied) {
+        if (generation === null || session.clear(generation)) onClose();
+      } else {
+        const message = "未套用設定；輸入仍保留，請確認編輯權限與專案版本。";
+        session.write(session.draft.values, message); setError(message);
+      }
+    } catch {
+      if (mounted.current && activeDialog.current === openedDialog && settingsSession.current === session && session.current && session.generation === generation) {
+        const message = "套用設定失敗；輸入仍保留，請重試。";
+        session.write(session.draft.values, message); setError(message);
+      }
+    } finally {
+      if (mounted.current && activeDialog.current === openedDialog && settingsSession.current === session) setApplying(false);
+    }
   };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!dialog) return;
+    if (dialog.kind === "project-settings") { void submitProjectSettings(); return; }
     const name = values.name?.trim();
     if (!name) {
       setError("名稱為必填欄位。");
@@ -158,23 +218,6 @@ export function PcbDialogs({
         description: values.description,
         width,
         height,
-      });
-      onClose();
-    } else if (dialog.kind === "project-settings") {
-      const width = positiveNumber(values.width);
-      const height = positiveNumber(values.height);
-      if (!width || !height || width < 20 || width > 1000 || height < 20 || height > 1000) {
-        setError("板框尺寸必須介於 20 到 1000 mm。");
-        return;
-      }
-      onUpdateProject({
-        ...dialog.project,
-        projectGroup: values.projectGroup?.trim(),
-        revision: values.revision?.trim() || "1",
-        name,
-        description: values.description ?? "",
-        status: values.status as PcbProject["status"],
-        board: resizeBoard(dialog.project, { width, height }, "top-left").board,
       });
       onClose();
     } else if (dialog.kind === "save-template") {
@@ -228,8 +271,21 @@ export function PcbDialogs({
     "component",
   ].includes(dialog.kind);
 
+  const session = settingsSession.current;
+  const settingsBlocked = dialog?.kind === "project-settings" && (!projectSettingsReady || !session?.current);
+  const settingsProjectId = session?.draft.projectId;
+  const currentSettingsProject = currentProjects.find(project => project.id === settingsProjectId);
+  const settingsCurrent = session?.current ?? false;
+  const baselineRevision = session?.draft.baselineRevision;
+  // Typing changes raw values only. Recheck the full CAD baseline only when its
+  // project reference/baseline changes; submit and the reducer still perform exact CAS.
+  const conflict = useMemo(() => dialog?.kind === "project-settings" && settingsCurrent && settingsProjectId && baselineRevision !== undefined
+    ? projectSettingsConflict({ projectId: settingsProjectId, baselineRevision }, currentSettingsProject) : "",
+  [dialog?.kind, settingsCurrent, settingsProjectId, currentSettingsProject, baselineRevision]);
+  // The registry is recovery, never an authorization source. Do not render private input under a denied gate.
+  if (settingsBlocked) return null;
   return (
-    <Dialog open={Boolean(dialog)} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={Boolean(dialog)} onOpenChange={(open) => !open && cancel()}>
       <DialogContent
         data-dialog-kind={dialog?.kind}
         data-dialog-tone={
@@ -250,7 +306,7 @@ export function PcbDialogs({
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>取消</Button>
+              <Button type="button" variant="outline" onClick={cancel}>取消</Button>
               <Button type="button" variant="destructive" onClick={confirm}>
                 {dialog.confirmLabel ?? "刪除"}
               </Button>
@@ -286,7 +342,7 @@ export function PcbDialogs({
               </div>
             )}
             <DialogFooter className="mt-4">
-              <Button type="button" variant="outline" onClick={onClose}>取消</Button>
+              <Button type="button" variant="outline" onClick={cancel}>取消</Button>
               <Button type="button" disabled={dialog.validCount === 0} onClick={confirm}>
                 匯入專案
               </Button>
@@ -330,7 +386,7 @@ export function PcbDialogs({
               </div>
             )}
             <DialogFooter className="mt-4">
-              <Button type="button" variant="outline" onClick={onClose}>取消</Button>
+              <Button type="button" variant="outline" onClick={cancel}>取消</Button>
               <Button type="button" disabled={dialog.validCount === 0} onClick={confirm}>
                 匯入元件庫
               </Button>
@@ -413,7 +469,7 @@ export function PcbDialogs({
               <span>更新 {new Date(dialog.project.updatedAt).toLocaleString("zh-TW")}</span>
             </div>
             <DialogFooter className="mt-5">
-              <Button type="button" variant="outline" onClick={onClose}>關閉</Button>
+              <Button type="button" variant="outline" onClick={cancel}>關閉</Button>
               <Button
                 type="button"
                 onClick={() => {
@@ -487,8 +543,8 @@ export function PcbDialogs({
                     />
                   </label>
                   <div data-pcb-field-tone="dimensions" className="grid grid-cols-2 gap-3">
-                    <NumberField label="寬度 (mm)" value={values.width} onChange={(value) => update("width", value)} />
-                    <NumberField label="高度 (mm)" value={values.height} onChange={(value) => update("height", value)} />
+                    <NumberField label="寬度 (mm)" preserveRaw={dialog.kind === "project-settings"} value={values.width} onChange={(value) => update("width", value)} />
+                    <NumberField label="高度 (mm)" preserveRaw={dialog.kind === "project-settings"} value={values.height} onChange={(value) => update("height", value)} />
                   </div>
                   {dialog.kind === "project-settings" && (
                     <label data-pcb-field-tone={values.status || "draft"} className="block text-xs text-slate-300">
@@ -618,10 +674,11 @@ export function PcbDialogs({
               )}
             </div>
 
+            {conflict && <p className="mt-3 text-sm text-amber-200" role="alert">{conflict}</p>}
             {error && <p className="mt-3 text-sm text-rose-300" role="alert">{error}</p>}
             <DialogFooter data-pcb-project-footer className="mt-5">
-              <Button type="button" variant="outline" onClick={onClose}>取消</Button>
-              <Button type="submit">{dialog.kind === "component" ? "儲存元件" : "儲存"}</Button>
+              <Button type="button" variant="outline" onClick={cancel}>取消</Button>
+              <Button type="submit" disabled={dialog.kind === "project-settings" && (applying || Boolean(conflict))}>{dialog.kind === "component" ? "儲存元件" : "儲存"}</Button>
             </DialogFooter>
           </form>
         )}
@@ -653,11 +710,13 @@ function TextField({
 
 function NumberField({
   axis,
+  preserveRaw = false,
   label,
   value,
   onChange,
 }: {
   axis?: "X" | "Y" | "Z";
+  preserveRaw?: boolean;
   label: string;
   value?: string;
   onChange: (value: string) => void;
@@ -666,9 +725,10 @@ function NumberField({
     <label data-dimension-axis={axis} className="block text-xs text-slate-300">
       {label}
       <Input
-        type="number"
-        min="0.1"
-        step="0.1"
+        type={preserveRaw ? "text" : "number"}
+        inputMode={preserveRaw ? "decimal" : undefined}
+        min={preserveRaw ? undefined : "0.1"}
+        step={preserveRaw ? undefined : "0.1"}
         value={value ?? ""}
         onChange={(event) => onChange(event.target.value)}
         className="mt-1 h-9 border-[#356985] bg-[#10263a] font-mono"

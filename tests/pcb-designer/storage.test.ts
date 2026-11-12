@@ -365,3 +365,64 @@ test("refreshes stale built-in templates while preserving custom catalog records
     BUILT_IN_COMPONENTS.length,
   );
 });
+
+test("memory-only recovery has one document warning across owners, clients and repository remounts", () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const listeners = new Set<(event: { preventDefault(): void; returnValue: string }) => void>();
+  let added = 0; let removed = 0; let fail = true;
+  const windowStub = {
+    addEventListener(type: string, listener: (event: { preventDefault(): void; returnValue: string }) => void) { assert.equal(type, "beforeunload"); added++; listeners.add(listener); },
+    removeEventListener(type: string, listener: (event: { preventDefault(): void; returnValue: string }) => void) { assert.equal(type, "beforeunload"); removed++; listeners.delete(listener); },
+  };
+  Object.defineProperty(globalThis, "window", { configurable: true, value: windowStub });
+  const storage = { getItem: () => null, setItem: () => { if (fail) throw new Error("Synthetic quota"); } };
+  const repository = new PcbLocalRepository(storage);
+  const state = repository.load("owner-a");
+  const owners = [["owner-a", "client-a"], ["owner-a", "client-b"], ["owner-b", "client-a"]] as const;
+  try {
+    for (const [owner, client] of owners) assert.equal(repository.saveRecovery(owner, state, "old-revision", client), false);
+    for (let mount = 0; mount < 3; mount++) {
+      const remounted = new PcbLocalRepository(storage);
+      assert.deepEqual(remounted.loadRecovery("owner-a", "client-a")?.state, state);
+      assert.equal(remounted.saveRecovery("owner-a", state, "old-revision", "client-a"), false);
+    }
+    assert.equal(added, 1);
+    assert.equal(listeners.size, 1);
+    let prevented = false;
+    const event = { preventDefault: () => { prevented = true; }, returnValue: "unmodified" };
+    listeners.forEach(listener => listener(event));
+    assert.equal(prevented, true);
+    assert.equal(event.returnValue, ""); // No owner or draft contents in the generic warning.
+    assert.equal(repository.loadRecovery("owner-b", "client-b"), null);
+    repository.clearRecovery("owner-b", "client-b");
+    assert.equal(listeners.size, 1); // A different namespace cannot remove the warning.
+    repository.clearRecovery("owner-a", "client-a");
+    repository.clearRecovery("owner-b", "client-a");
+    assert.equal(listeners.size, 1);
+    fail = false;
+    assert.equal(repository.saveRecovery("owner-a", state, "old-revision", "client-b"), true);
+    assert.equal(listeners.size, 0); // Successful durable recovery removes the final token.
+    assert.equal(removed, 1);
+  } finally {
+    for (const [owner, client] of owners) repository.clearRecovery(owner, client);
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow); else Reflect.deleteProperty(globalThis, "window");
+  }
+});
+
+test("durable recovery and clean memory checkpoints do not install a document warning", () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  let added = 0;
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { addEventListener: () => { added++; }, removeEventListener: () => undefined } });
+  let fail = false;
+  const storage = { getItem: () => null, setItem: () => { if (fail) throw new Error("Synthetic quota"); } };
+  const repository = new PcbLocalRepository(storage); const state = repository.load("owner-a");
+  try {
+    assert.equal(repository.saveRecovery("owner-a", state, "old-revision", "client-a"), true);
+    fail = true;
+    assert.equal(repository.saveRecovery("owner-a", state, state.updatedAt, "client-a"), false);
+    assert.equal(added, 0);
+  } finally {
+    repository.clearRecovery("owner-a", "client-a");
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow); else Reflect.deleteProperty(globalThis, "window");
+  }
+});

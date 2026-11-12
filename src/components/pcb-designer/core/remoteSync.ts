@@ -37,11 +37,16 @@ type RemoteTable = {
   };
 };
 
+export type PcbRemoteLoadResult =
+  | { source: "modern"; state: PcbSaveState | null }
+  | { source: "legacy"; state: PcbSaveState; ownSnapshotPresent: boolean };
+
 export interface PcbRemoteClient {
   getAccessSnapshot?: () => PcbRemoteAccessSnapshot;
   subscribeAccess?: (listener: () => void) => () => void;
   retryAccess?: () => void;
   load?: () => Promise<PcbSaveState | null>;
+  loadWithMetadata?: () => Promise<PcbRemoteLoadResult>;
   save?: (state: PcbSaveState) => Promise<boolean>;
   acquireProjectLock?: (input: PcbProjectLockRequest) => Promise<PcbProjectLockResult>;
   loadProjectLock?: (projectId: string) => Promise<PcbProjectLockResult>;
@@ -186,6 +191,10 @@ export async function loadPcbRemote(client: PcbRemoteClient): Promise<PcbSaveSta
   if (!client.load) throw new Error("PCB remote loader is unavailable");
   // Only a successful empty response is null. Denials and outages are not empty workspaces.
   return client.load();
+}
+
+export async function loadPcbRemoteResult(client: PcbRemoteClient): Promise<PcbRemoteLoadResult> {
+  return client.loadWithMetadata ? client.loadWithMetadata() : { source: "modern", state: await loadPcbRemote(client) };
 }
 
 type Sync = (state: PcbSaveState) => Promise<boolean>;

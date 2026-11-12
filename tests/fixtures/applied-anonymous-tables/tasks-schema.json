@@ -1,0 +1,178 @@
+{
+  "table": {
+    "acl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+    "rls": true,
+    "kind": "r",
+    "owner": "postgres",
+    "force_rls": false
+  },
+  "columns": [
+    {
+      "acl": null,
+      "name": "id",
+      "type": "uuid",
+      "default": "gen_random_uuid()",
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "title",
+      "type": "text",
+      "default": null,
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "description",
+      "type": "text",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "assignee",
+      "type": "text",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "column_id",
+      "type": "uuid",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "tags",
+      "type": "text[]",
+      "default": "'{}'::text[]",
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "result_url",
+      "type": "text",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "custom_fields",
+      "type": "jsonb",
+      "default": "'{}'::jsonb",
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "image_urls",
+      "type": "text[]",
+      "default": "'{}'::text[]",
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "attachment_urls",
+      "type": "text[]",
+      "default": "'{}'::text[]",
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "attachment_names",
+      "type": "text[]",
+      "default": "'{}'::text[]",
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "position",
+      "type": "integer",
+      "default": "0",
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "due_date",
+      "type": "timestamp with time zone",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "milestone",
+      "type": "text",
+      "default": null,
+      "not_null": false
+    },
+    {
+      "acl": null,
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "default": "now()",
+      "not_null": true
+    },
+    {
+      "acl": null,
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "default": "now()",
+      "not_null": true
+    }
+  ],
+  "policies": [
+    {
+      "cmd": "ALL",
+      "qual": "true",
+      "roles": [
+        "public"
+      ],
+      "tablename": "tasks",
+      "permissive": "PERMISSIVE",
+      "policyname": "Allow anonymous access to tasks",
+      "schemaname": "workspace",
+      "with_check": null
+    }
+  ],
+  "triggers": null,
+  "constraints": [
+    {
+      "name": "tasks_column_id_fkey",
+      "table": "workspace.tasks",
+      "definition": "FOREIGN KEY (column_id) REFERENCES workspace.columns(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "tasks_pkey",
+      "table": "workspace.tasks",
+      "definition": "PRIMARY KEY (id)"
+    }
+  ],
+  "publications": [
+    {
+      "pubname": "supabase_realtime",
+      "attnames": [
+        "id",
+        "title",
+        "description",
+        "assignee",
+        "column_id",
+        "tags",
+        "result_url",
+        "custom_fields",
+        "image_urls",
+        "attachment_urls",
+        "attachment_names",
+        "position",
+        "due_date",
+        "milestone",
+        "created_at",
+        "updated_at"
+      ],
+      "rowfilter": null,
+      "tablename": "tasks",
+      "schemaname": "workspace"
+    }
+  ],
+  "dependent_views": null,
+  "function_mentions": null
+}

@@ -1,5 +1,6 @@
+import { useMaintenanceComposer } from './useMaintenanceComposer';
 import { PrivateAttachmentHtml } from "@/components/attachments/PrivateAttachmentHtml";
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import DOMPurify from 'dompurify';
 import { ArrowLeft, Check, CheckCircle2, ChevronDown, Pencil, Pin, Send, UserRound, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { FAULT_STATUSES, assetLabel, faultStatusLabel, getFaultStatus, ownerNames, type Fault, type FaultMessage, type FaultWorkspaceData } from './maintenanceModel';
-import { AttachmentGallery, FilePicker, useFaultFiles } from './MaintenanceAttachments';
+import { AttachmentGallery, FilePicker, useComposerFilePreviews } from './MaintenanceAttachments';
 import { MaintenanceLoading, MaintenanceSpinner, showMaintenanceSuccess } from './MaintenanceFeedback';
 import { maintenanceError, updateFault, useFaultThread, useMaintenanceViewport } from './useMaintenanceData';
 
@@ -22,7 +23,7 @@ function eventText(message: FaultMessage) {
 }
 const timestamp = (value: string) => new Date(value).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 
-export function MaintenanceDetail({ issue, data, canEdit, onBack, refresh, assignmentRequest, onAssignmentHandled }: { issue: Fault; data: FaultWorkspaceData; canEdit: boolean; onBack: () => void; refresh: () => Promise<void>; assignmentRequest?: { issueId: string }; onAssignmentHandled?: () => void }) {
+export function MaintenanceDetail({ actorId, projectId, issue, data, canEdit, onBack, refresh, assignmentRequest, onAssignmentHandled }: { actorId?: string; projectId: string; issue: Fault; data: FaultWorkspaceData; canEdit: boolean; onBack: () => void; refresh: () => Promise<void>; assignmentRequest?: { issueId: string }; onAssignmentHandled?: () => void }) {
   const { thread, loading, error: threadError, refresh: refreshThread } = useFaultThread(issue);
   const [modal, setModal] = useState<'assign' | 'resolve' | 'edit'>('edit');
   const [modalOpen, setModalOpen] = useState(false);
@@ -30,16 +31,18 @@ export function MaintenanceDetail({ issue, data, canEdit, onBack, refresh, assig
   const [owners, setOwners] = useState<string[]>([]), [peopleQuery, setPeopleQuery] = useState('');
   const [category, setCategory] = useState(issue.category || '');
   const [title, setTitle] = useState(issue.title), [asset, setAsset] = useState(assetLabel(issue));
-  const [text, setText] = useState(''), [savedNote, setSavedNote] = useState(false);
-  const messageId = useRef(crypto.randomUUID());
+  const composer = useMaintenanceComposer(actorId, projectId, issue.id, canEdit);
+  const { text, savedNote } = composer.draft;
+  const setText = composer.setText;
   const [pending, setPending] = useState<'note' | 'update' | 'refresh' | null>(null), [error, setError] = useState('');
-  const busy = pending !== null;
+  const busy = pending !== null || ['sending', 'checking'].includes(composer.draft.phase);
+  const composerDisabled = busy || composer.blocked;
   const [version, setVersion] = useState(issue.updated_at);
-  const files = useFaultFiles(), status = getFaultStatus(issue);
+  const files = useComposerFilePreviews(composer.draft.files, composer.setFiles), status = getFaultStatus(issue);
   const viewport = useMaintenanceViewport();
   useEffect(() => {
     const dirty = !!text.trim() || files.files.length > 0;
-    const guard = (event: Event) => { if (busy || (dirty && !window.confirm('尚有未送出的紀錄或附件，確定離開並放棄？'))) event.preventDefault(); };
+    const guard = (event: Event) => { if (busy || (dirty && !window.confirm('尚有未送出的紀錄或附件，離開後僅保留於本頁記憶體，重新整理或登出將遺失。確定離開？'))) event.preventDefault(); };
     const unload = (event: BeforeUnloadEvent) => { if (dirty || busy) { event.preventDefault(); event.returnValue = ''; } };
     window.addEventListener('workspace-before-navigate', guard); window.addEventListener('beforeunload', unload);
     return () => { window.removeEventListener('workspace-before-navigate', guard); window.removeEventListener('beforeunload', unload); };
@@ -54,18 +57,14 @@ export function MaintenanceDetail({ issue, data, canEdit, onBack, refresh, assig
   };
   const send = async (event: React.FormEvent) => {
     event.preventDefault(); if (busy || (!text.trim() && !files.files.length)) return;
-    setPending('note'); setError('');
+    setError('');
     try {
-      if (!savedNote) {
-        const result = await supabase.rpc('maintenance_add_note', { p_issue_id: issue.id, p_message_id: messageId.current, p_body: text });
-        if (result.error) throw result.error;
-        setSavedNote(true);
+      if (await composer.send()) {
+        if (composer.isCurrent()) showMaintenanceSuccess('處理紀錄已送出');
       }
-      await files.upload(issue.id, messageId.current);
-      setText(''); setSavedNote(false); messageId.current = crypto.randomUUID();
-      showMaintenanceSuccess('處理紀錄已送出');
-    } catch (cause) { setError(maintenanceError(cause)); }
-    finally { setPending(null); await refresh(); await refreshThread(); }
+    } finally {
+      if (composer.isCurrent()) { await refresh(); await refreshThread(); }
+    }
   };
   const openModal = (type: typeof modal) => { setModal(type); setModalOpen(true); setVersion(issue.updated_at); setError(''); };
   const openAssign = () => { setOwners((issue.assignee_user_ids || []).filter(id => data.people.some(person => person.id === id))); setPeopleQuery(''); openModal('assign'); };
@@ -91,8 +90,8 @@ export function MaintenanceDetail({ issue, data, canEdit, onBack, refresh, assig
       {!loading && !threadError && !thread.messages.length && <p className="mf-hint mf-timeline-empty">從這裡補上處理進度，接手的人就能直接查看。</p>}
       <ol className="mf-timeline" data-ready={!loading && !threadError}>{thread.messages.map(message => <li key={message.id} className={message.kind === 'note' ? 'mf-note' : 'mf-event'}><div className="mf-message-meta"><strong>{message.actor_name}</strong><time dateTime={message.created_at}>{timestamp(message.created_at)}</time>{message.kind === 'note' && canEdit && <button type="button" title="設為交接重點" aria-label={`置頂 ${message.body || '附件'}`} disabled={busy} onClick={() => void mutate({ handover_message_id: message.id }, '交接重點已置頂')}><Pin size={14}/></button>}</div>{message.kind === 'note' ? <><p>{message.body}</p><AttachmentGallery attachments={thread.attachments.filter(file => file.maintenance_message_id === message.id)}/></> : <p>{eventText(message)}</p>}</li>)}</ol>
     </div>
-    {canEdit ? <form className="mf-composer" onSubmit={send} onPaste={event => { if (!busy && event.clipboardData.files.length) { event.preventDefault(); files.add(event.clipboardData.files); } }}>
-      {error && !modalOpen && <p role="alert" className="mf-error">{error}</p>}<label htmlFor="mf-new-note" className="mf-composer-label">新增處理紀錄</label><Textarea id="mf-new-note" value={text} disabled={busy || savedNote} maxLength={20000} rows={2} placeholder="做了什麼、發現什麼、下一步…" onChange={event => setText(event.target.value)}/><div className="mf-composer-tools"><FilePicker state={files} disabled={busy}/><Button className="mf-submit" type="submit" disabled={busy || (!text.trim() && !files.files.length)} aria-busy={pending === 'note' || undefined}>{pending === 'note' ? <MaintenanceSpinner /> : <Send size={16}/>} {pending === 'note' ? '送出中…' : savedNote ? '重試附件' : '送出'}</Button></div>
+    {canEdit ? <form className="mf-composer" onSubmit={send} onPaste={event => { if (!composerDisabled && !composer.draft.attemptLocked && event.clipboardData.files.length) { event.preventDefault(); files.add(event.clipboardData.files); } }}>
+      {(error || composer.draft.error) && !modalOpen && <p role="alert" className="mf-error">{error || composer.draft.error}</p>}{composer.draft.phase === 'uncertain' && <Button type="button" variant="outline" onClick={() => void composer.reconcile()}>核對送出結果</Button>}{composer.draft.phase === 'checking' && <p role="status">核對送出結果中…</p>}{composer.draft.attemptLocked && composer.draft.phase === 'idle' && <p className="mf-hint">原送出文字與附件保持不變，可手動重試確認；不會自動送出。</p>}<label htmlFor="mf-new-note" className="mf-composer-label">新增處理紀錄</label><Textarea id="mf-new-note" value={text} disabled={composerDisabled || savedNote || composer.draft.attemptLocked} maxLength={20000} rows={2} placeholder="做了什麼、發現什麼、下一步…" onChange={event => setText(event.target.value)}/><div className="mf-composer-tools"><FilePicker state={files} disabled={composerDisabled || composer.draft.attemptLocked}/><Button className="mf-submit" type="submit" disabled={composerDisabled || (!text.trim() && !files.files.length)} aria-busy={composer.draft.phase === 'sending' || undefined}>{composer.draft.phase === 'sending' ? <MaintenanceSpinner /> : <Send size={16}/>} {composer.draft.phase === 'sending' ? '送出中…' : savedNote ? '重試附件' : '送出'}</Button></div>
     </form> : <p className="mf-readonly">{status === 'resolved' ? '已解決 · ' : ''}目前為唯讀，原始紀錄與附件可繼續查閱。</p>}
     <Dialog open={modalOpen} onOpenChange={open => { if (!open && !busy) setModalOpen(false); }}><DialogContent className="mf-action-dialog" data-keyboard={viewport.bottom > 100} style={{ '--mf-keyboard-gap': `${viewport.bottom}px`, '--mf-visible-height': `${viewport.height}px` } as React.CSSProperties}><DialogTitle>{modal === 'assign' ? '指派負責人' : modal === 'resolve' ? '解決這筆故障' : '編輯故障資料'}</DialogTitle><DialogDescription>{modal === 'assign' ? '可共同處理；直接使用有維修編輯權限的平台帳號。' : modal === 'resolve' ? '請用目前專案的分類整理原因，方便之後查找反覆發生的故障。' : '只更新這筆故障的機台與問題名稱，原始描述仍會保留。'}</DialogDescription>
       <form onSubmit={event => { event.preventDefault(); if (modal === 'assign') void mutate({ assignee_user_ids: owners }, '負責人已更新', version); else if (modal === 'resolve') void mutate({ maintenance_status: 'resolved', category }, '故障已解決', version); else { const system = data.systems.find(item => (item.serial_number?.trim() || item.system_name) === asset.trim()); void mutate({ title, asset_identifier: asset, system_id: system?.id || null }, '故障資料已更新', version); } }}>

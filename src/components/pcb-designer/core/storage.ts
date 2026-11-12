@@ -10,6 +10,51 @@ export interface StorageLike {
   setItem(key: string, value: string): void;
 }
 
+const unavailableStorage: StorageLike = { getItem: () => null, setItem: () => { throw new Error("PCB browser storage unavailable"); } };
+export function getPcbBrowserStorage(): StorageLike {
+  try { return typeof window === "undefined" ? unavailableStorage : window.localStorage; }
+  catch { return unavailableStorage; }
+}
+
+export function pcbOwnerStorageKey(ownerId: string): string {
+  return `${PCB_STORAGE_KEY}:owner:${encodeURIComponent(ownerId)}`;
+}
+
+type RecoveryCheckpoint = { state: PcbSaveState; savedRevision: string };
+// Memory belongs only to this document/storage object. It is not durable across reloads.
+const recoveryCheckpoints = new WeakMap<StorageLike, Map<string, RecoveryCheckpoint | null>>();
+// One document-level warning survives permission-guard unmounts. Tokens contain no
+// owner or draft data. A browser may ignore the warning, and a reload/crash still
+// destroys memory-only recovery; this is not a claim of durable persistence.
+const recoveryWarningTokens = new WeakMap<StorageLike, Map<string, object>>();
+const memoryOnlyRecovery = new Set<object>();
+let recoveryWarningWindow: Window | null = null;
+const warnForMemoryOnlyRecovery = (event: BeforeUnloadEvent) => {
+  event.preventDefault();
+  event.returnValue = "";
+};
+function setMemoryOnlyRecovery(storage: StorageLike, key: string, memoryOnly: boolean): void {
+  let tokens = recoveryWarningTokens.get(storage);
+  if (!tokens) { tokens = new Map(); recoveryWarningTokens.set(storage, tokens); }
+  const token = tokens.get(key);
+  if (memoryOnly && !token) {
+    const next = {};
+    tokens.set(key, next);
+    memoryOnlyRecovery.add(next);
+  } else if (!memoryOnly && token) {
+    tokens.delete(key);
+    memoryOnlyRecovery.delete(token);
+  }
+  if (memoryOnlyRecovery.size > 0 && !recoveryWarningWindow && typeof window !== "undefined") {
+    recoveryWarningWindow = window;
+    recoveryWarningWindow.addEventListener("beforeunload", warnForMemoryOnlyRecovery);
+  } else if (memoryOnlyRecovery.size === 0 && recoveryWarningWindow) {
+    recoveryWarningWindow.removeEventListener("beforeunload", warnForMemoryOnlyRecovery);
+    recoveryWarningWindow = null;
+  }
+}
+
+
 interface PersistedPayload {
   version: typeof PAYLOAD_VERSION;
   state: PcbSaveState;
@@ -166,7 +211,16 @@ export class PcbLocalRepository {
     this.storage = storage;
   }
 
-  loadRecovery(ownerId: string, clientId?: string): { state: PcbSaveState; savedRevision: string } | null {
+  private checkpoints(): Map<string, RecoveryCheckpoint | null> {
+    let checkpoints = recoveryCheckpoints.get(this.storage);
+    if (!checkpoints) { checkpoints = new Map(); recoveryCheckpoints.set(this.storage, checkpoints); }
+    return checkpoints;
+  }
+
+  loadRecovery(ownerId: string, clientId?: string): RecoveryCheckpoint | null {
+    const checkpointKey = JSON.stringify([ownerId, clientId ?? null]);
+    const checkpoints = this.checkpoints();
+    if (checkpoints.has(checkpointKey)) return clone(checkpoints.get(checkpointKey)!);
     try {
       const raw = this.storage.getItem(`${PCB_STORAGE_KEY}:draft:${ownerId}${clientId ? `:${clientId}` : ""}`);
       const draft = raw ? JSON.parse(raw) : null;
@@ -178,22 +232,32 @@ export class PcbLocalRepository {
   }
 
   saveRecovery(ownerId: string, state: PcbSaveState, savedRevision: string, clientId?: string): boolean {
+    const checkpointKey = JSON.stringify([ownerId, clientId ?? null]);
+    this.checkpoints().set(checkpointKey, { state: clone(state), savedRevision });
     try {
       this.storage.setItem(`${PCB_STORAGE_KEY}:draft:${ownerId}${clientId ? `:${clientId}` : ""}`, JSON.stringify({
         version: PAYLOAD_VERSION, state, savedRevision,
       }));
+      setMemoryOnlyRecovery(this.storage, checkpointKey, false);
       return true;
-    } catch { return false; }
+    } catch {
+      setMemoryOnlyRecovery(this.storage, checkpointKey, state.updatedAt !== savedRevision);
+      return false;
+    }
   }
 
   clearRecovery(ownerId: string, clientId?: string): void {
+    // A failed disk clear must not resurrect a stale saved draft on SPA remount.
+    const checkpointKey = JSON.stringify([ownerId, clientId ?? null]);
+    this.checkpoints().set(checkpointKey, null);
+    setMemoryOnlyRecovery(this.storage, checkpointKey, false);
     try { this.storage.setItem(`${PCB_STORAGE_KEY}:draft:${ownerId}${clientId ? `:${clientId}` : ""}`, ""); } catch { /* Retain in-memory state. */ }
   }
 
-  load(): PcbSaveState {
+  load(ownerId?: string): PcbSaveState {
     try {
-      const raw = this.storage.getItem(PCB_STORAGE_KEY);
-      if (!raw) return this.seed();
+      const raw = this.storage.getItem(ownerId === undefined ? PCB_STORAGE_KEY : pcbOwnerStorageKey(ownerId));
+      if (!raw) return this.seed(ownerId);
       const payload = JSON.parse(raw) as Partial<PersistedPayload>;
       if (payload.version === PAYLOAD_VERSION && isPcbSaveState(payload.state)) {
         return normalizePcbSaveState(refreshBuiltInCatalog({
@@ -207,13 +271,13 @@ export class PcbLocalRepository {
     } catch {
       // A broken browser draft must never prevent the editor from rendering.
     }
-    return this.seed();
+    return this.seed(ownerId);
   }
 
-  save(state: PcbSaveState): PcbSaveState {
+  save(state: PcbSaveState, ownerId?: string): PcbSaveState {
     const next = normalizePcbSaveState({ ...clone(state), updatedAt: timestamp() });
     try {
-      this.storage.setItem(PCB_STORAGE_KEY, JSON.stringify({ version: PAYLOAD_VERSION, state: next }));
+      this.storage.setItem(ownerId === undefined ? PCB_STORAGE_KEY : pcbOwnerStorageKey(ownerId), JSON.stringify({ version: PAYLOAD_VERSION, state: next }));
     } catch {
       // localStorage can be unavailable (private browsing/quota); retain in-memory state.
     }
@@ -260,8 +324,8 @@ export class PcbLocalRepository {
     return { ...clone(state), activeProjectId, updatedAt: timestamp() };
   }
 
-  private seed(): PcbSaveState {
+  private seed(ownerId?: string): PcbSaveState {
     const state = createSeedState();
-    return this.save(state);
+    return this.save(state, ownerId);
   }
 }

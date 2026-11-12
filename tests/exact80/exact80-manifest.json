@@ -1,0 +1,1761 @@
+{
+  "schemaVersion": 2,
+  "researchOnly": true,
+  "publicationApproved": false,
+  "sourceCommit": "80f2c4c071c3c88a85d247b7c3d48b303ccdd57c",
+  "sourceTree": "e58643319c7b712c72613bc3fd637019bdc2737d",
+  "sourceArtifact": 13932556496,
+  "sourceRun": 43194005864,
+  "sourceArtifactSha256": "0ea50b92cad632805040cf4e4c8acba49097eed58a086cbcd41c5c466851bdd6",
+  "candidateCommit": "f6fadefcf503d9326af88757a2d2d42a8dd45ad1",
+  "candidateTree": "dfc3e60ca4f6709404a9bd91e7ae9b6447481699",
+  "candidateEntryPaths": {
+    "ENTRY": "assets/index-CtJT2AN9.js",
+    "AUTH": "assets/AuthenticatedApplication-BKKneqAm.js",
+    "INDEX": "assets/Index-BWax5dXN.js",
+    "MAINT": "assets/MaintenanceWorkspace-C7sf1jX7.js",
+    "DASH": "assets/MaintenanceDashboard-DrYcoyRM.js",
+    "PCB": "assets/PcbDesignerWorkspace-D7RXOalY.js"
+  },
+  "candidateFiles": {
+    "assets/7zz-CgkXYLdN.wasm": "e16c6997e2eaa89575c0dd1f305074be629c3f4d87246244d37fd19debc8a285",
+    "assets/AdminPanel-DbkCZmkf.js": "8f88c729e0c9bb1e88859e25687f53550d457ce009ec5c42ad6ab7fa3bb08d94",
+    "assets/AdminPanel-js1HChkk.css": "4bac234f0b559f37e5c8445abe4785828824339754104437ada93c1c2f8f9de3",
+    "assets/Adobe-CNS1-UCS2-fO900upv.bcmap": "e665837f2197c6bd08cd8955ad4d6932cee2398e2e328b25b00e6bfb3bd72af9",
+    "assets/Adobe-GB1-UCS2-BA083yIo.bcmap": "20507620260c0c935c35afc1e70e5888aa7125d5ec7ffc03cef1959feb2c1641",
+    "assets/Adobe-Japan1-UCS2-BL-4M2vS.bcmap": "66c5d0dc4964f4093e77b194023f3a0f689324028ec8330e1e1d0570bcba7c2f",
+    "assets/Adobe-Korea1-UCS2-BEQZuOdo.bcmap": "857b723088be97255053562bfa41bd1075a7f7910d3bab59a0645c8bbc7060ff",
+    "assets/ApiChatWorkspacePage-C8QR4cDH.js": "dec4cb702349dc3cc46b5b3577d4996683d449c168f356e9acb28c20c5e1173f",
+    "assets/ApiManagementPage-By7sJsTj.js": "42bf5366a82982898d25659164d082a9e898edf78da24e7f8e60bca470e4232f",
+    "assets/AuthenticatedApplication-BKKneqAm.js": "fe891cf26a731b0d00c83d50b1b71ace6e2e2c6ce7a4844c2261b1f267a098a2",
+    "assets/CircuitChangesWorkspace-B_Rox5r7.css": "e8edfea137d29f0119d6a79d6622c59623655a4ca13c31e07fe58b5357e58022",
+    "assets/CircuitChangesWorkspace-DgQf9776.js": "cf1d03adf3c6fa529983ad776d156598532810f09931edbe6e172432d92748bf",
+    "assets/ComparisonDiagramWorkspace-BBUdRT8N.js": "f6d956abc8626e2b0a6f592252a5040ca530cb92458d2aecdb218610f57fcdcb",
+    "assets/ComparisonDiagramWorkspace-C4-hHs_4.css": "b48b477d51553690085f733bad4ec9cd0ba398bfb02a14639dfd3d3ae67ddafb",
+    "assets/ComparisonWorkspace-D2g-5V-4.css": "62540be7d6422c08a01567e1d13d6c3a537794cf140d1e455f6736b646ea85ac",
+    "assets/ComparisonWorkspace-KM4VkVWb.js": "a6250fc2b2a12fd4b8261d34e614805d4fd0bc46fb6f2bb9f81c20a6bdd541c9",
+    "assets/DeploymentPlanningCenter-BNlbhkth.css": "821ecbcfa58e7da0c7d723558773d4f5348e05c8cdbfc81c6be6d57bec7056e0",
+    "assets/DeploymentPlanningCenter-ofYzbCWl.js": "b31126dab22ac6728672b21017b583a6e8bdcd560068edd59201940ccd006e3d",
+    "assets/ETHK-B5-H-1MLb5v9x.bcmap": "d2f10fa519336bc4efcc7b6deb9604b75429946b40d82e311cb3a97a1994c89a",
+    "assets/FoxitDingbats-BaQLufoW.pfb": "845c752392b6c914fb989c75a08b7792b88f542d2499042ef2889f8c814a16ed",
+    "assets/FoxitFixed-Dyd5Nipw.pfb": "b6c8fe53f134b8b6d4578cd2d544df4cee9624c4efa8d51a560fb40ea296101b",
+    "assets/FoxitFixedBold-D5TuYRwj.pfb": "f1b7159702973f54fc86254ea38bcf3712b2a736eb3a0995751e9f4bb45ad603",
+    "assets/FoxitFixedBoldItalic-BqlXQ_Yv.pfb": "8a000945843bd31add06aee63bf9fd41b7578b4f3242a4b7cd46349ad9d24d4d",
+    "assets/FoxitFixedItalic-DqjQkmbS.pfb": "5007faf8320fa1fcc08b8894b356ad976f60b992ba29ee5272578bbdebaf3876",
+    "assets/FoxitSerif-qbgiDIe-.pfb": "4f57d2b9d884af8f907bf22df6019b52d86cbf6214fdbd02b1ae05472a543f35",
+    "assets/FoxitSerifBold-DZZ4CclT.pfb": "0bdf4b04e964139818d51eda03d566ba999fc3ba2421b1c6c51f9dc969022e80",
+    "assets/FoxitSerifBoldItalic-DSQtwd_X.pfb": "a406cac82583bf98175cb62c87ed5e95c45fbb34eece63a10b0a13e793cb2e10",
+    "assets/FoxitSerifItalic-CQs5lx9Y.pfb": "610ae0687198045c4db5d1a6650fd5e92536631706382eb8b72e38df578d0ae9",
+    "assets/FoxitSymbol-BVtbc20u.pfb": "47967d055530e7357088a08403115425643ec2cdfd6201ba8af0fbd7116c1539",
+    "assets/GBK-EUC-H-CAORqCkf.bcmap": "2103fed28650ede096a2281104a1a8a4304dae0db414342c636867522307123b",
+    "assets/GBK2K-H-Cv55KPk8.bcmap": "3d919ae72af16c5cc6846ec87a4326a9f125e493c59d3628429d35c2c95fe8c4",
+    "assets/GBKp-EUC-H-CElrnV5g.bcmap": "d15ebd8e81fb4fe8a244f1b1e877922e03500ac69eddf5001093e502430451d2",
+    "assets/GBT-EUC-H-BTsQIL1M.bcmap": "dc5f44e48a39f3367ae28665027d8ab1d8cedb5a9dcc5068a900acd6709f60f9",
+    "assets/GBT-H-DL9h-WkS.bcmap": "8afda745a505763f3ff54c8126eeb48ef376ea9ed07d9f42ff9a22c5c547ec57",
+    "assets/GBTpc-EUC-H-DnIh5WJ3.bcmap": "7b23e2f7bfdb6c918f567b7324bf858f398bd8cd5f268d74ece19a3c91bf4f32",
+    "assets/HKscs-B5-H-CXbBbq6g.bcmap": "08599378f41d96b40537adef6e6edcc4a787bc63f5accf47c026df4905a13914",
+    "assets/Index-BWax5dXN.js": "0a3bd55062db4c9a9ecb8cffab2592dd917c7f2a9b0ff3178f564da8cba4c357",
+    "assets/Index-DoXjHN8V.css": "3f2f52d5277f9066d7d18af31cd577a401ab88183a923af36ea1097a4aff1d8f",
+    "assets/KSC-Johab-H-CGtV3MPT.bcmap": "939993d213f68db763bf156217c217ae23af082b91a0eacecf3d11eb4ff8ef8c",
+    "assets/LiberationSans-Bold-BPt4bU5Z.ttf": "361c61b82d575c5c35fd9157fda8b0194bcfcd0d88ea8521a4fb5dd53d33dddc",
+    "assets/LiberationSans-BoldItalic-Bj53-jFw.ttf": "a224075ac17495ad0a3af3bc0a419ac0704a8b3fd1095456201fb9b095fc281d",
+    "assets/LiberationSans-Italic-5QhGB3P9.ttf": "832b4406dbef23628800d3aaad21048534ac84d7e3ad955be83b8172ed8ef512",
+    "assets/LiberationSans-Regular-cbskN6YR.ttf": "f8ace1f892b2bd9dc1792ba7f097fa7588f84fed48321480e04de5390828221f",
+    "assets/MaintenanceDashboard-DrYcoyRM.js": "9bb67e9186691b843bb0497a4447ed3cb28fd732c7b0846711241a2f329ec03d",
+    "assets/MaintenanceHistory-CsppKldF.js": "eb7457bd6936da529abebd5da982903d7d77c4b2125204ee16e9fe98ad607e08",
+    "assets/MaintenancePageHeader-XTkjqAf5.js": "5532ed95e4b0e5d54226a59847262623c6cd9a1d0b370556e12b8299421a730f",
+    "assets/MaintenanceWorkspace-C7sf1jX7.js": "3b940a32e77427a86a9b0c455865fbf7a34edca46b3c64b6c61f2cc44de02140",
+    "assets/MaintenanceWorkspace-DTU3wIiz.css": "8b98fb27812fa1a775f275106e01336a92d0b58fda795a3156e72b2cb37fbf6e",
+    "assets/MaterialRequestPage-BHh-Z04E.js": "99ee919f9ffc786c66d1352d07796a5ea93eba3db7e6a3f3ed3f0350a1ab6c3a",
+    "assets/MaterialRequestPage-vNhfsthF.css": "684704ece694199bf1119de4540efc4049b813000d7148cebf24b65d40086a43",
+    "assets/MaterialSpecFillDialog-D7VfBf-5.js": "9edb159d6dff4ab4d3605a3d9328b04af8a807e3fe3a20ece97fb2f9398b6214",
+    "assets/MobileCommandBar-BdQlWARO.js": "d6d1e60ffefad797e36a09c97fae680564af3f409a7cf56a04fe3145d853fea8",
+    "assets/MobileToolsSheet-DxBF_WNu.js": "aec59abadf9a3ad00ca5a4e293270e00a880ccfd7e38ab7ed744a8c85c328c8e",
+    "assets/NotFound-t0KtRWq8.js": "231c5c3427fdf3776168d06b9e85e435fd3da1ca2929815f9da6e4b5117a14ef",
+    "assets/NvBomComparePanel-CBd7rQVp.css": "449dd34d188d1f3dd9d0574c3cdaa94928903453d2e8052f8cd97b7a3ef70100",
+    "assets/NvBomComparePanel-CW0rASEt.js": "c5e2c92d9c76067db516155d79d38fb07c6e2481f830f63cf364869a6127ea7c",
+    "assets/OBJLoader-BYwjrmI8.js": "6a48ea5a6c278ea438f4b48a545843d5e9c955ee8f5ad12525b04282e0dbfbcb",
+    "assets/OrbitControls-BOu0DVxa.js": "a920ce16f29af34a18f05b63a171de6095913ee1939de167019205704676b0a4",
+    "assets/PLYLoader-DXGvvo-S.js": "5bcfe671c0a27c7e141830cb5e6c8a88ecf8836bac560491609a2a965368aeac",
+    "assets/Pcb3DCanvas-PkryeoTT.js": "67e9e908113322fd81cb4bd42950d6a36b88495f72ec23a562880c9d77c6341c",
+    "assets/PcbDesignerWorkspace-BMUU68U-.css": "7e2e2226336671026d829f075b9ad018e2e54a8f01f153fb47cf2a61007b53d6",
+    "assets/PcbDesignerWorkspace-D7RXOalY.js": "f0928b3cdfe87c936af1440e9335662d3c5d115f2dd33b3a3ce05774437c71f9",
+    "assets/PerformanceAppraisalPage-DqiNeAGf.js": "0817bbbdbe96380e6e1f8e050338f587961e039996a12d18d2633f01910f6a4e",
+    "assets/PerformanceAppraisalPage-JbwSH0sZ.css": "0f97d676d722f511857cb29e19ea3d3bcb07fb37160ddda74879d1709389eb67",
+    "assets/PrivateAttachmentHtml-WqTg4u6f.js": "f6246c59e70311e41f62babe50e65afe0f689f59f0f319bb2625cf3f2e194201",
+    "assets/ProductionMonitor-D-kitqJt.js": "2030fdc408d691ab68ec8fea668ea39b7e80a3ad585d6e4ed5938fa2ceaec69f",
+    "assets/STLLoader-_lWO7ko0.js": "8560cad18e96b2e2087a746fe2eabc03682bba42ff070df4f0b87502731192d0",
+    "assets/SystemManager-CwBZMYg5.js": "ba6fd774779a4bf257a27817d1459643bd564a264cd60681e5a87847e2063b6f",
+    "assets/TestPlanWorkspace-DtX-22NB.css": "78d1b8e1d42e52dd5147788f7b202b4e8dd266cb8ec66e5ac7ecbbe0ddda7912",
+    "assets/TestPlanWorkspace-gZPxCrkd.js": "6c280231e61cb1a122c56115b263edd43db75329dc790021f15ec80538c9f0d3",
+    "assets/TestTrackerPage-C9IzbSWH.js": "bde7ec90599aac9013d1f6d4e5bdefb3ffb322eb197a988b34dbd3f457d0a27b",
+    "assets/ToolsManagement-BGQV1Mvw.js": "f0a20729a311506cc04641e41b32247a35b6ca0860a6ee865d2cad2303a80ec6",
+    "assets/ToolsManagement-DtgdfqZ0.css": "0204ee797326e59561eb2dcc259c4b1b22236c7d31f1513cae4ab38cb650f75d",
+    "assets/UTIF-DF93DW07.js": "959fd91fc5dd7a50ec2830a99c1c5144ba27eba82dfc386ca7dd2e7ce007feda",
+    "assets/UniCNS-UCS2-H-DWzv8UhH.bcmap": "779428116752f34e2490a1941d24e4634c71e3c22d053b811d2090ae2fb3c704",
+    "assets/UniCNS-UTF16-H-Bw0JKgCq.bcmap": "32ff139b3c7b91d6ad25f994701f3ce7b242906022c418fd73e6493fc228bfe5",
+    "assets/UniCNS-UTF32-H-IE_GrH2i.bcmap": "bf26eb67fe19ee5ba915799e80ca72408400aa8342fdf6a244a4f44de8f97336",
+    "assets/UniCNS-UTF8-H-BbLcFh6Q.bcmap": "2f2a742bcd1a84a148a4a518b9eed51a8f9c6ca5ed3bc5e2e41fff97de5dc2d8",
+    "assets/UniGB-UCS2-H-D7xzRvZN.bcmap": "9201569b402e81ad8860650bd86350c4fa28e5dd5971f05fcacaf40f51de18ed",
+    "assets/UniGB-UTF16-H-DKjbEwc0.bcmap": "386fd39581245c034da016a92d23f3df1117d169f996100050b264fc09a84e35",
+    "assets/UniGB-UTF32-H-Behfouj5.bcmap": "f48a145dc4e3ed1dca1dde7111716a72306a2a4191ab05c6bae3a5c3a961cd2f",
+    "assets/UniGB-UTF8-H-EROft1ro.bcmap": "f217b439c80ee5fa1bc2cf6d1defcc319f8d84483d166a00ee199e05a68588df",
+    "assets/UniJIS-UCS2-H-2DbZ0MaQ.bcmap": "ad2352f40870880fbf7f8ee5abadff743fbd025fbf9830b8ada472d1c5e4da0b",
+    "assets/UniJIS-UTF16-H-BlDDPdCK.bcmap": "f6a89c5688978548c83fcee990e205bc63c74274d5c69b49032a3bd4c49a05ee",
+    "assets/UniJIS-UTF32-H-BIQPWkjv.bcmap": "96195950ce0fe24443d8eb426fa6b88534ec421d7bef9046f0b2362809cfba73",
+    "assets/UniJIS-UTF8-H-CGusholx.bcmap": "798fb0bf06ab0788d1f6a91c2db7de581612eef03c628f10e8f7ecd8f70ab448",
+    "assets/UniJIS2004-UTF16-H-KXixH-HI.bcmap": "710a32d7cb43fd6bd9dbf30da5971f8c941590f74441e208d852c2be0e74cc97",
+    "assets/UniJIS2004-UTF32-H-CXrD-9YE.bcmap": "8d2658e18741af7937d586a57c89729a6fec0d86121197c1f8518aa58b29cdfb",
+    "assets/UniJIS2004-UTF8-H-BkOctZjn.bcmap": "691c614ce432b3e62486efb54e5c84c6da5afe9b51b21253bde4758feb484183",
+    "assets/UniJISX0213-UTF32-H-BavAhZjb.bcmap": "692044e1fb33445668632bc9fe7386805c624864be1ddeb29d65bb0c99fc630c",
+    "assets/UniJISX02132004-UTF32-H-DAH-AgUq.bcmap": "f80ea5a989be30ccda5a8804baef6d3b4b044d2b339bf8b31c671b2466171cf6",
+    "assets/UniKS-UCS2-H-YeUc7k1L.bcmap": "a1081396ab4adb6f4a5b6c15f896963c244c1c9bcb65ce5616d06096a1b9811c",
+    "assets/UniKS-UTF16-H-B0dvB-Td.bcmap": "42d35b396286499dfae1737a07adb3a64500df37b426580bfb1d3ea872938519",
+    "assets/UniKS-UTF32-H-olR_LtmR.bcmap": "3a01ec51ed1b828101351e337ffb8250abe11880032e5210f881170fed2588de",
+    "assets/UniKS-UTF8-H-CbpebD-y.bcmap": "3fac9c65145f72d7d42157a3b9c5ed6904632184e6a0888f2b828699afd2002f",
+    "assets/__vite-browser-external-Ckx8KI8k.js": "f7848e5d5fec2aaf2928f1cab46b7db3636e8b9071841a04b7235a3bf50424cb",
+    "assets/__vite-browser-external-D7Ct-6yo.js": "18c7eb5102634686ac6062381a09b4ddb18933678e599ba74a2e33d690f97134",
+    "assets/_commonjs-dynamic-modules-TDtrdbi3.js": "590ab8057bc032c3e14f9f1a76aaeffd01da609413fb12888819ca0433c1fae9",
+    "assets/activity-C6kxyRYP.js": "81b298344c99f7c095efc0c1ae43d3f7e73e7883ea1594a47de17d87fe7df61c",
+    "assets/aiPresentationExport-xnBzlzY6.js": "454805735bb1958ff4eb8f51643e16181a2fa971a0659cc5b82b3544a5fae8d5",
+    "assets/aiUsageTelemetry-Cgx_zHv9.js": "4d906aa84ed8b7116c5c9d26c1fea43999136d236886afa931f3fc369a1b84c2",
+    "assets/analysis-CoBjO-JG.webp": "f840f24953b7ae38af765b6b7a88becd244d78ac9eca18a4dcdb021fef8947c4",
+    "assets/apiKeyModelTargets-71nBTOFH.js": "1917908c4bee9eb9e2008faec914b648ee43b18e76f80ffedc43eabacc3d59be",
+    "assets/arrow-down-up-DLi-X7q6.js": "50a747c5365e304e5c3de3339cc4d8f8c6d38cf60c7b888cdf0f82b3807689d1",
+    "assets/arrow-left-right-Dk6u0YEH.js": "6c2c20fcd751afb3bb546a97d0f4cc8c062a2a9d5df043ab950db8b6b1a96506",
+    "assets/arrow-up-right-BrL6q99B.js": "803bddd57df534b03a964321e5dd18f947a773248665264acd0c668fb091b6bb",
+    "assets/arrow-up-vyGIXZhw.js": "97ff9e5724b76a7dddd7c80a64760f8472c38651f6e84e0f522e47f6ae353b7f",
+    "assets/book-open-D_NdtHAO.js": "bfc554fbc775723ba57e8bea8f8dcc82f5a321633ab2d61754f89913f6b50fce",
+    "assets/bot-BMCCDBB7.js": "c1e9538d51e6d9907217321d015dba3bc789807fc11174ecbbb4f3aa12bd3ede",
+    "assets/box-sb8kttBA.js": "f34f433ce7c04bec7b627969b0e7309d37a4277ed9b5adcc32720ff35887f743",
+    "assets/checkbox-V4vgMDLE.js": "9bdbff2db43147b4ea6dd4c9e8c4966b9485d5c58fbdbc73eb06558e1dddabe5",
+    "assets/chevron-left-NXjd-v2Y.js": "01e7402a2d0ce4cf2b45c839384250f4dda719525210b5920f940cebc5f1324f",
+    "assets/circle-check-Dg58rI4z.js": "d47d0426ab21e356ecad8303c86cb526e74e870066671ef935c89f18e4cea238",
+    "assets/circle-help-BfzU99W8.js": "8fe8716b2a9515303a6418e961a9bea8dd05d8c1cade3d0cbd96e7a61c0363f4",
+    "assets/clipboard-check-U9HaIJjr.js": "71793d0926423270e01a87637c4769b80339ad454d1db89c2a99b611c9f7c48c",
+    "assets/clipboard-paste-DXdCT2BR.js": "25a19cd5bbc7f2184b6e3217ca158b50e445c60676ac43d4f90c456befcff8f9",
+    "assets/clock-3-BkRbqZxN.js": "716c3de23918f460e54f3eefe0aa8e564eed97db6e64bfe4e80aa706d099b1d6",
+    "assets/columns-3-D8iZb_ZM.js": "d834b4a7200bb181ca65f4d987d53a0539fbf826c2950d43b0c0489b90d9a535",
+    "assets/comparison-DEpuqxPR.webp": "18be8952b581fb5a493850dd410f03196b8536673ac6d191257a50f5db7f50eb",
+    "assets/context-menu-C-mFYPtd.js": "c636ec655ad6903eb00fff62b01b6220a85a9fe16ac00d4b4d721510f6e4d605",
+    "assets/cpu-CXWc1Pe7.js": "ec8564e1e440b5fe0bcc7d39307a367108ec8819aed2538d28785323dc5d38bf",
+    "assets/dataCenterTypes-C6qVE04W.js": "76625790261e7a39a6cb9a0c845d4e1231f42789845a5422f1fc620e9855ffee",
+    "assets/database-yM88k4dB.js": "ef6845a70808835b7a797598d0400eeed3d5576250d56162db4825b5166199a3",
+    "assets/droppedFiles-C63-86T7.js": "eb6b24a6bd1b1055887eb20af797e485b90046e22ff96b9eb74a6ca7d8fa5e06",
+    "assets/eraser-CHeW6oCt.js": "cae86279fdcab75754f80efe8e60e354aeab056a0c52bf967ab87dcf05f8267d",
+    "assets/exceljs.min-Bb1_Kd_w.js": "39951e0727438dee649cfa302cdcb8b049b730b28753d1350002cada2e05a461",
+    "assets/expand-BZJvl2ST.js": "04c86bf6f3abe5a15f10302c04b71114563aa565095ebbe1e9b0bb5d31b38bd3",
+    "assets/export-CHG9YFwo.js": "0d9d98f5274bd343485421008d8ead00b3ef7defb049d59fe4f4905ea67aab95",
+    "assets/extends-CF3RwP-h.js": "e3496d12009d9b939915c56ad052af4c8ddbd3eb57165f20eee389886f036e51",
+    "assets/factory-DAtznkMA.js": "7c8310cd9b80436df182fd828f389aa826927dda2c2ac1b5eca4d52e1358759c",
+    "assets/field-mY7auGcB.js": "7262ced1c75d077640539188d001159f0e07662867caf7a99af44b096dd4a05b",
+    "assets/file-BeOV41Ox.js": "45e2120a6f43bee869b15c4ecdb55eb8793fae3bd8a364dfd826934bff6490c9",
+    "assets/file-archive-Dpi4vOks.js": "29868768b0c73efc97e0f394d791e4d2a53053df92c2445c9bfb9d6c4950b2a8",
+    "assets/file-code-2-BMHWf6mO.js": "1f792f26c33425b443ca32cba3e19561cc62ffea5ae4b0d5b3f74a69375bf29a",
+    "assets/file-up-C4aArIxz.js": "d4b5602e11df937b41595349c9b182db77766f701debb990ce14a662135b9ae4",
+    "assets/files-CEnOF0t4.webp": "131639a70be3d22022baf096c4a31d96745cd8f82f37cee935f21a57a4343a3f",
+    "assets/files-DxbMnQNZ.js": "e4386a2699bc8da10e06688336aa4d1d81dffd312327b2073ac43636e3e6ee63",
+    "assets/filter-BE9bYn20.js": "a8527cf4f0aa1b790ae57ac04a09643b592989db63d9667ac2f60d74c6de747a",
+    "assets/git-branch-CDNw15nq.js": "9014a745f1fa2950a28338d7dd6897c30873f3d77b7338d99f9c110a12c53dcc",
+    "assets/hard-drive-BbvSPqGm.js": "f64a60426d3965ae580dd6cad3a819571a76ffa50e2a019ef5a7148fedf5a75e",
+    "assets/history-BO9vWZy1.js": "f4af0ce5bbd1354d9d1e4cb4e166977dbdb66d1417f2bf4409588038247dcf78",
+    "assets/hover-card-oMNlcJxt.js": "f714f234d913e1da9cdfb7081810a7de772e776b96f81828c009ee3795ddbd11",
+    "assets/html2canvas.esm-B0tyYwQk.js": "c2bd1bddd0796f58fde6e213c061b2721256d46366bcee00c8530819e5fbc573",
+    "assets/index-BV471ls_.css": "3ecc96063c6f8406601bb1d3a0a9f57a184058df7d479d879d970af91d68ca52",
+    "assets/index-BmXdFceV.js": "2407615f2cd1a48577615bab914d807cfb0f52c94488676a4c06ffd288254afc",
+    "assets/index-BxgHAOom.js": "184d6fd9ed2f8c30dbfeea8e43072083b1bbf1f17624a1c78e53d3b448eb8f15",
+    "assets/index-CVWrwKJu.js": "184d6fd9ed2f8c30dbfeea8e43072083b1bbf1f17624a1c78e53d3b448eb8f15",
+    "assets/index-CjGb0i7A.css": "51d3833533b46a3e5efb6be895ab7137c046c1c449e1a52997740d69c24b387f",
+    "assets/index-CtJT2AN9.js": "eb4ab3aa19ab68981d1ebcee79dffcdf467a647d59e67e7abf72b1b7847af6b5",
+    "assets/index-D295Jldr.js": "184d6fd9ed2f8c30dbfeea8e43072083b1bbf1f17624a1c78e53d3b448eb8f15",
+    "assets/index-DMfedC7E.js": "184d6fd9ed2f8c30dbfeea8e43072083b1bbf1f17624a1c78e53d3b448eb8f15",
+    "assets/index-Dpgxz8VK.js": "184d6fd9ed2f8c30dbfeea8e43072083b1bbf1f17624a1c78e53d3b448eb8f15",
+    "assets/index-Dw1FkK7p.js": "184d6fd9ed2f8c30dbfeea8e43072083b1bbf1f17624a1c78e53d3b448eb8f15",
+    "assets/index-SIwpA7Yl.css": "51d3833533b46a3e5efb6be895ab7137c046c1c449e1a52997740d69c24b387f",
+    "assets/index-abvirgFu.js": "184d6fd9ed2f8c30dbfeea8e43072083b1bbf1f17624a1c78e53d3b448eb8f15",
+    "assets/index-nxYxZPpu.css": "51d3833533b46a3e5efb6be895ab7137c046c1c449e1a52997740d69c24b387f",
+    "assets/index-tdOgvZRd.css": "51d3833533b46a3e5efb6be895ab7137c046c1c449e1a52997740d69c24b387f",
+    "assets/index-v6HIfBCE.css": "51d3833533b46a3e5efb6be895ab7137c046c1c449e1a52997740d69c24b387f",
+    "assets/index-z_ORfTHJ.css": "51d3833533b46a3e5efb6be895ab7137c046c1c449e1a52997740d69c24b387f",
+    "assets/index.es-Bj4fpaGR.js": "45b55780e610d042625a16ce6e93e38b21d8c2f409b2e6e6a582b58e5e991603",
+    "assets/jbig2-CNFLgX9F.wasm": "e6bee67724a7b5436fe8162638e3708cfc8d52b6342db69a49715e30ff27cfdc",
+    "assets/jspdf.es.min-ijdAUsr4.js": "93ff5b981fea6a3c42158c3d1d39d73bee03f9190b2a9d5f65a5a619072476f8",
+    "assets/jszip.min-DmjCEA0g.js": "9057233b680547e552d528be23948e64e4bbafbd503c9c23536c1ba8aec97a4a",
+    "assets/layout-grid-DEySKVIb.js": "0b680d784528b0470d7db3def9ff9c090af6287cadf2f01a8592f942344ffe0e",
+    "assets/link-2-B_Oqex6K.js": "40f2e0baa70fb6bf167d4c26ddd571d68f9e806a5b931a43cdc2d362afd1620f",
+    "assets/list-BwQhMx8k.js": "412f4cceb91670256f419cecd8a88c91604b2d301c23b132c951443de4bb57be",
+    "assets/lock-CeHUSYAX.js": "93dfb44c510bf072418f1db7d2e65d4cfc6fd52cd4d853610aa6f1bf6aaab0e5",
+    "assets/maintenance-AcwWz_Gy.js": "31b17ba200b410bcc52c3f54c1aae61adac34e0761a5c999b6e7069c421229e6",
+    "assets/maintenance-DooQnWqJ.css": "b6a092010249f13300b9d980b4c6d0e9a35ea7dba8f709a0c7ce522656864896",
+    "assets/maintenanceOverviewLayout-DvO0b6EW.css": "7dc000d8e339a8079fc8045289d117dceef7c3dd8b6a28c032648d33e0c90473",
+    "assets/map-pin-Cg-SSgfQ.js": "dfde5fbf3bd3b967ef57f341d2e178a15646364a0e18d3a923329a7f4c209745",
+    "assets/materialAttachments-DeXegVir.js": "d832d2497d64b21cce8773c940f3f7ff318f8263ed2688960511797b18ff00db",
+    "assets/materialSpecDocument.worker-DFQzSkrM.js": "a8fd7594263126fe2d5547dab426b9b14eb4b394aa5a12fe8f40fd47a1008124",
+    "assets/materialSpecDocumentCore-CfGA4rUs.js": "6880e99e3dc07c3b57fba9e9e96bacec951b141814cb6b97c3ac71c5dccf2b8d",
+    "assets/materialSpecDocumentReaders-DCv5iye3.js": "f536274e2f9d9d0d22df709f3643180d135f82ffa276c13c505192a95977ab78",
+    "assets/materialSpecFillEngineering-DdY1fDLN.js": "fcca70f280eba32017e22ccff6f9b331c1ec8b21ca90571935d468e6586fb1e1",
+    "assets/materialSpecFillService-CnEE6Ext.js": "51b93dc32970adbc6d2d53e407726d7eba8c329b5e4ae44f1fdff3c97e4d7dd6",
+    "assets/materialSpecFillSource.worker-CMrcu2gj.js": "62e0df597f57a869d8e48d21bccebbfaf20dba8c3ea7cbc1c5da4707f99fa2b8",
+    "assets/maximize-2-b492K4Nc.js": "51a840aece10e266d4a9dfe213192defed8608ddc40962cd0b67641d4a5a6d67",
+    "assets/maximize-BIlrJVmg.js": "903717d1f449f0f7920aea3336cd000a8a81e4daa7f5d172d59a35df0a2dea94",
+    "assets/menu-BV7V0x3f.js": "d4f05d16c18af0288f55ee46ba5ca1a6ed845f8e98e4a8d58e79f24faa8ad327",
+    "assets/message-square-D3YtuXia.js": "b218e460fcfc276409e6ae4bd17797b6db7bc85fcfa022600f66a4dc28c87395",
+    "assets/mouse-pointer-2-DjMUQwIr.js": "7735b548a8ae15394abac37c181285e8f8b2f2c09e2da6dcf92a7eae9c64cdc0",
+    "assets/network-BX_TvDdE.js": "89ab84aedcff409c4eccf45582ca97c5319b57fefda329e0d21f6ddbedac9c49",
+    "assets/occt-import-js-BhHfLpto.wasm": "33391fc9d94ea5c869a6718488bf0a9a464222bac9bdc764dfe1690cef281952",
+    "assets/occt-wasm-BBDrUB5W.js": "b9af3794270a8b34736157f1d4acfbf590528a57ec95f7123c464a19ac36678f",
+    "assets/occt-wasm-DavvRDt7.wasm": "6eb91911c0845b5310755ec84d194c13e45b9138598b523b6efff4239e281374",
+    "assets/openjpeg-CS7joWBh.wasm": "67b8e2b162da472e98cb48d3d32e3e38fff481b9b32ff4818e78bb248af88ab2",
+    "assets/palette-nO30kVkc.js": "15d255b1ae6ebe368f51fa6a2318ed11839ea613ed52385d94bc25151ff86cb8",
+    "assets/panel-right-open-C60cXwm3.js": "c62c9adb83a8895aa53a6b579fb31355184cd848c290e01e4e68ac44487c3aa8",
+    "assets/parts-v2-CUM8bzEw.webp": "2b04b30a6a4254a86ff34e1886c0f14ccbe9f4796dcf3423119e05235b67dcb0",
+    "assets/pcb-v2-BbbJn3au.webp": "92fbcadfa62a4a5b2a80937f015324bea9833b3305ef56b7ebcf68d19a19c8e8",
+    "assets/pdf-DXVnnKPY.js": "cb37a9e399c681298b2035a10ed87404997c65bdf4b177911cdd7f952ba0f3b0",
+    "assets/pdf.worker.min-B_fnEKel.mjs": "a8d200fdf60c66446a5ad28ee255400108a7cb57787d0a0d81a6063056824269",
+    "assets/pdf.worker.min-pVC1FuQ5.js": "ef5d14ec6a6e8157483eee3d3b405eb9ccd08cad252955334e837f0ec5b11544",
+    "assets/pdfResources-Dozlyg3R.js": "cde36cdfc35806dff589f03272d3ce74c062f40f0d0b51ec5dacbeffa5651808",
+    "assets/pen-line-eRZGKX0f.js": "1f8033dae2590884bccefef27eb96de3be31890ccca285d795d6a91d5f683790",
+    "assets/pencil-line-Cwh9XhJ-.js": "e6750abd3d65bcd158a4fa206c899f9fdcb5f78e564d211fd8c7d4deec081d98",
+    "assets/performance-BH5Kc_Cv.webp": "7aae2620a8285b5d03197d8f6d90aadd9c04ab843bbc82e732d8dea0438aeb6d",
+    "assets/performanceExportArchive--LUJ1Chn.js": "ad06b98adc64b4205f5d993db06d9751692515aedf35e43f2a28e466286b7f37",
+    "assets/play-D6rKAEvE.js": "2da2e18fad299489c2c2fa396fccd4327dd43cfbfedad672729ec42c9fdfea0d",
+    "assets/popover-BA2IshYO.js": "cd9ecf674dcf7aabae6c64d2502e30f8903e83fc063c8d7f59ffc853022b5571",
+    "assets/power-CieNoJ6T.js": "74aef3b4006cfff2cba23f71cf227447de8b327fc19deec0e39adeb195dbfab4",
+    "assets/pptxgen.es-CMxOX5Nj.js": "673b9a365e64ccf69b6d6913ac6e275eef43e777f5dcdd5960d1046db6f232ec",
+    "assets/privateAttachments-BdbYdykZ.js": "9889bd65a33654f39144753bdf88d58e53d3ff552386097f3d4a8ef13decc392",
+    "assets/progress--j-ow8x3.js": "00d9d37213dc7ca90caab7ef2059abc57c899dac80143fc161a14ed1c30389ce",
+    "assets/purify.es-CAi2OJFm.js": "8e143ee7bcdf076d62676183aacc62568c9adb8042c57d4fef7d62e1ca7c345a",
+    "assets/qcms_bg-CUfpE_h9.wasm": "6017eca5939cde1836e88e6d8cd27ae039246f206515ea4487bdfd0e3fb16e26",
+    "assets/racks-DUkUjznZ.webp": "1d94c09bbd436b8c5e1fbb70e69c0e8353dd48ce5562132afd08686c0d9781de",
+    "assets/radio-group-BEmgHqJb.js": "06b7ea9c136889d0dda3a6638caf0617f03a6616a77bdac40344b8c8467450cc",
+    "assets/redo-2-BE3kHuWR.js": "a8d43d39243e50dcf631eb33e3fa5c18bb61a4d8c1030b78bca786edea73df56",
+    "assets/repair-CFvMKG0L.webp": "9377040a57f399babb48f1f57bcfe711dcfe925e79f0f11496534486de8296db",
+    "assets/rich-text-editor-CYh2XnLB.js": "95207aa966ee5c2125e8510423f42e26fd23cba735390d3c9e5ed17b9aee88e2",
+    "assets/rich-text-editor-DCck2gi_.css": "29464eb4983353664992452e1a9c132257e3a796bed5829afcac6374c5c9b532",
+    "assets/save-Cj0KB4JZ.js": "c8e93e8209231528fd5150b9184ed485c0eb3ad119f76efa77b85284d15e9b19",
+    "assets/scissors-C7Fg6smV.js": "29624b0f460d64fb9001f4fab268033b342e2d72af89133f0de4886c8ed4b924",
+    "assets/select-D_jJFtw0.js": "111d469cd6ed232eca29bfe94cf2db7c5869687030f2d41f405598ec241bd40c",
+    "assets/semanticJson-Jz6hERtk.js": "86d760f02d6b7c8037d7e7378c89ca3eb3906a22af9a854a81fe70a433ee14be",
+    "assets/separator-Da_SYZvh.js": "316473202c4b5213ee581ddc9a7f448d03222470e7e2dd45e55680b1352b76cb",
+    "assets/server-CVO9CU55.js": "b00eb2c68c1968f703efa72fc93e259ab26a0db937556349e4db434337838633",
+    "assets/shield-check-Bnjz8BX2.js": "fdfb4af2f0fde0c9a38a57213f241d053ada53d4bbc71a926ae241041c5a0d8b",
+    "assets/sliders-horizontal-DGl5rgCb.js": "2c2925616161c8e54cf7830cac4dfcb25b6c661ddd01aa2459b343061c0cddf7",
+    "assets/sparkles-BUN8RHDs.js": "cf21e5ea58d51ca411896f8a8257fd84d3aced4c561848d05a278188da5c655d",
+    "assets/square-CzzUdM_O.js": "0ebb59a74f6ae6ebbcaa0fdf10d2247421cc34045fefe8492667afedcabf8a01",
+    "assets/square-pen-BlfRxfp2.js": "c93505ebab0a50002ecd17ceb1078fb7e4c6d4ee94684bafce1a25233f491cd2",
+    "assets/stepConversion.worker-CO8FEsni.js": "4c36bf1840c10dabc1f41c8bf96afdb027bf546c15beea5005540ba9cb918a88",
+    "assets/stepImport-CqLm6dnS.js": "156c00ad9a0775c83c430d1bae1fe1c726d873743f5c8ad706d2f5ce2dfe3121",
+    "assets/storage-B-IN48UY.js": "fdda5d267a6baac63d14d291a0c1ce94bff0c823b435884e2ed1e0a372b780d2",
+    "assets/switch-8LAk2yAC.js": "f9956a25059f84a5353f21a6ee991461d96276b4394dc3c146313d707d0c25bc",
+    "assets/table-2-B-jzsS9u.js": "cc98cb571d45a89b578fcdf1fd493f593a19c003372029af80ffe2c8aa537573",
+    "assets/table-Cz3P7Gma.js": "bf3ce0b40ac613bc44212fbea7926e6c8743d7f126a87d9a40383df622ffc36d",
+    "assets/three.module-D4zglqVh.js": "2b94d5627b9369d7b067e25b92b214c6c11bba92ed70ccfe2ea35facb3c7f95b",
+    "assets/undo-2-XKS3hfJ6.js": "65cf12206339e03a43f975293982cee22af217f262c5d473777f69ee1a1d763a",
+    "assets/unrar-De7VYsPt.wasm": "c7d79f869196e3c79c053ba74a8f629116de8293a94f60cc851bbcd7977d0c2b",
+    "assets/upload-CjaLfnBb.js": "fa7c4f89d75edc9100a0b9713b42c24265825b755507700e636f54f1b10ea4bf",
+    "assets/usePrivateAttachmentUrl-CB3VuvTw.js": "cbdeeeb778cdbe72fd21b8548418c525aa81f6b421889c2457f51679b816fd49",
+    "assets/useWorkspaceMutationScope-BR9PRlkS.js": "0ab422d72f9c4d861773fcde4d7a0e2f7620031cb097516e1cbc759caf839506",
+    "assets/value-BTdN53H7.js": "4db2d523d63cfe548bf41fc99324532e91fd6381f51c7bd472a474e84aeb6543",
+    "assets/with-selector-C6b6hxNG.js": "d7d8950984f0ce178e5082dc9946997583e62bce445fada2b40e0a00fbe8b750",
+    "assets/xlsx-BGxaXtSB.js": "513f91f5933c2dffea827cbd5855e9924de3498fa73d4970fa88c7ad028cff49",
+    "assets/xlsx-QOIw0qXl.js": "e9a1e263fcb3528040c0d883cefa7a39dd33f61628abee436f27b39863a3791e",
+    "assets/zoom-out-_G6XijaW.js": "72d9a7f72f92a89d0929d0f801bbde42609c68af3237953d0d8041259458e131",
+    "comparison/README.md": "e3f082cf017a67e12bda18e88d65a403b3df3f9a4d3b5d3c232125fa0a9dd0c7",
+    "comparison/autocheck.worker.js": "e33520d7f16bf09a978e83c3b24e7051573349935ecfee4b5d93c6799275e7fb",
+    "comparison/browser_bridge.py": "d58283f4a829ead85605449d3b3e60da3c9017fed8ad568bdf8a1f1b7c50826c",
+    "comparison/browser_compat.py": "f0cc2ac0f0b7996e53711f3b69f0ecf0440eeedd99d064c993afc46f746117c7",
+    "comparison/engine/autocheck/__init__.py": "87bc112dcbf08939857c60548cf643a397df8de117e14e2d90e721d295e4daf9",
+    "comparison/engine/autocheck/bom_socket.py": "5464575143371d93ad600eb19c4656a281576c15a593313c943d7e6e8f375a53",
+    "comparison/engine/autocheck/checks/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "comparison/engine/autocheck/checks/bom_consistency.py": "54cffbbc0138c53eb20659a19c5307c8087560ab83df55af1ded518f14e7a012",
+    "comparison/engine/autocheck/checks/capv.py": "dce01dccd9133f94d52f7554b3182a36ae75e2801ac62e41b179c1e90d1d5c26",
+    "comparison/engine/autocheck/checks/diff.py": "2216ba57e87f6eb19fbd7bef0dc380aef35b3270602c4ea8e68d24eeba43a4b7",
+    "comparison/engine/autocheck/checks/drc.py": "4c2bf96e52f05a684197558c7b31ee1cc7759e8d6e82ed916c3cbbb54d70235e",
+    "comparison/engine/autocheck/checks/i2c_map.py": "77979a1ca50e5a1a28ab066dbcfb697bc5f2f2928e8a30a437e913eb38d714f0",
+    "comparison/engine/autocheck/checks/netrules.py": "98a21b314547bd69ddf796e9e463d8e4977b76cb27c7bb11739b4b492cabe569",
+    "comparison/engine/autocheck/checks/power_tree.py": "11f853bf728b005f3892634218d32f48e09d65fe4525a1dfa78edb14cdc509c3",
+    "comparison/engine/autocheck/checks/shortopen.py": "901c47f7e7bf7d8ca80b93cf37fe4828fc9dd800d7204cbeccc9e9f6ccce6f0c",
+    "comparison/engine/autocheck/cli.py": "17ac1ea302d765c03b74cac771a2a6d6d3f0f62458329e456bf96478462844a7",
+    "comparison/engine/autocheck/config.py": "4ed11831c2f68c657eb2a6d797b6c9b243bd7fed77c6a43d99ee707b3d500475",
+    "comparison/engine/autocheck/fakeschem.py": "471e2e151b4a25b6c3a404ada606c9a0ea81f3292b0996402c1c09406d4b4744",
+    "comparison/engine/autocheck/faultinject.py": "8ebcc119f6a4d41abf285ca2d170e449cbded0675a80886760a9449d98e9d842",
+    "comparison/engine/autocheck/findings.py": "962467a0caabbdb744f50ea7292a6ca6dc77c859c592138db7cbc084c2904bae",
+    "comparison/engine/autocheck/grouping.py": "3b7c3a428ddf69bcf8c8b2cf3ef86851819c38027e5333f958fb3e64b0ccb9f0",
+    "comparison/engine/autocheck/i2c_lib.py": "857bf52d20e4b4d9a9dffda1c57cf6466deac07f8dcd715507301bc4840d2e24",
+    "comparison/engine/autocheck/loader.py": "1419269fe29744b32253485f6065d9cb620e564e11f75fff41573c6784dc0c4e",
+    "comparison/engine/autocheck/model.py": "f79595124552f08c977cf98a95e42b02c6b7423f395449587c4f1d60aeedccdf",
+    "comparison/engine/autocheck/parsers/__init__.py": "82f20681e9d55eba445fb8473db65308c1349d3bbd5fae947b8a2ba5690be604",
+    "comparison/engine/autocheck/parsers/allegro_pst.py": "6fad99885f8d9f11e56f4a0e6ed67555db37352b19f36447f301d1909c782c7b",
+    "comparison/engine/autocheck/parsers/bom_agile.py": "11915e9cfd8b5a098f1a99ea47c6ba6ea882ecd3d78f5dd85b6792ee504897fd",
+    "comparison/engine/autocheck/parsers/bom_erp.py": "dde25fe9d74eb3aed722a6eb441686a345a5ffe0e787e70ed339774fadd3f34e",
+    "comparison/engine/autocheck/parsers/bom_nvidia.py": "dd428fa4a96e20e861a0f0c6b2e8b84a606d90ca9f8bd7c691f738ec577b0d0a",
+    "comparison/engine/autocheck/parsers/bom_orcad.py": "1941b6aeaf77aa73d272e511ee11a63dd05352dde9b050a9f22846c7d0021b32",
+    "comparison/engine/autocheck/parsers/dsn.py": "09130d5d62c0d398008cec84bcfbb947d38bb678d9c64ade02d6ecb813d275e1",
+    "comparison/engine/autocheck/pipeline.py": "87b52fe2de4b3e0e25e55fdc3bc6ac6c2a3088e6b00126a6bc67d9b3e1d97392",
+    "comparison/engine/autocheck/report/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "comparison/engine/autocheck/report/circuit_text.py": "c7db9731f1419233332ac9378a06f31277f65cebe037fde314ba184531d3b78a",
+    "comparison/engine/autocheck/report/data_out.py": "7d92c560f1c68425cb604243e93cf806ad2e4ac4a3e0674c19bc7384fa98e09b",
+    "comparison/engine/autocheck/report/diagram_html.py": "e06f05f69f9efc965a6e7702daf23410c22e5edd4ff35b739040170b1c43e22f",
+    "comparison/engine/autocheck/report/i2c_block_diagram.py": "03c57d4f7c39522af16a0f095bb2ee8cfd611041000931b05aacb11dcd88ec9f",
+    "comparison/engine/autocheck/report/i2c_block_drawio.py": "0e07ff7883ef7081be33337a6c526984e5432eabc4c520988b03b636b80bb7c3",
+    "comparison/engine/autocheck/report/i2c_map_diagram.py": "685a707b9c10cea4806dbe44f73ab5fd908f709da95af044f46f686895dcdc38",
+    "comparison/engine/autocheck/report/pdf_annotate.py": "795065455f32373d8cdd86c0bc577de61bdf5e86400c7464cb685e4080585d69",
+    "comparison/engine/autocheck/report/pdf_report.py": "0adf0f2b206489fa867ee4aaf3bc8f3a6a9de784b93ed3a75625651386fcd7f3",
+    "comparison/engine/autocheck/report/power_tree_diagram.py": "63df281ae94beeba8ad832db239961be38d38292f662c5a49639b9738354a7d2",
+    "comparison/engine/autocheck/report/power_tree_drawio.py": "cf2f95866b0d259ce771845fe1cc8c8fef347069741f9fef64c27da38cc94839",
+    "comparison/engine/autocheck/report/xlsx_tracker.py": "66a674e77f8c9b2d761c66ba0a164ec87927bd2fe8c503154ca11def87a463e1",
+    "comparison/engine/autocheck/review.py": "f99431a3025d59d12be56709543abfc48215849c8a339bc6ef660db15fbf1330",
+    "comparison/engine/autocheck/ruleinject.py": "36067d8430acadfdb886d30e85e1e42794365da908e2a66bd5c6f7400a54719d",
+    "comparison/engine/autocheck/rules_zh.py": "61839c481ab8e7b7ae1cdb110a3bc4c43486436decdf75e863aad85dec217dee",
+    "comparison/engine/autocheck/tracking.py": "eae52b308b41ecdc01e56f543ebf9d572921be9dd85de6662624b1e0b9f8841f",
+    "comparison/engine/autocheck/ui_nav.py": "3e65bb8ba8e61f1a308d2981812ae7773837da8720f62aa176b0d3573e0e5bd8",
+    "comparison/engine/autocheck/ui_pick.py": "a4feae4d744808a0dd5e94ab75a34d28c5ed352a02ec4367d2ed07b1158ee51d",
+    "comparison/engine/autocheck/ui_viewer.py": "de91723a94e17a9c55d2c2e313600f3c86c98fcfd1f23bc30df9864ed23add39",
+    "comparison/engine/autocheck/values.py": "e8829a5bb74955c9b9498c0f012178b98fdabc4b115c2ae87f0db1e38f43aaa1",
+    "comparison/engine/config/default.yaml": "7f4a103a47b14ea0e7e1708db8d4ece6c1fd04bd4c8ca3366bc93fa263b5bf83",
+    "comparison/engine/config/i2c_devices.yaml": "ec66808f77d63b919b7d00ba9a8bd12ca5d788858a1bcbfe1c2c78e8e452e3a8",
+    "comparison/engine/config/i2c_devices_user.yaml": "1d48bc1d0ea0d339cef894a8fcd0bea948094b2800332fd7258932728c5b4a21",
+    "comparison/engine/config/power_parts.yaml": "b270c15564ee8d3ef8b479d54eb8673e418509f70f3a2b2935aa68d015f866cb",
+    "comparison/engine/manifest.json": "dbff94656e4f043307bb4e8795f392331c33ce0e25e7bda271362cb6d92c42aa",
+    "comparison/guides/netlist-files.svg": "d56c7e006a062b40346d2b4721f6547c6f4ea03f4696dfd9bccd046412ca0cfc",
+    "comparison/guides/revision-folders.svg": "d622ca76454b79fdd8819373b0aa05fcaae6eb6bcae63a9d8bce796bbccd5f5d",
+    "comparison/pdfjs-licenses/ADOBE-CMAP.txt": "aa92ab5a472974865a96fd4a4e9c13bb41bf6fe1b309cb6b8da48bc9e19839a2",
+    "comparison/pdfjs-licenses/FONT-FOXIT.txt": "b578cdd2345840ada550bd12519533812320d5f1d21cf4c1c7e1b1b0a31c98b7",
+    "comparison/pdfjs-licenses/FONT-LIBERATION.txt": "93fed46019c38bbe566b479d22148e2e8a1e85ada614accb0211c37b2c61c19b",
+    "comparison/pdfjs-licenses/LICENSE_JBIG2.txt": "9e66b7f1b934a28b37f3bc4dac97915de1674271e79a0a88182a18ed9731b4d1",
+    "comparison/pdfjs-licenses/LICENSE_OPENJPEG.txt": "a6af136f3e15038a666b61f376612a07d9a4e48cb7c01adbf3e33b3f14ab49b6",
+    "comparison/pdfjs-licenses/LICENSE_PDFJS_JBIG2.txt": "aad3cce09842e00e9e11ad5e8fef8cc02fbc3a3768fe2f007443b9cee37aaee5",
+    "comparison/pdfjs-licenses/LICENSE_PDFJS_OPENJPEG.txt": "717fc62da03292dbb4dd0c8280bd4ce7bb8550dcf31d772bc93455fb50313425",
+    "comparison/pdfjs-licenses/LICENSE_PDFJS_QCMS.txt": "eb5104ca33552be007857a28351bc408f379ddd4bfacab1226b09c6d1e9fd7c4",
+    "comparison/pdfjs-licenses/LICENSE_QCMS.txt": "36d847ae882f6574ebc72f56a4f354e4f104fde4a584373496482e97d52d31bc",
+    "comparison/pdfjs-licenses/PDFJS-APACHE-2.0.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "comparison/power_tree_compat.py": "0d10bedb51695ad64090b3ffa153915a61ba7c600b22492ded6b9bc632560abc",
+    "favicon.ico": "29a40d56580a5366083461297773dbf146ec043d1156f432f5472cb3487f506b",
+    "index.html": "160ea80e3e65ebe8a7861953a30a7793ddf91c0d6d5053ad6f390eb5d14d7d09",
+    "material-ce-reference.xlsx": "6410a7a6f600b34200bb2d354a22736eb31c385a10c98048586c63e5b1b7e678",
+    "material-non-pvl/step1.png": "0f074de419e90dbb790c49dba074d6cf23014ececd9cce4bcc54cdba8ca22c8a",
+    "material-non-pvl/step2.png": "df09af58c2d161072bda8c749a069568bbba2d98e455b3c785f7f41060afd540",
+    "material-non-pvl/step3.png": "8c9cad79abc244db3f17194296aa9e5a717d9c06480adbc7d5c58ee70c96ae85",
+    "material-non-pvl/step4.png": "7b4836a0f1371a78ff8e71a447a4507ccedb19aad18029e7db326e644eb68415",
+    "material-non-pvl/step5.png": "c96381234f67bd07df7ffb2afca93973d2eedddc9a1beac9744013c2cd4cc10c",
+    "material-non-pvl/step6.png": "d08a3848d3fd44d37619be7c759334c62d5b8cee60621aec02b57e3e5908fe79",
+    "material-upload-template.xlsx": "722fd9b9637c1be5db95297cf17b7bc0301821f94fb5c6347d16c32ebec22eb9",
+    "models/data-center/carlo-next-l10-20260715.glb": "94e5de12a8ab30df33f332ed5ac7c30f9e24cc1f14be85417ca1d17c98532396",
+    "models/data-center/carlo-next-l10-20260715.json": "156efec06b974d0f29709e92441e368704afac7afa71bf812428ac38a47a495f",
+    "models/data-center/carlo-next-l10-20260715.mobile.glb": "623cb6f046312826cc15dab13fabf2f8af7ef4a8dbb971678dfa3e65fc55ba1b",
+    "models/data-center/nv-mgx-rack-v1-2-rev7.glb": "043893b8fded972580219f0ee9dd7515329cbf9a2e6fd82346f655d7727e135c",
+    "models/data-center/nv-mgx-rack-v1-2-rev7.json": "cf567456b30e2c10e64606fcda1cc580a0b91f598f7fec38c33f0fe5c52f9895",
+    "models/data-center/nv-mgx-rack-v1-2-rev7.mobile.glb": "3dc82eaf80aea2fe59c34fc411d45900de75bd803a10972763a3e6fbda501506",
+    "models/data-center/vera-rubin-vr-1u-20260715.glb": "eed1c6ade41331b350ac3af2d08a37cf330b57439159237b78a201be47516ecf",
+    "models/data-center/vera-rubin-vr-1u-20260715.json": "0cfc1622c76cd6001b21008c07089905b67148e3ce153e997c805d087f9d129f",
+    "models/data-center/vera-rubin-vr-1u-20260715.mobile.glb": "5c74ab84680a3e8a8da5258791e03d72285875bb9d4a4c60c4b2ee420e4d200f",
+    "placeholder.svg": "64badf7aabda0b9630b87020ffb6095cb858ccbcf66b355c2aa08b1063954d3b",
+    "platform-mobile-qr.svg": "57328ae5d6505d0f2bfacbe6e13e5b9480b7ba8dc8062d24011875de1381e589",
+    "robots.txt": "a3d27b3ca5ce32341fa9f96f01169b521b1657c05d1860c45d1e53a6258e9e8b"
+  },
+  "oldAllowedBoot": {
+    "assets/AuthenticatedApplication-s-lsZ7en.js": {
+      "path": "assets/AuthenticatedApplication-s-lsZ7en.js",
+      "bytes": 77211,
+      "sha256": "3bdc41463ae6975e05153908ac2ec9ded8c5c4776faf37aefba0e2f3d0455425",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [
+        "assets/Index-BONUKZ5v.js",
+        "assets/NotFound-EUq1ptLr.js",
+        "assets/TestTrackerPage-C6Qppdsi.js",
+        "assets/ApiManagementPage-BRVmlZIF.js"
+      ],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/shield.js",
+        "src/hooks/useModuleNavigation.ts",
+        "node_modules/react-router/dist/development/chunk-6KYCQHYJ.mjs",
+        "src/hooks/fetchAllPages.ts",
+        "src/lib/readDeadline.ts",
+        "src/components/test-projects/TestProjectProvider.tsx",
+        "src/lib/permissionRefresh.mjs",
+        "src/lib/workspacePermissions.ts",
+        "src/hooks/usePermissions.ts",
+        "src/components/ui/alert.tsx",
+        "src/components/layout/PermissionGuard.tsx",
+        "src/hooks/useStationStatus.ts",
+        "src/lib/realtimeRows.ts",
+        "src/hooks/useUnifiedData.ts",
+        "src/hooks/presenceSession.mjs",
+        "src/hooks/useUserPresence.ts",
+        "src/components/auth/AuthenticatedApplication.tsx"
+      ]
+    },
+    "assets/Index-BONUKZ5v.js": {
+      "path": "assets/Index-BONUKZ5v.js",
+      "bytes": 270823,
+      "sha256": "27725ca0701e7da9241bc8d318ad81d09bf79d59df40dd5d4f57ae3b8195242c",
+      "imports": [
+        "assets/index-QQIaZRuM.js",
+        "assets/AuthenticatedApplication-s-lsZ7en.js",
+        "assets/select-C2Cfs6QA.js",
+        "assets/SystemManager-BCrS-8Yq.js",
+        "assets/shield-check--w_fKSbU.js"
+      ],
+      "dynamicImports": [
+        "assets/AdminPanel-DJenLMaY.js",
+        "assets/ApiChatWorkspacePage-Dl1QgtRJ.js",
+        "assets/ComparisonWorkspace-DdBsWZOg.js",
+        "assets/DeploymentPlanningCenter-AcMeUN8C.js",
+        "assets/MaintenanceDashboard-Cgyl8M-G.js",
+        "assets/MaintenanceWorkspace-kf7TOHYo.js",
+        "assets/MaterialRequestPage-Bh6nm2RE.js",
+        "assets/PcbDesignerWorkspace-D5tdlgro.js",
+        "assets/PerformanceAppraisalPage-e5UUlrpn.js",
+        "assets/MaintenanceHistory-B1OaYZwM.js",
+        "assets/MaintenanceHistory-B1OaYZwM.js",
+        "assets/TestPlanWorkspace-hYZRv13-.js",
+        "assets/ToolsManagement-C1QM-O0p.js"
+      ],
+      "css": [
+        "assets/Index-DoXjHN8V.css"
+      ],
+      "assets": [
+        "assets/racks-DUkUjznZ.webp",
+        "assets/repair-CFvMKG0L.webp",
+        "assets/files-CEnOF0t4.webp",
+        "assets/parts-v2-CUM8bzEw.webp",
+        "assets/pcb-v2-BbbJn3au.webp",
+        "assets/analysis-CoBjO-JG.webp",
+        "assets/performance-BH5Kc_Cv.webp",
+        "assets/comparison-DEpuqxPR.webp"
+      ],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/archive.js",
+        "node_modules/lucide-react/dist/esm/icons/arrow-left.js",
+        "node_modules/lucide-react/dist/esm/icons/bell.js",
+        "node_modules/lucide-react/dist/esm/icons/calendar-clock.js",
+        "node_modules/lucide-react/dist/esm/icons/calendar-days.js",
+        "node_modules/lucide-react/dist/esm/icons/camera.js",
+        "node_modules/lucide-react/dist/esm/icons/check-check.js",
+        "node_modules/lucide-react/dist/esm/icons/circle-pause.js",
+        "node_modules/lucide-react/dist/esm/icons/circle-play.js",
+        "node_modules/lucide-react/dist/esm/icons/circuit-board.js",
+        "node_modules/lucide-react/dist/esm/icons/clipboard-copy.js",
+        "node_modules/lucide-react/dist/esm/icons/corner-up-left.js",
+        "node_modules/lucide-react/dist/esm/icons/film.js",
+        "node_modules/lucide-react/dist/esm/icons/folder-up.js",
+        "node_modules/lucide-react/dist/esm/icons/git-compare-arrows.js",
+        "node_modules/lucide-react/dist/esm/icons/inbox.js",
+        "node_modules/lucide-react/dist/esm/icons/layers-3.js",
+        "node_modules/lucide-react/dist/esm/icons/layout-dashboard.js",
+        "node_modules/lucide-react/dist/esm/icons/log-out.js",
+        "node_modules/lucide-react/dist/esm/icons/megaphone.js",
+        "node_modules/lucide-react/dist/esm/icons/message-circle.js",
+        "node_modules/lucide-react/dist/esm/icons/message-square-text.js",
+        "node_modules/lucide-react/dist/esm/icons/package-search.js",
+        "node_modules/lucide-react/dist/esm/icons/pin-off.js",
+        "node_modules/lucide-react/dist/esm/icons/pin.js",
+        "node_modules/lucide-react/dist/esm/icons/presentation.js",
+        "node_modules/lucide-react/dist/esm/icons/qr-code.js",
+        "node_modules/lucide-react/dist/esm/icons/radio.js",
+        "node_modules/lucide-react/dist/esm/icons/send.js",
+        "node_modules/lucide-react/dist/esm/icons/share-2.js",
+        "node_modules/lucide-react/dist/esm/icons/smartphone.js",
+        "node_modules/lucide-react/dist/esm/icons/smile.js",
+        "node_modules/lucide-react/dist/esm/icons/target.js",
+        "node_modules/lucide-react/dist/esm/icons/users-round.js",
+        "node_modules/lucide-react/dist/esm/icons/users.js",
+        "node_modules/lucide-react/dist/esm/icons/zap.js",
+        "node_modules/@radix-ui/react-avatar/dist/index.mjs",
+        "src/components/ui/avatar.tsx",
+        "src/components/account/userAvatarUrl.ts",
+        "src/components/account/PersonalProfileDialog.tsx",
+        "src/components/account/OwnCredentialsDialog.tsx",
+        "src/hooks/useNotificationInbox.ts",
+        "src/components/performance/assessmentAttachmentPolicy.mjs",
+        "src/components/performance/assessmentEntries.mjs",
+        "src/components/performance/rd2Standards.mjs",
+        "src/components/performance/rd2Assessment.mjs",
+        "src/components/performance/performanceNotifications.mjs",
+        "src/components/account/UserAvatar.tsx",
+        "src/components/collaboration/directMessageMedia.mjs",
+        "src/components/collaboration/DirectMessageDocument.tsx",
+        "src/components/collaboration/directMessageExperience.mjs",
+        "src/components/collaboration/directMessageState.mjs",
+        "src/lib/authorizePrivateRealtime.ts",
+        "src/hooks/useDirectMessages.ts",
+        "src/components/collaboration/DirectMessagesPanel.tsx",
+        "src/components/collaboration/CollaborationCenter.tsx",
+        "src/components/common/UpdateIndicator.tsx",
+        "src/components/common/WorkspaceRuntimeBoundary.tsx",
+        "src/components/common/CollaborationIndicator.tsx",
+        "src/lib/writeClipboardText.ts",
+        "src/components/layout/WebsiteQrButton.tsx",
+        "src/components/layout/MainWorkspaceHeader.tsx",
+        "node_modules/vaul/dist/index.mjs",
+        "src/components/ui/drawer.tsx",
+        "src/components/layout/MobileWorkspaceDock.tsx",
+        "src/assets/workspace/racks.webp",
+        "src/assets/workspace/repair.webp",
+        "src/assets/workspace/files.webp",
+        "src/assets/workspace/parts-v2.webp",
+        "src/assets/workspace/pcb-v2.webp",
+        "src/assets/workspace/analysis.webp",
+        "src/assets/workspace/performance.webp",
+        "src/assets/workspace/comparison.webp",
+        "src/components/layout/WorkspacePreview.tsx",
+        "src/components/layout/mobile/MobileHomeShortcuts.tsx",
+        "src/components/dashboard/issueDashboardMetrics.ts",
+        "src/lib/issuePriority.ts",
+        "src/components/layout/mobile/MobileHomeTasks.tsx",
+        "src/components/layout/WorkspaceEntrance.tsx",
+        "src/components/maintenance/MaintenanceFeedback.tsx",
+        "src/components/maintenance/maintenanceShell.css",
+        "src/components/test-projects/ProjectScopeBar.tsx",
+        "src/components/performance/MyAssessmentBackupsDialog.tsx",
+        "src/pages/Index.tsx"
+      ]
+    },
+    "assets/Index-DoXjHN8V.css": {
+      "path": "assets/Index-DoXjHN8V.css",
+      "bytes": 6874,
+      "sha256": "3f2f52d5277f9066d7d18af31cd577a401ab88183a923af36ea1097a4aff1d8f"
+    },
+    "assets/MaintenanceDashboard-Cgyl8M-G.js": {
+      "path": "assets/MaintenanceDashboard-Cgyl8M-G.js",
+      "bytes": 4167,
+      "sha256": "543cc938dbe35a3edf56ea0f912110bae9bee06b22d126e26195cd7618968a9d",
+      "imports": [
+        "assets/index-QQIaZRuM.js",
+        "assets/AuthenticatedApplication-s-lsZ7en.js",
+        "assets/Index-BONUKZ5v.js",
+        "assets/maintenance-C8ngA8hT.js",
+        "assets/select-C2Cfs6QA.js",
+        "assets/server-HHQwUFgd.js",
+        "assets/SystemManager-BCrS-8Yq.js",
+        "assets/shield-check--w_fKSbU.js"
+      ],
+      "dynamicImports": [],
+      "css": [
+        "assets/maintenanceOverviewLayout-DvO0b6EW.css"
+      ],
+      "assets": [],
+      "modules": [
+        "src/components/maintenance/MaintenanceDashboard.tsx"
+      ]
+    },
+    "assets/MaintenanceWorkspace-DTU3wIiz.css": {
+      "path": "assets/MaintenanceWorkspace-DTU3wIiz.css",
+      "bytes": 9818,
+      "sha256": "8b98fb27812fa1a775f275106e01336a92d0b58fda795a3156e72b2cb37fbf6e"
+    },
+    "assets/MaintenanceWorkspace-kf7TOHYo.js": {
+      "path": "assets/MaintenanceWorkspace-kf7TOHYo.js",
+      "bytes": 27209,
+      "sha256": "c510324c8b943723ff4b7ef1dc8154c5433e1e9928046a2ff5f4d2a9fdee61cf",
+      "imports": [
+        "assets/index-QQIaZRuM.js",
+        "assets/AuthenticatedApplication-s-lsZ7en.js",
+        "assets/maintenance-C8ngA8hT.js",
+        "assets/Index-BONUKZ5v.js",
+        "assets/PrivateAttachmentHtml-CMzdGDuc.js",
+        "assets/purify.es-CAi2OJFm.js",
+        "assets/select-C2Cfs6QA.js",
+        "assets/usePrivateAttachmentUrl-CXSGjhZd.js",
+        "assets/privateAttachments-BKg0LOv0.js",
+        "assets/SystemManager-BCrS-8Yq.js",
+        "assets/circle-check-D-Ctgkex.js",
+        "assets/shield-check--w_fKSbU.js"
+      ],
+      "dynamicImports": [],
+      "css": [
+        "assets/MaintenanceWorkspace-DTU3wIiz.css"
+      ],
+      "assets": [],
+      "modules": [
+        "src/components/attachments/PrivateAttachmentImage.tsx",
+        "src/components/maintenance/MaintenanceAttachments.tsx",
+        "src/components/maintenance/MaintenanceDetail.tsx",
+        "src/components/maintenance/MaintenanceReport.tsx",
+        "src/components/maintenance/maintenanceFaultLayout.css",
+        "src/components/maintenance/MaintenanceWorkspace.tsx"
+      ]
+    },
+    "assets/PcbDesignerWorkspace-BMUU68U-.css": {
+      "path": "assets/PcbDesignerWorkspace-BMUU68U-.css",
+      "bytes": 58407,
+      "sha256": "7e2e2226336671026d829f075b9ad018e2e54a8f01f153fb47cf2a61007b53d6"
+    },
+    "assets/PcbDesignerWorkspace-D5tdlgro.js": {
+      "path": "assets/PcbDesignerWorkspace-D5tdlgro.js",
+      "bytes": 328829,
+      "sha256": "024e24249f3ffdc1ed6c460bd557d1b226df79b0573ba2163a5c17d02310a91b",
+      "imports": [
+        "assets/index-QQIaZRuM.js",
+        "assets/SystemManager-BCrS-8Yq.js",
+        "assets/AuthenticatedApplication-s-lsZ7en.js",
+        "assets/__vite-browser-external-D7Ct-6yo.js",
+        "assets/dataCenterTypes-BZcv7E_Z.js",
+        "assets/select-C2Cfs6QA.js",
+        "assets/box-BKkWFKpU.js",
+        "assets/context-menu-C4oSXiVA.js",
+        "assets/upload-BPd1mMOP.js",
+        "assets/pencil-line-CaAO5WxN.js",
+        "assets/circle-check-D-Ctgkex.js",
+        "assets/shield-check--w_fKSbU.js",
+        "assets/filter-BSx04egy.js",
+        "assets/save-BSv-9QbM.js",
+        "assets/square-wHHkjpNT.js",
+        "assets/Index-BONUKZ5v.js",
+        "assets/undo-2-D5lE1QWA.js",
+        "assets/redo-2-C5shF2GR.js",
+        "assets/mouse-pointer-2-CcAFVbvI.js",
+        "assets/maximize-2-RR2QKDiY.js",
+        "assets/lock-CnU-9QXr.js",
+        "assets/zoom-out-DKppPEQg.js",
+        "assets/popover-BSzlW0jk.js",
+        "assets/file-up-C_zCvaiq.js",
+        "assets/scissors-HYInhJ7L.js",
+        "assets/cpu-QysPLjFR.js"
+      ],
+      "dynamicImports": [
+        "assets/xlsx-QOIw0qXl.js",
+        "assets/xlsx-QOIw0qXl.js",
+        "assets/Pcb3DCanvas-DM9mzVJc.js"
+      ],
+      "css": [
+        "assets/PcbDesignerWorkspace-BMUU68U-.css"
+      ],
+      "assets": [
+        "assets/occt-import-js-BhHfLpto.wasm"
+      ],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/align-center-horizontal.js",
+        "node_modules/lucide-react/dist/esm/icons/align-center-vertical.js",
+        "node_modules/lucide-react/dist/esm/icons/align-end-horizontal.js",
+        "node_modules/lucide-react/dist/esm/icons/align-end-vertical.js",
+        "node_modules/lucide-react/dist/esm/icons/align-horizontal-space-between.js",
+        "node_modules/lucide-react/dist/esm/icons/align-start-horizontal.js",
+        "node_modules/lucide-react/dist/esm/icons/align-start-vertical.js",
+        "node_modules/lucide-react/dist/esm/icons/align-vertical-space-between.js",
+        "node_modules/lucide-react/dist/esm/icons/ban.js",
+        "node_modules/lucide-react/dist/esm/icons/lock-open.js",
+        "node_modules/lucide-react/dist/esm/icons/panel-left.js",
+        "node_modules/lucide-react/dist/esm/icons/ruler.js",
+        "node_modules/lucide-react/dist/esm/icons/shield-ban.js",
+        "src/components/pcb-designer/core/exports.ts",
+        "src/components/pcb-designer/core/tabular.ts",
+        "src/components/pcb-designer/core/files.ts",
+        "src/components/pcb-designer/defaults.ts",
+        "src/components/pcb-designer/core/componentKeepout.ts",
+        "src/components/pcb-designer/core/dxfTopology.ts",
+        "src/components/pcb-designer/core/boardOutline.ts",
+        "src/components/pcb-designer/core/validation.ts",
+        "node_modules/occt-import-js/dist/occt-import-js.js?commonjs-module",
+        "\u0000__vite-browser-external?commonjs-proxy",
+        "node_modules/occt-import-js/dist/occt-import-js.js",
+        "node_modules/occt-import-js/dist/occt-import-js.js?commonjs-es-import",
+        "node_modules/occt-import-js/dist/occt-import-js.wasm?url",
+        "src/components/data-center/stepImport.ts",
+        "src/components/pcb-designer/core/modelAssets.ts",
+        "src/components/pcb-designer/core/resizeBoard.ts",
+        "src/components/pcb-designer/PcbDialogs.tsx",
+        "src/components/pcb-designer/core/modelProjection.ts",
+        "src/components/pcb-designer/core/geometry.ts",
+        "src/components/pcb-designer/core/viewSync.ts",
+        "src/components/pcb-designer/core/editor.ts",
+        "src/components/pcb-designer/core/selection.ts",
+        "src/components/pcb-designer/PcbComponentKeepoutDialog.tsx",
+        "src/components/pcb-designer/core/measurementShortcuts.ts",
+        "src/components/pcb-designer/PcbMeasurementShortcutsDialog.tsx",
+        "src/components/pcb-designer/PcbCanvas.tsx",
+        "src/components/pcb-designer/PcbLeftRail.tsx",
+        "src/components/pcb-designer/PcbToolbar.tsx",
+        "src/components/pcb-designer/PcbCollaborators.tsx",
+        "src/components/pcb-designer/core/boardCuts.ts",
+        "src/components/pcb-designer/core/dxf.ts",
+        "src/components/pcb-designer/PcbBoardOutlineDialog.tsx",
+        "src/components/pcb-designer/PcbInspector.tsx",
+        "src/components/pcb-designer/PcbStepModelDialog.tsx",
+        "src/components/pcb-designer/core/pngExport.ts",
+        "src/components/pcb-designer/core/remoteAccess.ts",
+        "src/components/pcb-designer/core/storage.ts",
+        "src/components/pcb-designer/core/accountRemoteSync.ts",
+        "src/components/pcb-designer/core/history.ts",
+        "src/components/pcb-designer/core/drc.ts",
+        "src/components/pcb-designer/core/workspaceRecords.ts",
+        "src/components/pcb-designer/core/workspace.ts",
+        "src/components/pcb-designer/hooks/usePcbEditorActions.ts",
+        "src/components/pcb-designer/core/remoteSync.ts",
+        "src/components/pcb-designer/core/recoveryClient.ts",
+        "src/components/pcb-designer/hooks/usePcbPersistence.ts",
+        "src/components/pcb-designer/hooks/usePcbRemoteAccess.ts",
+        "src/components/pcb-designer/hooks/usePcbProjectLock.ts",
+        "src/components/pcb-designer/hooks/usePcbWorkspace.ts",
+        "src/components/pcb-designer/hooks/usePcbProjectPresence.ts",
+        "src/components/pcb-designer/pcb-designer.css",
+        "src/components/pcb-designer/PcbDesignerWorkspace.tsx"
+      ]
+    },
+    "assets/PrivateAttachmentHtml-CMzdGDuc.js": {
+      "path": "assets/PrivateAttachmentHtml-CMzdGDuc.js",
+      "bytes": 1494,
+      "sha256": "ef31dde49aefa9d2bc60fe021124a5f3f263e36d994225d8959fe74c36c9a9b0",
+      "imports": [
+        "assets/index-QQIaZRuM.js",
+        "assets/purify.es-CAi2OJFm.js",
+        "assets/privateAttachments-BKg0LOv0.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "src/components/attachments/PrivateAttachmentHtml.tsx"
+      ]
+    },
+    "assets/SystemManager-BCrS-8Yq.js": {
+      "path": "assets/SystemManager-BCrS-8Yq.js",
+      "bytes": 47065,
+      "sha256": "80ff6d147fca913b746a42831faf31d97d77ccd34ebefbd7e2752fae430187c4",
+      "imports": [
+        "assets/index-QQIaZRuM.js",
+        "assets/select-C2Cfs6QA.js",
+        "assets/AuthenticatedApplication-s-lsZ7en.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/arrow-right.js",
+        "node_modules/lucide-react/dist/esm/icons/boxes.js",
+        "node_modules/lucide-react/dist/esm/icons/circle.js",
+        "node_modules/lucide-react/dist/esm/icons/clipboard-list.js",
+        "node_modules/lucide-react/dist/esm/icons/ellipsis.js",
+        "node_modules/lucide-react/dist/esm/icons/file-spreadsheet.js",
+        "node_modules/lucide-react/dist/esm/icons/file-text.js",
+        "node_modules/lucide-react/dist/esm/icons/gauge.js",
+        "node_modules/lucide-react/dist/esm/icons/house.js",
+        "node_modules/lucide-react/dist/esm/icons/image-plus.js",
+        "node_modules/lucide-react/dist/esm/icons/list-checks.js",
+        "node_modules/lucide-react/dist/esm/icons/lock-keyhole.js",
+        "node_modules/lucide-react/dist/esm/icons/minus.js",
+        "node_modules/lucide-react/dist/esm/icons/panel-left-close.js",
+        "node_modules/lucide-react/dist/esm/icons/panel-left-open.js",
+        "node_modules/lucide-react/dist/esm/icons/paperclip.js",
+        "node_modules/lucide-react/dist/esm/icons/settings-2.js",
+        "node_modules/lucide-react/dist/esm/icons/user-round.js",
+        "node_modules/lucide-react/dist/esm/icons/wrench.js",
+        "node_modules/@radix-ui/react-roving-focus/node_modules/@radix-ui/react-context/dist/index.mjs",
+        "node_modules/@radix-ui/react-roving-focus/dist/index.mjs",
+        "node_modules/@radix-ui/react-menu/dist/index.mjs",
+        "node_modules/@radix-ui/react-dropdown-menu/dist/index.mjs",
+        "src/components/ui/dropdown-menu.tsx",
+        "src/components/layout/Sidebar.tsx",
+        "src/components/maintenance/MaintenanceLoading.tsx",
+        "src/components/ui/sheet.tsx",
+        "src/components/test-tracker/SystemManager.tsx"
+      ]
+    },
+    "assets/__vite-browser-external-D7Ct-6yo.js": {
+      "path": "assets/__vite-browser-external-D7Ct-6yo.js",
+      "bytes": 130,
+      "sha256": "18c7eb5102634686ac6062381a09b4ddb18933678e599ba74a2e33d690f97134",
+      "imports": [],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "__vite-browser-external"
+      ]
+    },
+    "assets/analysis-CoBjO-JG.webp": {
+      "path": "assets/analysis-CoBjO-JG.webp",
+      "bytes": 48008,
+      "sha256": "f840f24953b7ae38af765b6b7a88becd244d78ac9eca18a4dcdb021fef8947c4"
+    },
+    "assets/box-BKkWFKpU.js": {
+      "path": "assets/box-BKkWFKpU.js",
+      "bytes": 479,
+      "sha256": "898ff720b7eed218eb09e2bae1d17ca52b8fe4238f8f5c295d054ce12a4c4f61",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/box.js"
+      ]
+    },
+    "assets/circle-check-D-Ctgkex.js": {
+      "path": "assets/circle-check-D-Ctgkex.js",
+      "bytes": 341,
+      "sha256": "d6c06f76190c820c067ad835e16154e04fced446e3345c57d01130b5b79e4231",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/circle-check.js"
+      ]
+    },
+    "assets/comparison-DEpuqxPR.webp": {
+      "path": "assets/comparison-DEpuqxPR.webp",
+      "bytes": 64036,
+      "sha256": "18be8952b581fb5a493850dd410f03196b8536673ac6d191257a50f5db7f50eb"
+    },
+    "assets/context-menu-C4oSXiVA.js": {
+      "path": "assets/context-menu-C4oSXiVA.js",
+      "bytes": 8320,
+      "sha256": "65da4c9d66a7d4bfc0af370d8e0e4a82a97eff0d07873e3d9517fbd3130784cf",
+      "imports": [
+        "assets/index-QQIaZRuM.js",
+        "assets/SystemManager-BCrS-8Yq.js",
+        "assets/select-C2Cfs6QA.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/@radix-ui/react-context-menu/dist/index.mjs",
+        "src/components/ui/context-menu.tsx"
+      ]
+    },
+    "assets/cpu-QysPLjFR.js": {
+      "path": "assets/cpu-QysPLjFR.js",
+      "bytes": 665,
+      "sha256": "6f977d2f6d8360526c699039e0207cdf19519e93110d855dba1e41af14483413",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/cpu.js"
+      ]
+    },
+    "assets/dataCenterTypes-BZcv7E_Z.js": {
+      "path": "assets/dataCenterTypes-BZcv7E_Z.js",
+      "bytes": 1352,
+      "sha256": "9fca7c25aa3d23570494cd6fc4622ca41c395c0921b40802d99de9f8c3c54897",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/layout-template.js",
+        "node_modules/lucide-react/dist/esm/icons/rotate-cw.js",
+        "src/components/data-center/dataCenterTypes.ts"
+      ]
+    },
+    "assets/file-up-C_zCvaiq.js": {
+      "path": "assets/file-up-C_zCvaiq.js",
+      "bytes": 469,
+      "sha256": "f57c3cae35552df8147b4d2b0828b63377e9b7b89670fdcdf918752f773434c6",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/file-up.js"
+      ]
+    },
+    "assets/files-CEnOF0t4.webp": {
+      "path": "assets/files-CEnOF0t4.webp",
+      "bytes": 35808,
+      "sha256": "131639a70be3d22022baf096c4a31d96745cd8f82f37cee935f21a57a4343a3f"
+    },
+    "assets/filter-BSx04egy.js": {
+      "path": "assets/filter-BSx04egy.js",
+      "bytes": 330,
+      "sha256": "c40e07aa74e84f015de5c0ab9ac54a0389e8a383ecdea2cbb4a0009d2c0dbbb3",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/filter.js"
+      ]
+    },
+    "assets/index-BV471ls_.css": {
+      "path": "assets/index-BV471ls_.css",
+      "bytes": 405704,
+      "sha256": "3ecc96063c6f8406601bb1d3a0a9f57a184058df7d479d879d970af91d68ca52"
+    },
+    "assets/index-QQIaZRuM.js": {
+      "path": "assets/index-QQIaZRuM.js",
+      "bytes": 522117,
+      "sha256": "761094f66bf9d85efa19ca8984a4d8346616a1baaa8521a5c28ed76fc625e9de",
+      "imports": [],
+      "dynamicImports": [
+        "assets/AuthenticatedApplication-s-lsZ7en.js"
+      ],
+      "css": [
+        "assets/index-BV471ls_.css"
+      ],
+      "assets": [],
+      "modules": [
+        "\u0000vite/modulepreload-polyfill.js",
+        "index.html?html-proxy&inline-css&index=0.css",
+        "\u0000commonjsHelpers.js",
+        "node_modules/react/jsx-runtime.js?commonjs-module",
+        "node_modules/react/cjs/react-jsx-runtime.production.min.js?commonjs-exports",
+        "node_modules/react/index.js?commonjs-module",
+        "node_modules/react/cjs/react.production.min.js?commonjs-exports",
+        "node_modules/react/cjs/react.production.min.js",
+        "node_modules/react/index.js",
+        "node_modules/react/cjs/react-jsx-runtime.production.min.js",
+        "node_modules/react/jsx-runtime.js",
+        "node_modules/react/jsx-runtime.js?commonjs-es-import",
+        "src/lib/workspaceHistory.ts",
+        "node_modules/react-dom/client.js?commonjs-exports",
+        "node_modules/react-dom/index.js?commonjs-module",
+        "node_modules/react-dom/cjs/react-dom.production.min.js?commonjs-exports",
+        "node_modules/scheduler/index.js?commonjs-module",
+        "node_modules/scheduler/cjs/scheduler.production.min.js?commonjs-exports",
+        "node_modules/scheduler/cjs/scheduler.production.min.js",
+        "node_modules/scheduler/index.js",
+        "node_modules/react-dom/cjs/react-dom.production.min.js",
+        "node_modules/react-dom/index.js",
+        "node_modules/react-dom/client.js",
+        "node_modules/react-dom/client.js?commonjs-es-import",
+        "\u0000vite/preload-helper.js",
+        "node_modules/react/index.js?commonjs-es-import",
+        "src/lib/applicationUpdate.ts",
+        "src/components/common/ModuleLoadRecovery.tsx",
+        "src/components/common/recoverableLazy.tsx",
+        "src/hooks/use-toast.ts",
+        "node_modules/react-dom/index.js?commonjs-es-import",
+        "node_modules/@radix-ui/primitive/dist/index.mjs",
+        "node_modules/@radix-ui/react-compose-refs/dist/index.mjs",
+        "node_modules/@radix-ui/react-collection/node_modules/@radix-ui/react-context/dist/index.mjs",
+        "node_modules/@radix-ui/react-slot/dist/index.mjs",
+        "node_modules/@radix-ui/react-collection/dist/index.mjs",
+        "node_modules/@radix-ui/react-context/dist/index.mjs",
+        "node_modules/@radix-ui/react-primitive/dist/index.mjs",
+        "node_modules/@radix-ui/react-use-callback-ref/dist/index.mjs",
+        "node_modules/@radix-ui/react-use-escape-keydown/dist/index.mjs",
+        "node_modules/@radix-ui/react-dismissable-layer/dist/index.mjs",
+        "node_modules/@radix-ui/react-use-layout-effect/dist/index.mjs",
+        "node_modules/@radix-ui/react-portal/dist/index.mjs",
+        "node_modules/@radix-ui/react-presence/dist/index.mjs",
+        "node_modules/@radix-ui/react-use-controllable-state/dist/index.mjs",
+        "node_modules/@radix-ui/react-visually-hidden/dist/index.mjs",
+        "node_modules/@radix-ui/react-toast/dist/index.mjs",
+        "node_modules/clsx/dist/clsx.mjs",
+        "node_modules/class-variance-authority/dist/index.mjs",
+        "node_modules/lucide-react/dist/esm/shared/src/utils.js",
+        "node_modules/lucide-react/dist/esm/defaultAttributes.js",
+        "node_modules/lucide-react/dist/esm/Icon.js",
+        "node_modules/lucide-react/dist/esm/createLucideIcon.js",
+        "node_modules/lucide-react/dist/esm/icons/key-round.js",
+        "node_modules/lucide-react/dist/esm/icons/refresh-cw.js",
+        "node_modules/lucide-react/dist/esm/icons/rotate-ccw.js",
+        "node_modules/lucide-react/dist/esm/icons/triangle-alert.js",
+        "node_modules/lucide-react/dist/esm/icons/user-round-plus.js",
+        "node_modules/lucide-react/dist/esm/icons/x.js",
+        "node_modules/tailwind-merge/dist/bundle-mjs.mjs",
+        "src/lib/utils.ts",
+        "src/components/ui/toast.tsx",
+        "src/components/ui/toaster.tsx",
+        "node_modules/next-themes/dist/index.mjs",
+        "node_modules/sonner/dist/index.mjs",
+        "src/hooks/use-mobile.tsx",
+        "src/components/ui/sonner.tsx",
+        "node_modules/@radix-ui/react-id/dist/index.mjs",
+        "node_modules/@floating-ui/utils/dist/floating-ui.utils.mjs",
+        "node_modules/@floating-ui/core/dist/floating-ui.core.mjs",
+        "node_modules/@floating-ui/utils/dist/floating-ui.utils.dom.mjs",
+        "node_modules/@floating-ui/dom/dist/floating-ui.dom.mjs",
+        "node_modules/@floating-ui/react-dom/dist/floating-ui.react-dom.mjs",
+        "node_modules/@radix-ui/react-arrow/dist/index.mjs",
+        "node_modules/@radix-ui/react-popper/node_modules/@radix-ui/react-context/dist/index.mjs",
+        "node_modules/@radix-ui/react-use-size/dist/index.mjs",
+        "node_modules/@radix-ui/react-popper/dist/index.mjs",
+        "node_modules/@radix-ui/react-tooltip/dist/index.mjs",
+        "src/components/ui/tooltip.tsx",
+        "src/components/common/AppRuntimeBoundary.tsx",
+        "node_modules/@tanstack/query-core/build/modern/subscribable.js",
+        "node_modules/@tanstack/query-core/build/modern/utils.js",
+        "node_modules/@tanstack/query-core/build/modern/focusManager.js",
+        "node_modules/@tanstack/query-core/build/modern/onlineManager.js",
+        "node_modules/@tanstack/query-core/build/modern/thenable.js",
+        "node_modules/@tanstack/query-core/build/modern/retryer.js",
+        "node_modules/@tanstack/query-core/build/modern/notifyManager.js",
+        "node_modules/@tanstack/query-core/build/modern/removable.js",
+        "node_modules/@tanstack/query-core/build/modern/query.js",
+        "node_modules/@tanstack/query-core/build/modern/queryCache.js",
+        "node_modules/@tanstack/query-core/build/modern/mutation.js",
+        "node_modules/@tanstack/query-core/build/modern/mutationCache.js",
+        "node_modules/@tanstack/query-core/build/modern/infiniteQueryBehavior.js",
+        "node_modules/@tanstack/query-core/build/modern/queryClient.js",
+        "node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js",
+        "src/components/account/userAvatarUtils.mjs",
+        "node_modules/tslib/tslib.es6.mjs",
+        "node_modules/@supabase/functions-js/dist/module/helper.js",
+        "node_modules/@supabase/functions-js/dist/module/types.js",
+        "node_modules/@supabase/functions-js/dist/module/FunctionsClient.js",
+        "node_modules/@supabase/postgrest-js/dist/index.mjs",
+        "node_modules/@supabase/realtime-js/dist/module/lib/websocket-factory.js",
+        "node_modules/@supabase/realtime-js/dist/module/lib/version.js",
+        "node_modules/@supabase/realtime-js/dist/module/lib/constants.js",
+        "node_modules/@supabase/realtime-js/dist/module/lib/serializer.js",
+        "node_modules/@supabase/realtime-js/dist/module/lib/transformers.js",
+        "node_modules/@supabase/phoenix/priv/static/phoenix.mjs",
+        "node_modules/@supabase/realtime-js/dist/module/phoenix/presenceAdapter.js",
+        "node_modules/@supabase/realtime-js/dist/module/RealtimePresence.js",
+        "node_modules/@supabase/realtime-js/dist/module/phoenix/channelAdapter.js",
+        "node_modules/@supabase/realtime-js/dist/module/RealtimeChannel.js",
+        "node_modules/@supabase/realtime-js/dist/module/phoenix/socketAdapter.js",
+        "node_modules/@supabase/realtime-js/dist/module/RealtimeClient.js",
+        "node_modules/iceberg-js/dist/index.mjs",
+        "node_modules/@supabase/storage-js/dist/index.mjs",
+        "node_modules/@supabase/auth-js/dist/module/lib/version.js",
+        "node_modules/@supabase/auth-js/dist/module/lib/constants.js",
+        "node_modules/@supabase/auth-js/dist/module/lib/errors.js",
+        "node_modules/@supabase/auth-js/dist/module/lib/base64url.js",
+        "node_modules/@supabase/auth-js/dist/module/lib/helpers.js",
+        "node_modules/@supabase/auth-js/dist/module/lib/fetch.js",
+        "node_modules/@supabase/auth-js/dist/module/lib/types.js",
+        "node_modules/@supabase/auth-js/dist/module/GoTrueAdminApi.js",
+        "node_modules/@supabase/auth-js/dist/module/lib/local-storage.js",
+        "node_modules/@supabase/auth-js/dist/module/lib/locks.js",
+        "node_modules/@supabase/auth-js/dist/module/lib/polyfills.js",
+        "node_modules/@supabase/auth-js/dist/module/lib/web3/ethereum.js",
+        "node_modules/@supabase/auth-js/dist/module/lib/webauthn.errors.js",
+        "node_modules/@supabase/auth-js/dist/module/lib/webauthn.js",
+        "node_modules/@supabase/auth-js/dist/module/GoTrueClient.js",
+        "node_modules/@supabase/auth-js/dist/module/AuthClient.js",
+        "node_modules/@supabase/supabase-js/dist/index.mjs",
+        "src/integrations/supabase/authLockPolicy.mjs",
+        "src/integrations/supabase/client.ts",
+        "src/components/auth/loginRetryPolicy.mjs",
+        "src/components/auth/UserContext.tsx",
+        "src/components/brand/PlatformLogoMark.tsx",
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "node_modules/@radix-ui/react-label/dist/index.mjs",
+        "src/components/ui/label.tsx",
+        "src/integrations/supabase/serviceErrors.js",
+        "src/components/auth/LoginPage.tsx",
+        "src/App.tsx",
+        "src/index.css",
+        "src/main.tsx",
+        "index.html"
+      ]
+    },
+    "assets/lock-CnU-9QXr.js": {
+      "path": "assets/lock-CnU-9QXr.js",
+      "bytes": 375,
+      "sha256": "cb4d1473c4b0baa0f595145bcb375a870c44bbd052e298369e66bc2514bcdc89",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/lock.js"
+      ]
+    },
+    "assets/maintenance-C8ngA8hT.js": {
+      "path": "assets/maintenance-C8ngA8hT.js",
+      "bytes": 6103,
+      "sha256": "ef109a0c264f5732757495fec9eb5794afe2b4dcf1d34ad23346c9b191cb0055",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [
+        "assets/maintenance-DooQnWqJ.css"
+      ],
+      "assets": [],
+      "modules": [
+        "src/components/maintenance/maintenanceModel.ts",
+        "src/components/maintenance/useMaintenanceData.ts",
+        "src/components/maintenance/maintenance.css"
+      ]
+    },
+    "assets/maintenance-DooQnWqJ.css": {
+      "path": "assets/maintenance-DooQnWqJ.css",
+      "bytes": 17104,
+      "sha256": "b6a092010249f13300b9d980b4c6d0e9a35ea7dba8f709a0c7ce522656864896"
+    },
+    "assets/maintenanceOverviewLayout-DvO0b6EW.css": {
+      "path": "assets/maintenanceOverviewLayout-DvO0b6EW.css",
+      "bytes": 6564,
+      "sha256": "7dc000d8e339a8079fc8045289d117dceef7c3dd8b6a28c032648d33e0c90473"
+    },
+    "assets/maximize-2-RR2QKDiY.js": {
+      "path": "assets/maximize-2-RR2QKDiY.js",
+      "bytes": 993,
+      "sha256": "2680456888c26b2d7e7ecd9239aa6fe678b1cee1d61eddcf6987b6a20963fa88",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/hand.js",
+        "node_modules/lucide-react/dist/esm/icons/maximize-2.js"
+      ]
+    },
+    "assets/mouse-pointer-2-CcAFVbvI.js": {
+      "path": "assets/mouse-pointer-2-CcAFVbvI.js",
+      "bytes": 418,
+      "sha256": "4d5b558266e25b2cb4445d84e6fc0294e9294ade94bbd2e4d3ba4ebd7b6af99b",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/mouse-pointer-2.js"
+      ]
+    },
+    "assets/occt-import-js-BhHfLpto.wasm": {
+      "path": "assets/occt-import-js-BhHfLpto.wasm",
+      "bytes": 7604031,
+      "sha256": "33391fc9d94ea5c869a6718488bf0a9a464222bac9bdc764dfe1690cef281952"
+    },
+    "assets/parts-v2-CUM8bzEw.webp": {
+      "path": "assets/parts-v2-CUM8bzEw.webp",
+      "bytes": 51658,
+      "sha256": "2b04b30a6a4254a86ff34e1886c0f14ccbe9f4796dcf3423119e05235b67dcb0"
+    },
+    "assets/pcb-v2-BbbJn3au.webp": {
+      "path": "assets/pcb-v2-BbbJn3au.webp",
+      "bytes": 86646,
+      "sha256": "92fbcadfa62a4a5b2a80937f015324bea9833b3305ef56b7ebcf68d19a19c8e8"
+    },
+    "assets/pencil-line-CaAO5WxN.js": {
+      "path": "assets/pencil-line-CaAO5WxN.js",
+      "bytes": 487,
+      "sha256": "cc3e61f54c704453d5feff2c9a37c75afdd8db7e71eb5aaf1fd29e5dfa46e197",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/pencil-line.js"
+      ]
+    },
+    "assets/performance-BH5Kc_Cv.webp": {
+      "path": "assets/performance-BH5Kc_Cv.webp",
+      "bytes": 41620,
+      "sha256": "7aae2620a8285b5d03197d8f6d90aadd9c04ab843bbc82e732d8dea0438aeb6d"
+    },
+    "assets/popover-BSzlW0jk.js": {
+      "path": "assets/popover-BSzlW0jk.js",
+      "bytes": 5218,
+      "sha256": "513f241d3a151dd045be3fdb86692d1e6998379ec0fc6b538536e3d62a0a9f56",
+      "imports": [
+        "assets/index-QQIaZRuM.js",
+        "assets/select-C2Cfs6QA.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/@radix-ui/react-popover/dist/index.mjs",
+        "src/components/ui/popover.tsx"
+      ]
+    },
+    "assets/privateAttachments-BKg0LOv0.js": {
+      "path": "assets/privateAttachments-BKg0LOv0.js",
+      "bytes": 1545,
+      "sha256": "f14e8d5cc451531f77e2bd4513cf079ce3f438d2c061db21c2a9839b5d3f1e26",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "src/lib/privateAttachmentPaths.mjs",
+        "src/lib/privateAttachments.ts"
+      ]
+    },
+    "assets/purify.es-CAi2OJFm.js": {
+      "path": "assets/purify.es-CAi2OJFm.js",
+      "bytes": 30469,
+      "sha256": "8e143ee7bcdf076d62676183aacc62568c9adb8042c57d4fef7d62e1ca7c345a",
+      "imports": [],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/dompurify/dist/purify.es.mjs"
+      ]
+    },
+    "assets/racks-DUkUjznZ.webp": {
+      "path": "assets/racks-DUkUjznZ.webp",
+      "bytes": 49698,
+      "sha256": "1d94c09bbd436b8c5e1fbb70e69c0e8353dd48ce5562132afd08686c0d9781de"
+    },
+    "assets/redo-2-C5shF2GR.js": {
+      "path": "assets/redo-2-C5shF2GR.js",
+      "bytes": 375,
+      "sha256": "b1c601c06e6ee47142af590ce96669df48f29f7c2ec83172918ae9cae1cb4075",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/redo-2.js"
+      ]
+    },
+    "assets/repair-CFvMKG0L.webp": {
+      "path": "assets/repair-CFvMKG0L.webp",
+      "bytes": 76384,
+      "sha256": "9377040a57f399babb48f1f57bcfe711dcfe925e79f0f11496534486de8296db"
+    },
+    "assets/save-BSv-9QbM.js": {
+      "path": "assets/save-BSv-9QbM.js",
+      "bytes": 496,
+      "sha256": "188ac237b6d718fb6e6b378c52126c21446d6c89368244bb7df4e253e4457e81",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/save.js"
+      ]
+    },
+    "assets/scissors-HYInhJ7L.js": {
+      "path": "assets/scissors-HYInhJ7L.js",
+      "bytes": 783,
+      "sha256": "fc50141741aeef9df4e48ee225668be79871ce949c6bb5607c9e227fe37d694a",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/panel-right.js",
+        "node_modules/lucide-react/dist/esm/icons/scissors.js"
+      ]
+    },
+    "assets/select-C2Cfs6QA.js": {
+      "path": "assets/select-C2Cfs6QA.js",
+      "bytes": 82331,
+      "sha256": "28e1dc75085ba11077fc7847314157da106b30e88e8a4b6bdbdfbf8d00e8d48f",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/check.js",
+        "node_modules/lucide-react/dist/esm/icons/chevron-down.js",
+        "node_modules/lucide-react/dist/esm/icons/chevron-right.js",
+        "node_modules/lucide-react/dist/esm/icons/chevron-up.js",
+        "node_modules/lucide-react/dist/esm/icons/copy.js",
+        "node_modules/lucide-react/dist/esm/icons/download.js",
+        "node_modules/lucide-react/dist/esm/icons/external-link.js",
+        "node_modules/lucide-react/dist/esm/icons/loader-circle.js",
+        "node_modules/lucide-react/dist/esm/icons/pencil.js",
+        "node_modules/lucide-react/dist/esm/icons/plus.js",
+        "node_modules/lucide-react/dist/esm/icons/search.js",
+        "node_modules/lucide-react/dist/esm/icons/trash-2.js",
+        "node_modules/@radix-ui/react-focus-scope/dist/index.mjs",
+        "node_modules/@radix-ui/react-focus-guards/dist/index.mjs",
+        "node_modules/react-remove-scroll-bar/dist/es2015/constants.js",
+        "node_modules/use-callback-ref/dist/es2015/assignRef.js",
+        "node_modules/use-callback-ref/dist/es2015/useRef.js",
+        "node_modules/use-callback-ref/dist/es2015/useMergeRef.js",
+        "node_modules/use-sidecar/dist/es2015/medium.js",
+        "node_modules/use-sidecar/dist/es2015/exports.js",
+        "node_modules/react-remove-scroll/dist/es2015/medium.js",
+        "node_modules/react-remove-scroll/dist/es2015/UI.js",
+        "node_modules/get-nonce/dist/es2015/index.js",
+        "node_modules/react-style-singleton/dist/es2015/singleton.js",
+        "node_modules/react-style-singleton/dist/es2015/hook.js",
+        "node_modules/react-style-singleton/dist/es2015/component.js",
+        "node_modules/react-remove-scroll-bar/dist/es2015/utils.js",
+        "node_modules/react-remove-scroll-bar/dist/es2015/component.js",
+        "node_modules/react-remove-scroll/dist/es2015/aggresiveCapture.js",
+        "node_modules/react-remove-scroll/dist/es2015/handleScroll.js",
+        "node_modules/react-remove-scroll/dist/es2015/SideEffect.js",
+        "node_modules/react-remove-scroll/dist/es2015/sidecar.js",
+        "node_modules/react-remove-scroll/dist/es2015/Combination.js",
+        "node_modules/aria-hidden/dist/es2015/index.js",
+        "node_modules/@radix-ui/react-dialog/dist/index.mjs",
+        "src/components/ui/dialog.tsx",
+        "src/components/ui/badge.tsx",
+        "node_modules/@radix-ui/react-direction/dist/index.mjs",
+        "node_modules/@radix-ui/number/dist/index.mjs",
+        "node_modules/@radix-ui/react-scroll-area/dist/index.mjs",
+        "src/components/ui/scroll-area.tsx",
+        "node_modules/@radix-ui/react-tabs/node_modules/@radix-ui/primitive/dist/index.mjs",
+        "node_modules/@radix-ui/react-tabs/node_modules/@radix-ui/react-context/dist/index.mjs",
+        "node_modules/@radix-ui/react-tabs/node_modules/@radix-ui/react-compose-refs/dist/index.mjs",
+        "node_modules/@radix-ui/react-tabs/node_modules/@radix-ui/react-slot/dist/index.mjs",
+        "node_modules/@radix-ui/react-tabs/node_modules/@radix-ui/react-collection/dist/index.mjs",
+        "node_modules/@radix-ui/react-tabs/node_modules/@radix-ui/react-use-layout-effect/dist/index.mjs",
+        "node_modules/@radix-ui/react-tabs/node_modules/@radix-ui/react-id/dist/index.mjs",
+        "node_modules/@radix-ui/react-tabs/node_modules/@radix-ui/react-primitive/dist/index.mjs",
+        "node_modules/@radix-ui/react-tabs/node_modules/@radix-ui/react-use-callback-ref/dist/index.mjs",
+        "node_modules/@radix-ui/react-tabs/node_modules/@radix-ui/react-use-controllable-state/dist/index.mjs",
+        "node_modules/@radix-ui/react-tabs/node_modules/@radix-ui/react-direction/dist/index.mjs",
+        "node_modules/@radix-ui/react-tabs/node_modules/@radix-ui/react-roving-focus/dist/index.mjs",
+        "node_modules/@radix-ui/react-tabs/node_modules/@radix-ui/react-presence/dist/index.mjs",
+        "node_modules/@radix-ui/react-tabs/dist/index.mjs",
+        "src/components/ui/tabs.tsx",
+        "src/components/ui/textarea.tsx",
+        "node_modules/@radix-ui/react-alert-dialog/dist/index.mjs",
+        "src/components/ui/alert-dialog.tsx",
+        "node_modules/@radix-ui/react-use-previous/dist/index.mjs",
+        "node_modules/@radix-ui/react-select/dist/index.mjs",
+        "src/components/ui/select.tsx"
+      ]
+    },
+    "assets/server-HHQwUFgd.js": {
+      "path": "assets/server-HHQwUFgd.js",
+      "bytes": 507,
+      "sha256": "18cfe01f94fbac06e49205d63b7065569a021415005f74ef3bd3a4cd42ff9a85",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/server.js"
+      ]
+    },
+    "assets/shield-check--w_fKSbU.js": {
+      "path": "assets/shield-check--w_fKSbU.js",
+      "bytes": 3204,
+      "sha256": "ca3caa88ae31a2f85c4f816e6d200f9a3464793d92926b7b43d1a522a5a0c3ed",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/circle-alert.js",
+        "node_modules/lucide-react/dist/esm/icons/eye-off.js",
+        "node_modules/lucide-react/dist/esm/icons/eye.js",
+        "node_modules/lucide-react/dist/esm/icons/file-json.js",
+        "node_modules/lucide-react/dist/esm/icons/server-cog.js",
+        "node_modules/lucide-react/dist/esm/icons/shield-check.js"
+      ]
+    },
+    "assets/square-wHHkjpNT.js": {
+      "path": "assets/square-wHHkjpNT.js",
+      "bytes": 316,
+      "sha256": "61a2639f4b199e47ea4c2f0f4f16fe3fc0536022e01c50b9ac5b85964a89f9a2",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/square.js"
+      ]
+    },
+    "assets/undo-2-D5lE1QWA.js": {
+      "path": "assets/undo-2-D5lE1QWA.js",
+      "bytes": 376,
+      "sha256": "bc17298eebe23db0b8becb09c52130abc52ca4478758bb4878ee530c2efc9a96",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/undo-2.js"
+      ]
+    },
+    "assets/upload-BPd1mMOP.js": {
+      "path": "assets/upload-BPd1mMOP.js",
+      "bytes": 426,
+      "sha256": "28950a0ba06d66ebabccfc5d921a6517617a37f68607d223ea5dc8602b19d3e5",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/upload.js"
+      ]
+    },
+    "assets/usePrivateAttachmentUrl-CXSGjhZd.js": {
+      "path": "assets/usePrivateAttachmentUrl-CXSGjhZd.js",
+      "bytes": 868,
+      "sha256": "81261e3f743dd1e79440692a532ac266becf582238e31cf83d802f4111673bfa",
+      "imports": [
+        "assets/index-QQIaZRuM.js",
+        "assets/privateAttachments-BKg0LOv0.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "src/components/attachments/usePrivateAttachmentUrl.ts"
+      ]
+    },
+    "assets/zoom-out-DKppPEQg.js": {
+      "path": "assets/zoom-out-DKppPEQg.js",
+      "bytes": 837,
+      "sha256": "fd8b54ac706f28c48b71052ba936a6431837bbe8cad89631e0e8e6248ed38a2e",
+      "imports": [
+        "assets/index-QQIaZRuM.js"
+      ],
+      "dynamicImports": [],
+      "css": [],
+      "assets": [],
+      "modules": [
+        "node_modules/lucide-react/dist/esm/icons/zoom-in.js",
+        "node_modules/lucide-react/dist/esm/icons/zoom-out.js"
+      ]
+    },
+    "favicon.ico": {
+      "path": "favicon.ico",
+      "bytes": 7645,
+      "sha256": "29a40d56580a5366083461297773dbf146ec043d1156f432f5472cb3487f506b"
+    },
+    "index.html": {
+      "path": "index.html",
+      "bytes": 10685,
+      "sha256": "4127cf01b91c859c5392c3561fc6d45085dc40e1d9754b688fe48f1cf8e2676f"
+    },
+    "platform-mobile-qr.svg": {
+      "path": "platform-mobile-qr.svg",
+      "bytes": 13440,
+      "sha256": "57328ae5d6505d0f2bfacbe6e13e5b9480b7ba8dc8062d24011875de1381e589"
+    }
+  },
+  "postCutoverExtra": [
+    {
+      "path": "assets/MaintenanceDashboard-Cgyl8M-G.js",
+      "bytes": 4167,
+      "sha256": "543cc938dbe35a3edf56ea0f912110bae9bee06b22d126e26195cd7618968a9d"
+    },
+    {
+      "path": "assets/maintenance-C8ngA8hT.js",
+      "bytes": 6103,
+      "sha256": "ef109a0c264f5732757495fec9eb5794afe2b4dcf1d34ad23346c9b191cb0055"
+    },
+    {
+      "path": "assets/server-HHQwUFgd.js",
+      "bytes": 507,
+      "sha256": "18cfe01f94fbac06e49205d63b7065569a021415005f74ef3bd3a4cd42ff9a85"
+    }
+  ],
+  "blockedOldPaths": [
+    "assets/index-QQIaZRuM.js",
+    "assets/AuthenticatedApplication-s-lsZ7en.js",
+    "assets/AdminPanel-DJenLMaY.js",
+    "assets/PcbDesignerWorkspace-D5tdlgro.js",
+    "assets/PrivateAttachmentHtml-CMzdGDuc.js",
+    "assets/MaterialRequestPage-Bh6nm2RE.js",
+    "assets/Pcb3DCanvas-DM9mzVJc.js"
+  ],
+  "revokedHashes": [
+    "024e24249f3ffdc1ed6c460bd557d1b226df79b0573ba2163a5c17d02310a91b",
+    "27eedc1d0c4a4d97b9cdfee33973a51878307d9db1282bd950c66262fa6512c7",
+    "2ada803b5c40cc361e69de65b94a28a0ec64a83379197e8d8f7981bb3f78bc38",
+    "3bdc41463ae6975e05153908ac2ec9ded8c5c4776faf37aefba0e2f3d0455425",
+    "3cdc8a3bd50b3c3ab35cb1621ec32698b2cea802bbbdc57a6c3b11c83a1c1255",
+    "3fdc16044d19b7099c0bea2694f368c71ad961c102546dccff9418ffcc6c5187",
+    "51032200a4eeb81109960c68a64d98370f98f8077733358a6bbeff218b6a05bc",
+    "69457da6b7ca22ef8d7262e7549a5f24ccdab7b12ca7acccb67040692bd740c1",
+    "761094f66bf9d85efa19ca8984a4d8346616a1baaa8521a5c28ed76fc625e9de",
+    "8e5983e3455ae37de0019d35c81b03c437a758a65028009cd4233ad3b2f50548",
+    "a194c5edc6486b50a0dbc5ed721d2c5c56bad1838c04661b2d63f6fcea2449d6",
+    "b616a5600e65147e8d6c0c607773b7ebe8afb402122179479bd3950654071fa9",
+    "c1ba9e4ffda4d9d0d1cbe2b5982df79aafea1b5af2df21cfcaccaac226be4e78",
+    "d25128a0c02aca67425cf1a27ccb0cc4c140085152b366cf39b6bda1308373f7",
+    "d4a2c845b58e1dc3f5ddf39ee3b8178c02153c7ba7ccda341015fcbe617bf28f",
+    "eb251f7acf9f5a31d756a4ea62f7ea14d7e5414c9cbd1057e18ad452f43829fc",
+    "ef31dde49aefa9d2bc60fe021124a5f3f263e36d994225d8959fe74c36c9a9b0",
+    "f4a600086cf83128683c2476baa90a8eddfc55e6a4309fa15c8375b2529250f2",
+    "f9fe6e3ee99d02226ec2e0ce4d4c1ec6034ef09a2fddaa373e6c9a1591ca1e32"
+  ],
+  "additionalRevokedExecutables": [
+    {
+      "path": "assets/AuthenticatedApplication-B_M5oMyv.js",
+      "bytes": 77211,
+      "sha256": "8e5983e3455ae37de0019d35c81b03c437a758a65028009cd4233ad3b2f50548",
+      "baseline": "96",
+      "component": "AuthenticatedApplication"
+    },
+    {
+      "path": "assets/AdminPanel-DpjSkMJj.js",
+      "bytes": 57992,
+      "sha256": "3fdc16044d19b7099c0bea2694f368c71ad961c102546dccff9418ffcc6c5187",
+      "baseline": "96",
+      "component": "AdminPanel"
+    },
+    {
+      "path": "assets/PcbDesignerWorkspace-DUWZmjSw.js",
+      "bytes": 328829,
+      "sha256": "2ada803b5c40cc361e69de65b94a28a0ec64a83379197e8d8f7981bb3f78bc38",
+      "baseline": "96",
+      "component": "PcbDesignerWorkspace"
+    },
+    {
+      "path": "assets/PrivateAttachmentHtml-fasS_6T9.js",
+      "bytes": 1494,
+      "sha256": "d25128a0c02aca67425cf1a27ccb0cc4c140085152b366cf39b6bda1308373f7",
+      "baseline": "96",
+      "component": "PrivateAttachmentHtml"
+    },
+    {
+      "path": "assets/MaterialRequestPage-er4Hr6CZ.js",
+      "bytes": 586851,
+      "sha256": "a194c5edc6486b50a0dbc5ed721d2c5c56bad1838c04661b2d63f6fcea2449d6",
+      "baseline": "96",
+      "component": "MaterialRequestPage"
+    },
+    {
+      "path": "assets/Pcb3DCanvas--InH1BSY.js",
+      "bytes": 33723,
+      "sha256": "3cdc8a3bd50b3c3ab35cb1621ec32698b2cea802bbbdc57a6c3b11c83a1c1255",
+      "baseline": "96",
+      "component": "Pcb3DCanvas"
+    },
+    {
+      "path": "assets/AuthenticatedApplication-CGQeyXlO.js",
+      "bytes": 77211,
+      "sha256": "c1ba9e4ffda4d9d0d1cbe2b5982df79aafea1b5af2df21cfcaccaac226be4e78",
+      "baseline": "741",
+      "component": "AuthenticatedApplication"
+    },
+    {
+      "path": "assets/AdminPanel-DCwGYtaJ.js",
+      "bytes": 57992,
+      "sha256": "b616a5600e65147e8d6c0c607773b7ebe8afb402122179479bd3950654071fa9",
+      "baseline": "741",
+      "component": "AdminPanel"
+    },
+    {
+      "path": "assets/PcbDesignerWorkspace-CxIAl1oX.js",
+      "bytes": 328829,
+      "sha256": "eb251f7acf9f5a31d756a4ea62f7ea14d7e5414c9cbd1057e18ad452f43829fc",
+      "baseline": "741",
+      "component": "PcbDesignerWorkspace"
+    },
+    {
+      "path": "assets/PrivateAttachmentHtml-Bb_jgjU2.js",
+      "bytes": 1494,
+      "sha256": "69457da6b7ca22ef8d7262e7549a5f24ccdab7b12ca7acccb67040692bd740c1",
+      "baseline": "741",
+      "component": "PrivateAttachmentHtml"
+    },
+    {
+      "path": "assets/MaterialRequestPage-S4VS60Rn.js",
+      "bytes": 587260,
+      "sha256": "51032200a4eeb81109960c68a64d98370f98f8077733358a6bbeff218b6a05bc",
+      "baseline": "741",
+      "component": "MaterialRequestPage"
+    },
+    {
+      "path": "assets/Pcb3DCanvas-DNn5P-DJ.js",
+      "bytes": 33723,
+      "sha256": "27eedc1d0c4a4d97b9cdfee33973a51878307d9db1282bd950c66262fa6512c7",
+      "baseline": "741",
+      "component": "Pcb3DCanvas"
+    },
+    {
+      "path": "assets/AuthenticatedApplication-s-lsZ7en.js",
+      "bytes": 77211,
+      "sha256": "3bdc41463ae6975e05153908ac2ec9ded8c5c4776faf37aefba0e2f3d0455425",
+      "baseline": "80",
+      "component": "AuthenticatedApplication"
+    },
+    {
+      "path": "assets/AdminPanel-DJenLMaY.js",
+      "bytes": 57992,
+      "sha256": "f4a600086cf83128683c2476baa90a8eddfc55e6a4309fa15c8375b2529250f2",
+      "baseline": "80",
+      "component": "AdminPanel"
+    },
+    {
+      "path": "assets/PcbDesignerWorkspace-D5tdlgro.js",
+      "bytes": 328829,
+      "sha256": "024e24249f3ffdc1ed6c460bd557d1b226df79b0573ba2163a5c17d02310a91b",
+      "baseline": "80",
+      "component": "PcbDesignerWorkspace"
+    },
+    {
+      "path": "assets/PrivateAttachmentHtml-CMzdGDuc.js",
+      "bytes": 1494,
+      "sha256": "ef31dde49aefa9d2bc60fe021124a5f3f263e36d994225d8959fe74c36c9a9b0",
+      "baseline": "80",
+      "component": "PrivateAttachmentHtml"
+    },
+    {
+      "path": "assets/MaterialRequestPage-Bh6nm2RE.js",
+      "bytes": 587260,
+      "sha256": "f9fe6e3ee99d02226ec2e0ce4d4c1ec6034ef09a2fddaa373e6c9a1591ca1e32",
+      "baseline": "80",
+      "component": "MaterialRequestPage"
+    },
+    {
+      "path": "assets/Pcb3DCanvas-DM9mzVJc.js",
+      "bytes": 33723,
+      "sha256": "d4a2c845b58e1dc3f5ddf39ee3b8178c02153c7ba7ccda341015fcbe617bf28f",
+      "baseline": "80",
+      "component": "Pcb3DCanvas"
+    }
+  ],
+  "sourceUnderTest": {
+    "commit": "80f2c4c071c3c88a85d247b7c3d48b303ccdd57c",
+    "browserCoverageStatus": "not-run",
+    "sourceIsPublishedArtifact": true
+  },
+  "otherUnexercisedProductionBaselines": [
+    {
+      "commit": "96a6f0584967ed5ff3bf59807720264a7caa8a88",
+      "coveredByThis80ToF6Suite": false,
+      "separateResearch": "96-to-fixed344 only; do not change that manifest"
+    },
+    {
+      "commit": "7416485948454869b1dd740b0bd251c1c899595f",
+      "coveredByThis80ToF6Suite": false
+    }
+  ],
+  "derivation": {
+    "sourceRebuildMatchingFiles": 334,
+    "bootRoots": {
+      "ENTRY": "assets/index-QQIaZRuM.js",
+      "AUTH": "assets/AuthenticatedApplication-s-lsZ7en.js",
+      "INDEX": "assets/Index-BONUKZ5v.js",
+      "MAINT": "assets/MaintenanceWorkspace-kf7TOHYo.js",
+      "DASH": "assets/MaintenanceDashboard-Cgyl8M-G.js",
+      "PCB": "assets/PcbDesignerWorkspace-D5tdlgro.js"
+    },
+    "bootJsFiles": 35,
+    "bootFiles": 53,
+    "candidateServableFilesAfterBomVeto": 332,
+    "method": "Actual80 hashes; exact334/334 instrumented source reproduction; explicit six entry roots; recursive static imports plus css/assets/referencedFiles; fixed HTML/favicon/QR runtime files.",
+    "dynamicRootsSelectedOnly": [
+      "authenticated application",
+      "Index",
+      "maintenance workspace",
+      "maintenance dashboard",
+      "PCB workspace"
+    ],
+    "dynamicChildrenNotGenerallyIncluded": true
+  },
+  "warmDashboard": {
+    "extraPaths": [
+      "assets/MaintenanceDashboard-Cgyl8M-G.js",
+      "assets/maintenance-C8ngA8hT.js",
+      "assets/server-HHQwUFgd.js"
+    ],
+    "extraBytes": 10777,
+    "requiredAlreadyResidentJs": [
+      "assets/AuthenticatedApplication-s-lsZ7en.js",
+      "assets/Index-BONUKZ5v.js",
+      "assets/SystemManager-BCrS-8Yq.js",
+      "assets/index-QQIaZRuM.js",
+      "assets/select-C2Cfs6QA.js",
+      "assets/shield-check--w_fKSbU.js"
+    ],
+    "expectedWarmMaintenanceJs": [
+      "assets/AuthenticatedApplication-s-lsZ7en.js",
+      "assets/Index-BONUKZ5v.js",
+      "assets/MaintenanceWorkspace-kf7TOHYo.js",
+      "assets/PrivateAttachmentHtml-CMzdGDuc.js",
+      "assets/SystemManager-BCrS-8Yq.js",
+      "assets/circle-check-D-Ctgkex.js",
+      "assets/index-QQIaZRuM.js",
+      "assets/maintenance-C8ngA8hT.js",
+      "assets/privateAttachments-BKg0LOv0.js",
+      "assets/purify.es-CAi2OJFm.js",
+      "assets/select-C2Cfs6QA.js",
+      "assets/shield-check--w_fKSbU.js",
+      "assets/usePrivateAttachmentUrl-CXSGjhZd.js"
+    ],
+    "genuinelyNotLoadedBeforeCutover": [
+      "assets/MaintenanceDashboard-Cgyl8M-G.js",
+      "assets/server-HHQwUFgd.js"
+    ],
+    "alreadyWarmButKeptAsThirdResearchExtra": "assets/maintenance-C8ngA8hT.js",
+    "cssCurrentReuse": [
+      {
+        "path": "assets/Index-DoXjHN8V.css",
+        "bytes": 6874,
+        "sha256": "3f2f52d5277f9066d7d18af31cd577a401ab88183a923af36ea1097a4aff1d8f"
+      },
+      {
+        "path": "assets/index-BV471ls_.css",
+        "bytes": 405704,
+        "sha256": "3ecc96063c6f8406601bb1d3a0a9f57a184058df7d479d879d970af91d68ca52"
+      },
+      {
+        "path": "assets/maintenance-DooQnWqJ.css",
+        "bytes": 17104,
+        "sha256": "b6a092010249f13300b9d980b4c6d0e9a35ea7dba8f709a0c7ce522656864896"
+      },
+      {
+        "path": "assets/maintenanceOverviewLayout-DvO0b6EW.css",
+        "bytes": 6564,
+        "sha256": "7dc000d8e339a8079fc8045289d117dceef7c3dd8b6a28c032648d33e0c90473"
+      }
+    ],
+    "selectedSourceHashes": [
+      {
+        "path": "src/components/maintenance/MaintenanceDashboard.tsx",
+        "sha256": "ac7d1120a3b60ddb4af706e928ad066979f316ddc23faa27d95e4d0b15d4ad3b",
+        "sameF6Source": true
+      },
+      {
+        "path": "src/components/maintenance/maintenanceModel.ts",
+        "sha256": "1b52ecda72159019c85e1561cf7fddb96734237cdcbd34281365c592639ac6dd",
+        "sameF6Source": true
+      },
+      {
+        "path": "src/components/maintenance/useMaintenanceData.ts",
+        "sha256": "ee327b29b8752f57ff147d854fc5ca7a233c6458b03e5fb154c1eabd13de45da",
+        "sameF6Source": true
+      },
+      {
+        "path": "src/components/maintenance/maintenance.css",
+        "sha256": "2800a89abb5d6808e6110f446b8bf63a6069b3d845271d59f2e92f0499af454e",
+        "sameF6Source": true
+      }
+    ],
+    "notACompleteRetainedClosure": true,
+    "notColdStartSupport": true,
+    "notSecurityRepairForResidentCode": true
+  },
+  "limits": [
+    "Old bytes may be downloaded/extracted only into private CI runner source inputs; never commit, upload as evidence or include in a public deploy.",
+    "Before cutover this private synthetic harness may execute old Auth/PCB/HTML to characterize existing Documents. After cutover their paths and hashes must be404 under every alias. No BOM/seed is served in either phase.",
+    "The three dashboard extras are conditional experiment inputs, not a release allowlist. Static Dashboard closure still requires resident old Auth and Index; the production planner must keep rejecting missing required Auth.",
+    "Old maintenance helper also contains updateFault RPC; the dashboard render uses read-only hooks. Fixture must continue rejecting every business write and retaining only explicitly modeled synthetic read/lease/Realtime behavior.",
+    "Six dashboard dependencies must already be evaluated in the same Document. A loaded URL, HTTP cache or open tab alone is insufficient. Do not preload Dashboard as setup.",
+    "No browser was run while preparing this manifest. The expanded plan is16 cases: eight old-Document cases, four candidate cold maintenance/PCB cases and four candidate protected403 negative-characterization cases at1280x800 and390x844.96-to344 results do not transfer.",
+    "Raw-permission-denial case is negative characterization, potentially unmounting composer/losing unsent state, never evidence for safe backend privilege revocation.",
+    "The PCB case covers synthetic unsaved settings dialog only, not CAD/WebGL/real boards or all draft formats. Workers and unselected dynamic routes are intentionally excluded.",
+    "New index cannot change already-open old handlers. Same hashed filename bytes must never be rewritten. No secret/BOM values are included in metadata."
+  ]
+}

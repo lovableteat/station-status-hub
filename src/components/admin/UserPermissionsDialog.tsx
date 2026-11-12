@@ -1,3 +1,4 @@
+import { readSystemUserProfile } from "@/lib/systemUserProfiles";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Save, Shield, X } from "lucide-react";
 
@@ -106,31 +107,39 @@ export function UserPermissionsDialog({
   const [isReading, setIsReading] = useState(true);
   const loadRequest = useRef({ id: 0 });
   const returnFocus = useRef<HTMLElement | null>(null);
-  const canConfigure = loadedUserId === userId && !isReading && !isLoading;
   const { toast } = useToast();
   const { user } = useUser();
+  const [loadedActorId, setLoadedActorId] = useState<string | null>(null);
+  const actorRef = useRef(user?.userId);
+  actorRef.current = user?.userId;
+  const dialogRef = useRef({ userId, isOpen });
+  dialogRef.current = { userId, isOpen };
+  const renderedRequest = loadRequest.current.id;
+  const canConfigure = isOpen && loadedUserId === userId && loadedActorId === user?.userId
+    && Boolean(user?.userId) && !isReading && !isLoading;
 
   const loadUserPermissions = useCallback(async () => {
     const request = ++loadRequest.current.id;
+    const actor = user?.userId;
+    const isCurrent = () => request === loadRequest.current.id && actor === actorRef.current;
+    setLoadedActorId(null);
+    setIsLoading(false);
     setIsReading(true);
     setLoadedUserId(null);
     try {
+      if (!actor) throw new Error("需要有效登入帳號");
       const [{ data: pagePermissions, error: pagePermissionError }, { data: userData, error: userError }] =
         await Promise.all([
           supabase
             .from("user_page_permissions")
             .select("permission")
             .eq("user_id", userId),
-          supabase
-            .from("system_users")
-            .select("permissions")
-            .eq("id", userId)
-            .maybeSingle(),
+          readSystemUserProfile(userId),
         ]);
 
       if (userError) throw userError;
       if (!userData) throw new Error("找不到要設定權限的帳號");
-      if (request !== loadRequest.current.id) return;
+      if (!isCurrent()) return;
 
       const permissionSettings =
         userData?.permissions && typeof userData.permissions === "object"
@@ -148,8 +157,9 @@ export function UserPermissionsDialog({
       setWorkspaceAccess(readWorkspaceAccess(permissionSettings, loadedPermissions));
       setPerformanceManager(permissionSettings.performanceManager === true);
       setLoadedUserId(userId);
+      setLoadedActorId(actor);
     } catch (error) {
-      if (request !== loadRequest.current.id) return;
+      if (!isCurrent()) return;
       console.error("Failed to load user permissions:", error);
       setPermissions([]);
       setWorkspaceAccess(DEFAULT_WORKSPACE_ACCESS);
@@ -161,9 +171,9 @@ export function UserPermissionsDialog({
         variant: "destructive",
       });
     } finally {
-      if (request === loadRequest.current.id) setIsReading(false);
+      if (isCurrent()) setIsReading(false);
     }
-  }, [toast, userId]);
+  }, [toast, userId, user?.userId]);
 
   useEffect(() => {
     const counter = loadRequest.current;
@@ -292,6 +302,11 @@ export function UserPermissionsDialog({
 
   const handleSave = async () => {
     if (!canConfigure) return;
+    const request = renderedRequest;
+    const actor = user?.userId;
+    const isCurrent = () => request === loadRequest.current.id && actor === actorRef.current
+      && dialogRef.current.userId === userId && dialogRef.current.isOpen;
+    if (!isCurrent()) return;
     try {
       setIsLoading(true);
       const synchronizedPermissions = synchronizeWorkspacePermissions(
@@ -308,6 +323,7 @@ export function UserPermissionsDialog({
         p_performance_manager: performanceManager,
       });
       if (error) throw error;
+      if (!isCurrent()) return;
 
       window.dispatchEvent(
         new CustomEvent("station-permissions-updated", {
@@ -323,13 +339,14 @@ export function UserPermissionsDialog({
 
       onClose();
     } catch (error) {
+      if (!isCurrent()) return;
       toast({
         title: "權限儲存失敗",
         description: getSaveErrorMessage(error),
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      if (isCurrent()) setIsLoading(false);
     }
   };
 
@@ -599,7 +616,7 @@ export function UserPermissionsDialog({
           </div>
         </div>
 
-        <div className="admin-permissions-footer flex items-center justify-between gap-3 border-t border-border/70 bg-card/95 px-4 py-3 sm:px-5">
+        <div data-load-retry={!isReading && loadedUserId !== userId ? "true" : undefined} className="admin-permissions-footer flex items-center justify-between gap-3 border-t border-border/70 bg-card/95 px-4 py-3 sm:px-5">
           <div className="text-xs text-muted-foreground">
             {isReading ? "正在讀取此帳號的最新權限…" : loadedUserId !== userId ? (
               <Button variant="outline" size="sm" onClick={() => void loadUserPermissions()}>

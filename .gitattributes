@@ -5,5 +5,9 @@ tests/comparison/fixtures/**/*.pdf binary
 supabase/migrations/20261112001122_restrict_internal_stats_cleanup_execution.sql text eol=lf
 supabase/migrations/20261112013540_restrict_anonymous_delete_test_system_execution.sql text eol=lf
 supabase/migrations/20261112022029_restrict_anonymous_login_audit_access.sql text eol=lf
+supabase/migrations/20261112064452_add_protected_profile_and_legacy_pcb_read_apis.sql text eol=lf
 # Preserve captured PCB function bodies and exact candidate pre/postflight hashes.
 docs/security-proposals/pcb-rpc-cutover-PENDING.sql -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+docs/security-proposals/legacy-pcb/*.sql text eol=lf
+supabase/migrations/20261112073038_restrict_anonymous_test_progress_audit_access.sql text eol=lf
+supabase/migrations/20261112073518_restrict_anonymous_tasks_access.sql text eol=lf

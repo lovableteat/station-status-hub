@@ -364,10 +364,9 @@ test("keeps legacy row storage owner-scoped while sharing fallback projects acro
   assert.match(workspaceSource, /isDatabaseUserId\(user\?\.userId\)/);
   assert.match(accountRemoteSource, /load_pcb_designer_workspace/);
   assert.match(accountRemoteSource, /save_pcb_designer_workspace/);
-  assert.match(accountRemoteSource, /PCB_REMOTE_FALLBACK_KEY\s*=\s*["']pcbDesignerWorkspace["']/);
-  assert.match(accountRemoteSource, /from\(["']system_users["']\)/);
-  assert.match(accountRemoteSource, /select\(["']id,permissions["']\)/);
-  assert.match(accountRemoteSource, /mergePcbFallbackWorkspaces/);
+  assert.match(accountRemoteSource, /load_pcb_designer_legacy_workspace["'], \{\}/);
+  assert.doesNotMatch(accountRemoteSource, /from\(|select\(|update\(|PCB_REMOTE_FALLBACK_KEY/);
+  assert.match(accountRemoteSource, /parsePcbLegacyWorkspace/);
   assert.match(pcbWorkspaceHookSource, /setInterval\([\s\S]{0,100}refreshRemote\(false\)[\s\S]{0,80}8_000/);
   assert.match(pcbWorkspaceHookSource, /addEventListener\(["']focus["'],\s*refreshOnFocus\)/);
 });
