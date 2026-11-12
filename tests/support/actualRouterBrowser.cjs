@@ -86,7 +86,7 @@ async function runActualRouterBrowser(browser, bundle, evidenceDirectory) {
         response.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
         // The app gives body/root width:100%; outside margins enlarge the mobile
         // viewport. Keep fixture spacing inside the body's border box instead.
-        response.end('<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Isolated actual Router</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/actual-index.css"><style>body{font:16px system-ui;margin:0;padding:16px;box-sizing:border-box}button{min-height:44px;margin:4px}textarea{display:block;min-height:120px;width:95%}output{display:block}svg{width:20px}</style><div id="root"></div><script src="/actual-router.js"></script>');
+        response.end('<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Isolated actual Router</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/actual-index.css"><style>body{font:16px system-ui;margin:0;padding:16px;box-sizing:border-box}button{min-height:44px;margin:4px}textarea{display:block;min-height:120px;width:95%}output{display:block;overflow-wrap:anywhere}svg{width:20px}</style><div id="root"></div><script src="/actual-router.js"></script>');
       });
       await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
       const origin = 'http://127.0.0.1:' + server.address().port;
@@ -153,7 +153,14 @@ async function runActualRouterBrowser(browser, bundle, evidenceDirectory) {
         assert.equal(await page.evaluate(() => innerWidth), viewport.width);
         const initialUrl = page.url();
         await body({ page, draft, recovery, current, waitHeld, release, rememberDraft, preservedDraft, initialUrl, requests });
-        assert.equal(await page.evaluate(() => innerWidth), viewport.width, 'The completed interaction still has the requested CSS viewport');
+        const actualWidths = await page.evaluate(() => ({
+          innerWidth: window.innerWidth,
+          documentScrollWidth: document.documentElement.scrollWidth,
+          bodyScrollWidth: document.body.scrollWidth,
+        }));
+        assert.equal(actualWidths.innerWidth, viewport.width, 'The completed interaction still has the requested CSS viewport');
+        assert.ok(actualWidths.documentScrollWidth <= viewport.width, `Document content width ${actualWidths.documentScrollWidth} exceeds viewport ${viewport.width}`);
+        assert.ok(actualWidths.bodyScrollWidth <= viewport.width, `Body content width ${actualWidths.bodyScrollWidth} exceeds viewport ${viewport.width}`);
         const safety = await page.evaluate(() => ({
           writes: fixtureStorageWrites, network: fixtureNetworkCalls,
           before: fixtureStorageSnapshot, after: { local: { ...localStorage }, session: { ...sessionStorage } },
@@ -171,7 +178,7 @@ async function runActualRouterBrowser(browser, bundle, evidenceDirectory) {
           fs.mkdirSync(evidenceDirectory, { recursive: true });
           await page.screenshot({ path: path.join(evidenceDirectory, `${viewport.width}-actual-router-${name}.png`), fullPage: true });
         }
-        reports.push({ width: viewport.width, scenario: name, actualPreparedRoutes: true, realDynamicImports: true, noReload: true, noStorageWrites: true, noServiceAccess: true });
+        reports.push({ width: viewport.width, actualWidths, scenario: name, actualPreparedRoutes: true, realDynamicImports: true, noReload: true, noStorageWrites: true, noServiceAccess: true });
       } catch (error) {
         console.error(JSON.stringify({ actualRouterScenario: name, width: viewport.width, error: error.message, requests, forbiddenRequests, errors,
           state: await page.evaluate(() => ({ url: location.href, fixture: window.actualRouterFixture, body: document.body.innerText })).catch(() => null) }));
