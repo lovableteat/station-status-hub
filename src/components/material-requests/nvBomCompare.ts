@@ -31,6 +31,13 @@ const known = (value: string) => {
 };
 const order = new Intl.Collator("zh-TW", { numeric: true, sensitivity: "base" });
 
+export function getNvBomParentLocationLayout(header: readonly string[]) {
+  const headings = header.map(identity);
+  const required = ["LEVEL", "PARENT NUMBER", "PART NUMBER", "PART DESCRIPTION", "MANUFACTURER", "MANUFACTURER PART NUMBER", "QTY", "LOCATION"];
+  if (!required.every(label => headings.includes(label))) return null;
+  return { levelIndex: headings.indexOf("LEVEL"), parentIndex: headings.indexOf("PARENT NUMBER") };
+}
+
 export async function readNvBomFile(file: File): Promise<NvBomFile> {
   if (!/\.(xlsx?|xlsm|csv)$/i.test(file.name)) throw new Error("請選擇 Excel（XLSX、XLS、XLSM）或 CSV 原始 BOM。");
   const xlsx = await import("xlsx");
@@ -88,14 +95,38 @@ function quantityTotal(values: string[]) {
   const formatted = digits ? `${absolute.slice(0, -digits)}.${absolute.slice(-digits)}`.replace(/\.?0+$/, "") : absolute;
   return `${sum < 0n ? "-" : ""}${formatted}`;
 }
+
+function findGreenFactorSummary(rows: string[][], headerRow: number) {
+  const layout = getNvBomParentLocationLayout(rows[headerRow - 1]);
+  if (!layout) return null;
+  const { levelIndex, parentIndex } = layout;
+  const hasOnlySummaryColumns = (cells: string[]) => cells.every((value, index) => index === levelIndex || index === parentIndex || !text(value));
+  const start = rows.findIndex((cells, index) => {
+    if (index < headerRow || identity(cells[levelIndex]) !== "GREEN FACTOR TYPE SUMMARY" || text(cells[parentIndex]) || !hasOnlySummaryColumns(cells)) return false;
+    const next = rows[index + 1];
+    return next && ["GREEN FACTOR TYPE", "GREEN FACTOR"].includes(identity(next[levelIndex])) && identity(next[parentIndex]) === "COUNT" && hasOnlySummaryColumns(next);
+  });
+  if (start < 0) return null;
+  let end = start + 2;
+  while (end < rows.length) {
+    const cells = rows[end];
+    const category = identity(cells[levelIndex]);
+    if (!category || /^(?:\d+|[A-Z])$/.test(category) || !isDecimalQuantity(text(cells[parentIndex])) || !hasOnlySummaryColumns(cells)) break;
+    end++;
+  }
+  return { start, end };
+}
+
 function group(sheet: NvBomSheet, mapping: NvBomMapping, keys: NvBomField[], side: NvBomUnresolved["side"]) {
   validateNvBomMapping(mapping, sheet);
   const rows = new Map<string, NvBomPart[]>(), unresolved: NvBomUnresolved[] = [];
   const referenceUse = new Map<string, number>();
   const header = sheet.rows[mapping.headerRow - 1];
+  const summary = findGreenFactorSummary(sheet.rows, mapping.headerRow);
   const selectedColumns = NV_BOM_FIELDS.flatMap(({ key }) => mapping[key] === null ? [] : [mapping[key]! - 1]);
   let skipped = 0;
   for (let row = mapping.headerRow; row < sheet.rows.length; row++) {
+    if (summary && row >= summary.start && row < summary.end) continue;
     const cells = sheet.rows[row];
     if (!cells.some(value => text(value)) || selectedColumns.every(column => identity(cells[column]) === identity(header[column]))) continue;
     const part = { sourceRows: [row + 1] } as NvBomPart;
