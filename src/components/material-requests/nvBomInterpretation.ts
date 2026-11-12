@@ -32,6 +32,22 @@ const knownIdentifier = (value?: string) => {
   const normalized = normalize(value);
   return /^(?:[-–—]+|N\/?A|N\.A\.|NONE|NULL|未提供|未填寫)$/.test(normalized) ? "" : normalized;
 };
+
+export function nvBomSourceListDelta(before: string, after: string) {
+  // A comma can be part of a manufacturer's name. NV lists use semicolons or line breaks.
+  const members = (value: string) => {
+    const result = new Map<string, string>();
+    for (const entry of value.split(/[;；\r\n]+/)) {
+      const key = knownIdentifier(entry);
+      if (key && !result.has(key)) result.set(key, entry.trim());
+    }
+    return result;
+  };
+  const previous = members(before), current = members(after);
+  const difference = (left: Map<string, string>, right: Map<string, string>) =>
+    [...left].filter(([key]) => !right.has(key)).map(([, value]) => value);
+  return { added: difference(current, previous), removed: difference(previous, current) };
+}
 const differentIdentifier = (before: string, after: string) => {
   const a = knownIdentifier(before), b = knownIdentifier(after);
   return Boolean(a && b && a !== b);

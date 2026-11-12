@@ -33,9 +33,19 @@
 .nv-bom-models { display:flex; flex-wrap:wrap; gap:7px; margin-block:7px; }
 .nv-bom-models label { display:flex; max-width:100%; align-items:center; gap:8px; padding:8px 10px; border:1px solid hsl(var(--border)); border-radius:7px; cursor:pointer; overflow-wrap:anywhere; font-size:13px; }
 .nv-bom-models label:has(input:checked) { border-color:hsl(var(--primary) / .6); background:hsl(var(--primary) / .09); }
+.nv-bom-models label > span { display:grid; gap:3px; min-width:0; }
+.nv-bom-models label strong { font-weight:550; }
+.nv-bom-models label small { max-width:36ch; line-height:1.45; font-size:12px; }
+.nv-bom-models label[data-availability=unavailable] { cursor:default; border-color:hsl(var(--destructive) / .38); background:hsl(var(--destructive) / .07); }
+.nv-bom-models label[data-availability=unavailable] input { cursor:not-allowed; }
+.nv-bom-models label[data-availability=unavailable] small { color:hsl(var(--destructive)); }
+.nv-bom-models label[data-availability=unverified] small { color:hsl(var(--warning)); }
 .nv-bom-compare input[type=checkbox] { width:17px; height:17px; flex:none; accent-color:hsl(var(--primary)); cursor:pointer; }
 .nv-bom-help { color:hsl(var(--muted-foreground)); font-size:12px; line-height:1.6; }
 .nv-bom-error { display:flex; flex:none; flex-wrap:wrap; align-items:center; gap:8px; border:1px solid hsl(var(--destructive) / .4); border-radius:7px; padding:8px 12px; color:hsl(var(--destructive)); font-size:13px; }
+.nv-bom-error > p { flex:1; min-width:180px; }
+.nv-bom-error strong { margin-right:4px; }
+.nv-bom-error,.nv-bom-run-notice,.nv-bom-runbar > span { white-space:pre-line; overflow-wrap:anywhere; }
 .nv-bom-results-tabs { display:flex; flex:none; gap:7px; overflow-x:auto; padding-bottom:2px; }
 .nv-bom-results-tabs button { display:grid; max-width:340px; gap:4px; padding:8px 12px; border:1px solid hsl(var(--border)); border-radius:7px; text-align:left; }
 .nv-bom-results-tabs button[aria-selected=true] { border-color:hsl(var(--primary)); background:hsl(var(--primary) / .09); }
@@ -80,7 +90,9 @@
 [data-kind=removed] .nv-bom-kind,[data-action=sourceRemoved] .nv-bom-kind,[data-action=unmount] .nv-bom-kind { background:hsl(0 52% 35% / .3); color:hsl(0 88% 83%); }
 [data-action=replacement] .nv-bom-kind { background:hsl(41 61% 33% / .36); color:hsl(40 90% 78%); }
 .nv-bom-result-main > strong { font-size:14px; line-height:1.35; overflow-wrap:anywhere; }
-.nv-bom-identity-change { color:hsl(var(--foreground)); font-size:12px; overflow-wrap:anywhere; }
+.nv-bom-delta-list { display:flex; flex-wrap:wrap; gap:4px 6px; }
+.nv-bom-delta { display:inline-flex; min-width:0; max-width:100%; align-items:baseline; gap:5px; padding:2px 6px; border:1px solid hsl(var(--nv-direction) / .4); border-radius:5px; background:hsl(var(--nv-direction) / .14); font-size:12px; font-weight:600; overflow-wrap:anywhere; }
+.nv-bom-delta > small { flex:none; color:inherit; font-size:11px; font-weight:400; }
 .nv-bom-result-main > small,.nv-bom-current-cell > small,.nv-bom-result-refs small { color:hsl(var(--muted-foreground)); font-size:11px; }
 .nv-bom-result-main > small,.nv-bom-ref-preview > span,.nv-bom-current-cell > strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .nv-bom-ref-preview { display:flex; min-width:0; align-items:baseline; gap:4px; }
@@ -107,6 +119,43 @@
 .nv-bom-full-ref-changes { display:grid; gap:6px; }
 .nv-bom-note { display:grid; gap:5px; font-size:12px; font-weight:600; }
 .nv-bom-note textarea { min-width:0; width:100%; min-height:50px; max-height:160px; resize:vertical; border:1px solid hsl(var(--border)); border-radius:5px; padding:6px 8px; background:hsl(var(--background) / .65); font-size:13px; font-weight:400; }
+
+.nv-bom-compare :is(.nv-bom-source, .nv-bom-source-evidence) { --nv-side:var(--info); border-color:hsl(var(--nv-side) / .34); background:color-mix(in srgb,hsl(var(--card)),hsl(var(--nv-side)) 10%); }
+.nv-bom-compare :is(.nv-bom-source, .nv-bom-source-evidence)[data-side=after] { --nv-side:var(--primary); }
+.nv-bom-source-heading strong span,.nv-bom-source[data-side=after] .nv-bom-source-heading strong span { color:hsl(var(--nv-side)); background:hsl(var(--nv-side) / .19); }
+.nv-bom-source-evidence h4 { color:hsl(var(--nv-side)); }
+.nv-bom-source-evidence [data-field-changed=true] { padding:4px 6px; border-radius:4px; background:hsl(var(--nv-side) / .17); }
+.nv-bom-source-evidence [data-field-changed=true] dt { color:hsl(var(--nv-side)); font-weight:650; }
+.nv-bom-settings { border-color:hsl(var(--info) / .29); }
+.nv-bom-settings > summary { background:hsl(var(--info) / .08); border-radius:9px; }
+.nv-bom-summary { padding:10px 12px; border:1px solid hsl(var(--info) / .3); border-radius:8px; background:color-mix(in srgb,hsl(var(--card)),hsl(var(--info)) 8%); }
+.nv-bom-summary-heading h3 { color:hsl(var(--info)); }
+.nv-bom-scope-buttons button { --nv-scope:var(--primary); }
+.nv-bom-scope-buttons button[data-scope=board] { --nv-scope:var(--info); }
+.nv-bom-scope-buttons button[data-scope=unknown] { --nv-scope:var(--warning); }
+.nv-bom-scope-buttons button[data-scope] { border-color:hsl(var(--nv-scope) / .28); background:hsl(var(--nv-scope) / .09); }
+.nv-bom-scope-buttons button[data-scope][aria-pressed=true] { color:hsl(var(--nv-scope)); border-color:hsl(var(--nv-scope) / .65); background:hsl(var(--nv-scope) / .2); }
+.nv-bom-result-heading { color:hsl(var(--info)); background:color-mix(in srgb,hsl(var(--card)),hsl(var(--info)) 15%); }
+.nv-bom-result article { --nv-row:var(--warning); }
+.nv-bom-result article:is([data-action=added],[data-action=sourceAdded],[data-action=mount]) { --nv-row:var(--success); }
+.nv-bom-result article:is([data-action=removed],[data-action=sourceRemoved],[data-action=unmount]) { --nv-row:var(--destructive); }
+.nv-bom-result article[data-action=refs] { --nv-row:var(--info); }
+.nv-bom-result article > .nv-bom-result-line { border-inline-start:3px solid hsl(var(--nv-row) / .74); background:hsl(var(--nv-row) / .065); }
+.nv-bom-result article .nv-bom-kind { border:1px solid hsl(var(--nv-row) / .35); color:hsl(var(--nv-row)); background:hsl(var(--nv-row) / .15); }
+.nv-bom-compare [data-direction=added] { --nv-direction:var(--success); color:hsl(var(--nv-direction)); }
+.nv-bom-compare [data-direction=removed] { --nv-direction:var(--destructive); color:hsl(var(--nv-direction)); }
+.nv-bom-current-cell small[data-link-state=ambiguous] { color:hsl(var(--warning)); }
+.nv-bom-current-cell small[data-link-state=missing] { color:hsl(var(--muted-foreground)); }
+.nv-bom-change-evidence { padding:9px 12px; border:1px solid hsl(var(--nv-row) / .4); border-radius:7px; background:hsl(var(--nv-row) / .09); }
+.nv-bom-change-evidence > p { margin-top:7px; color:hsl(var(--muted-foreground)); font-size:12px; }
+.nv-bom-ai-evidence { border-color:hsl(var(--primary) / .3); background:hsl(var(--primary) / .08); line-height:1.55; }
+.nv-bom-ai-evidence h4 { color:hsl(var(--primary)); }
+.nv-bom-ai-evidence details { margin-top:7px; color:hsl(var(--muted-foreground)); }
+.nv-bom-ai-evidence summary { width:fit-content; cursor:pointer; }
+.nv-bom-results-tabs button[data-run-state=done] small { color:hsl(var(--success)); }
+.nv-bom-results-tabs button[data-run-state=failed] { border-color:hsl(var(--destructive) / .5); background:hsl(var(--destructive) / .09); }
+.nv-bom-results-tabs button[data-run-state=failed] small { color:hsl(var(--destructive)); }
+.nv-bom-results-tabs button[data-run-state=running] small { color:hsl(var(--info)); }
 .nv-bom-pagination { display:flex; flex:none; align-items:center; gap:8px; }.nv-bom-pagination > span { margin-right:auto; color:hsl(var(--muted-foreground)); font-size:12px; }.nv-bom-pagination button { min-height:36px; font-size:12px; }
 .nv-bom-empty { padding:24px 12px!important; text-align:center; color:hsl(var(--muted-foreground)); }.nv-bom-empty > svg { width:28px; height:28px; margin:16px auto; color:hsl(var(--primary)); }.nv-bom-empty h3 { font-size:16px; font-weight:600; color:hsl(var(--foreground)); }.nv-bom-empty p { margin-top:8px; font-size:13px; }
 .nv-spin { animation:nv-bom-spin 1s linear infinite; }@keyframes nv-bom-spin { to { transform:rotate(360deg); } }
