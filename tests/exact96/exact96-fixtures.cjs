@@ -7,6 +7,13 @@ const project={id:PROJECT,name:'SYNTHETIC CUTOVER PROJECT',status:'active',is_ar
 const fault={id:ISSUE,project_id:PROJECT,title:'SYNTHETIC CUTOVER FAULT',description:'Synthetic note, no external resource.',status:'open',maintenance_status:'pending',assigned_to:null,assignee_user_ids:[],asset_identifier:'SYNTHETIC MACHINE',system_id:null,category:'Synthetic',created_at:DATE,updated_at:DATE};
 const pcbProject={schemaVersion:1,id:'synthetic-board',name:'SYNTHETIC PCB',description:'Synthetic existing PCB',status:'draft',board:{width:100,height:80,gridSize:1,showGrid:true,snapToGrid:true,background:'#102030',layerColors:{top:'#00aa44',bottom:'#0044aa'},cuts:[]},components:[],keepouts:[],measurements:[],createdAt:DATE,updatedAt:DATE};
 const pcb={projects:[pcbProject],templates:[],library:[],activeProjectId:pcbProject.id,modelAssets:{},pendingPlacementsByProject:{},remoteDeletions:{projects:[],templates:[],library:[]},updatedAt:DATE};
+function workspaceQuery(workspace) {
+ if(!['station-status','pcb-designer'].includes(workspace))throw Error('Unmodeled research workspace');
+ const query=new URLSearchParams({project:PROJECT,workspace});
+ // Original Index prioritizes station modules over workspace; PCB must not carry issues.
+ if(workspace==='station-status'){query.set('module','issues');query.set('openIssue',ISSUE);}
+ return query;
+}
 function session() {
  const expires=Math.floor(Date.now()/1000)+3600;
  const token=[{alg:'HS256',typ:'JWT'},{sub:AUTH,exp:expires,role:'authenticated',aud:'authenticated'},'synthetic-signature'].map((x,i)=>i===2?x:Buffer.from(JSON.stringify(x)).toString('base64url')).join('.');
@@ -53,4 +60,4 @@ function realtimeResponse(value) {
  const response={status:'ok',response:event==='phx_join'?{postgres_changes:changes.map((binding,index)=>({...binding,id:index+1}))}: {}};
  return{kind:presence?'synthetic-presence':'synthetic-realtime-protocol',event,reply:array?[joinRef,ref,topic,'phx_reply',response]:{join_ref:joinRef,ref,topic,event:'phx_reply',payload:response}};
 }
-module.exports={realtimeResponse,ACTOR,AUTH,PROJECT,ISSUE,DATE,pcb,session,responseFor};
+module.exports={workspaceQuery,realtimeResponse,ACTOR,AUTH,PROJECT,ISSUE,DATE,pcb,session,responseFor};

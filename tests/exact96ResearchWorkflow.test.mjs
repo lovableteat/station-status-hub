@@ -74,3 +74,11 @@ test('warm module, completed refresh and pending PNG byte assertions cannot be r
   assert.ok(browser.includes('Expected negative characterization of old client; a passing observation is NOT a safe permission cutover'));
   assert.ok(browser.includes('unsentDraftSurvived='));
 });
+
+test('original mobile drawer navigation uses the workspace item and waits for its real close', () => {
+  assert.ok(browser.includes('const query=fixture.workspaceQuery(workspace)'));
+  assert.ok(browser.includes('[data-mobile-more-sheet="true"]'));
+  assert.ok(browser.includes('[data-mobile-more-id="${workspaceId}"]'));
+  assert.ok(browser.includes("await target.click();await sheet.waitFor({state:'hidden'})"));
+  assert.doesNotMatch(browser, /force:\s*true/);
+});
