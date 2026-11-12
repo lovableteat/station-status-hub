@@ -39,6 +39,8 @@ jobs:
         run: PGLITE_MODULE="$AUDIT_QA_DIR/node_modules/@electric-sql/pglite/dist/index.js" node --test tests/historicalCredentialSanitization.postgres.mjs
       - name: PCB verified identity, data preservation and staged cutover
         run: PGLITE_MODULE="$AUDIT_QA_DIR/node_modules/@electric-sql/pglite/dist/index.js" node --test tests/pcbRpcSecurity.postgres.mjs
+      - name: Protected legacy PCB reads and sanitized profile data preservation
+        run: PGLITE_MODULE="$AUDIT_QA_DIR/node_modules/@electric-sql/pglite/dist/index.js" node --test tests/legacyPcbSecurity.postgres.mjs
       - name: Complete unit and source contracts
         run: npm test
       - name: Reject high and critical dependency advisories

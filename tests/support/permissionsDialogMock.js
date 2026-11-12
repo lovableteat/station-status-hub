@@ -1,4 +1,19 @@
+function sanitizedProfile(id) {
+  return { id, username: 'AUDIT_LOCAL', display_name: 'Isolated profile', role: 'engineer', status: 'active',
+    permissions: window.auditPermissions.settings, created_by: null, created_at: '2026-11-12T00:00:00.000Z', updated_at: '2026-11-12T00:00:00.000Z',
+    registration_requested_at: null, approved_at: null, approved_by: null, auth_user_id: null, auth_migrated_at: null, last_seen_at: null, avatar_path: null };
+}
 export const supabase = {
+  schema(name) {
+    if (name !== 'workspace') throw new Error(`Unexpected fixture schema ${name}`);
+    return { rpc(name, args) {
+      if (name !== 'list_system_user_profiles' || (args !== undefined && Object.keys(args).length)) throw new Error(`Unexpected fixture profile RPC ${name}`);
+      let id;
+      const query = { eq(column, value) { if (column !== 'id') throw new Error('Unexpected profile filter'); id = value; return query; },
+        maybeSingle() { return Promise.resolve({data: sanitizedProfile(id), error: window.auditPermissions.failRead ? {message: 'Isolated read failure'} : null}); } };
+      return query;
+    } };
+  },
   from(table) {
     let operation = 'read';
     const query = {
@@ -11,7 +26,7 @@ export const supabase = {
         ? window.auditPermissions.settings.pagePermissions.map(permission => ({permission})) : null,
         error: null}).then(resolve);},
     };
-    if (!['system_users', 'user_page_permissions'].includes(table)) throw new Error(`Unexpected fixture table ${table}`);
+    if (table !== 'user_page_permissions') throw new Error(`Unexpected fixture table ${table}`);
     return query;
   },
   async rpc(functionName, payload) {

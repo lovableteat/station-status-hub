@@ -37,12 +37,17 @@ jobs:
         run: PGLITE_MODULE="$AUDIT_QA_DIR/node_modules/@electric-sql/pglite/dist/index.js" node --test tests/historicalCredentialSanitization.postgres.mjs
       - name: PCB verified identity, data preservation and staged cutover
         run: PGLITE_MODULE="$AUDIT_QA_DIR/node_modules/@electric-sql/pglite/dist/index.js" node --test tests/pcbRpcSecurity.postgres.mjs
+      - name: Protected legacy PCB reads and sanitized profile data preservation
+        run: PGLITE_MODULE="$AUDIT_QA_DIR/node_modules/@electric-sql/pglite/dist/index.js" node --test tests/legacyPcbSecurity.postgres.mjs
       - name: Complete unit and source contracts
         run: npm test
       - name: Mobile workspace and query contracts
         run: node --test tests/mobileCoreWorkspaces.test.mjs tests/mobileFirstAdaptiveShell.test.mjs tests/apiChatModelControl.test.mjs tests/apiChatPromptLibraryLayout.test.mjs tests/apiChatPromptHelpers.test.mjs tests/apiChatMaintenanceSource.test.mjs
       - name: PostgreSQL 17.4 permission boundary and revocation races
         run: npm run test:permission:postgres
+      - name: Actual PostgREST protected profile and legacy recovery contracts
+        if: ${{ github.event_name == 'pull_request' }}
+        run: timeout --signal=TERM --kill-after=10s 300s node --test tests/legacyPcbPostgrest.integration.cjs
       - name: Deno 2.1.4 Edge type and endpoint contracts
         run: |
           docker run --rm -v "$PWD:/app" -w /app/supabase/functions/account-admin-sync denoland/deno:2.1.4@sha256:3bf75873714baa410dcf7fabaf76d806d20f0ac8a7579df11577b4ed97416e34 deno check --frozen index.ts
@@ -69,6 +74,16 @@ jobs:
         env:
           PCB_RECOVERY_EVIDENCE_DIR: ${{ runner.temp }}/pcb-session-recovery
         run: timeout --signal=TERM --kill-after=10s 240s node tests/pcbSessionRecovery.browser.cjs
+      - name: Protected legacy PCB recovery and owner-scoped draft preservation
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && steps.install-browser.outcome == 'success' }}
+        env:
+          PCB_LEGACY_EVIDENCE_DIR: ${{ runner.temp }}/pcb-legacy-recovery
+        run: timeout --signal=TERM --kill-after=10s 240s node tests/pcbLegacyRecovery.browser.cjs
+      - name: Sanitized profile consumers and actual permission-gate recovery
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && steps.install-browser.outcome == 'success' }}
+        env:
+          SANITIZED_PROFILES_EVIDENCE_DIR: ${{ runner.temp }}/sanitized-profiles
+        run: timeout --signal=TERM --kill-after=10s 240s node tests/sanitizedProfiles.browser.cjs
       - name: Browser history cancellation
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         run: timeout --signal=TERM --kill-after=10s 180s node tests/auditHistory.browser.cjs
@@ -125,5 +140,7 @@ jobs:
             ${{ runner.temp }}/short-landscape/
             ${{ runner.temp }}/deployment-recovery/
             ${{ runner.temp }}/pcb-session-recovery/
+            ${{ runner.temp }}/pcb-legacy-recovery/
+            ${{ runner.temp }}/sanitized-profiles/
           if-no-files-found: ignore
           retention-days: 3

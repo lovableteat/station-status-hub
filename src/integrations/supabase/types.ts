@@ -4242,8 +4242,26 @@ type BaseDatabase = {
   }
 }
 
+export type SystemUserProfile = Pick<BaseDatabase["public"]["Tables"]["system_users"]["Row"],
+  "id" | "username" | "display_name" | "role" | "status" | "permissions" |
+  "created_by" | "created_at" | "updated_at" | "registration_requested_at" |
+  "approved_at" | "approved_by" | "auth_user_id" | "auth_migrated_at" |
+  "last_seen_at" | "avatar_path"
+>
+
 export type Database = BaseDatabase & {
-  workspace: BaseDatabase["public"]
+  workspace: BaseDatabase["public"] & {
+    Functions: BaseDatabase["public"]["Functions"] & {
+      load_pcb_designer_legacy_workspace: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      list_system_user_profiles: {
+        Args: Record<PropertyKey, never>
+        Returns: SystemUserProfile[]
+      }
+    }
+  }
 }
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">

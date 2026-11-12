@@ -56,6 +56,7 @@ export function guardPcbRemoteClient(client: PcbRemoteClient, auth?: PcbSessionS
   const listeners = new Set<() => void>();
   let unsubscribe: (() => void) | undefined;
   let actorId: string | null = null;
+  let legacyReadOnly = false;
   const publish = (status: PcbRemoteAccessStatus, invalidate = false) => {
     if (snapshot.status === status && !invalidate) return;
     snapshot = { status, generation: snapshot.generation + (invalidate ? 1 : 0) };
@@ -100,6 +101,12 @@ export function guardPcbRemoteClient(client: PcbRemoteClient, auth?: PcbSessionS
   const soft = async <T>(operation: () => Promise<T>, failure: T): Promise<T> => {
     try { return await execute(operation); } catch { return failure; }
   };
+  const loadWithMetadata = client.loadWithMetadata ? async () => {
+    const result = await execute(() => client.loadWithMetadata!());
+    // Both public load APIs must apply mode only after the generation/actor fence.
+    legacyReadOnly = result.source === "legacy";
+    return result;
+  } : undefined;
   return {
     getAccessSnapshot: () => snapshot,
     subscribeAccess: (listener) => {
@@ -123,13 +130,16 @@ export function guardPcbRemoteClient(client: PcbRemoteClient, auth?: PcbSessionS
       };
     },
     retryAccess: () => publish("checking", true),
-    load: () => execute(() => client.load!()),
-    save: (state) => soft(() => client.save!(state), false),
-    acquireProjectLock: (input) => execute(() => client.acquireProjectLock!(input)),
+    load: loadWithMetadata ? async () => (await loadWithMetadata()).state : () => execute(() => client.load!()),
+    ...(loadWithMetadata ? { loadWithMetadata } : {}),
+    save: (state) => legacyReadOnly ? Promise.resolve(false) : soft(() => client.save!(state), false),
+    acquireProjectLock: (input) => legacyReadOnly
+      ? Promise.resolve({ available: true, acquired: false, lock: null })
+      : execute(() => client.acquireProjectLock!(input)),
     loadProjectLock: (projectId) => execute(() => client.loadProjectLock!(projectId)),
     releaseProjectLock: (projectId) => soft(() => client.releaseProjectLock!(projectId), false),
-    deleteProject: (projectId) => soft(() => client.deleteProject!(projectId), false),
-    saveModelAsset: (asset) => soft(() => client.saveModelAsset!(asset), false),
+    deleteProject: (projectId) => legacyReadOnly ? Promise.resolve(false) : soft(() => client.deleteProject!(projectId), false),
+    saveModelAsset: (asset) => legacyReadOnly ? Promise.resolve(false) : soft(() => client.saveModelAsset!(asset), false),
     loadModelAsset: (assetId) => soft(() => client.loadModelAsset!(assetId), null),
     listModelAssets: () => soft(() => client.listModelAssets!(), []),
   };

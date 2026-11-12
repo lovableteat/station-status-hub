@@ -611,8 +611,8 @@ export function PcbDesignerWorkspace({
             {persistenceLabel(workspace.persistenceStatus)}
           </span>
           {remoteClient ? (
-            workspace.remoteAccessStatus !== "ready" ? (
-              <span className="pcb-read-only">雲端存取暫停</span>
+            workspace.legacyRecovery || workspace.remoteAccessStatus !== "ready" ? (
+              <span className="pcb-read-only">{workspace.legacyRecovery ? "舊版恢復 · 唯讀" : "雲端存取暫停"}</span>
             ) : workspace.projectLock.status === "acquiring" ? (
               <span className="pcb-read-only">確認編輯權...</span>
             ) : workspace.canEdit ? (
@@ -736,11 +736,12 @@ export function PcbDesignerWorkspace({
         </div>
       </header>
 
-      {workspace.remoteAccessStatus !== "ready" && (
-        <div role="status" data-testid="pcb-cloud-access" data-status={workspace.remoteAccessStatus}
+      {(workspace.legacyRecovery || workspace.remoteAccessStatus !== "ready") && (
+        <div role="status" data-testid="pcb-cloud-access" data-status={workspace.legacyRecovery ? "legacy-recovery" : workspace.remoteAccessStatus}
           className="flex flex-wrap items-center gap-2 border-b border-amber-500/30 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
           <span className="min-w-0 flex-1">
             {workspace.ownerChanged ? "帳號已變更。此草稿仍保留在原帳號，已暫停編輯與同步；請返回原帳號繼續，或先匯出保留副本。"
+              : workspace.legacyRecovery ? "目前是舊版資料恢復模式，僅供檢視與匯出，尚未儲存至現行雲端；既有草稿不會被舊資料覆蓋。請在雲端服務恢復後重試連線。"
               : workspace.remoteAccessStatus === "checking" ? "正在確認 PCB 雲端連線，現有內容不會清除。"
               : workspace.remoteAccessStatus === "session-required" ? "PCB 雲端登入已失效或尚未建立。本機內容與未儲存草稿已保留；請先完成帳號登入，再重試連線。"
               : workspace.remoteAccessStatus === "denied" ? "PCB 雲端存取遭拒。本機內容與未儲存草稿已保留，編輯與同步已暫停；請確認帳號權限後重試。"

@@ -1,0 +1,44 @@
+[
+  {
+    "nspname": "workspace",
+    "proname": "current_system_user_id",
+    "args": "",
+    "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "definition": "CREATE OR REPLACE FUNCTION workspace.current_system_user_id()\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'auth', 'pg_temp'\nAS $function$\r\n  SELECT id\r\n  FROM workspace.system_users\r\n  WHERE auth_user_id = auth.uid()\r\n    AND status = 'active'\r\n  LIMIT 1;\r\n$function$\n"
+  },
+  {
+    "nspname": "workspace",
+    "proname": "pcb_designer_can_view",
+    "args": "p_user_id uuid",
+    "acl": "{postgres=X/postgres}",
+    "definition": "CREATE OR REPLACE FUNCTION workspace.pcb_designer_can_view(p_user_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\n  SELECT EXISTS (\r\n    SELECT 1\r\n    FROM workspace.system_users AS account\r\n    WHERE account.id = p_user_id\r\n      AND account.status = 'active'\r\n      AND (\r\n        account.role IN ('admin', 'super_admin')\r\n        OR COALESCE(\r\n          account.permissions #>> '{workspaceAccess,pcb-designer}',\r\n          'none'\r\n        ) IN ('view', 'edit')\r\n      )\r\n  );\r\n$function$\n"
+  },
+  {
+    "nspname": "workspace",
+    "proname": "current_user_has_stored_page_permission",
+    "args": "p_permission text",
+    "acl": "{postgres=X/postgres}",
+    "definition": "CREATE OR REPLACE FUNCTION workspace.current_user_has_stored_page_permission(p_permission text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1 from workspace.system_users account\n    where account.auth_user_id = auth.uid() and account.status = 'active'\n      and case\n        when not (coalesce(account.permissions, '{}'::jsonb) ? 'pagePermissions')\n        then exists (select 1 from workspace.user_page_permissions legacy\n          where legacy.user_id = account.id and legacy.permission::text = p_permission)\n        when jsonb_typeof(account.permissions -> 'pagePermissions') = 'array'\n        then (account.permissions -> 'pagePermissions') @> jsonb_build_array(p_permission)\n        else false\n      end\n  );\n$function$\n"
+  },
+  {
+    "nspname": "workspace",
+    "proname": "set_user_access_permissions",
+    "args": "p_user_id uuid, p_permissions page_permission[], p_workspace_access jsonb, p_granted_by text",
+    "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "definition": "CREATE OR REPLACE FUNCTION workspace.set_user_access_permissions(p_user_id uuid, p_permissions page_permission[], p_workspace_access jsonb, p_granted_by text DEFAULT 'admin'::text)\n RETURNS void\n LANGUAGE sql\n SET search_path TO ''\nAS $function$\n  select workspace.set_user_access_permissions(\n    p_user_id,\n    p_permissions,\n    p_workspace_access,\n    p_granted_by,\n    null\n  );\n$function$\n"
+  },
+  {
+    "nspname": "workspace",
+    "proname": "can_manage_system_users",
+    "args": "",
+    "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "definition": "CREATE OR REPLACE FUNCTION workspace.can_manage_system_users()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1 from workspace.system_users account\n    where account.auth_user_id = auth.uid() and account.status = 'active'\n      and (account.role in ('admin', 'super_admin') or (\n        case\n          when not (coalesce(account.permissions, '{}'::jsonb) ? 'workspaceAccess')\n            or (\n              jsonb_typeof(account.permissions -> 'workspaceAccess') = 'object'\n              and not ((account.permissions -> 'workspaceAccess') ? 'user-management')\n            )\n          then true\n          when jsonb_typeof(account.permissions -> 'workspaceAccess') = 'object'\n          then coalesce(account.permissions #>> '{workspaceAccess,user-management}', '') = 'edit'\n          else false\n        end\n        and workspace.current_user_has_stored_page_permission('admin_edit')\n      ))\n  );\n$function$\n"
+  },
+  {
+    "nspname": "workspace",
+    "proname": "set_user_access_permissions",
+    "args": "p_user_id uuid, p_permissions page_permission[], p_workspace_access jsonb, p_granted_by text, p_performance_manager boolean",
+    "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "definition": "CREATE OR REPLACE FUNCTION workspace.set_user_access_permissions(p_user_id uuid, p_permissions page_permission[], p_workspace_access jsonb, p_granted_by text, p_performance_manager boolean)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  v_actor_id uuid;\n  v_is_service_role boolean := coalesce((select auth.role()), '') = 'service_role';\n  v_lock_user_id uuid;\nbegin\n  if not v_is_service_role then\n    v_actor_id := workspace.current_system_user_id();\n  end if;\n\n  -- Every permission mutation takes the same actor/target lock order. The\n  -- authorization below is deliberately a later statement, so Read Committed\n  -- obtains a fresh snapshot after any queued revocation has committed.\n  for v_lock_user_id in\n    select lock_user_id\n    from unnest(array[v_actor_id, p_user_id]) as lock_ids(lock_user_id)\n    where lock_user_id is not null\n    group by lock_user_id\n    order by lock_user_id\n  loop\n    perform 1\n    from workspace.system_users\n    where id = v_lock_user_id\n    for update;\n  end loop;\n\n  if not exists (\n    select 1 from workspace.system_users where id = p_user_id\n  ) then\n    raise exception 'Unknown system user: %', p_user_id;\n  end if;\n\n  if not v_is_service_role\n     and not workspace.can_manage_system_users() then\n    raise exception 'User management edit access required'\n      using errcode = '42501';\n  end if;\n\n  if jsonb_typeof(p_workspace_access) is distinct from 'object'\n     or not (p_workspace_access ?& array[\n       'station-status',\n       'material-requests',\n       'data-center'\n     ])\n     or exists (\n       select 1\n       from jsonb_each_text(p_workspace_access) as access(key, value)\n       where key not in (\n         'station-status',\n         'material-requests',\n         'data-center',\n         'pcb-designer',\n         'user-management',\n         'ai-chat',\n         'performance'\n       )\n          or value is null\n          or value not in ('none', 'view', 'edit')\n     ) then\n    raise exception 'Invalid workspace access payload';\n  end if;\n\n  delete from workspace.user_page_permissions\n  where user_id = p_user_id;\n\n  insert into workspace.user_page_permissions (user_id, permission, granted_by)\n  select p_user_id, permission, nullif(p_granted_by, '')\n  from unnest(\n    coalesce(p_permissions, array[]::public.page_permission[])\n  ) as permission\n  on conflict (user_id, permission) do nothing;\n\n  update workspace.system_users\n  set permissions = coalesce(permissions, '{}'::jsonb)\n    || jsonb_build_object(\n      'workspaceAccess', p_workspace_access,\n      'pagePermissions', to_jsonb(\n        coalesce(p_permissions, array[]::public.page_permission[])\n      )\n    )\n    || case\n      when p_performance_manager is null then '{}'::jsonb\n      else jsonb_build_object('performanceManager', p_performance_manager)\n    end\n  where id = p_user_id;\nend;\n$function$\n"
+  }
+]

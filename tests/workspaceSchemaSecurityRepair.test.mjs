@@ -115,9 +115,12 @@ test("admin account list explicitly selects only approved system-user columns", 
 
   assert.ok(systemUserLoad, "expected the system-user load query");
   assert.doesNotMatch(systemUserLoad, /\.select\(['"]\*['"]\)/);
-  assert.match(systemUserLoad, /SYSTEM_USER_SAFE_COLUMNS/);
+  assert.match(systemUserLoad, /listSystemUserProfiles\(\)/);
+  assert.doesNotMatch(systemUserLoad, /\.from\(['"]system_users['"]\)/);
+  const reader = await readFile(new URL("../src/lib/systemUserProfiles.ts", import.meta.url), "utf8");
+  assert.match(reader, /schema\("workspace"\)\s*\.rpc\("list_system_user_profiles"\)/);
   assert.doesNotMatch(systemUserLoad, /password_hash/);
-  const projection = source.match(/const SYSTEM_USER_SAFE_COLUMNS = "([^"]+)";/)?.[1];
+  const projection = reader.match(/const SYSTEM_USER_PROFILE_COLUMNS = "([^"]+)";/)?.[1];
   assert.ok(projection, "expected a literal, typechecked safe projection");
   const selectedColumns = projection.split(",");
   assert.deepEqual(selectedColumns, [
@@ -138,5 +141,5 @@ test("admin account list explicitly selects only approved system-user columns", 
     "last_seen_at",
     "avatar_path",
   ], "the browser roster must preserve the established production 16-column grant");
-  assert.match(systemUserLoad, /\.order\(['"]created_at['"],\s*\{\s*ascending:\s*false\s*\}\)/);
+  assert.match(reader, /\.order\(['"]created_at['"],\s*\{\s*ascending:\s*false\s*\}\)/);
 });

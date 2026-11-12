@@ -29,6 +29,10 @@ const {chromium} = qa('playwright');
   const style = await require('postcss')([require('tailwindcss')({config: path.resolve('tailwind.config.ts')}), require('autoprefixer')])
     .process(fs.readFileSync('src/index.css', 'utf8').replace(/@import url\([^\n]+\n/g, '')
       + sourceAt('src/components/admin/admin-panel.css'), {from: path.resolve('src/index.css')});
+  if (process.env.AUDIT_PERMISSIONS_BUILD_ONLY === '1') {
+    console.log(JSON.stringify({status:'build-only-passed',browserExecuted:false,bytes:bundled.outputFiles[0].text.length}));
+    return;
+  }
   const server = http.createServer((req, res) => {
     if (req.url === '/fixture.js') {res.setHeader('Content-Type', 'text/javascript');res.end(bundled.outputFiles[0].text);}
     else {res.setHeader('Content-Type', 'text/html; charset=utf-8');res.end(`<meta name="viewport" content="width=device-width,initial-scale=1"><style>${style.css}</style><div id="root"></div><script src="/fixture.js"></script>`);}

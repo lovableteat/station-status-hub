@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { listSystemUserProfiles } from "@/lib/systemUserProfiles";
+import { watchPermissionRefresh } from "@/lib/permissionRefresh.mjs";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { REALTIME_COLLABORATION_V2_ENABLED } from "@/lib/realtimeCollaborationConfig";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,11 +50,11 @@ interface SystemUser {
   id: string;
   username: string;
   role: string;
-  status: string;
+  status: string | null;
   permissions: unknown;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
-  display_name?: string;
+  display_name?: string | null;
   auth_user_id?: string | null;
   auth_migrated_at?: string | null;
   registration_requested_at?: string | null;
@@ -67,8 +69,6 @@ const ADMIN_TAB_LABELS: Record<AdminTab, string> = { users: "帳號管理", coll
 
 const SHOW_ENGINEER_ADMIN = false;
 const SHOW_EXTENDED_ADMIN_COPY = false;
-// Keep the projection literal so PostgREST can check the approved roster columns.
-const SYSTEM_USER_SAFE_COLUMNS = "id,username,display_name,role,status,permissions,created_by,created_at,updated_at,registration_requested_at,approved_at,approved_by,auth_user_id,auth_migrated_at,last_seen_at,avatar_path";
 
 export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) {
   const [engineers, setEngineers] = useState<Engineer[]>([]);
@@ -93,6 +93,9 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   const { toast } = useToast();
   const { isRealtimeAuthenticated, logout, user } = useUser();
   const { canEditModule, canViewModule, loading: permissionsLoading } = usePermissions();
+  const rosterRequest = useRef(0);
+  const rosterActor = useRef(user?.userId);
+  rosterActor.current = user?.userId;
   const canEditUsers = canEditModule("users");
   const canViewApiManagement = canViewModule("api-management");
 
@@ -142,28 +145,36 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
   };
 
   const loadSystemUsers = useCallback(async () => {
+    const actor = user?.userId;
+    if (!actor || actor !== rosterActor.current) return;
+    const request = ++rosterRequest.current;
+    const isCurrent = () => request === rosterRequest.current && actor === rosterActor.current;
     try {
-      const { data, error } = await supabase
-        .from('system_users')
-        .select(SYSTEM_USER_SAFE_COLUMNS)
-        .order('created_at', { ascending: false });
+      const { data, error } = await listSystemUserProfiles();
+      if (!isCurrent()) return;
 
       if (error) throw error;
       if (data) setSystemUsers(data);
     } catch (error) {
+      if (!isCurrent()) return;
       toast({
         title: "載入失敗",
         description: "無法載入帳號資料",
         variant: "destructive"
       });
     }
-  }, [toast]);
+  }, [toast, user?.userId]);
 
   useEffect(() => {
+    setSystemUsers([]);
     void loadSystemUsers();
+    return () => { rosterRequest.current += 1; };
   }, [loadSystemUsers]);
 
   useEffect(() => {
+    const refresh = () => void loadSystemUsers();
+    const stopRefresh = watchPermissionRefresh({ windowTarget: window, documentTarget: document, refresh });
+    window.addEventListener("station-permissions-updated", refresh);
     const channel = supabase
       .channel("admin-system-user-roster")
       .on(
@@ -171,8 +182,10 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
         { event: "*", schema: "workspace", table: "system_users" },
         () => void loadSystemUsers(),
       )
-      .subscribe();
+      .subscribe((status) => { if (status === "SUBSCRIBED") refresh(); });
     return () => {
+      stopRefresh();
+      window.removeEventListener("station-permissions-updated", refresh);
       void supabase.removeChannel(channel);
     };
   }, [loadSystemUsers]);

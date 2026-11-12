@@ -1,0 +1,4 @@
+{
+  "sha256": "32d951b69930d11c9d8c3cb37063f69740964a1839b9b3e016d9961f4fbaa5c8",
+  "text": "-- BEGIN FIXED RELEASE GATE: retain until separately reviewed release evidence.\nDO $legacy_pcb_release_gate$\nBEGIN\n RAISE EXCEPTION 'Legacy PCB enforcement remains pending: old clients, Realtime OLD/NEW filtering, private/dynamic return paths and hosted compatibility must be verified';\nEND;\n$legacy_pcb_release_gate$;\n-- END FIXED RELEASE GATE\n"
+}

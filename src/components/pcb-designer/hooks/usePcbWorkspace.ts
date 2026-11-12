@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { PcbLocalRepository, type StorageLike } from "../core/storage.ts";
+import { getPcbBrowserStorage, PcbLocalRepository, type StorageLike } from "../core/storage.ts";
 import {
   createWorkspaceState,
   reduceWorkspaceState,
@@ -25,7 +25,7 @@ import {
   type PcbEditorIdentity,
   type PcbRemoteClient,
 } from "./usePcbPersistence.ts";
-import { loadPcbRemote, mergePcbRemoteState } from "../core/remoteSync.ts";
+import { isBlankSeedWorkspace, loadPcbRemoteResult, mergePcbRemoteState, type PcbRemoteLoadResult } from "../core/remoteSync.ts";
 import { usePcbProjectLock } from "./usePcbProjectLock.ts";
 import { PcbRemoteAccessError, type PcbRemoteAccessStatus } from "../core/remoteAccess.ts";
 import { usePcbRemoteAccess } from "./usePcbRemoteAccess.ts";
@@ -38,13 +38,6 @@ export interface UsePcbWorkspaceOptions {
   editor?: PcbEditorIdentity | null;
   clientId?: string;
   recoveryClientId?: string;
-}
-
-function browserStorage(): StorageLike {
-  if (typeof window === "undefined") {
-    return { getItem: () => null, setItem: () => undefined };
-  }
-  return window.localStorage;
 }
 
 export function usePcbWorkspace({
@@ -61,18 +54,20 @@ export function usePcbWorkspace({
   const draftOwnerRef = useRef(editorIdentity ?? null);
   const ownerChanged = (draftOwnerRef.current?.userId ?? "local") !== (editorIdentity?.userId ?? "local");
   const repository = useMemo(
-    () => new PcbLocalRepository(storage ?? browserStorage()),
+    () => new PcbLocalRepository(storage ?? getPcbBrowserStorage()),
     [storage],
   );
   const recovery = useMemo(() => repository.loadRecovery(draftOwnerRef.current?.userId ?? "local", recoveryClientId), [repository, recoveryClientId]);
   const [state, dispatch] = useReducer(
     reduceWorkspaceState,
     undefined,
-    () => createWorkspaceState(recovery?.state ?? repository.load(), canEdit && !remoteClient),
+    () => createWorkspaceState(recovery?.state ?? repository.load(draftOwnerRef.current?.userId ?? "local"), canEdit && !remoteClient),
   );
   const stateRef = useRef(state.data);
   const viewStateRef = useRef(state);
   const [remoteReady, setRemoteReady] = useState(!remoteClient);
+  const [legacyRecovery, setLegacyRecovery] = useState<"own" | "shared-only" | null>(null);
+  const modernLoadedRef = useRef(false);
   const [remoteLoadStatus, setRemoteLoadStatus] = useState<PcbRemoteAccessStatus>(remoteClient ? "checking" : "ready");
   const hydratedCleanRevisionRef = useRef<string | null>(null);
   const hasUnsavedChangesRef = useRef(false);
@@ -88,7 +83,7 @@ export function usePcbWorkspace({
     projectId: state.activeProject.id,
     projectName: state.activeProject.name,
   });
-  const cloudReady = !ownerChanged && (!remoteClient || (remoteReady && remoteAccess.status === "ready" && remoteLoadStatus === "ready"));
+  const cloudReady = !ownerChanged && !legacyRecovery && (!remoteClient || (remoteReady && remoteAccess.status === "ready" && remoteLoadStatus === "ready"));
   const effectiveCanEdit = canEdit && projectLock.canEdit && cloudReady;
 
   const persistence = usePcbPersistence({
@@ -100,7 +95,7 @@ export function usePcbWorkspace({
     initialSavedRevision: recovery?.savedRevision,
     recoveryClientId,
   });
-  const { markClean, saveNow: savePersistedNow } = persistence;
+  const { markClean, markDirty, saveNow: savePersistedNow } = persistence;
   const { refresh: refreshProjectLock } = projectLock;
   hasUnsavedChangesRef.current = persistence.hasUnsavedChanges;
 
@@ -126,9 +121,9 @@ export function usePcbWorkspace({
     const refreshRemote = async (initial: boolean) => {
       if (!active || loading || (!initial && initialized && hasUnsavedChangesRef.current)) return;
       loading = true;
-      let remoteState: PcbSaveState | null;
+      let loaded: PcbRemoteLoadResult;
       try {
-        remoteState = await loadPcbRemote(remoteClient);
+        loaded = await loadPcbRemoteResult(remoteClient);
       } catch (error) {
         if (active) {
           setRemoteReady(false);
@@ -140,8 +135,12 @@ export function usePcbWorkspace({
       }
       if (!active) return;
       initialized = true;
+      const remoteState = loaded.state;
+      const recoveringLegacy = loaded.source === "legacy";
+      setLegacyRecovery(loaded.source === "legacy" ? loaded.ownSnapshotPresent ? "own" : "shared-only" : null);
       setRemoteLoadStatus("ready");
-      setRemoteReady(true);
+      setRemoteReady(!recoveringLegacy);
+      if (!recoveringLegacy) modernLoadedRef.current = true;
       // Recheck after await: a user can edit while background refresh is pending.
       // A restored dirty recovery draft must also survive initial hydration.
       if (hasUnsavedChangesRef.current) {
@@ -149,11 +148,17 @@ export function usePcbWorkspace({
       }
       const localState = stateRef.current;
       const localView = viewStateRef.current;
+      if (recoveringLegacy) {
+        markDirty();
+        // Legacy revisions/tombstones may predate this device's modern state.
+        // Only a clean, blank seed can be automatically populated from recovery.
+        if (modernLoadedRef.current || !isBlankSeedWorkspace(localState)) return;
+      }
       if (remoteState) {
         const mergedState = mergePcbRemoteState(localState, remoteState);
         if (JSON.stringify(mergedState) !== JSON.stringify(localState)) {
-          repository.save(mergedState);
-          hydratedCleanRevisionRef.current = mergedState.updatedAt;
+          repository.save(mergedState, draftOwnerRef.current?.userId ?? "local");
+          if (!recoveringLegacy) hydratedCleanRevisionRef.current = mergedState.updatedAt;
           dispatch({
             type: "persistence/hydrate",
             data: mergedState,
@@ -168,7 +173,7 @@ export function usePcbWorkspace({
               selectedObjects: localView.selectedObjects,
             },
           });
-        } else if (initial) {
+        } else if (initial && !recoveringLegacy) {
           markClean(localState.updatedAt);
         }
       }
@@ -187,7 +192,7 @@ export function usePcbWorkspace({
       window.clearInterval(refreshTimer);
       window.removeEventListener("focus", refreshOnFocus);
     };
-  }, [markClean, remoteClient, remoteAccess.generation, repository, ownerChanged]);
+  }, [markClean, markDirty, remoteClient, remoteAccess.generation, repository, ownerChanged]);
 
   useEffect(() => {
     if (hydratedCleanRevisionRef.current !== state.data.updatedAt) return;
@@ -385,6 +390,7 @@ export function usePcbWorkspace({
     remoteReady: cloudReady,
     remoteAccessStatus: ownerChanged ? "denied" : remoteAccess.status !== "ready" ? remoteAccess.status : remoteLoadStatus,
     ownerChanged,
+    legacyRecovery,
     retryRemote,
     hasUnsavedChanges: persistence.hasUnsavedChanges,
     lastSavedEditor: persistence.lastSavedEditor,
