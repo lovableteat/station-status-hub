@@ -84,7 +84,9 @@ async function runActualRouterBrowser(browser, bundle, evidenceDirectory) {
         }
         if (pathname !== '/station-status-hub/') { response.writeHead(404).end(); return; }
         response.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
-        response.end('<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Isolated actual Router</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/actual-index.css"><style>body{font:16px system-ui;margin:16px}button{min-height:44px;margin:4px}textarea{display:block;min-height:120px;width:95%}output{display:block}svg{width:20px}</style><div id="root"></div><script src="/actual-router.js"></script>');
+        // The app gives body/root width:100%; outside margins enlarge the mobile
+        // viewport. Keep fixture spacing inside the body's border box instead.
+        response.end('<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Isolated actual Router</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/actual-index.css"><style>body{font:16px system-ui;margin:0;padding:16px;box-sizing:border-box}button{min-height:44px;margin:4px}textarea{display:block;min-height:120px;width:95%}output{display:block}svg{width:20px}</style><div id="root"></div><script src="/actual-router.js"></script>');
       });
       await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
       const origin = 'http://127.0.0.1:' + server.address().port;
