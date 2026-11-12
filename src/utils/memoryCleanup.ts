@@ -5,7 +5,7 @@ export const cleanupThreeJSResources = (scene: THREE.Scene, renderer?: THREE.Web
   try {
     // 遍歷場景中的所有對象
     scene.traverse((object) => {
-      if ((object as any).isMesh) {
+      if ((object as THREE.Mesh).isMesh) {
         const mesh = object as THREE.Mesh;
         
         // 清理幾何體
@@ -21,7 +21,7 @@ export const cleanupThreeJSResources = (scene: THREE.Scene, renderer?: THREE.Web
               // 清理材質的紋理
               Object.values(material).forEach(value => {
                 if (value && typeof value === 'object' && 'dispose' in value) {
-                  (value as any).dispose();
+                  (value as { dispose: () => void }).dispose();
                 }
               });
             });
@@ -30,7 +30,7 @@ export const cleanupThreeJSResources = (scene: THREE.Scene, renderer?: THREE.Web
             // 清理材質的紋理
             Object.values(mesh.material).forEach(value => {
               if (value && typeof value === 'object' && 'dispose' in value) {
-                (value as any).dispose();
+                (value as { dispose: () => void }).dispose();
               }
             });
           }
@@ -80,7 +80,7 @@ export const cleanupLocalStorageData = (keyPrefix: string) => {
 // 內存使用監控
 export const checkMemoryUsage = () => {
   if ('memory' in performance) {
-    const memory = (performance as any).memory;
+    const memory = (performance as Performance & { memory: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
     console.log('Memory usage:', {
       used: Math.round(memory.usedJSHeapSize / 1024 / 1024) + ' MB',
       total: Math.round(memory.totalJSHeapSize / 1024 / 1024) + ' MB',
@@ -98,7 +98,7 @@ export const checkMemoryUsage = () => {
 };
 
 // 防抖函數，避免頻繁的狀態更新
-export const debounce = <T extends (...args: any[]) => any>(
+export const debounce = <T extends (...args: unknown[]) => unknown>(
   func: T,
   wait: number
 ): ((...args: Parameters<T>) => void) => {

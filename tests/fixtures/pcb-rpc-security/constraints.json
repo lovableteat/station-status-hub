@@ -1,0 +1,107 @@
+{
+  "triggers": [
+    {
+      "table": "workspace.pcb_designer_model_assets",
+      "definition": "CREATE TRIGGER set_pcb_designer_model_assets_updated_at BEFORE UPDATE ON workspace.pcb_designer_model_assets FOR EACH ROW EXECUTE FUNCTION workspace.set_pcb_designer_updated_at()"
+    },
+    {
+      "table": "workspace.pcb_designer_shared_library",
+      "definition": "CREATE TRIGGER set_pcb_designer_shared_library_updated_at BEFORE UPDATE ON workspace.pcb_designer_shared_library FOR EACH ROW EXECUTE FUNCTION workspace.set_pcb_designer_updated_at()"
+    },
+    {
+      "table": "workspace.pcb_designer_shared_projects",
+      "definition": "CREATE TRIGGER set_pcb_designer_shared_projects_updated_at BEFORE UPDATE ON workspace.pcb_designer_shared_projects FOR EACH ROW EXECUTE FUNCTION workspace.set_pcb_designer_updated_at()"
+    },
+    {
+      "table": "workspace.pcb_designer_workspaces",
+      "definition": "CREATE TRIGGER set_pcb_designer_workspaces_updated_at BEFORE UPDATE ON workspace.pcb_designer_workspaces FOR EACH ROW EXECUTE FUNCTION workspace.set_pcb_designer_updated_at()"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "system_users_pkey",
+      "table": "workspace.system_users",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "system_users_username_key",
+      "table": "workspace.system_users",
+      "definition": "UNIQUE (username)"
+    },
+    {
+      "name": "pcb_designer_shared_library_pkey",
+      "table": "workspace.pcb_designer_shared_library",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "pcb_designer_shared_library_state_check",
+      "table": "workspace.pcb_designer_shared_library",
+      "definition": "CHECK ((((payload IS NOT NULL) AND (deleted_at IS NULL) AND (component_updated_at IS NOT NULL)) OR ((payload IS NULL) AND (deleted_at IS NOT NULL))))"
+    },
+    {
+      "name": "pcb_designer_shared_library_updated_by_fkey",
+      "table": "workspace.pcb_designer_shared_library",
+      "definition": "FOREIGN KEY (updated_by) REFERENCES workspace.system_users(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "pcb_designer_workspaces_owner_id_fkey",
+      "table": "workspace.pcb_designer_workspaces",
+      "definition": "FOREIGN KEY (owner_id) REFERENCES workspace.system_users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "pcb_designer_workspaces_pkey",
+      "table": "workspace.pcb_designer_workspaces",
+      "definition": "PRIMARY KEY (owner_id)"
+    },
+    {
+      "name": "pcb_designer_shared_projects_pkey",
+      "table": "workspace.pcb_designer_shared_projects",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "pcb_designer_shared_projects_state_check",
+      "table": "workspace.pcb_designer_shared_projects",
+      "definition": "CHECK ((((payload IS NOT NULL) AND (deleted_at IS NULL) AND (project_updated_at IS NOT NULL)) OR ((payload IS NULL) AND (deleted_at IS NOT NULL))))"
+    },
+    {
+      "name": "pcb_designer_shared_projects_updated_by_fkey",
+      "table": "workspace.pcb_designer_shared_projects",
+      "definition": "FOREIGN KEY (updated_by) REFERENCES workspace.system_users(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "pcb_designer_project_locks_editor_user_id_fkey",
+      "table": "workspace.pcb_designer_project_locks",
+      "definition": "FOREIGN KEY (editor_user_id) REFERENCES workspace.system_users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "pcb_designer_project_locks_pkey",
+      "table": "workspace.pcb_designer_project_locks",
+      "definition": "PRIMARY KEY (project_id)"
+    },
+    {
+      "name": "pcb_designer_model_assets_id_check",
+      "table": "workspace.pcb_designer_model_assets",
+      "definition": "CHECK (((length(id) >= 1) AND (length(id) <= 200)))"
+    },
+    {
+      "name": "pcb_designer_model_assets_metadata_check",
+      "table": "workspace.pcb_designer_model_assets",
+      "definition": "CHECK ((jsonb_typeof(metadata) = 'object'::text))"
+    },
+    {
+      "name": "pcb_designer_model_assets_pkey",
+      "table": "workspace.pcb_designer_model_assets",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "pcb_designer_model_assets_size_check",
+      "table": "workspace.pcb_designer_model_assets",
+      "definition": "CHECK (((octet_length(compressed_payload) >= 1) AND (octet_length(compressed_payload) <= 67108864)))"
+    },
+    {
+      "name": "pcb_designer_model_assets_updated_by_fkey",
+      "table": "workspace.pcb_designer_model_assets",
+      "definition": "FOREIGN KEY (updated_by) REFERENCES workspace.system_users(id) ON DELETE SET NULL"
+    }
+  ]
+}

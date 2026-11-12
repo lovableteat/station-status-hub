@@ -169,6 +169,7 @@
 @container (max-width: 850px) {
   .maintenance-fault-center[data-detail-open="true"] > .mf-page-head { display: none; }
   .maintenance-fault-center .mf-layout { height: auto; min-height: 0; }
+  .maintenance-fault-center .mf-list-panel { overflow: visible; overscroll-behavior: auto; }
   .maintenance-fault-center .mf-list-heading { scrollbar-gutter: auto; }
   .maintenance-fault-center .mf-result-list { overflow: visible; scrollbar-gutter: auto; }
   .maintenance-fault-center .mf-layout > .mf-detail { height: max(360px, calc(100dvh - 220px)); min-height: 0; }

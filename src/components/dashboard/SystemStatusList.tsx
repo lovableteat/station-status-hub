@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 interface SystemStatusListProps {
-  onNavigate?: (module: string, params?: any) => void;
+  onNavigate?: (module: string, params?: Record<string, unknown>) => void;
 }
 
 export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
@@ -185,11 +185,11 @@ export function SystemStatusList({ onNavigate }: SystemStatusListProps) {
                          <span className="text-muted-foreground">負責人</span>
                          <p className="mt-2 font-medium leading-6">{system.assigned_engineer || '未分配'}</p>
                        </div>
-                        {(system as any).team && (
+                        {(system as typeof system & { team?: string }).team && (
                           <>
                             <div className="rounded-2xl border border-white/8 bg-background/22 p-3 col-span-2">
                               <span className="text-muted-foreground">位置</span>
-                              <p className="mt-2 font-medium text-primary leading-6">{(system as any).team}</p>
+                              <p className="mt-2 font-medium text-primary leading-6">{(system as typeof system & { team?: string }).team}</p>
                             </div>
                           </>
                         )}

@@ -41,7 +41,7 @@ export function MaintenanceReport({ open, projectId, systems, assetSuggestions =
     } catch (cause) { setError(maintenanceError(cause)); }
     finally { setBusy(false); }
   };
-  return <Dialog open={open} onOpenChange={nextOpen => { if (!nextOpen) close(); }}><DialogContent className="mf-report-dialog" style={{ '--mf-visible-height': `${viewport.height}px`, '--mf-keyboard-gap': `${viewport.bottom}px` } as React.CSSProperties} onCloseAutoFocus={onExited} onInteractOutside={event => { if (busy) event.preventDefault(); }} onEscapeKeyDown={event => { if (busy) event.preventDefault(); }}>
+  return <Dialog open={open} onOpenChange={nextOpen => { if (!nextOpen) close(); }}><DialogContent className="mf-report-dialog" style={{ '--mf-visible-height': `${viewport.height}px`, '--mf-keyboard-gap': `${viewport.bottom}px` } as React.CSSProperties} onCloseAutoFocus={event => { event.preventDefault(); onExited(); }} onInteractOutside={event => { if (busy) event.preventDefault(); }} onEscapeKeyDown={event => { if (busy) event.preventDefault(); }}>
     <header><DialogTitle>快速報修</DialogTitle><DialogDescription>先記下哪台、什麼問題，負責人與分類稍後再補。</DialogDescription></header>
     <form onSubmit={submit} onPaste={event => { if (!busy && !saved && event.clipboardData.files.length) { event.preventDefault(); files.add(event.clipboardData.files); } }}>
       <div className="mf-report-fields">

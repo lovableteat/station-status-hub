@@ -1,3 +1,4 @@
+import { PrivateAttachmentHtml } from '@/components/attachments/PrivateAttachmentHtml';
 import { useCallback, useEffect, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 import { Check, Code2, Copy, Download, Edit2, Filter, Loader2, Plus, Search, Trash2 } from "lucide-react";
@@ -505,9 +506,9 @@ export function CodeStorageManager({ workspaceKey = "station-status" }: { worksp
                 </div>
               </div>
               <div className="min-h-0 flex-1 space-y-4 overflow-auto p-5">
-                {selectedSnippet.description && <div className="rounded-lg border border-[#274a64] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#c8dce8]" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedSnippet.description) }} />}
+                {selectedSnippet.description && <PrivateAttachmentHtml className="rounded-lg border border-[#274a64] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#c8dce8]" html={DOMPurify.sanitize(selectedSnippet.description)} />}
                 <pre className="max-h-[520px] overflow-auto whitespace-pre rounded-xl border border-[#23445d] bg-[#020913] p-5 font-mono text-sm leading-6 text-[#d9edf7]"><code>{selectedSnippet.code_content}</code></pre>
-                {selectedSnippet.sop_content && <div className="rounded-lg border border-[#274a64] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#c8dce8]" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedSnippet.sop_content) }} />}
+                {selectedSnippet.sop_content && <PrivateAttachmentHtml className="rounded-lg border border-[#274a64] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#c8dce8]" html={DOMPurify.sanitize(selectedSnippet.sop_content)} />}
               </div>
             </div>
           ) : (

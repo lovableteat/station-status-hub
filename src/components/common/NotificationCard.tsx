@@ -19,7 +19,7 @@ interface UserNotification {
   sender_id: string;
   reference_type?: string;
   reference_id?: string;
-  metadata?: any;
+  metadata?: { sender_name?: string; [key: string]: unknown };
   require_confirmation?: boolean;
   reply_id?: string;
   archived_at?: string;

@@ -1,3 +1,4 @@
+import { usePrivateAttachmentUrl } from "@/components/attachments/usePrivateAttachmentUrl";
 import React, { useCallback, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -32,7 +33,8 @@ interface AttachmentManagerProps {
 
 export function AttachmentManager({ issueId, onUpdate, refreshKey = 0 }: AttachmentManagerProps) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [previewFile, setPreviewFile] = useState<{ url: string; type: string; name: string } | null>(null);
+  const [previewFile, setPreviewFile] = useState<{ path: string; type: string; name: string } | null>(null);
+  const { url: previewUrl, error: previewError } = usePrivateAttachmentUrl("issue-attachments", previewFile?.path);
   const [pendingDelete, setPendingDelete] = useState<Attachment | null>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -58,6 +60,7 @@ export function AttachmentManager({ issueId, onUpdate, refreshKey = 0 }: Attachm
   }, [issueId, toast]);
 
   useEffect(() => {
+    setPreviewFile(null);
     loadAttachments();
   }, [loadAttachments, refreshKey]);
 
@@ -119,25 +122,12 @@ export function AttachmentManager({ issueId, onUpdate, refreshKey = 0 }: Attachm
     }
   };
 
-  const previewAttachment = async (attachment: Attachment) => {
-    try {
-      const { data } = supabase.storage
-        .from('issue-attachments')
-        .getPublicUrl(attachment.file_path);
-
-      setPreviewFile({
-        url: data.publicUrl,
-        type: attachment.file_type,
-        name: attachment.file_name
-      });
-    } catch (error) {
-      console.error('預覽失敗:', error);
-      toast({
-        title: "預覽失敗",
-        description: "無法預覽此附件",
-        variant: "destructive"
-      });
-    }
+  const previewAttachment = (attachment: Attachment) => {
+    setPreviewFile({
+      path: attachment.file_path,
+      type: attachment.file_type,
+      name: attachment.file_name,
+    });
   };
 
   const downloadAttachment = async (attachment: Attachment) => {
@@ -272,16 +262,17 @@ export function AttachmentManager({ issueId, onUpdate, refreshKey = 0 }: Attachm
           <DialogHeader>
             <DialogTitle>{previewFile?.name}</DialogTitle>
           </DialogHeader>
+          {previewError && <p role="alert">{previewError}</p>}
           <div className="max-h-[70vh] overflow-auto">
             {previewFile?.type.startsWith('image/') ? (
               <img
-                src={previewFile.url}
+                src={previewUrl || undefined}
                 alt={previewFile.name}
                 className="max-w-full h-auto"
               />
             ) : previewFile?.type === 'application/pdf' ? (
               <iframe
-                src={previewFile.url}
+                src={previewUrl || undefined}
                 className="w-full h-[60vh] border"
                 title={previewFile.name}
               />
@@ -291,7 +282,8 @@ export function AttachmentManager({ issueId, onUpdate, refreshKey = 0 }: Attachm
                 <p className="text-muted-foreground">此檔案類型無法預覽</p>
                 <Button
                   className="mt-4"
-                  onClick={() => window.open(previewFile.url, '_blank')}
+                  disabled={!previewUrl}
+                  onClick={() => window.open(previewUrl, '_blank', 'noopener,noreferrer')}
                 >
                   在新視窗開啟
                 </Button>

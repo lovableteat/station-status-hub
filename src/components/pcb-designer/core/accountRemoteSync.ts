@@ -1,3 +1,4 @@
+import { guardPcbRemoteClient, throwIfPcbAuthorizationError, type PcbSessionSource } from "./remoteAccess.ts";
 import type { PcbSaveState } from "../types.ts";
 import { isPcbSaveState, refreshBuiltInCatalog } from "./storage.ts";
 import {
@@ -12,7 +13,7 @@ import type {
   PcbRemoteClient,
 } from "./remoteSync.ts";
 
-type DatabaseError = { code?: string; message?: string } | null;
+type DatabaseError = { code?: string; message?: string; status?: number } | null;
 type DatabaseResult<T> = Promise<{ data: T; error: DatabaseError }>;
 
 interface SystemUserRecord {
@@ -70,11 +71,22 @@ function parseRemoteState(value: unknown): PcbSaveState | null {
   return isPcbSaveState(value) ? refreshBuiltInCatalog(value) : null;
 }
 
-function isMissingRpc(error: DatabaseError): boolean {
-  const message = error?.message?.toLowerCase() ?? "";
-  return error?.code === "PGRST202"
-    || message.includes("could not find the function")
-    || message.includes("does not exist");
+function isMissingRpc(error: DatabaseError, rpcName: string): boolean {
+  throwIfPcbAuthorizationError(error);
+  // Match the requested entry point, not a missing helper invoked inside it.
+  const message = error?.message ?? "";
+  const target = new RegExp(`function\\s+(?:(?:"?(?:workspace|public)"?)\\.)?"?${rpcName}"?\\s*\\(`, "i");
+  return target.test(message) && (
+    (error?.code === "PGRST202" && /could not find the function/i.test(message))
+    || (error?.code === "42883" && /does not exist/i.test(message))
+  );
+}
+
+function readRemoteState(value: unknown): PcbSaveState | null {
+  if (value === null) return null;
+  const state = parseRemoteState(value);
+  if (!state) throw new Error("Invalid PCB cloud workspace response");
+  return state;
 }
 
 function parseProjectLock(value: unknown): PcbProjectLockResult | null {
@@ -234,42 +246,44 @@ export function createPcbAccountRemoteClient(
   database: PcbAccountDatabase,
   userId: string,
   clientId = `pcb-client-${userId}`,
+  auth?: PcbSessionSource,
 ): PcbRemoteClient {
-  return {
+  return guardPcbRemoteClient({
     load: async () => {
       const primary = await database.rpc("load_pcb_designer_workspace_shared", {
         p_user_id: userId,
       });
-      if (!primary.error) {
-        const state = parseRemoteState(primary.data);
-        if (state) return state;
-      }
+      if (!primary.error) return readRemoteState(primary.data);
+      if (!isMissingRpc(primary.error, "load_pcb_designer_workspace_shared")) throw primary.error;
 
       const legacy = await database.rpc("load_pcb_designer_workspace", {
         p_user_id: userId,
       });
+      if (legacy.error && !isMissingRpc(legacy.error, "load_pcb_designer_workspace")) throw legacy.error;
+      // The legacy RPC predates the shared library. Only its missing shared RPC
+      // permits the compatibility read below, never a denied/failed cloud load.
+      const legacyState = !legacy.error ? readRemoteState(legacy.data) : null;
       const sharedFallback = await database
         .from("system_users")
         .select("id,permissions");
       const fallbackState = !sharedFallback.error && sharedFallback.data
         ? mergePcbFallbackWorkspaces(sharedFallback.data, userId)
         : null;
-      if (!legacy.error) {
-        const state = parseRemoteState(legacy.data);
-        if (state) {
-          if (!fallbackState) return state;
-          return refreshBuiltInCatalog({
-            ...state,
-            library: fallbackState.library,
-            remoteDeletions: {
-              ...state.remoteDeletions,
-              library: [...new Set([
-                ...(state.remoteDeletions?.library ?? []),
-                ...(fallbackState.remoteDeletions?.library ?? []),
-              ])],
-            },
-          });
-        }
+      throwIfPcbAuthorizationError(sharedFallback.error);
+      if (sharedFallback.error) throw sharedFallback.error;
+      if (legacyState) {
+        if (!fallbackState) return legacyState;
+        return refreshBuiltInCatalog({
+          ...legacyState,
+          library: fallbackState.library,
+          remoteDeletions: {
+            ...legacyState.remoteDeletions,
+            library: [...new Set([
+              ...(legacyState.remoteDeletions?.library ?? []),
+              ...(fallbackState.remoteDeletions?.library ?? []),
+            ])],
+          },
+        });
       }
       if (!sharedFallback.error && sharedFallback.data) {
         return fallbackState;
@@ -280,7 +294,9 @@ export function createPcbAccountRemoteClient(
         .select("permissions")
         .eq("id", userId)
         .maybeSingle();
-      if (ownFallback.error || !ownFallback.data) return null;
+      throwIfPcbAuthorizationError(ownFallback.error);
+      if (ownFallback.error) throw ownFallback.error;
+      if (!ownFallback.data) return null;
       return stateFromPermissions(ownFallback.data.permissions);
     },
     save: async (state) => {
@@ -292,30 +308,34 @@ export function createPcbAccountRemoteClient(
       });
       if (!locked.error) return true;
       // A lock rejection must never fall through to an unlocked legacy write.
-      if (!isMissingRpc(locked.error)) return false;
+      if (!isMissingRpc(locked.error, "save_pcb_designer_workspace_locked")) return false;
 
       const primary = await database.rpc("save_pcb_designer_workspace_shared", {
         p_user_id: userId,
         p_payload: state,
       });
       if (!primary.error) return true;
+      if (!isMissingRpc(primary.error, "save_pcb_designer_workspace_shared")) return false;
 
       const legacy = await database.rpc("save_pcb_designer_workspace", {
         p_user_id: userId,
         p_payload: state,
       });
       if (!legacy.error) return true;
+      if (!isMissingRpc(legacy.error, "save_pcb_designer_workspace")) return false;
 
       const table = database.from("system_users");
       const current = await table
         .select("permissions")
         .eq("id", userId)
         .maybeSingle();
+      throwIfPcbAuthorizationError(current.error);
       if (current.error || !current.data) return false;
 
       const permissions = asRecord(current.data.permissions);
       permissions[PCB_REMOTE_FALLBACK_KEY] = structuredClone(state);
       const updated = await table.update({ permissions }).eq("id", userId);
+      throwIfPcbAuthorizationError(updated.error);
       return !updated.error;
     },
     acquireProjectLock: async ({ projectId, projectName }) => {
@@ -326,8 +346,8 @@ export function createPcbAccountRemoteClient(
         p_editor_client_id: clientId,
         p_lease_seconds: 30,
       });
-      if (isMissingRpc(result.error)) return LEGACY_LOCK_RESULT;
-      if (result.error) return { available: true, acquired: false, lock: null };
+      if (isMissingRpc(result.error, "acquire_pcb_designer_project_lock")) return LEGACY_LOCK_RESULT;
+      if (result.error) throw result.error;
       return parseProjectLock(result.data)
         ?? { available: true, acquired: false, lock: null };
     },
@@ -336,8 +356,8 @@ export function createPcbAccountRemoteClient(
         p_user_id: userId,
         p_project_id: projectId,
       });
-      if (isMissingRpc(result.error)) return LEGACY_LOCK_RESULT;
-      if (result.error) return { available: true, acquired: false, lock: null };
+      if (isMissingRpc(result.error, "load_pcb_designer_project_lock")) return LEGACY_LOCK_RESULT;
+      if (result.error) throw result.error;
       return parseProjectLock(result.data)
         ?? { available: true, acquired: false, lock: null };
     },
@@ -347,7 +367,7 @@ export function createPcbAccountRemoteClient(
         p_project_id: projectId,
         p_editor_client_id: clientId,
       });
-      return isMissingRpc(result.error) || !result.error;
+      return isMissingRpc(result.error, "release_pcb_designer_project_lock") || !result.error;
     },
     deleteProject: async (projectId) => {
       const result = await database.rpc("delete_pcb_designer_project_locked", {
@@ -355,6 +375,7 @@ export function createPcbAccountRemoteClient(
         p_project_id: projectId,
         p_editor_client_id: clientId,
       });
+      throwIfPcbAuthorizationError(result.error);
       return !result.error && result.data === true;
     },
     saveModelAsset: async (asset: PcbModelAsset) => {
@@ -366,8 +387,10 @@ export function createPcbAccountRemoteClient(
           p_metadata: asset.metadata,
           p_payload_base64: payloadBase64,
         });
+        throwIfPcbAuthorizationError(result.error);
         return !result.error;
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && error.name === "PcbRemoteAccessError") throw error;
         return false;
       }
     },
@@ -376,6 +399,7 @@ export function createPcbAccountRemoteClient(
         p_user_id: userId,
         p_asset_id: assetId,
       });
+      throwIfPcbAuthorizationError(result.error);
       if (result.error) return null;
       const cloud = parseCloudModel(result.data);
       if (!cloud) return null;
@@ -389,10 +413,11 @@ export function createPcbAccountRemoteClient(
       const result = await database.rpc("list_pcb_designer_model_assets", {
         p_user_id: userId,
       });
+      throwIfPcbAuthorizationError(result.error);
       if (result.error) return [];
       return parseCloudModelList(result.data);
     },
-  };
+  }, auth);
 }
 
 export function isDatabaseUserId(value: string | null | undefined): value is string {

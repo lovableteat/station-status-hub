@@ -22,7 +22,7 @@ interface NotificationReplyDialogProps {
     title: string;
     message: string;
     sender_id: string;
-    metadata?: any;
+    metadata?: { sender_name?: string; [key: string]: unknown };
   };
 }
 

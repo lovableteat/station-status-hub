@@ -1,3 +1,5 @@
+import { PrivateAttachmentImage } from "@/components/attachments/PrivateAttachmentImage";
+import { openPrivateAttachment, downloadPrivateAttachment } from "@/lib/privateAttachments";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -765,23 +767,18 @@ export function IssueTableView({ issues, onUpdate, onViewIssue }: IssueTableView
             <DialogHeader><DialogTitle>附件預覽</DialogTitle></DialogHeader>
             <div className="grid grid-cols-2 gap-4">
               {attachmentPreview?.map((att) => {
-                const pub = supabase.storage.from('issue-attachments').getPublicUrl(att.file_path).data.publicUrl;
+
                 const isImg = /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(att.file_name);
                 return (
                   <div key={att.id} className="border rounded p-2">
                     {isImg ? (
-                      <img src={pub} alt={att.file_name} className="w-full h-40 object-contain rounded" />
+                      <PrivateAttachmentImage path={att.file_path} alt={att.file_name} className="w-full h-40 object-contain rounded" />
                     ) : (
                       <div className="text-sm text-muted-foreground">{att.file_name}</div>
                     )}
                     <div className="mt-2 flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => window.open(pub, '_blank')}>開啟</Button>
-                      <Button variant="ghost" size="sm" onClick={() => {
-                        const a = document.createElement('a');
-                        a.href = pub;
-                        a.download = att.file_name;
-                        a.click();
-                      }}>下載</Button>
+                      <Button variant="outline" size="sm" onClick={() => void openPrivateAttachment('issue-attachments', att.file_path).catch(() => toast({ title: '附件無法開啟', variant: 'destructive' }))}>開啟</Button>
+                      <Button variant="ghost" size="sm" onClick={() => void downloadPrivateAttachment('issue-attachments', att.file_path, att.file_name).catch(() => toast({ title: '附件下載失敗', variant: 'destructive' }))}>下載</Button>
                     </div>
                   </div>
                 );

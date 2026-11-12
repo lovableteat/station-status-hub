@@ -166,6 +166,8 @@
         const FALLBACK_BUTTON = "\u624b\u52d5\u8f09\u5165\u6700\u65b0\u7248\u672c";
 
         window.__STATION_MANUAL_RELOAD__ = function () {
+          // A stale boot button must never replace a live application.
+          if (window.__STATION_APP_READY__ === true) return;
           try {
             window.sessionStorage.removeItem(RETRY_KEY);
           } catch {
@@ -176,9 +178,9 @@
           window.location.replace(nextUrl.toString());
         };
 
-        function renderFallbackMessage(force) {
+        function renderFallbackMessage() {
           const root = document.getElementById("root");
-          if (!root || (!force && window.__STATION_APP_READY__ === true)) return;
+          if (!root || window.__STATION_APP_READY__ === true) return;
 
           root.innerHTML =
             '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#0b0b0d;color:#f2f2ef;font-family:Arial,sans-serif;">' +
@@ -210,6 +212,7 @@
         }
 
         function retryBoot(reason, fingerprint) {
+          if (window.__STATION_APP_READY__ === true) return;
           try {
             fingerprint = fingerprint || reason;
             const now = Date.now();
@@ -220,7 +223,7 @@
             );
             if (hasRetried) {
               console.warn("station-status-hub boot retry already used:", reason);
-              renderFallbackMessage(true);
+              renderFallbackMessage();
               return;
             }
 
@@ -232,11 +235,14 @@
             nextUrl.searchParams.set("reload", Date.now().toString());
             window.location.replace(nextUrl.toString());
           } catch {
-            renderFallbackMessage(true);
+            renderFallbackMessage();
           }
         }
 
         window.addEventListener("vite:preloadError", function (event) {
+          // Mounted modules handle rejection locally. Let the import reject so
+          // its recovery UI can offer a retry without destroying any editor.
+          if (window.__STATION_APP_READY__ === true) return;
           event.preventDefault();
           const payload = event.payload;
           const fingerprint = payload && payload.message
@@ -262,14 +268,14 @@
             if (event.error) {
               if (window.__STATION_APP_READY__ !== true) {
                 console.error("station-status-hub failed before mount:", event.error);
-                renderFallbackMessage(true);
+                renderFallbackMessage();
                 return;
               }
 
               window.setTimeout(function () {
                 const root = document.getElementById("root");
                 if (root && root.children.length === 0) {
-                  renderFallbackMessage(true);
+                  renderFallbackMessage();
                 }
               }, 0);
             }
@@ -280,7 +286,7 @@
         window.addEventListener("unhandledrejection", function (event) {
           if (window.__STATION_APP_READY__ !== true) {
             console.error("station-status-hub rejected before mount:", event.reason);
-            renderFallbackMessage(true);
+            renderFallbackMessage();
           }
         });
 
@@ -290,7 +296,7 @@
 
         window.setTimeout(function () {
           if (window.__STATION_APP_READY__ !== true) {
-            renderFallbackMessage(true);
+            renderFallbackMessage();
           }
         }, 15000);
       })();

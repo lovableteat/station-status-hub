@@ -2,11 +2,62 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import ts from 'typescript';
+import postcss from 'postcss';
 
 const source = await readFile(new URL('../src/components/maintenance/maintenanceModel.ts', import.meta.url), 'utf8');
 const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const model = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
 const issue = (id, extra = {}) => ({ id, title: '無法開機', description: '', status: 'open', assigned_to: null, assignee_user_ids: [], asset_identifier: 'GB300-021', system_id: null, category: null, created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-10T00:00:00Z', ...extra });
+
+test('maintenance body clipping avoids a hidden scroll container in every compact orientation only', async () => {
+  const css = postcss.parse(await readFile(new URL('../src/index.css', import.meta.url), 'utf8'));
+  const maintenanceBodies = [];
+  css.walkRules('body:has(.maintenance-workspace)', rule => maintenanceBodies.push(rule));
+  assert.equal(maintenanceBodies.length, 1, 'Keep one maintenance-only body overflow rule');
+  const rule = maintenanceBodies[0];
+  assert.equal(rule.parent.type, 'atrule');
+  assert.equal(rule.parent.name, 'media');
+  assert.equal(rule.parent.params, '(max-width: 1023px)', 'Portrait phones must not be excluded by a max-height condition');
+  assert.deepEqual(rule.nodes.map(node => [node.prop, node.value]), [['overflow-x', 'clip']]);
+  const phone = css.nodes.find(node => node.type === 'atrule' && node.name === 'media' && node.params === '(max-width: 767px)' && node.nodes.some(child => child.type === 'rule' && child.selector === 'body'));
+  assert.ok(phone, 'The existing general phone tier remains intact');
+  const phoneBody = phone.nodes.find(node => node.type === 'rule' && node.selector === 'body');
+  assert.ok(phoneBody.nodes.some(node => node.prop === 'overflow-x' && node.value === 'hidden'), 'Do not change overflow in unrelated workspaces');
+  const shortLandscape = css.nodes.find(node => node.type === 'atrule' && node.name === 'media' && node.params === '(max-width: 1023px) and (max-height: 500px)');
+  assert.ok(shortLandscape.nodes.some(node => node.type === 'rule' && node.selector === '.maintenance-workspace main' && node.nodes.some(declaration => declaration.prop === 'overscroll-behavior-y' && declaration.value === 'auto')), 'Keep the existing short-landscape main scrolling rule');
+});
+
+test('compact fault lists release the panel scroll trap while desktop results keep their own scroller', async () => {
+  const layout = postcss.parse(await readFile(new URL('../src/components/maintenance/maintenanceFaultLayout.css', import.meta.url), 'utf8'));
+  const base = postcss.parse(await readFile(new URL('../src/components/maintenance/maintenance.css', import.meta.url), 'utf8'));
+  const declarations = (parent, selector) => {
+    const rule = parent.nodes.find(node => node.type === 'rule' && node.selector === selector);
+    assert.ok(rule, `Missing ${selector}`);
+    return Object.fromEntries(rule.nodes.filter(node => node.type === 'decl').map(node => [node.prop, node.value]));
+  };
+  const compact = layout.nodes.find(node => node.type === 'atrule' && node.name === 'container' && node.params === '(max-width: 850px)');
+  assert.ok(compact, 'The touch-scroll fix must be limited to the existing compact container breakpoint');
+  const defaultPanel = layout.nodes.find(node => node.type === 'rule' && node.selector === '.maintenance-fault-center .mf-list-panel');
+  assert.ok(layout.nodes.indexOf(compact) > layout.nodes.indexOf(defaultPanel), 'The equally specific compact override must follow the default panel rule');
+  const mobilePanel = declarations(compact, '.maintenance-fault-center .mf-list-panel');
+  assert.equal(mobilePanel.overflow, 'visible');
+  assert.equal(mobilePanel['overscroll-behavior'], 'auto');
+  assert.equal(declarations(compact, '.maintenance-fault-center .mf-result-list').overflow, 'visible');
+  assert.equal(declarations(layout, '.maintenance-fault-center .mf-list-panel').overflow, 'hidden');
+  const desktopResults = declarations(layout, '.maintenance-fault-center .mf-result-list');
+  assert.equal(desktopResults['overflow-y'], 'auto');
+  assert.equal(desktopResults['overscroll-behavior'], 'contain');
+  assert.equal(declarations(base, '.mf-layout').overflow, 'hidden', 'The outer panel still clips its rounded corners');
+});
+
+test('controlled report closure returns focus to its real opener without moving the page', async () => {
+  const report = await readFile(new URL('../src/components/maintenance/MaintenanceReport.tsx', import.meta.url), 'utf8');
+  const workspace = await readFile(new URL('../src/components/maintenance/MaintenanceWorkspace.tsx', import.meta.url), 'utf8');
+  assert.match(report, /onCloseAutoFocus=\{event => \{ event\.preventDefault\(\); onExited\(\); \}\}/);
+  assert.match(workspace, /<Button ref=\{reportTriggerRef\} onClick=\{\(\) => setReport/);
+  assert.match(workspace, /reportTriggerRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(workspace, /previous\.session === report\.session && !previous\.open/);
+});
 
 test('old issue statuses and old assignee text remain visible without inventing identities', () => {
   assert.equal(model.getFaultStatus(issue('A')), 'pending');

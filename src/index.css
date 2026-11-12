@@ -1383,6 +1383,11 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
     box-sizing: border-box;
     padding-bottom: var(--mobile-shell-bottom);
   }
+
+  /* Keep compact maintenance pages on the document scroller in either orientation. */
+  body:has(.maintenance-workspace) {
+    overflow-x: clip;
+  }
 }
 
 @media (max-width: 1023px) and (max-height: 500px) {
@@ -1393,11 +1398,6 @@ button.material-status-surface:hover { background-color: hsl(var(--material-stat
   [data-testid="pending-materials-dialog"] > [data-testid="pending-materials-list"] {
     flex: none;
     overflow: visible;
-  }
-
-  /* Keep short maintenance pages on the document scroller. */
-  body:has(.maintenance-workspace) {
-    overflow-x: clip;
   }
 
   .maintenance-workspace main {

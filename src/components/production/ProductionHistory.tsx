@@ -120,7 +120,7 @@ export function ProductionHistory() {
     }
   };
 
-  const calculateBottlenecks = (data: any[]) => {
+  const calculateBottlenecks = (data: { test_flow_stations?: { station_name: string }; status?: string; started_at?: string; completed_at?: string }[]) => {
     const stationStats = new Map();
     
     data.forEach(item => {

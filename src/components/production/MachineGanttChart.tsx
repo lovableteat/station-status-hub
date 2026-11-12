@@ -288,7 +288,7 @@ export const MachineGanttChart = React.memo(function MachineGanttChart() {
         break;
     }
     
-    let currentDate = new Date(start);
+    const currentDate = new Date(start);
     while (currentDate <= end) {
       const dayFromStart = Math.ceil((currentDate.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
       const percent = totalDays > 0 ? (dayFromStart / totalDays) * 100 : 0;

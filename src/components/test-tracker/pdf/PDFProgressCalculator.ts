@@ -52,7 +52,7 @@ export class PDFProgressCalculator {
         station3Progress: station3,
         actualStartedAt: system.actual_started_at,
         actualCompletedAt: system.actual_completed_at,
-        excludeFromDashboard: (system as any).exclude_from_dashboard || false
+        excludeFromDashboard: (system as TestSystem & { exclude_from_dashboard?: boolean }).exclude_from_dashboard || false
       };
     });
   }

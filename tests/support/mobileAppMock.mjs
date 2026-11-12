@@ -7,9 +7,52 @@ const bom=Array.from({length:24},(_,i)=>({id:`bom-${i}`,sourceGroupKey:`group-${
 const users=Array.from({length:12},(_,i)=>({id:`audit-user-${i}`,username:`audit${i}`,display_name:`測試使用者 ${i+1}`,role:i===0?'admin':'engineer',status:'active',permissions:{},created_by:'demo-admin',created_at:ts,updated_at:ts,last_seen_at:ts,avatar_path:null,auth_user_id:null}));
 const db={test_projects:[{id:pid,name:'Mobile Audit 專案',description:'隔離 mock 資料',status:'active',is_archived:false,active_flow_version_id:null,created_at:ts,updated_at:ts}],test_systems:systems,test_flow_stations:stations,test_flow_items:items,test_progress:[],station_contents:[],system_users:users,engineers:[{id:'eng1',name:'陳工程師',email:'audit@example.invalid',team:'RD',status:'active',created_at:ts}],issues:Array.from({length:12},(_,i)=>({id:`issue-${i}`,project_id:pid,system_id:systems[i].id,station_id:'st-2',test_item_id:'item-1',title:`診斷失敗 ${i+1}：電源與韌體確認`,description:'隔離測試工單。確認電源後仍有測試異常，需要查核診斷日誌。',priority:i%2?'high':'critical',status:i%3?'in_progress':'open',assigned_to:'陳工程師',created_by:'demo-admin',created_at:ts,updated_at:ts,test_systems:systems[i],test_flow_stations:stations[1],test_flow_items:items[1]})),issue_attachments:[],material_bom_workspaces:[{id:'bom-workspace',name:'Audit BOM',source_file:'audit.xlsx',sheet_name:'BOM',generated_at:ts,record_count:bom.length,updated_at:ts}],material_bom_records:bom.map((data,i)=>({workspace_id:'bom-workspace',record_id:data.id,order_index:i,data,updated_at:ts})),ui_table_preferences:[],data_center_projects:[],api_keys:[],performance_reviews:[],performance_review_contents:[],user_page_permissions:[]};
 db.data_center_projects=[{id:'dc-audit',project_key:'dc-audit',name:'Audit Data Center',category:'隔離測試',description:'本機 mock 場景',document:{},updated_at:ts,updated_by:'demo-admin',archived_at:null}];
+// Preserve the legacy table fixtures while supplying the current maintenance RPC contract.
+// The real RPC flattens the related machine identity; nested test_systems alone is not enough.
+db.issues = db.issues.map((issue, index) => ({
+  ...issue,
+  asset_identifier: issue.test_systems.serial_number,
+  system_name: issue.test_systems.system_name,
+  serial_number: issue.test_systems.serial_number,
+  assignee_user_ids: [],
+  maintenance_status: index % 3 ? 'repairing' : 'pending',
+  category: index % 2 ? '韌體' : '電源',
+  summary: '隔離測試：已保留診斷日誌，等待確認',
+  process_notes: null,
+  solution: null,
+  handover_message_id: null,
+}));
+db.maintenance_messages = [];
 window.__AUDIT_DB__=db;window.__AUDIT_CALLS__=[];
 function query(table){let filters=[],lo=0,hi=Infinity,single=false,action='select',payload=null,columns='*';const q=new Proxy({}, {get(_,key){if(key==='then')return(resolve,reject)=>Promise.resolve().then(()=>{window.__AUDIT_CALLS__.push({table,action,columns});let rows=(db[table]??[]).filter(r=>filters.every(f=>f(r)));if(action==='insert'||action==='upsert'){const added=(Array.isArray(payload)?payload:[payload]).map(r=>({id:r.id??crypto.randomUUID(),created_at:ts,updated_at:new Date().toISOString(),...r}));db[table]=[...(db[table]??[]),...added];rows=added;}if(action==='update'){rows.forEach(r=>Object.assign(r,payload,{updated_at:new Date().toISOString()}));}if(action==='delete'){db[table]=(db[table]??[]).filter(r=>!rows.includes(r));}const count=rows.length;rows=rows.slice(lo,hi+1);return{data:single?(rows[0]??null):rows,error:null,count,status:200};}).then(resolve,reject);if(key==='select')return(c)=>{columns=c;return q};if(key==='single'||key==='maybeSingle')return()=>{single=true;return q};if(key==='range')return(a,b)=>{lo=a;hi=b;return q};if(key==='limit')return(n)=>{hi=n-1;return q};if(key==='eq')return(k,v)=>{filters.push(r=>r[k]===v);return q};if(key==='neq')return(k,v)=>{filters.push(r=>r[k]!==v);return q};if(key==='in')return(k,v)=>{filters.push(r=>v.includes(r[k]));return q};if(key==='is')return(k,v)=>{filters.push(r=>v===null?r[k]==null:r[k]===v);return q};if(key==='like'||key==='ilike')return(k,v)=>{filters.push(r=>String(r[k]??'').includes(v.replaceAll('%','')));return q};if(['update','insert','upsert','delete'].includes(key))return(p)=>{action=key;payload=p;return q};return()=>q;}});return q;}
 function channel(){const c={on:()=>c,subscribe:()=>c,unsubscribe:async()=>{},track:async()=>{},untrack:async()=>{},send:async()=>{},presenceState:()=>({})};return c;}
 export const SUPABASE_URL=window.location.origin+'/mock-only';
-export const supabase={from:query,schema:()=>supabase,channel,removeChannel:async()=>{},removeAllChannels:async()=>{},getChannels:()=>[],rpc:async(name,args)=>({data:name.includes('project')?db.test_projects[0]:[],error:null}),auth:{getSession:async()=>({data:{session:null},error:null}),getUser:async()=>({data:{user:null},error:null}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}}),signOut:async()=>({error:null})},realtime:{setAuth:async()=>{},connect(){},disconnect(){},isConnected:()=>true},storage:{from:()=>({getPublicUrl:p=>({data:{publicUrl:`${window.location.origin}/mock-asset/${p}`}}),createSignedUrl:async()=>({data:{signedUrl:''},error:null}),upload:async()=>({data:{path:'mock-file'},error:null}),remove:async()=>({error:null}),download:async()=>({data:new Blob(),error:null})})},functions:{invoke:async()=>({data:[],error:null})}};
-supabase.rpc=async(name,args)=>({data:name.includes('summar')?[{project_id:pid,machine_count:systems.length,active_machine_count:9,open_issue_count:12,flow_version_label:'Audit flow'}]:[],error:null});
+export const supabase={from:query,schema:()=>supabase,channel,removeChannel:async()=>{},removeAllChannels:async()=>{},getChannels:()=>[],rpc,auth:{getSession:async()=>({data:{session:null},error:null}),getUser:async()=>({data:{user:null},error:null}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}}),signOut:async()=>({error:null})},realtime:{setAuth:async()=>{},connect(){},disconnect(){},isConnected:()=>true},storage:{from:()=>({getPublicUrl:p=>({data:{publicUrl:`${window.location.origin}/mock-asset/${p}`}}),createSignedUrl:async()=>({data:{signedUrl:''},error:null}),upload:async()=>({data:{path:'mock-file'},error:null}),remove:async()=>({error:null}),download:async()=>({data:new Blob(),error:null})})},functions:{invoke:async()=>({data:[],error:null})}};
+async function rpc(name, args = {}) {
+  window.__AUDIT_CALLS__.push({ rpc: name, args: structuredClone(args) });
+  const ok = data => ({ data: structuredClone(data), error: null });
+  if (name === 'get_test_project_summaries') return ok(db.test_projects.map(project => ({
+    project_id: project.id,
+    machine_count: db.test_systems.filter(system => system.project_id === project.id).length,
+    active_machine_count: db.test_systems.filter(system => system.project_id === project.id && system.status !== 'completed').length,
+    open_issue_count: db.issues.filter(issue => issue.project_id === project.id && !['closed', 'resolved'].includes(issue.status)).length,
+    flow_version_label: 'Audit flow',
+  })));
+  if (name === 'maintenance_workspace') {
+    const issues = db.issues.filter(issue => issue.project_id === args.p_project_id);
+    return ok({
+      issues,
+      systems: db.test_systems.filter(system => system.project_id === args.p_project_id),
+      people: db.system_users.filter(user => user.status === 'active').map(user => ({ id: user.id, name: user.display_name, username: user.username })),
+      categories: [...new Set(issues.map(issue => issue.category).filter(Boolean))],
+    });
+  }
+  if (name === 'maintenance_thread') return ok({
+    messages: db.maintenance_messages.filter(message => message.issue_id === args.p_issue_id),
+    attachments: db.issue_attachments.filter(attachment => attachment.issue_id === args.p_issue_id),
+  });
+  // A test must explicitly model a new maintenance operation instead of returning a
+  // successful [] that can hide a contract change or crash the real application.
+  if (name.startsWith('maintenance_')) return { data: null, error: { message: `Unimplemented isolated maintenance RPC: ${name}`, code: 'AUDIT_FIXTURE_UNIMPLEMENTED' } };
+  return ok([]);
+}
