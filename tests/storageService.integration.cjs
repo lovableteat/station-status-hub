@@ -38,13 +38,25 @@ test('real Storage HTTP preserves historical paths and enforces attachment matri
   const actors = { anon: token(null, 'anon'), editor: token(uid(1)), viewer: token(uid(2)),
     inactive: token(uid(3)), otherWorkspace: token(uid(4)), unmapped: token(uid(5)),
     missingSubject: token(null), expired: token(uid(1), 'authenticated', -60), service: token(null, 'service_role') };
-  let origin;
+  const origin = 'http://127.0.0.1:5000';
   async function request(route, actor, options = {}) {
     const url = new URL(route, origin);
     assert.equal(url.origin, origin, 'No non-loopback or cross-origin request');
     const headers = new Headers(options.headers);
     if (actor) headers.set('Authorization', 'Bearer ' + actors[actor]);
-    return fetch(url, { ...options, headers, redirect: 'error', signal: AbortSignal.timeout(10000) });
+    // The internal-only network deliberately publishes no host port. Make real
+    // localhost HTTP requests inside this exact disposable container instead.
+    const code = `let input=''; for await (const c of process.stdin) input+=c;
+      const q=JSON.parse(input); const u=new URL(q.url);
+      if(u.origin!=='http://127.0.0.1:5000') throw Error('Nonlocal request');
+      const r=await fetch(u,{method:q.method,headers:q.headers,
+        body:q.body===null?undefined:Buffer.from(q.body,'base64'),redirect:'error',signal:AbortSignal.timeout(10000)});
+      console.log(JSON.stringify({status:r.status,headers:Object.fromEntries(r.headers),body:Buffer.from(await r.arrayBuffer()).toString('base64')}));`;
+    const result = JSON.parse(docker(['exec', '-i', storage, 'node', '--input-type=module', '-e', code], {
+      input: JSON.stringify({ url: url.href, method: options.method || 'GET', headers: Object.fromEntries(headers),
+        body: options.body === undefined ? null : Buffer.from(options.body).toString('base64') }), timeout: 15000,
+    }));
+    return new Response([204,304].includes(result.status) ? null : Buffer.from(result.body,'base64'), {status:result.status,headers:result.headers});
   }
   const json = (method, value) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
   const objectPath = (bucket, name) => `${bucket}/${name.split('/').map(encodeURIComponent).join('/')}`;
@@ -83,10 +95,8 @@ test('real Storage HTTP preserves historical paths and enforces attachment matri
       FILE_STORAGE_BACKEND_PATH: '/var/lib/storage', GLOBAL_S3_BUCKET: 'synthetic', TENANT_ID: 'synthetic',
       REGION: 'local', SERVER_PORT: '5000', PG_QUEUE_ENABLE: 'false', ENABLE_IMAGE_TRANSFORMATION: 'false',
       IMAGE_TRANSFORMATION_ENABLED: 'false', S3_PROTOCOL_ENABLED: 'false', FILE_SIZE_LIMIT: '1048576' };
-    docker(['run', '--rm', '-d', '--name', storage, '--network', network, '-p', '127.0.0.1::5000',
+    docker(['run', '--rm', '-d', '--name', storage, '--network', network,
       '--tmpfs', '/var/lib/storage:rw,mode=1777', ...Object.entries(env).flatMap(([k,v]) => ['-e', `${k}=${v}`]), images.storage]);
-    const binding = docker(['port', storage, '5000/tcp']);
-    assert.match(binding, /^127\.0\.0\.1:\d+$/); origin = 'http://' + binding;
     for (let i = 0; ; i++) {
       try { if ((await request('/bucket', 'service')).ok) break; } catch {}
       if (i === 119) throw new Error('Storage readiness timeout: ' + redact(docker(['logs', storage])).slice(-5000));

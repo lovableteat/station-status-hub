@@ -11,8 +11,9 @@ STORAGE_COMPAT_LOCAL=1 node --test tests/storageService.integration.cjs
 ```
 
 No npm installation is needed. The test pulls two official, digest-pinned images,
-creates a uniquely named internal Docker network, and exposes only Storage on a
-random loopback port. Database and file bytes live in disposable container tmpfs.
+creates a uniquely named internal Docker network, and publishes no host port.
+Real HTTP requests execute against localhost inside the exact disposable Storage
+container. Database and file bytes live in disposable container tmpfs.
 It accepts no production URL, database URL or key. Ephemeral test JWTs are minted
 only for this local service and redacted from failures. Cleanup addresses only the
 two exact generated container names and their generated network.

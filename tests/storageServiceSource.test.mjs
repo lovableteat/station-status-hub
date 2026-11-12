@@ -7,9 +7,10 @@ test('Storage rehearsal cannot select a hosted project or use production secrets
   assert.match(source, /GITHUB_EVENT_NAME === 'pull_request'/);
   assert.match(source, /STORAGE_COMPAT_LOCAL === '1'/);
   assert.match(source, /'--internal'/);
-  assert.match(source, /127\.0\.0\.1::5000/);
+  assert.match(source, /http:\/\/127\.0\.0\.1:5000/);
+  assert.doesNotMatch(source, /'--publish'|'-p'/);
   assert.match(source, /url\.origin, origin/);
-  assert.match(source, /redirect: 'error'/);
+  assert.match(source, /redirect:\s*'error'/);
   assert.doesNotMatch(source, /rfppeuz|supabase\.co|process\.env\.(?:SUPABASE|DATABASE|SERVICE)/);
   assert.equal((source.match(/@sha256:[a-f0-9]{64}/g) || []).length, 2);
 });
