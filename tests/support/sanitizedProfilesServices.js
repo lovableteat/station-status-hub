@@ -1,5 +1,6 @@
 // Only synthetic transport/Auth boundaries. Actual profile reader and consumers are bundled.
 import { useSyncExternalStore } from 'react';
+import { setDocumentDraftActor } from '../../src/lib/documentDrafts.ts';
 export const OWNER = '10000000-0000-4000-8000-000000000001';
 export const TARGET = '10000000-0000-4000-8000-000000000002';
 export const SECOND = '10000000-0000-4000-8000-000000000003';
@@ -23,6 +24,7 @@ export const fixture = window.sanitizedProfilesFixture = {
   modes: {}, pageMode: 'ok', saveMode: 'ok', calls: [], held: [], writes: [], rawAttempts: [], authMutations: [], toasts: [], channels: [],
   state: null, renders: [], mountCount: 0, unmountCount: 0, permissionEvents: [],
   switchUser(id = SECOND) {
+    setDocumentDraftActor(id);
     fixture.user = { userId: id, username: 'synthetic-switched', displayName: 'Synthetic switched', role: 'engineer' };
     for (const listener of listeners) listener();
   },
@@ -38,6 +40,9 @@ export const fixture = window.sanitizedProfilesFixture = {
     }
   },
 };
+// Synthetic identity owner mirrors UserContext, not an editor authorization bypass.
+setDocumentDraftActor(OWNER);
+
 const sourceSnapshots = JSON.stringify(fixture.sourceSnapshots);
 fixture.assertSnapshots = () => JSON.stringify(fixture.sourceSnapshots) === sourceSnapshots;
 window.addEventListener('station-permissions-updated', event => fixture.permissionEvents.push(event.detail || {}));

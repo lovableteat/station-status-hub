@@ -1,6 +1,9 @@
 export const SUPABASE_URL = location.origin;
 import { useSyncExternalStore } from 'react';
+import { setDocumentDraftActor } from '../../src/lib/documentDrafts';
 const account = new URLSearchParams(location.search).get('qaUser') || 'A';
+// Synthetic UserContext boundary owns identity, matching the real provider.
+setDocumentDraftActor(account);
 export const useUser = () => ({user:{userId:account,displayName:account === 'B' ? '林浩' : '王宇',username:account}});
 export const usePermissions = () => ({canEditModule:() => account !== 'view',canViewModule:() => true});
 let projectRevision=0;

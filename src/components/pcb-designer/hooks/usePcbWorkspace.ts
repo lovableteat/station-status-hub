@@ -1,3 +1,4 @@
+import { projectSettingsRevision, type ProjectSettings } from "../core/projectSettingsDraft.ts";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { getPcbBrowserStorage, PcbLocalRepository, type StorageLike } from "../core/storage.ts";
 import {
@@ -255,13 +256,32 @@ export function usePcbWorkspace({
     },
     [state.activeProject],
   );
+  const settingsReceipt = useRef<{ requestToken: string; resolve: (applied: boolean) => void } | null>(null);
+  const settingsEditable = useRef(false);
+  settingsEditable.current = effectiveCanEdit && state.canEdit && !state.documentLocked;
   const updateProjectSettings = useCallback(
-    (project: PcbProject) => {
-      if (project.id === state.activeProject.id) commitProject(project);
-      else dispatch({ type: "project/rename", projectId: project.id, name: project.name });
+    (projectId: string, baselineRevision: string, settings: ProjectSettings): Promise<boolean> => {
+      const previous = viewStateRef.current;
+      if (!settingsEditable.current || projectId !== previous.activeProject.id || settingsReceipt.current) return Promise.resolve(false);
+      if (projectSettingsRevision(previous.activeProject) !== baselineRevision) return Promise.resolve(false);
+      const requestToken = crypto.randomUUID();
+      return new Promise(resolve => {
+        settingsReceipt.current = { requestToken, resolve };
+        dispatch({ type: "project/settings", requestToken, projectId, baselineRevision, settings });
+      });
     },
-    [commitProject, state.activeProject.id],
+    [],
   );
+  useEffect(() => {
+    const receipt = settingsReceipt.current;
+    if (!receipt || state.projectSettingsReceipt?.requestToken !== receipt.requestToken) return;
+    settingsReceipt.current = null;
+    receipt.resolve(settingsEditable.current && state.projectSettingsReceipt.accepted);
+  }, [state]);
+  useEffect(() => () => {
+    settingsReceipt.current?.resolve(false);
+    settingsReceipt.current = null;
+  }, []);
 
   const applyTemplate = useCallback(
     (templateId: string) => dispatch({ type: "template/apply", templateId }),

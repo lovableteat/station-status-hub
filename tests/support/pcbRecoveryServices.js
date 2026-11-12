@@ -1,5 +1,6 @@
 // Synthetic transport boundary only. Production PCB adapter/hooks are not mocked.
 import { useSyncExternalStore } from 'react';
+import { setDocumentDraftActor } from '../../src/lib/documentDrafts.ts';
 import { createBlankProject } from '../../src/components/pcb-designer/defaults.ts';
 import { PCB_STORAGE_KEY, pcbOwnerStorageKey, isPcbSaveState } from '../../src/components/pcb-designer/core/storage.ts';
 
@@ -114,6 +115,7 @@ export const fixture = window.pcbRecoveryFixture = {
     for (const callback of events) callback('SIGNED_OUT', null);
   },
   switchActor() {
+    setDocumentDraftActor(OTHER_USER_ID);
     fixture.user = { userId: OTHER_USER_ID, username: 'synthetic-editor-b', displayName: 'Synthetic editor B', role: 'user' };
     fixture.session = {
       access_token: 'synthetic-account-b-token', refresh_token: 'synthetic-account-b-refresh',
@@ -130,6 +132,9 @@ export const fixture = window.pcbRecoveryFixture = {
     held.resolve(response(held.name, held.args, mode));
   },
 };
+
+// Synthetic identity owner mirrors UserContext, not an editor authorization bypass.
+setDocumentDraftActor(USER_ID);
 
 if (params.has('loadMode')) fixture.controls.load = params.get('loadMode');
 if (params.get('surface') === 'guard') {
