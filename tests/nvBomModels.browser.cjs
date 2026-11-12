@@ -6,7 +6,7 @@ const evidence=path.resolve(process.env.NV_MODELS_EVIDENCE_DIR||'../nv-ai-models
 const expected=['gpt-5.4','gpt-6.1-sol','gemini-2.5-flash','gemini-3.5-flash-lite','gemini-3.8-flash','qa-claude','qa-text'];
 const keyIds=['00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000004'];
 const modelKey=model=>model.startsWith('gpt-')?keyIds[0]:model.startsWith('gemini-')?keyIds[1]:model==='qa-claude'?keyIds[2]:keyIds[3];
-const startButton=page=>page.getByRole('button',{name:/^確認欄位並比對/});
+const startButton=page=>page.getByRole('button',{name:/^開始比對/});
 const changes=page=>page.locator('.nv-bom-result article[data-kind]');
 async function showRemovedDetail(page){
  const card=page.locator('.nv-bom-result article[data-kind="removed"]');
@@ -29,8 +29,11 @@ async function run(browser,origin,width){
   assert.deepEqual(await page.evaluate(()=>window.__nvQA.discoveries.map(call=>({operation:call.operation,apiKeyId:call.apiKeyId,rawCredentialPresent:!!call.apiKey}))),[{operation:'models',apiKeyId:keyIds[0],rawCredentialPresent:false}]);
   const models=page.getByRole('group',{name:'BOM 比對 AI 服務',exact:true});
   const labels=await models.locator('label').allTextContents();for(const model of expected)assert.ok(labels.some(label=>label.endsWith(model)),model+' is missing');
-  assert.match(await page.locator('.nv-bom-model-heading strong').innerText(),/7/);
-  await page.getByRole('button',{name:'全選',exact:true}).click();assert.equal(await models.locator('input:checked').count(),7);
+  assert.match(await page.locator('.nv-bom-model-heading strong').innerText(),/用 AI 幫忙核對/);
+  await page.getByRole('button',{name:'重查 AI',exact:true}).click();
+  await page.waitForFunction(()=>window.__nvQA.discoveries.length===2);
+  assert.equal(await page.evaluate(()=>window.__nvQA.requests.length),0);
+  await page.getByRole('button',{name:'全選可用選項',exact:true}).click();assert.equal(await models.locator('input:checked').count(),7);
   await page.getByRole('button',{name:'清除選取',exact:true}).click();assert.equal(await models.locator('input:checked').count(),0);
   const start=startButton(page);assert.equal(await start.isEnabled(),false);
   await page.screenshot({path:path.join(evidence,`models-${width}.png`)});
@@ -50,7 +53,7 @@ async function run(browser,origin,width){
   await page.getByRole('tab').filter({hasText:'qa-text'}).click();
   assert.equal(await changes(page).count(),3);
   report.checks.push('one selected custom model receives only the complete three-difference review request');
-  await showSettings(page);await page.getByRole('button',{name:'全選',exact:true}).click();await start.click();
+  await showSettings(page);await page.getByRole('button',{name:'全選可用選項',exact:true}).click();await start.click();
   await waitForComparison(page,8);
   const tabs=page.getByRole('tab');assert.equal(await tabs.count(),8);
   const state=await page.evaluate(()=>({requests:window.__nvQA.requests,telemetry:window.__nvQA.telemetry,reads:window.__nvQA.reads}));

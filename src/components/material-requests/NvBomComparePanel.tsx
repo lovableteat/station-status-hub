@@ -116,11 +116,19 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
   useEffect(() => { if (!active) controller.current?.abort(); }, [active]);
   async function loadModels() {
     setLoading(true); setModelError("");
-    try { const items = await loadNvBomModels(); if (mounted.current) setModels(items); }
+    try {
+      const items = await loadNvBomModels();
+      if (mounted.current) {
+        setModels(items);
+        const selectable = new Set(items.filter(model => model.availability?.state !== "unavailable").map(model => model.id));
+        setSelected(value => value.filter(id => selectable.has(id)));
+      }
+    }
     catch (failure) { if (mounted.current) setModelError(failure instanceof Error ? failure.message : "無法讀取 AI 服務。"); }
     finally { if (mounted.current) setLoading(false); }
   }
   useEffect(() => { if (active && !started.current) { started.current = true; void loadModels(); } }, [active]);
+  const selectableModels = models.filter(model => model.availability?.state !== "unavailable");
   const activeRun = runs[selectedResult], result = activeRun?.result, notes = annotations[selectedResult] ?? EMPTY_NOTES;
   const beforeSheet = before?.file.sheets[before.sheet], afterSheet = after?.file.sheets[after.sheet];
   const baseDiff = runs[LOCAL_RESULT]?.result?.diff;
@@ -161,7 +169,7 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
   async function run(ids = selected) {
     if (!beforeSheet || !afterSheet || controller.current || beforeReading || afterReading) return;
     setCompareError(""); setNotice("");
-    const targets = models.filter(model => ids.includes(model.id));
+    const targets = selectableModels.filter(model => ids.includes(model.id));
     const request = new AbortController(); controller.current = request;
     const current = () => mounted.current && controller.current === request;
     try {
@@ -170,26 +178,49 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
       const sources = { before: !manual.before && needsMapping(beforeMap) ? beforeSheet : undefined,
         after: !manual.after && needsMapping(afterMap) ? afterSheet : undefined };
       let beforeMapping = beforeMap, afterMapping = afterMap;
-      const shouldResolve = !mappingModel && targets[0] && (sources.before || sources.after);
-      if (shouldResolve) {
-        setBusy(true); setNotice("AI 正在辨識 Excel 表頭與欄位…");
-        const resolved = await resolveNvBomMappings({ sources, model: targets[0], signal: request.signal });
-        request.signal.throwIfAborted();
-        beforeMapping = resolved.before ?? beforeMapping;
-        afterMapping = resolved.after ?? afterMapping;
+      let mappingAssistant: NvBomModel | undefined;
+      const mappingFailures: string[] = [];
+      if (!mappingModel && (sources.before || sources.after)) {
+        for (const model of targets) {
+          setBusy(true); setNotice(`${model.label} 正在辨識 Excel 欄位…`);
+          try {
+            const resolved = await resolveNvBomMappings({ sources, model, signal: request.signal });
+            request.signal.throwIfAborted();
+            beforeMapping = resolved.before ?? beforeMapping;
+            afterMapping = resolved.after ?? afterMapping;
+            mappingAssistant = model;
+            break;
+          } catch (failure) {
+            request.signal.throwIfAborted();
+            mappingFailures.push(`${model.label}：${failure instanceof Error ? failure.message : "無法辨識欄位。"}`);
+          }
+        }
       }
-      beforeMapping = validateNvBomHeaderMapping(beforeMapping, beforeSheet);
-      afterMapping = validateNvBomHeaderMapping(afterMapping, afterSheet);
-      const mappingChanged = (old: NvBomMapping, next: NvBomMapping) => old.headerRow !== next.headerRow || NV_BOM_FIELDS.some(({ key }) => old[key] !== next[key]);
-      const changed = mappingChanged(beforeMap, beforeMapping) || mappingChanged(afterMap, afterMapping);
-      const comparison: NvBomComparison = { beforeMapping, afterMapping, diff: previous && !changed ? previous.diff : compareNvBomSheets(beforeSheet, afterSheet, beforeMapping, afterMapping) };
-      if (shouldResolve) {
+      let comparison: NvBomComparison;
+      let changed: boolean;
+      try {
+        for (const [side, sheet, mapping] of [["before", beforeSheet, beforeMapping], ["after", afterSheet, afterMapping]] as const) {
+          if (!manual[side] && getNvBomHeaderAmbiguities(sheet, mapping.headerRow).some(key => mapping[key] === null)) {
+            throw new Error(`「${sheet.name}」有多個可能欄位，請手動選擇正確欄位。`);
+          }
+        }
+        beforeMapping = validateNvBomHeaderMapping(beforeMapping, beforeSheet);
+        afterMapping = validateNvBomHeaderMapping(afterMapping, afterSheet);
+        const mappingChanged = (old: NvBomMapping, next: NvBomMapping) => old.headerRow !== next.headerRow || NV_BOM_FIELDS.some(({ key }) => old[key] !== next[key]);
+        changed = mappingChanged(beforeMap, beforeMapping) || mappingChanged(afterMap, afterMapping);
+        comparison = { beforeMapping, afterMapping, diff: previous && !changed ? previous.diff : compareNvBomSheets(beforeSheet, afterSheet, beforeMapping, afterMapping) };
+      } catch (failure) {
+        if (!mappingFailures.length) throw failure;
+        throw new Error([failure instanceof Error ? failure.message : "無法確認欄位。", ...mappingFailures].join("\n"));
+      }
+      if (mappingAssistant) {
         setBeforeMap(beforeMapping); setAfterMap(afterMapping);
-        setMappingModel(targets[0].label);
+        setMappingModel(mappingAssistant.label);
         if (changed) setAnnotations({});
       }
       const local = { ...comparison, modelId: LOCAL_RESULT, modelLabel: "本機比對", reviewed: 0 };
-      setNotice(""); setSettings(false); setPage(1);
+      const mappingNotice = mappingFailures.length ? `欄位辨識${mappingAssistant ? `由 ${mappingAssistant.label} 完成` : "沿用已確認的本機欄位"}。\n${mappingFailures.join("\n")}` : "";
+      setNotice(mappingNotice); setSettings(false); setPage(1);
       setSelectedResult(value => targets.some(model => model.id === value) ? value : targets[0]?.id ?? LOCAL_RESULT);
       setRuns(value => ({ ...(changed ? {} : value), [LOCAL_RESULT]: { state: "done", progress: "依已辨識欄位", result: local },
         ...Object.fromEntries(targets.map(model => [model.id, { state: "running", progress: "等待 AI 核對…", result: { ...local, modelId: model.id, modelLabel: model.label } }])) }));
@@ -259,23 +290,23 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
         <SourcePicker side="before" value={before} busy={busy} mapping={beforeMap} onMapping={value => editMapping("before", value)} onReading={setBeforeReading} onChange={value => selectSource("before", value)} />
         <SourcePicker side="after" value={after} busy={busy} mapping={afterMap} onMapping={value => editMapping("after", value)} onReading={setAfterReading} onChange={value => selectSource("after", value)} />
       </div>
-      <div className="nv-bom-model-heading"><strong>AI 辨識與核對（選用）{!loading && models.length > 0 && ` · ${models.length} 個選項`}</strong><Button type="button" variant="ghost" disabled={busy || loading || !models.length} onClick={() => setSelected(models.map(model => model.id))}>全選</Button><Button type="button" variant="ghost" disabled={busy || !selected.length} onClick={() => setSelected([])}>清除選取</Button></div>
-      {loading && <p role="status">正在讀取可用 AI…</p>}{modelError && <p role="alert" className="nv-bom-error">{modelError}<Button type="button" variant="ghost" onClick={() => void loadModels()}>重試讀取</Button></p>}
+      <div className="nv-bom-model-heading"><strong>用 AI 幫忙核對（選用）</strong><Button type="button" variant="ghost" disabled={busy || loading || !selectableModels.length} onClick={() => setSelected(selectableModels.map(model => model.id))}>全選可用選項</Button><Button type="button" variant="ghost" disabled={busy || !selected.length} onClick={() => setSelected([])}>清除選取</Button><Button type="button" variant="outline" disabled={busy || loading} onClick={() => void loadModels()}>重查 AI</Button></div>
+      {loading && <p role="status">正在讀取 AI 設定及模型清單…</p>}{modelError && <p role="alert" className="nv-bom-error">{modelError}</p>}
       {!loading && !modelError && !models.length && <p className="nv-bom-help">目前無可用的 AI 核對服務，可直接在本機比對。</p>}
-      <div className="nv-bom-models" role="group" aria-label="BOM 比對 AI 服務">{models.map(model => <label key={model.id}><input type="checkbox" disabled={busy} checked={selected.includes(model.id)} onChange={event => setSelected(current => event.target.checked ? [...current, model.id] : current.filter(id => id !== model.id))} /><span>{model.label}</span></label>)}</div>
-      <p className="nv-bom-help">勾選 AI 後，格式有變時會自動辨識表頭。料件配對在本機完成，再交由勾選的 AI 核對差異。手動指定的欄位優先使用。</p>
+      <div className="nv-bom-models" role="group" aria-label="BOM 比對 AI 服務">{models.map(model => <label key={model.id} data-availability={model.availability?.state}><input type="checkbox" disabled={busy || loading || model.availability?.state === "unavailable"} checked={selected.includes(model.id)} onChange={event => setSelected(current => event.target.checked ? [...current, model.id] : current.filter(id => id !== model.id))} /><span><strong>{model.label}</strong>{model.availability && <small>{model.availability.message}</small>}</span></label>)}</div>
+      <p className="nv-bom-help">按「開始比對」就能找出新舊差異。勾選 AI 會另外核對差異，並在欄位需要辨識時協助讀取表頭。</p>
     </div></details>
-    {(!result || settings || busy) ? <div className="nv-bom-runbar"><Button type="button" disabled={busy || beforeReading || afterReading || !beforeSheet || !afterSheet} onClick={() => void run()}><Check aria-hidden="true" />確認欄位並比對{selected.length ? `（${selected.length} 項 AI 核對）` : ""}</Button>{busy && <Button type="button" variant="outline" onClick={() => controller.current?.abort()}>停止 AI 核對</Button>}<span role="status">{notice || (busy ? "AI 核對中，可先查看本機結果。" : "")}</span></div> : notice && <p className="nv-bom-help" role="status">{notice}</p>}
+    {(!result || settings || busy) ? <div className="nv-bom-runbar"><Button type="button" disabled={busy || beforeReading || afterReading || !beforeSheet || !afterSheet} onClick={() => void run()}><Check aria-hidden="true" />開始比對{selected.length ? `（${selected.length} 項 AI 核對）` : ""}</Button>{busy && <Button type="button" variant="outline" onClick={() => controller.current?.abort()}>停止 AI 核對</Button>}<span role="status">{notice || (busy ? "AI 核對中，可先查看本機結果。" : "")}</span></div> : notice && <p className="nv-bom-help nv-bom-run-notice" role="status">{notice}</p>}
     {compareError && <p role="alert" className="nv-bom-error">{compareError}</p>}
-    {Object.keys(runs).length > 1 && <div className="nv-bom-results-tabs" role="tablist" aria-label="比對結果"><button type="button" role="tab" aria-selected={selectedResult === LOCAL_RESULT} onClick={() => changeFilter(setSelectedResult, LOCAL_RESULT)}><span>本機比對</span><small>依確認欄位</small></button>{models.filter(model => runs[model.id]).map(model => <button key={model.id} type="button" role="tab" aria-selected={selectedResult === model.id} onClick={() => changeFilter(setSelectedResult, model.id)}><span>{model.label}</span><small>{runs[model.id].state === "running" ? <LoaderCircle className="nv-spin" aria-hidden="true" /> : runs[model.id].state === "done" ? <Check aria-hidden="true" /> : null}{runs[model.id].progress}</small></button>)}</div>}
-    {activeRun?.error && <p role="alert" className="nv-bom-error">{activeRun.error}{!busy && <Button type="button" variant="outline" onClick={() => void run([selectedResult])}>重試這個 AI</Button>}</p>}
+    {Object.keys(runs).length > 1 && <div className="nv-bom-results-tabs" role="tablist" aria-label="比對結果"><button type="button" role="tab" aria-selected={selectedResult === LOCAL_RESULT} onClick={() => changeFilter(setSelectedResult, LOCAL_RESULT)}><span>本機比對</span><small>直接讀取 Excel</small></button>{Object.entries(runs).filter(([id]) => id !== LOCAL_RESULT).map(([id, run]) => <button key={id} type="button" role="tab" data-run-state={run.state} aria-selected={selectedResult === id} onClick={() => changeFilter(setSelectedResult, id)}><span>{run.result?.modelLabel || models.find(model => model.id === id)?.label || id}</span><small>{run.state === "running" ? <LoaderCircle className="nv-spin" aria-hidden="true" /> : run.state === "done" ? <Check aria-hidden="true" /> : null}{run.progress}</small></button>)}</div>}
+    {activeRun?.error && <div className="nv-bom-error"><p role="alert"><strong>AI 核對失敗</strong> {activeRun.error} 本機比對結果已保留。</p>{!busy && selectableModels.some(model => model.id === selectedResult) && <Button type="button" variant="outline" onClick={() => void run([selectedResult])}>重試這個 AI</Button>}</div>}
     {result ? <>
       <div className="nv-bom-summary">
         <div className="nv-bom-summary-heading"><h3>{result.diff.changes.length.toLocaleString()} 筆差異</h3><span>未變更 {result.diff.unchanged.toLocaleString()} 組</span>{selectedResult !== LOCAL_RESULT && <small>AI 已核對 {result.reviewed}／{result.diff.changes.length} 筆</small>}</div>
-        {currentBomName && <p className="nv-bom-table-context"><strong>對照目前表格</strong> <span>{currentBomName}</span></p>}
+        {currentBomName && <p className="nv-bom-table-context"><strong>用來定位的網站 BOM</strong> <span>{currentBomName}</span></p>}
         <div className="nv-bom-scope-buttons" aria-label="項目類別">
-          <button type="button" aria-pressed={scope === "all"} onClick={() => changeFilter(setScope, "all")}>全部 <b>{result.diff.changes.length}</b></button>
-          {(Object.entries(NV_BOM_SCOPE_LABELS) as [NvBomInterpretedChange["scope"], string][]).map(([value, label]) => Boolean(scopeCounts?.[value]) && <button type="button" key={value} aria-pressed={scope === value} onClick={() => changeFilter(setScope, value)}>{label} <b>{scopeCounts?.[value]}</b></button>)}
+          <button type="button" data-scope="all" aria-pressed={scope === "all"} onClick={() => changeFilter(setScope, "all")}>全部 <b>{result.diff.changes.length}</b></button>
+          {(Object.entries(NV_BOM_SCOPE_LABELS) as [NvBomInterpretedChange["scope"], string][]).map(([value, label]) => Boolean(scopeCounts?.[value]) && <button type="button" key={value} data-scope={value} aria-pressed={scope === value} onClick={() => changeFilter(setScope, value)}>{label} <b>{scopeCounts?.[value]}</b></button>)}
         </div>
       </div>
       {result.diff.unresolved.length > 0 && <details className="nv-bom-unresolved">
@@ -292,7 +323,7 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
       <div className="nv-bom-filters"><label className="nv-bom-search"><Search aria-hidden="true" /><input aria-label="搜尋 NV BOM 差異" value={query} onChange={event => changeFilter(setQuery, event.target.value)} placeholder="搜尋位號、NV／PEGA 料號、MPN 或備註" /></label><select aria-label="差異類型" value={kind} onChange={event => changeFilter(setKind, event.target.value as ReviewKind)}><option value="all">全部變更</option>{Object.entries(NV_BOM_INTERPRETATION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><select aria-label="人工核對狀態" value={checked} onChange={event => changeFilter(setChecked, event.target.value)}><option value="all">全部核對狀態</option><option value="pending">尚未核對</option><option value="checked">已核對</option></select><span>{filtered.length.toLocaleString()}／{result.diff.changes.length.toLocaleString()} 筆</span></div>
       {(query || kind !== "all" || scope !== "all" || checked !== "all") && <div className="nv-bom-chips">{query && <button onClick={() => changeFilter(setQuery, "")}>搜尋：{query}<X aria-hidden="true" /></button>}{kind !== "all" && <button onClick={() => changeFilter(setKind, "all")}>變更：{NV_BOM_INTERPRETATION_LABELS[kind]}<X aria-hidden="true" /></button>}{scope !== "all" && <button onClick={() => changeFilter(setScope, "all")}>項目：{NV_BOM_SCOPE_LABELS[scope]}<X aria-hidden="true" /></button>}{checked !== "all" && <button onClick={() => changeFilter(setChecked, "all")}>核對：{checked === "checked" ? "已核對" : "尚未核對"}<X aria-hidden="true" /></button>}<button onClick={() => { setQuery(""); setKind("all"); setScope("all"); setChecked("all"); setPage(1); }}>全部清除</button></div>}
       <div className="nv-bom-result" aria-label="NV BOM 變更清單">
-        <div className="nv-bom-result-line nv-bom-result-heading" aria-hidden="true"><span>核對</span><span>實際變更</span><span>位號</span><span>目前表格</span><span>原始資料</span></div>
+        <div className="nv-bom-result-line nv-bom-result-heading" aria-hidden="true"><span>核對</span><span>這筆改了什麼</span><span>位號</span><span>在網站 BOM 定位</span><span>新舊資料</span></div>
         {!shown.length ? <p className="nv-bom-empty">{result.diff.changes.length ? "目前篩選條件沒有符合的差異" : "這兩份工作表沒有可確認的差異"}</p> : shown.map(entry => {
           const id = entry.change.id;
           return <NvBomReviewRow key={`${selectedResult}:${id}`} entry={{ ...entry, change: visibleChanges.get(id) ?? entry.change }} link={links.get(id)} note={notes[id]} showAi={selectedResult !== LOCAL_RESULT}

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compareNvBomSheets } from "./nvBomCompare.ts";
 import { inferNvBomMapping } from "./nvBomMapping.ts";
-import { interpretNvBomDiff } from "./nvBomInterpretation.ts";
+import { interpretNvBomDiff, nvBomSourceListDelta } from "./nvBomInterpretation.ts";
 
 const columns = ["Level", "Parent Number", "Part Number", "Part Description", "Manufacturer", "Manufacturer Part Number", "Qty", "Location", "S/D", "Material Category", "Source", "Population"];
 const sheet = (rows, header = columns) => ({ name: "QA", rows: [header, ...rows] });
@@ -16,6 +16,14 @@ function compare(oldRows, newRows, header = columns) {
   assert.ok(mapping);
   return interpretNvBomDiff(compareNvBomSheets(before, after, mapping, mapping));
 }
+
+test("explains the exact additions and removals in NV source lists", () => {
+  assert.deepEqual(nvBomSourceListDelta("MPN-A;MPN-B;MPN-C", "mpn-c；MPN-NEW\nMPN-A;MPN-B;MPN-NEW"),
+    { added: ["MPN-NEW"], removed: [] });
+  assert.deepEqual(nvBomSourceListDelta("MURATA, INC.;YAGEO;—", "murata, inc.\r\nTAIYO;N/A"),
+    { added: ["TAIYO"], removed: ["YAGEO"] });
+  assert.deepEqual(nvBomSourceListDelta("MURATA;YAGEO", "YAGEO;MURATA"), { added: [], removed: [] });
+});
 
 test("uses explicit population-only changes and Qty 0 at matching placements", () => {
   const marked = [...placed.slice(0, -1), "DNP"];
