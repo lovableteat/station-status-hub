@@ -1,4 +1,4 @@
-import { NV_BOM_FIELDS, validateNvBomMapping, type NvBomField, type NvBomMapping, type NvBomSheet } from "./nvBomCompare";
+import { getNvBomParentLocationLayout, NV_BOM_FIELDS, validateNvBomMapping, type NvBomField, type NvBomMapping, type NvBomSheet } from "./nvBomCompare.ts";
 
 const aliases: Record<NvBomField, string[]> = {
   partNumber: [
@@ -21,16 +21,19 @@ const fieldByHeader = new Map<string, NvBomField>(NV_BOM_FIELDS.flatMap(({ key }
 const metadata = new Set([
   "Level", "Item Type", "Version", "State", "Find #", "Find Num", "Find Number", "Alt Qty", "Alt Quantity", "Alternate Qty", "Alternate Quantity",
   "Primary", "Ordering Restrictions", "Sourcing Status", "Supplier Intent", "BOM Notes",
+  "Parent Number", "Parent Part Number", "Parent PN", "Parent Item Number",
 ].map(normalize));
 const blankMapping = (headerRow: number): NvBomMapping => ({ headerRow, partNumber: null, mpn: null, manufacturer: null, description: null, qty: null, refs: null });
 
 function inspectHeader(sheet: NvBomSheet, headerRow: number) {
-  const headers = (sheet.rows[headerRow - 1] ?? []).map(normalize);
+  const row = sheet.rows[headerRow - 1] ?? [];
+  const headers = row.map(normalize);
   const cells = new Set(headers);
   // Bare Number is an NV part number only when the rest of the NVIDIA report header corroborates it.
   const nvidia = ["LEVEL", "ITEMTYPE", "NUMBER", "REFDES", "MANUFACTURERPARTNUMBER"].every(label => cells.has(label))
     && (cells.has("FIND#") || cells.has("FINDNUM"));
-  const meanings = headers.map(label => nvidia && label === "NUMBER" ? "partNumber" : fieldByHeader.get(label));
+  const parentLocationLayout = getNvBomParentLocationLayout(row);
+  const meanings = headers.map(label => nvidia && label === "NUMBER" ? "partNumber" : parentLocationLayout && label === "LOCATION" ? "refs" : fieldByHeader.get(label));
   const mapping = blankMapping(headerRow);
   const ambiguous: NvBomField[] = [];
   let fieldCount = 0;

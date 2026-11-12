@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
 import test from "node:test";
+import { inferNvBomMapping, inferNvBomMappingAt, getNvBomHeaderAmbiguities, validateNvBomHeaderMapping } from "./nvBomMapping.ts";
 
-const { loader } = createRequire(import.meta.url)("../../../tests/support/renderHarness.cjs");
-const { inferNvBomMapping, inferNvBomMappingAt, getNvBomHeaderAmbiguities, validateNvBomHeaderMapping } =
-  loader({})("src/components/material-requests/nvBomMapping.ts");
 const sheet = (...rows) => ({ name: "QA", rows });
 
 test("detects a NVIDIA report below its title and separates Number, MPN, Qty and Alt Qty", () => {
@@ -16,6 +13,18 @@ test("detects a NVIDIA report below its title and separates Number, MPN, Qty and
   assert.deepEqual({ ...inferNvBomMapping(workbook) }, { headerRow: 6, partNumber: 3, mpn: 12, manufacturer: 14, description: 4, qty: 8, refs: 11 });
   assert.deepEqual(Array.from(getNvBomHeaderAmbiguities(workbook, 6)), []);
   assert.throws(() => validateNvBomHeaderMapping({ ...inferNvBomMapping(workbook), qty: 9 }, workbook), /Alt Qty.*不是數量/);
+});
+
+test("maps Location to reference designators only in the NV parent-number format", () => {
+  const workbook = sheet(["Report"], [],
+    ["Level", "Parent Number", "Part Number", "Part Description", "Manufacturer", "Manufacturer Part Number", "Qty", "Location"],
+    ["2", "QA-PARENT", "0001", "Resistor", "QA maker", "QA-MPN", "1", "R1"],
+  );
+  const mapping = inferNvBomMapping(workbook);
+  assert.deepEqual({ ...mapping }, { headerRow: 3, partNumber: 3, mpn: 6, manufacturer: 5, description: 4, qty: 7, refs: 8 });
+  assert.throws(() => validateNvBomHeaderMapping({ ...mapping, partNumber: 2 }, workbook), /Parent Number.*不是NV／來源料號/);
+  const generic = sheet(["Part Number", "Qty", "Location"], ["0001", "2", "Warehouse A"]);
+  assert.equal(inferNvBomMapping(generic).refs, null);
 });
 
 test("matches localized aliases and keeps the correct positions after column reorder", () => {

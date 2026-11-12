@@ -116,3 +116,32 @@ test("malformed Gemini review remains an explicit failure and retains the comput
   assert.deepEqual(Array.from(partial[0].diff.changes, item => item.kind).sort(), ["added", "changed", "removed"]);
   assert.ok(partial[0].diff.changes.every(item => !item.advice && !item.aiNote));
 });
+
+test("AI maps unfamiliar headings by Excel coordinate without sending BOM contents", async () => {
+  const unknown = { name: "private-workbook", rows: [["QA PRIVATE MEMO", "ACQUISITION PRIVATE REMARK"], ["", "Component Code", "Supplier Model", "Units Used", "PCB Site"], ["", "PRIVATE-0042", "QA-172", "1", "R22"]] };
+  const guess = { headerRow: 2, partNumber: 2, mpn: 3, manufacturer: null, description: null, qty: 4, refs: 5 };
+  let calls = 0;
+  const service = load({ transport: async call => {
+    calls++;
+    assert.deepEqual(requestInput(call), { after: { rows: [{ row: 2, columns: [
+      { column: 2, header: "Component Code" }, { column: 3, header: "Supplier Model" }, { column: 4, header: "Units Used" }, { column: 5, header: "PCB Site" },
+    ] }] } });
+    assert.doesNotMatch(call.init.body, /private-workbook|PRIVATE-0042|QA-172|R22|PRIVATE MEMO|PRIVATE REMARK/);
+    return response(call.provider, { after: guess });
+  } });
+  const model = (await service.loadNvBomModels())[0];
+  const resolved = await service.resolveNvBomMappings({ sources: { after: unknown }, model, signal: new AbortController().signal });
+  assert.deepEqual({ ...resolved.after }, guess);
+  assert.equal(calls, 1);
+});
+
+test("AI cannot assign a duplicate heading or use a row outside the candidate table", async () => {
+  const unknown = { name: "QA", rows: [["Part Number", "Qty", "Qty"], ["001", "1", "2"]] };
+  let headerRow = 1;
+  const service = load({ transport: async call => response(call.provider, { before: { headerRow, partNumber: 1, qty: 3 } }) });
+  const model = (await service.loadNvBomModels())[0];
+  const resolve = () => service.resolveNvBomMappings({ sources: { before: unknown }, model, signal: new AbortController().signal });
+  await assert.rejects(resolve(), /無法確認.*數量/);
+  headerRow = 2;
+  await assert.rejects(resolve(), /無法確認.*表頭/);
+});
