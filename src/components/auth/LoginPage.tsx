@@ -65,7 +65,7 @@ export function LoginPage() {
         return;
       }
       setIsServiceRestricted(false);
-      toast({ title: "登入成功", description: `歡迎回來，${result.user.displayName}` });
+      toast({ title: "登入成功", description: `歡迎回來，${result.user.displayName}`, variant: "success" });
     } catch (error) {
       const serviceRestricted = isSupabaseServiceRestrictedError(error);
       setIsServiceRestricted(serviceRestricted);
@@ -113,6 +113,7 @@ export function LoginPage() {
       toast({
         title: "註冊申請已送出",
         description: "管理員核准後即可使用這組帳號密碼登入。",
+        variant: "success",
       });
       setView("login");
       setDisplayName("");
@@ -212,8 +213,8 @@ export function LoginPage() {
                 <p className="text-xs leading-5 text-slate-500">僅需至少 6 個字元，不限制大小寫、數字或符號組合。</p>
               </div>
             ) : null}
-            <Button type="submit" className="h-11 w-full bg-cyan-300 text-base font-black text-[#071421] hover:bg-cyan-200" disabled={isLoading}>
-              {isLoading ? "處理中..." : view === "login" ? "登入工作平台" : "送出註冊申請"}
+            <Button type="submit" className="h-11 w-full bg-cyan-300 text-base font-black text-[#071421] hover:bg-cyan-200" pending={isLoading}>
+              {view === "login" ? (isLoading ? "正在登入…" : "登入工作平台") : (isLoading ? "正在送出申請…" : "送出註冊申請")}
             </Button>
           </form>
         </CardContent>

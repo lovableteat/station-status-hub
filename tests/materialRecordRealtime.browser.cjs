@@ -18,7 +18,20 @@ async function closeEditor(page){await editor(page).getByTestId('material-record
  await editor(desktop).waitFor();await editor(desktop).locator('#material-internal-pn').fill('LIVE-PN-500');
  await editor(desktop).getByRole('tab',{name:/狀態追蹤/}).click();await editor(desktop).getByRole('radio',{name:'已發信',exact:true}).check();
  const firstLoadCount=await phone.evaluate(()=>window.__qaLiveRecords.loads);
- await editor(desktop).getByRole('button',{name:'儲存資料與追蹤',exact:true}).click();await editor(desktop).waitFor({state:'hidden'});
+ await desktop.evaluate(() => {
+   window.__qaBomRecordSaveGate = new Promise(resolve => { window.__qaReleaseBomRecordSave = resolve; });
+ });
+ await editor(desktop).getByRole('button',{name:'儲存資料與追蹤',exact:true}).click();
+ const saving = editor(desktop).getByRole('button',{name:'儲存中…',exact:true});
+ await saving.waitFor();
+ assert.equal(await saving.getAttribute('aria-busy'),'true');
+ assert.equal(await saving.isDisabled(),true);
+ assert.equal(await desktop.getByText('料件已更新',{exact:true}).count(),0);
+ await desktop.screenshot({path:path.join(evidence,'record-saving-desktop.png')});
+ await desktop.evaluate(() => window.__qaReleaseBomRecordSave());
+ await editor(desktop).waitFor({state:'hidden'});
+ await desktop.getByText('料件已更新',{exact:true}).waitFor();
+ await desktop.screenshot({path:path.join(evidence,'record-success-desktop.png')});
  console.log('Saved PN and status'); await waitRow(phone,'qa-5','LIVE-PN-500');await waitRow(phone,'qa-5','已發信');
  assert.equal(await phone.getByRole('button',{name:'載入最新資料',exact:true}).count(),0);
  assert.equal(await phone.evaluate(()=>window.__qaLiveRecords.loads),firstLoadCount,'ordinary row edits must not reload the complete BOM');

@@ -211,6 +211,7 @@ export const saveBomWorkspaceTableColorTheme = async (id, theme) => {
 };
 export const removeBomWorkspace = async (id) => { if (safetyMode) window.__qaBomSafety.writes.push({ method: 'delete', id }); store.delete(id); fullRecords.delete(id); };
 export const saveBomWorkspaceRecord = async (target, record) => {
+  if (globalThis.__qaBomRecordSaveGate) await globalThis.__qaBomRecordSaveGate;
   const list = fullRecords.get(target.id) ?? [];
   const index = list.findIndex(item => item.id === record.id);
   if (liveRecords && index >= 0 && target.recordMeta?.[record.id]?.updatedAt !== store.get(target.id).recordMeta[record.id]?.updatedAt) throw new BomRecordConflictError('QA record revision conflict');

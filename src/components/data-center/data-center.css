@@ -39,6 +39,7 @@
 .dc-mobile-scene { flex: 1; }
 .dc-scene-content[hidden], .dc-mobile-scene[hidden] { display: none; }
 .data-center-workspace [data-testid="data-center-metric-summary"] span { font-size: 12px; }
+.data-center-workspace :is([data-dc-sync-state="loading"], [data-dc-sync-state="saving"]) { color: hsl(var(--info)); border-color: hsl(var(--info) / .38); background: hsl(var(--info) / .12); }
 .data-center-workspace [data-dc-sync-state="error"] { color: hsl(var(--warning)); border-color: hsl(var(--warning) / .4); background: hsl(var(--warning) / .08); }
 .data-center-workspace [data-dc-sync-state="local"] { color: hsl(var(--muted-foreground)); border-color: hsl(var(--border)); background: hsl(var(--muted)); }
 .data-center-workspace [data-testid="data-center-simple-toolbar"] { max-width: calc(100% - 32px); }
@@ -178,6 +179,9 @@ body:has([data-chat-dock="detached"]) .dc-2d-workspace { padding-bottom: 56px; }
 .dc-work-submit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-top: 20px; padding-top: 16px; border-top: 1px solid hsl(var(--border)); }
 .dc-work-submit p { display: flex; align-items: flex-start; gap: 6px; flex: 1 1 190px; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 1.7; }
 .dc-work-submit p svg { flex-shrink: 0; margin-top: 3px; }
+.dc-work-submit p[data-state="saving"] { color: hsl(var(--info)); }
+.dc-work-submit p[data-state="saved"] { border: 1px solid hsl(var(--success) / .4); border-radius: 7px; padding: 5px 8px; background: hsl(var(--success) / .12); color: hsl(var(--success)); }
+.dc-work-submit p[data-state="saved"] svg { color: hsl(var(--success)); }
 .dc-work-submit button { min-height: 44px; gap: 8px; }
 .dc-work-notice, .dc-work-error { margin: 12px 0; padding: 12px; border: 1px solid hsl(var(--primary) / .4); border-radius: 8px; background: hsl(var(--muted)); font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
 .dc-work-error { border-color: hsl(var(--destructive)); }
@@ -211,7 +215,7 @@ body:has([data-chat-dock="detached"]) .dc-2d-workspace { padding-bottom: 56px; }
 .dc-work-empty h4, .dc-work-empty h3 { margin: 12px 0 6px; color: hsl(var(--foreground)); font-weight: 500; }
 .dc-work-empty p { line-height: 1.7; }
 .dc-work-empty button { margin-top: 16px; }
-.dc-work-skeleton { height: 8px; margin-bottom: 12px; border-radius: 3px; background: hsl(var(--muted)); }
+.dc-work-loading { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 72px; color: hsl(var(--info)); }
 @media (min-width: 1400px) { .dc-work-layout { grid-template-columns: minmax(340px, 400px) minmax(0, 1fr); } }
 @media (max-width: 767px) {
   .dc-project-browser { display: block; overflow-y: auto; }

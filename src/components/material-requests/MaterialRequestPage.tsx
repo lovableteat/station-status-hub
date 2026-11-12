@@ -2473,7 +2473,8 @@ export function MaterialRecordDialog({
   const [trackingDraft, setTrackingDraft] = useState(() => createMaterialTrackingDraft(record));
   const [activeTab, setActiveTab] = useState<MaterialEditorTab>(initialTab);
   const [detailsView, setDetailsView] = useState<"form" | "table">("form");
-  const [isSaving, setIsSaving] = useState(false);
+  const [savingAction, setSavingAction] = useState<"save" | "pending" | null>(null);
+  const isSaving = savingAction !== null;
   const [saveError, setSaveError] = useState("");
   const savingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -2518,7 +2519,11 @@ export function MaterialRecordDialog({
       if (!isCurrent()) return;
       if (result.documents.length) setForm(current => withMaterialSpecDocuments(current, [...getMaterialSpecDocuments(current), ...result.documents]));
       setSpecFailures(result.failures);
-      toast({ title: result.failures.length ? `已上傳 ${result.documents.length} 份，${result.failures.length} 份失敗` : `SPEC 已上傳 ${result.documents.length} 份`, description: "成功的檔案已加入清單；按「儲存資料與追蹤」保存到料件。", variant: result.failures.length ? "destructive" : undefined });
+      toast({
+        title: result.failures.length ? `已上傳 ${result.documents.length} 份，${result.failures.length} 份失敗` : `SPEC 已上傳 ${result.documents.length} 份`,
+        description: result.documents.length ? "成功的檔案已加入清單，請按「儲存資料與追蹤」保存到料件。" : "可在附件清單重試失敗的檔案。",
+        variant: result.failures.length ? (result.documents.length ? "warning" : "destructive") : "success",
+      });
     } finally {
       if (isCurrent()) { specUploadRef.current = false; setIsUploadingSpec(false); }
     }
@@ -2555,7 +2560,7 @@ export function MaterialRecordDialog({
         level: addToPending ? form.level : 2,
       }, trackingDraft, uploaderName);
       savingRef.current = true;
-      setIsSaving(true);
+      setSavingAction(addToPending ? "pending" : "save");
       await onSave(addToPending ? addMaterialToPending(next, uploaderName ?? "") : next, addToPending);
     } catch (error) {
       if (!mountedRef.current) return;
@@ -2564,7 +2569,7 @@ export function MaterialRecordDialog({
       toast({ title: "資料尚未儲存", description: message, variant: "destructive" });
     } finally {
       savingRef.current = false;
-      if (mountedRef.current) setIsSaving(false);
+      if (mountedRef.current) setSavingAction(null);
     }
   };
 
@@ -2677,7 +2682,10 @@ export function MaterialRecordDialog({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold">SPEC 文件</h3>
             <input ref={specInputRef} type="file" accept={MATERIAL_SPEC_ACCEPT} multiple className="hidden" onChange={(event) => void handleSpecFile(event)} />
-            {!readOnly && <Button type="button" data-testid="material-spec-add" disabled={isSaving || isUploadingSpec} onClick={() => specInputRef.current?.click()} className="h-11"><Upload data-icon="inline-start" />{isUploadingSpec ? `上傳中 ${specProgress.completed}/${specProgress.total}` : "新增 SPEC 檔案"}</Button>}
+            {!readOnly && <Button type="button" data-testid="material-spec-add" disabled={isSaving || isUploadingSpec} aria-busy={isUploadingSpec || undefined} onClick={() => specInputRef.current?.click()} className="h-11">
+              {isUploadingSpec ? <Loader2 aria-hidden="true" className="motion-safe:animate-spin" /> : <Upload data-icon="inline-start" aria-hidden="true" />}
+              {isUploadingSpec ? `上傳中 ${specProgress.completed}/${specProgress.total}` : "新增 SPEC 檔案"}
+            </Button>}
           </div>
           <div data-testid="material-spec-document" className="material-spec-files mt-3" aria-live="polite">
             {getMaterialSpecDocuments(form).map(document => <div className="material-spec-file" key={document.path}>
@@ -2731,10 +2739,12 @@ export function MaterialRecordDialog({
                 data-testid="material-record-add-pending"
                 className="h-11 border-primary/45 bg-primary/10 text-primary hover:bg-primary/20"
                 disabled={isSaving || isUploadingSpec || trackingDraft.pendingImageReads > 0 || !form.name.trim()}
+                aria-busy={savingAction === "pending" || undefined}
                 title="儲存目前的修改，並加入待處理料的「其他」分類"
                 onClick={() => void handleSave(true)}
               >
-                <Plus className="mr-1.5 h-3.5 w-3.5" />新增為待處理料
+                {savingAction === "pending" ? <Loader2 aria-hidden="true" className="motion-safe:animate-spin" /> : <Plus aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />}
+                {savingAction === "pending" ? "加入待處理料中…" : "新增為待處理料"}
               </Button>
             )}
           </div>
@@ -2746,8 +2756,9 @@ export function MaterialRecordDialog({
               <Pencil className="mr-1.5 h-3.5 w-3.5" />修改這筆
             </Button>
           ) : (
-            <Button type="button" size="sm" className="h-11" onClick={() => void handleSave()} disabled={isSaving || isUploadingSpec || trackingDraft.pendingImageReads > 0 || !form.name.trim()}>
-              {isSaving ? "儲存中…" : "儲存資料與追蹤"}
+            <Button type="button" size="sm" className="h-11" onClick={() => void handleSave()} disabled={isSaving || isUploadingSpec || trackingDraft.pendingImageReads > 0 || !form.name.trim()} aria-busy={savingAction === "save" || undefined}>
+              {savingAction === "save" && <Loader2 aria-hidden="true" className="motion-safe:animate-spin" />}
+              {savingAction === "save" ? "儲存中…" : "儲存資料與追蹤"}
             </Button>
           )}
         </DialogFooter>
@@ -4529,7 +4540,7 @@ export function MaterialRequestPage() {
         workspaceName: activeWorkspace.name,
         exportedBy: user?.displayName || user?.username || "未知使用者",
       });
-      toast({ title: "不建議料明細已匯出", description: `${rows.length.toLocaleString()} 筆 · ${fileName}` });
+      toast({ title: "不建議料明細已匯出", description: `${rows.length.toLocaleString()} 筆 · ${fileName}`, variant: "success" });
     } catch (error) {
       toast({ title: "不建議料匯出失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
     } finally {
@@ -4546,7 +4557,7 @@ export function MaterialRequestPage() {
     setIsExportingDiscouraged(true);
     try {
       const fileName = await exportNonPvlApplyList({ partNumbers, workspaceName: activeWorkspace.name });
-      toast({ title: "PLM 申請清單已匯出", description: `${partNumbers.length.toLocaleString()} 個實體料號 · ${fileName}，請到 PLM 的 Non PVL 申請上傳。` });
+      toast({ title: "PLM 申請清單已匯出", description: `${partNumbers.length.toLocaleString()} 個實體料號 · ${fileName}，請到 PLM 的 Non PVL 申請上傳。`, variant: "success" });
     } catch (error) {
       toast({ title: "PLM 申請清單匯出失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
     } finally {
@@ -5273,6 +5284,7 @@ export function MaterialRequestPage() {
       toast({
         title: addToPending ? "已加入待處理料的其他分類" : editorMode === "create" ? "料件已新增" : "料件已更新",
         description: `${record.manufacturer || "未指定廠商"} ${record.manufacturerPartNumber || record.name}`,
+        variant: "success",
       });
     } catch (error) {
       if (error instanceof WorkspaceMutationScopeChangedError) throw error;
@@ -5580,7 +5592,7 @@ export function MaterialRequestPage() {
     try {
       const { exportMaterialVisibleColumns } = await import("./materialRequestExport");
       const fileName = await exportMaterialVisibleColumns(snapshot, columns);
-      toast({ title: "顯示欄位已匯出", description: `${columns.length} 欄 · ${snapshot.rows.length} 筆明細 · ${fileName}` });
+      toast({ title: "顯示欄位已匯出", description: `${columns.length} 欄 · ${snapshot.rows.length} 筆明細 · ${fileName}`, variant: "success" });
     } catch (error) {
       toast({ title: "匯出失敗", description: error instanceof Error ? error.message : "請稍後再試。", variant: "destructive" });
     } finally { setExportingVisibleColumns(false); }
@@ -5638,6 +5650,7 @@ export function MaterialRequestPage() {
       toast({
         title: "主管報表已匯出",
         description: `${fileName} · ${exportSnapshot.rows.length.toLocaleString()} 筆明細`,
+        variant: "success",
       });
     } catch (error) {
       toast({
@@ -5727,7 +5740,7 @@ export function MaterialRequestPage() {
         requestId,
       });
       setRemoteSyncFailed(false);
-      toast({ title: "已載入最新資料", description: "搜尋、篩選與分頁條件皆已保留。" });
+      toast({ title: "已載入最新資料", description: "搜尋、篩選與分頁條件皆已保留。", variant: "success" });
     } catch {
       toast({ title: "載入最新資料失敗", description: "目前仍保留畫面中的資料與輸入內容。", variant: "destructive" });
     } finally {
@@ -6094,9 +6107,10 @@ export function MaterialRequestPage() {
               variant="ghost"
               onClick={() => void applySearch()}
               aria-label={isSearchPending ? "搜尋中" : "搜尋"}
+              aria-busy={isSearchPending || undefined}
               className="h-11 w-11 rounded-xl p-0 text-primary"
             >
-              {isSearchPending ? <RotateCcw className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+              {isSearchPending ? <Loader2 aria-hidden="true" className="h-5 w-5 motion-safe:animate-spin" /> : <Search aria-hidden="true" className="h-5 w-5" />}
             </Button>
           </div>
 
@@ -6296,15 +6310,14 @@ export function MaterialRequestPage() {
         </div>
       )}
 
-      {isWorkspaceLoading && (
-        <div className="mt-2 flex items-center gap-2 rounded-xl border border-cyan-300/20 bg-[#0d2035] px-3 py-2" role="status" aria-live="polite">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300 motion-reduce:animate-none" />
-          <p className="text-sm font-bold text-cyan-100">正在切換 BOM</p>
-          <p className="truncate text-xs text-slate-400">只下載這份 BOM 的最新記錄，完成前不顯示其他 BOM 的舊資料。</p>
+      {(isWorkspaceLoading || (isCompactLayout && exportingVisibleColumns)) && (
+        <div className="mt-2 flex items-center gap-2 rounded-xl border border-info/30 bg-info/10 px-3 py-2 text-sm font-semibold text-info" role="status">
+          <Loader2 aria-hidden="true" className="size-4 shrink-0 motion-safe:animate-spin" />
+          {exportSnapshotRequested ? "正在準備匯出報表…" : isWorkspaceLoading ? "正在載入 BOM 資料…" : "正在匯出顯示欄位…"}
         </div>
       )}
 
-      <div ref={tableResultsRef} data-material-results="true" className={cn("mt-2 transition-opacity", isWorkspaceLoading && "pointer-events-none opacity-35")} aria-busy={isWorkspaceLoading}>
+      <div ref={tableResultsRef} data-material-results="true" className={cn("mt-2 transition-opacity motion-reduce:transition-none", isWorkspaceLoading && "pointer-events-none opacity-35")} aria-busy={isWorkspaceLoading}>
         <div className="min-w-0">
       <section
         data-testid="material-table-card"
@@ -6340,7 +6353,7 @@ export function MaterialRequestPage() {
                 className="h-9 border-[#356985] bg-[#071522] pl-9 pr-9 text-sm text-slate-100 placeholder:text-[#a9c0d1] focus-visible:ring-cyan-400"
               />
               {isSearchPending && (
-                <RotateCcw className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-cyan-300" aria-label="搜尋中" />
+                <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-info motion-safe:animate-spin" role="status" aria-label="搜尋中" />
               )}
             </div>
             {activeFilterControls}
@@ -6358,7 +6371,10 @@ export function MaterialRequestPage() {
               </SelectContent>
             </Select>
             {tableSettingsControl}
-            <Button type="button" variant="outline" size="sm" data-testid="material-export-visible" className="material-action-highlight h-9 gap-1.5 px-2.5 text-xs" disabled={exportingVisibleColumns || !isFullDatasetLoaded || isWorkspaceLoading || isSearchPending} onClick={() => void exportVisibleColumns()} title="依目前顯示欄位與順序匯出所有符合篩選的廠商明細，不受分頁限制；狀態欄匯出文字"><Download className="h-3.5 w-3.5" />{exportingVisibleColumns ? "匯出中…" : "匯出顯示欄位"}</Button>
+            <Button type="button" variant="outline" size="sm" data-testid="material-export-visible" className="material-action-highlight h-9 gap-1.5 px-2.5 text-xs" disabled={exportingVisibleColumns || !isFullDatasetLoaded || isWorkspaceLoading || isSearchPending} aria-busy={exportingVisibleColumns || undefined} onClick={() => void exportVisibleColumns()} title="依目前顯示欄位與順序匯出所有符合篩選的廠商明細，不受分頁限制；狀態欄匯出文字">
+              {exportingVisibleColumns ? <Loader2 aria-hidden="true" className="h-3.5 w-3.5 motion-safe:animate-spin" /> : <Download aria-hidden="true" className="h-3.5 w-3.5" />}
+              {exportingVisibleColumns ? "匯出中…" : "匯出顯示欄位"}
+            </Button>
             <Button type="button" variant="outline" size="sm" data-testid="material-personal-marks-filter" className="material-personal-marks-button h-9 gap-1.5 px-2.5 text-xs" aria-label={`我的標記（${markedGroupCount}）`} aria-pressed={showMarkedOnly} disabled={!personalMarks.ready} onClick={() => setShowMarkedOnly(value => !value)} title="只顯示目前帳號勾選的料件，其他使用者看不到這些標記"><Star className={cn("h-3.5 w-3.5", showMarkedOnly && "fill-current")} />我的標記 <span className="material-mark-count">{markedGroupCount}</span></Button>
             <span className="material-toolbar-count">
               {isPreviewDataset

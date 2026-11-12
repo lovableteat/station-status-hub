@@ -16,6 +16,7 @@ const AlertDialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
     data-ui="scrim"
+    data-platform-dialog-scrim=""
     className={cn(
       "fixed inset-0 z-50 bg-[radial-gradient(circle_at_top,hsl(var(--platform-rose)/0.10),transparent_28%),linear-gradient(180deg,hsl(220_40%_3%/0.78),hsl(220_40%_2%/0.88))] backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
@@ -104,6 +105,8 @@ const AlertDialogAction = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Action
     ref={ref}
+    data-ui="button"
+    data-variant="default"
     className={cn(buttonVariants(), className)}
     {...props}
   />
@@ -116,6 +119,8 @@ const AlertDialogCancel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Cancel
     ref={ref}
+    data-ui="button"
+    data-variant="outline"
     className={cn(
       buttonVariants({ variant: "outline" }),
       className

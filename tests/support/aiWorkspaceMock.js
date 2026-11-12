@@ -61,6 +61,7 @@ export const supabase = {
     if (body.operation === 'models') return {data:{data:[{id:'gpt-5.4'},{id:'gpt-6.1-sol'}]},error:null,response:new Response(null,{status:200})};
     const request = body.request;
     window.__aiModelErrorQA.requests.push(structuredClone(request));
+    await window.__aiModelErrorQA.responseGate;
     await new Promise(resolve => setTimeout(resolve,100));
     const denied = request.model === 'gpt-6.1-sol';
     const data = denied

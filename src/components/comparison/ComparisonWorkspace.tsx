@@ -1,6 +1,6 @@
 import { recoverableLazy } from "@/components/common/recoverableLazy";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { GitCompareArrows, Play, Square, Download, Upload, Plus, Check, CheckCircle2, TriangleAlert, FileText, ChevronDown, FilePlus2, X, MoreHorizontal } from "lucide-react";
+import { GitCompareArrows, Play, Square, Download, Upload, Plus, Check, CheckCircle2, Info, TriangleAlert, FileText, ChevronDown, FilePlus2, X, MoreHorizontal } from "lucide-react";
 import { useUser } from "@/components/auth/UserContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useIsCompactLayout } from "@/hooks/use-mobile";
@@ -86,7 +86,7 @@ export default function ComparisonWorkspace() {
   const [diagramSource, setDiagramSource] = useState<DiagramSource | null>(null);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<{ message: string; tone: "info" | "success" } | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [engine, setEngine] = useState<EngineSettings>(() => readEngineSettings());
   const runtimeRef = useRef<EngineRuntime>(createRuntime(engine));
@@ -101,12 +101,12 @@ export default function ComparisonWorkspace() {
   const changeEngine = (next: EngineSettings) => {
     if (busyRef.current) return;
     runtimeRef.current.cancel(); runtimeRef.current = createRuntime(next); writeEngineSettings(next); setEngine(next); setError("");
-    setNotice(next.mode === "server" ? `之後的比對會送到 ${engineHost(next.url)} 處理；結果仍只存在這台電腦的瀏覽器` : "之後的比對在這台電腦的瀏覽器處理");
+    setNotice({ tone: "info", message: next.mode === "server" ? `之後的比對會送到 ${engineHost(next.url)} 處理；結果仍只存在這台電腦的瀏覽器` : "之後的比對在這台電腦的瀏覽器處理" });
   };
 
   useEffect(() => {
     const currentEpoch = ++epoch.current;
-    runtimeRef.current.cancel(); busyRef.current = false; setBusy(false); setProgress(""); setError(""); setNotice("");
+    runtimeRef.current.cancel(); busyRef.current = false; setBusy(false); setProgress(""); setError(""); setNotice(null);
     setCurrent(null); setSessions([]); setLibraryEntries([]); setLibraryYaml("devices: []\n"); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setProjectName(""); setRestoring(true); setRestoredAccountId(accountId); setDiagramSource(null);
     setMode("compare"); setSingleInput(blankRevision()); setSingleLabel("BOARD"); setChartSide("b");
     if (!accountId) { setRestoring(false); return; }
@@ -128,7 +128,7 @@ export default function ComparisonWorkspace() {
   const runJob = async <T,>(work: () => Promise<T>): Promise<T | undefined> => {
     if (busyRef.current) return undefined;
     const currentEpoch = epoch.current;
-    busyRef.current = true; setBusy(true); setError(""); setProgress("準備處理資料…");
+    busyRef.current = true; setBusy(true); setError(""); setNotice(null); setProgress("準備處理資料…");
     try { const result = await work(); return currentEpoch === epoch.current ? result : undefined; }
     catch (error) { if (currentEpoch === epoch.current) setError(error instanceof Error ? error.message : String(error)); return undefined; }
     finally { if (currentEpoch === epoch.current) { busyRef.current = false; setBusy(false); setProgress(""); } }
@@ -211,7 +211,7 @@ export default function ComparisonWorkspace() {
       const old = sessions.find(item => item.id === id);
       const next: ComparisonSession = { version: 1, projectName: name, id, result, replies: { ...old?.replies }, history: [...(old?.history ?? [])], ...(old?.lastReviewKey ? { lastReviewKey: old.lastReviewKey } : {}), savedAt: new Date().toISOString(), libraryYaml };
       setCurrent(next); setLibraryEntries(result.library);
-      try { await persist(next, token); setChartSide("b"); if (mode === "single") update("tab", "power"); setNotice(`${mode === "single" ? "單板圖已產生" : "比對完成"}，結果已儲存在此帳號的本機瀏覽器`); }
+      try { await persist(next, token); setChartSide("b"); if (mode === "single") update("tab", "power"); setNotice({ tone: "success", message: `${mode === "single" ? "單板圖已產生" : "比對完成"}，結果已儲存在此帳號的本機瀏覽器` }); }
       catch (error) { scope.assertCurrent(token); throw new Error(`結果已產生，但本機儲存失敗；請立即匯出備份。${error instanceof Error ? error.message : String(error)}`); }
       return next;
     });
@@ -247,11 +247,11 @@ export default function ComparisonWorkspace() {
       if (currentEpoch !== epoch.current) return;
       const updated = updatedTracker ? { ...current, result: { ...current.result, artifacts: current.result.artifacts.map(artifact => artifact.key === "xlsx" ? updatedTracker : artifact) } } : current;
       downloadLocal(await exportBackup(updated), `${current.projectName}_${current.result.meta.a.label}_vs_${current.result.meta.b.label}.autocheck.zip`, "application/zip");
-      setNotice("備份已匯出，包含比對結果、審查回覆與原始報表");
+      setNotice({ tone: "success", message: "備份已匯出，包含比對結果、審查回覆與原始報表" });
       return true;
     });
   };
-  const chooseSession = (id: string) => { const current = sessions.find(item => item.id === id); if (!current) return; setCurrent(current); setMode(current.result.mode === "single" ? "single" : "compare"); setSingleLabel(current.result.meta.b.label); setChartSide("b"); setProjectName(current.projectName); setALabel(current.result.meta.a.label); setBLabel(current.result.meta.b.label); setLibraryEntries(current.result.library); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setNotice(""); };
+  const chooseSession = (id: string) => { const current = sessions.find(item => item.id === id); if (!current) return; setCurrent(current); setMode(current.result.mode === "single" ? "single" : "compare"); setSingleLabel(current.result.meta.b.label); setChartSide("b"); setProjectName(current.projectName); setALabel(current.result.meta.a.label); setBLabel(current.result.meta.b.label); setLibraryEntries(current.result.library); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setNotice(null); };
   const importSession = async (file: File) => {
     await runJob(async () => {
       const token = scope.capture(); const restored = await importBackup(file); scope.assertCurrent(token);
@@ -260,7 +260,7 @@ export default function ComparisonWorkspace() {
         restored.projectName = `${restored.projectName.slice(0, 120 - suffix.length)}${suffix}`;
         restored.id = JSON.stringify([restored.projectName, restored.result.meta.a.label, restored.result.meta.b.label]);
       }
-      await persist(restored, token); setMode(restored.result.mode === "single" ? "single" : "compare"); setSingleLabel(restored.result.meta.b.label); setChartSide("b"); setProjectName(restored.projectName); setALabel(restored.result.meta.a.label); setBLabel(restored.result.meta.b.label); setLibraryEntries(restored.result.library); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setNotice("備份已匯入；同名比對保留為另一份，原資料未被覆寫"); return true;
+      await persist(restored, token); setMode(restored.result.mode === "single" ? "single" : "compare"); setSingleLabel(restored.result.meta.b.label); setChartSide("b"); setProjectName(restored.projectName); setALabel(restored.result.meta.a.label); setBLabel(restored.result.meta.b.label); setLibraryEntries(restored.result.library); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setNotice({ tone: "success", message: "備份已匯入；同名比對保留為另一份，原資料未被覆寫" }); return true;
     });
   };
   const saveUserLibrary = async (yaml: string) => { const token = scope.capture(); await saveLibrary(token.accountId, yaml); scope.assertCurrent(token); setLibraryYaml(yaml); };
@@ -285,21 +285,21 @@ export default function ComparisonWorkspace() {
   const runActions = <div className="comparison-run-actions" data-ready={canEdit && !busy && nextStep === "run"}>
     <ol className="comparison-steps" aria-label="比對步驟">{sideSteps.map(step => <li key={step.key} data-state={step.done ? "done" : nextStep === step.key ? "next" : "todo"}><button type="button" title={step.done ? `${step.label}的必要檔案已齊` : step.errors.join("；") || `前往${step.label}`} onClick={() => focusPanel(step.side)}><span className="comparison-step-no">{step.done ? <Check /> : step.no}</span><span>{step.label}</span><strong>{step.done ? "已齊" : `${step.ready}／${step.total}`}</strong></button></li>)}</ol>
     <div className="comparison-run-status"><strong>{runTitle}</strong><p id="comparison-run-hint" title={blockers.join("；")}>{runHint}</p></div>
-    <Button size="lg" data-testid="comparison-run" aria-describedby="comparison-run-hint" disabled={!canEdit || busy || !projectName.trim() || blockers.length > 0} onClick={() => void start()}><Play />{busy ? "處理中…" : mode === "single" ? "產生單板圖" : session ? "重新比對" : "開始比對"}</Button>
+    <Button size="lg" data-testid="comparison-run" aria-describedby="comparison-run-hint" pending={busy} disabled={!canEdit || !projectName.trim() || blockers.length > 0} onClick={() => void start()}>{!busy && <Play aria-hidden="true" />}{busy ? "處理中…" : mode === "single" ? "產生單板圖" : session ? "重新比對" : "開始比對"}</Button>
   </div>;
 
   return <div ref={workspace} className="comparison-workspace" data-comparison-workspace="true" onDragOver={guardFileDrag} onDrop={guardFileDrag}>
     <div className="comparison-topbar">
-    <section className="comparison-page-header"><MaintenancePageHeader title="AutoCheck" description="線路改版比對與審查追蹤" icon={GitCompareArrows} wrapActionsOnMobile actions={<>{compact ? <Button variant="outline" size="icon" aria-label="AutoCheck 工具" aria-expanded={mobileToolsOpen} data-testid="comparison-mobile-tools-trigger" onClick={() => setMobileToolsOpen(true)}><MoreHorizontal /></Button> : <><ComparisonGuide /><ComparisonFeedback tab={filters.tab === "diagram" ? "compare" : filters.tab} projectName={feedbackProjectName} revisionA={aLabel} revisionB={bLabel} /><Button variant="ghost" title="匯出備份：下載這份比對的 .autocheck.zip" disabled={!session || busy} onClick={() => void exportSession()}><Download />匯出備份</Button><Button variant="ghost" title="匯入備份：讀回之前匯出的 .autocheck.zip" disabled={!canEdit || busy} onClick={() => importInput.current?.click()}><Upload />匯入備份</Button>{canEdit ? <EngineSettingsControl settings={engine} onChange={changeEngine} disabled={busy} /> : <Badge variant="outline">唯讀</Badge>}</>}<Button variant="outline" title="清空目前的輸入，開始另一份比對" disabled={!canEdit || busy} onClick={() => { setCurrent(null); setMode("compare"); setSingleInput(blankRevision()); setProjectName(""); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setNotice(""); update("tab", "compare"); }}><Plus />新比對</Button></>} /></section>
+    <section className="comparison-page-header"><MaintenancePageHeader title="AutoCheck" description="線路改版比對與審查追蹤" icon={GitCompareArrows} wrapActionsOnMobile actions={<>{compact ? <Button variant="outline" size="icon" aria-label="AutoCheck 工具" aria-expanded={mobileToolsOpen} data-testid="comparison-mobile-tools-trigger" onClick={() => setMobileToolsOpen(true)}><MoreHorizontal /></Button> : <><ComparisonGuide /><ComparisonFeedback tab={filters.tab === "diagram" ? "compare" : filters.tab} projectName={feedbackProjectName} revisionA={aLabel} revisionB={bLabel} /><Button variant="ghost" title="匯出備份：下載這份比對的 .autocheck.zip" disabled={!session || busy} onClick={() => void exportSession()}><Download />匯出備份</Button><Button variant="ghost" title="匯入備份：讀回之前匯出的 .autocheck.zip" disabled={!canEdit || busy} onClick={() => importInput.current?.click()}><Upload />匯入備份</Button>{canEdit ? <EngineSettingsControl settings={engine} onChange={changeEngine} disabled={busy} /> : <Badge variant="outline">唯讀</Badge>}</>}<Button variant="outline" title="清空目前的輸入，開始另一份比對" disabled={!canEdit || busy} onClick={() => { setCurrent(null); setMode("compare"); setSingleInput(blankRevision()); setProjectName(""); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setNotice(null); update("tab", "compare"); }}><Plus />新比對</Button></>} /></section>
     <div className="comparison-workspace-nav"><nav aria-label="比對系統頁面">{Object.entries(tabLabels).map(([key, label]) => <Button key={key} variant={filters.tab === key ? "secondary" : "ghost"} aria-current={filters.tab === key ? "page" : undefined} onClick={() => { update("tab", key as keyof typeof tabLabels); if (key === "review" && session && session.result.mode !== "single") requestAnimationFrame(() => workspace.current?.querySelector(".comparison-review-anchor:not([hidden])")?.scrollIntoView({ block: "start" })); }}>{label}</Button>)}</nav></div>
     </div>
     {compact && <MobileToolsSheet testId="comparison-mobile-tools" open={mobileToolsOpen} onOpenChange={setMobileToolsOpen} title="AutoCheck 工具" description="說明、意見回報、備份與比對處理位置" sections={[{ key: "tools", content: <div className="comparison-mobile-tools"><div><ComparisonGuide /><ComparisonFeedback tab={filters.tab === "diagram" ? "compare" : filters.tab} projectName={feedbackProjectName} revisionA={aLabel} revisionB={bLabel} /><Button variant="ghost" disabled={!session || busy} onClick={() => void exportSession()}><Download />匯出備份</Button><Button variant="ghost" disabled={!canEdit || busy} onClick={() => importInput.current?.click()}><Upload />匯入備份</Button><EngineSettingsControl settings={engine} onChange={changeEngine} disabled={busy || !canEdit} /></div></div> }]} />}
     <input ref={importInput} type="file" accept=".zip" className="sr-only" aria-label="匯入 AutoCheck 備份" onChange={event => { const file = event.target.files?.[0]; if (file) void importSession(file); event.target.value = ""; }} />
     {!!sessions.length && <div className="comparison-session-picker"><Label>已儲存的比對</Label><Select value={session?.id ?? "new"} disabled={busy} onValueChange={chooseSession}><SelectTrigger aria-label="已儲存的比對"><SelectValue placeholder="選擇比對" /></SelectTrigger><SelectContent>{!session && <SelectItem value="new" disabled>新比對</SelectItem>}{sessions.map(item => <SelectItem key={item.id} value={item.id}>{item.projectName} · {item.result.mode === "single" ? `單板 ${item.result.meta.b.label}` : `${item.result.meta.a.label} → ${item.result.meta.b.label}`}</SelectItem>)}</SelectContent></Select><span>儲存於目前帳號與瀏覽器</span></div>}
     {error && <div className="comparison-alert" role="alert"><TriangleAlert /><p>{error}</p><Button variant="ghost" size="icon" aria-label="關閉錯誤訊息" onClick={() => setError("")}>×</Button></div>}
-    {notice && <div className="comparison-notice" role="status"><CheckCircle2 /><p>{notice}</p></div>}
-    {busy && <div className="comparison-progress" role="status" aria-live="polite"><div><span className="comparison-progress-indicator" /><p>{progress || "正在處理…"}</p><small>{engine.mode === "server" ? `檔案已上傳到 ${engineHost(engine.url)} 處理；結果仍只存在這台電腦的瀏覽器` : "首次使用會下載執行套件；工程檔案留在本機"}</small></div><Button variant="outline" onClick={() => runtimeRef.current.cancel()}><Square />取消</Button></div>}
-    {restoring ? <div className="comparison-loading" role="status">正在讀取本機比對紀錄…</div> : <>
+    {notice && <div className="comparison-notice" data-tone={notice.tone} role="status">{notice.tone === "success" ? <CheckCircle2 aria-hidden="true" /> : <Info aria-hidden="true" />}<p>{notice.message}</p></div>}
+    {busy && <div className="comparison-progress"><div role="status"><span className="comparison-progress-indicator" aria-hidden="true" /><p>{progress || "正在處理…"}</p></div><Button variant="outline" onClick={() => runtimeRef.current.cancel()}><Square aria-hidden="true" />取消</Button></div>}
+    {restoring ? <div className="comparison-loading" role="status"><span className="comparison-progress-indicator" aria-hidden="true" />正在讀取本機比對紀錄…</div> : <>
       {filters.tab === "compare" && <details key={session?.id ?? "new"} className="comparison-source-settings" open={!session} data-new={!session}>
         <summary>展開來源檔案，重新比對<ChevronDown /></summary>
         <section className="comparison-section comparison-run-settings">
@@ -329,6 +329,6 @@ export default function ComparisonWorkspace() {
       {filters.tab === "library" && <ComparisonLibrary key={accountId} runtime={runtimeRef.current} yaml={libraryYaml} entries={libraryEntries} onEntries={setLibraryEntries} onSave={saveUserLibrary} canEdit={canEdit} signedBy={user?.displayName ?? ""} busy={busy} runJob={runJob} />}
     </>}
     {/* Keep the same account's draft mounted while permission changes refresh comparison records. */}
-    {filters.tab === "diagram" && (accountId ? <Suspense fallback={<div className="comparison-loading" role="status">正在載入圖表編輯器…</div>}><ComparisonDiagramEditor key={accountId} accountId={accountId} session={editorSession} canEdit={canEdit && !busy} pdfUrl={editorSession ? urls.schematic : undefined} initialSource={editorInitialSource} onSourceConsumed={consumeDiagramSource} capturePersistence={captureDiagramPersistence} /></Suspense> : <section className="comparison-section"><p>請先登入後使用圖表編輯器。</p></section>)}
+    {filters.tab === "diagram" && (accountId ? <Suspense fallback={<div className="comparison-loading" role="status"><span className="comparison-progress-indicator" aria-hidden="true" />正在載入圖表編輯器…</div>}><ComparisonDiagramEditor key={accountId} accountId={accountId} session={editorSession} canEdit={canEdit && !busy} pdfUrl={editorSession ? urls.schematic : undefined} initialSource={editorInitialSource} onSourceConsumed={consumeDiagramSource} capturePersistence={captureDiagramPersistence} /></Suspense> : <section className="comparison-section"><p>請先登入後使用圖表編輯器。</p></section>)}
   </div>;
 }

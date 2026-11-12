@@ -318,6 +318,7 @@ export function UserPermissionsDialog({
       toast({
         title: "設定成功",
         description: `已更新 ${username} 的工作區與頁面權限`,
+        variant: "success",
       });
 
       onClose();
@@ -612,9 +613,9 @@ export function UserPermissionsDialog({
               <X className="mr-2 h-4 w-4" />
               取消
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={!canConfigure}>
-              <Save className="mr-2 h-4 w-4" />
-              {isLoading ? "儲存中..." : "儲存權限"}
+            <Button size="sm" onClick={handleSave} disabled={!canConfigure} pending={isLoading}>
+              {!isLoading && <Save className="mr-2 h-4 w-4" />}
+              {isLoading ? "正在儲存權限…" : "儲存權限"}
             </Button>
           </div>
         </div>

@@ -1469,6 +1469,20 @@
   color: var(--rd2-muted);
   font-size: 12px;
 }
+.rd2-draft-status[data-saved] > span {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 5px 8px;
+  border: 1px solid hsl(var(--success) / .4);
+  border-radius: 7px;
+  background: hsl(var(--success) / .12);
+  color: hsl(var(--success));
+  overflow-wrap: anywhere;
+}
+.rd2-draft-status[data-saved] svg { flex: none; width: 15px; height: 15px; }
 .rd2-error {
   color: hsl(var(--destructive));
   background: hsl(var(--destructive) / 0.12);

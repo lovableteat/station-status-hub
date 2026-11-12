@@ -6,7 +6,7 @@ import { Box3, BufferGeometry, Color, DoubleSide, ExtrudeGeometry, Shape, Path, 
 import { getBoardPolygon, getBoardHoles } from "./core/boardOutline.ts";
 import { getPcbMountY } from "./core/software3d.ts";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import { Focus, MousePointer2 } from "lucide-react";
+import { Focus, LoaderCircle, MousePointer2 } from "lucide-react";
 import { getRenderedKeepouts } from "./core/componentKeepout.ts";
 
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
@@ -67,7 +67,7 @@ export function Pcb3DCanvasSafe({
       data-pcb-bottom-color={workspace.activeProject.board.layerColors.bottom}
     >
       {webglState === "checking" ? (
-        <div className="pcb-3d-loading">正在檢查 3D 圖形加速…</div>
+        <div className="pcb-3d-loading" role="status"><LoaderCircle aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />正在檢查 3D 圖形加速…</div>
       ) : webglState === "unavailable" ? softwareFallback : (
         <Pcb3DErrorBoundary fallback={softwareFallback}>
           <Canvas

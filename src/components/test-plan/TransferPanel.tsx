@@ -60,11 +60,13 @@ export function TransferPanel({ uploads, downloads, onDismiss }: Props) {
   }
   const [lead, ...rest] = [...rows.filter((row) => row.status === "active"), ...rows.filter((row) => row.status !== "active")];
   const activeCount = rows.filter((row) => row.status === "active").length;
+  const state = activeCount > 0 ? "active" : rows.some((row) => row.status === "error") ? "error" : rows.some((row) => row.status === "cancelled") ? "cancelled" : "done";
+  const title = { active: `傳輸中 · ${activeCount} 項`, error: "有檔案傳輸失敗", cancelled: "有檔案傳輸已取消", done: "傳輸完成" }[state];
 
   return (
-    <aside className="file-library-transfers" role="status" aria-live="polite" aria-label="檔案傳輸進度" data-testid="file-library-transfers">
+    <aside className="file-library-transfers" role="status" aria-label="檔案傳輸進度" data-state={state} data-testid="file-library-transfers">
       <header className="file-library-transfers-head">
-        <strong>{activeCount > 0 ? `傳輸中 · ${activeCount} 項` : "傳輸完成"}</strong>
+        <strong>{title}</strong>
         <span>{rows.length} 項</span>
       </header>
       {lead && <TransferLead row={lead} />}
@@ -96,8 +98,8 @@ function TransferLead({ row }: { row: { kind: "upload" | "download"; name: strin
         {row.status === "active" && row.cancel && <Button type="button" variant="outline" size="sm" onClick={row.cancel}>取消</Button>}
         {row.status !== "active" && row.dismiss && <Button type="button" variant="ghost" size="icon" className="h-9 w-9" aria-label="關閉" onClick={row.dismiss}><X className="h-4 w-4" /></Button>}
       </div>
-      <div className="file-library-transfer-percent" aria-label={`${percent}%`}>
-        {row.status === "done" ? <><Check />完成</> : row.status === "error" ? <><AlertTriangle />失敗</> : row.status === "cancelled" ? "已取消" : unknownSize ? "…" : <>{percent}<small>%</small></>}
+      <div className="file-library-transfer-percent">
+        {row.status === "done" ? <><Check aria-hidden="true" />完成</> : row.status === "error" ? <><AlertTriangle aria-hidden="true" />失敗</> : row.status === "cancelled" ? "已取消" : unknownSize ? "…" : <>{percent}<small>%</small></>}
       </div>
       <div className="file-library-transfer-bar" aria-hidden="true"><span style={{ width: `${percent}%` }} /></div>
       <p className="file-library-transfer-name" title={row.name}>{row.name}</p>

@@ -5,6 +5,7 @@ import { Toaster } from '../../src/components/ui/toaster';
 import { MaterialRequestPage } from '../../src/components/material-requests/MaterialRequestPage';
 import { setQaMaterialAccount } from './materialWorkspaceMock';
 import '../../src/index.css';
+import '../../src/platform-interaction.css';
 
 const localFetch=window.fetch.bind(window);
 window.fetch = async (input,init) => { const url=typeof input==='string'?input:input instanceof URL?input.href:input.url;if(new URL(url,location.href).origin===location.origin)return localFetch(input,init);throw new Error('Production/network requests are disabled in this fixture'); };
