@@ -1,7 +1,4 @@
--- Fix password hashes for existing users
-UPDATE public.system_users 
-SET password_hash = public.hash_password(username)
-WHERE username IN ('liu52417', '111');
+-- Historical embedded credential provisioning removed. No operational data is changed by this source edit.
 
 -- Create login audit table for tracking login records
 CREATE TABLE public.login_audit (

@@ -2,6 +2,10 @@
 
 These proposals remain outside automatic migrations. A draft PR and isolated CI are allowed preparation; they do not authorize production execution, merging main, bucket changes, or history deletion. Sleeping users and an idle-looking UI do not establish a safe change window. The separately authorized four-RPC migration and daily-stats v13 are already applied; [their recorded baseline](../security/applied-internal-rpc-cutover-20261112.md) is not part of the remaining proposal promotion. The later [anonymous-delete ACL cutover](../security/applied-delete-rpc-cutover-20261112.md), version `20261112013540`, is also applied; authenticated station-edit body guards remain pending. The later [login-audit containment](../security/applied-login-audit-cutover-20261112.md), version `20261112022029`, is also applied; signed-in audit restrictions remain pending.
 
+## Historical source cleanup is not migration promotion
+
+The [five historical credential files](../security/historical-credential-sanitization.md) keep their original versions and structural statements but no longer seed or reset accounts. Their versions were not matched in the target ledger metadata review. Do not infer that a bulk runner will skip them, run them on production, retimestamp them, or repair the ledger to force agreement. The three exact applied containment records above remain untouched. New installations intentionally have no default privileged account and require a separately reviewed protected bootstrap.
+
 ## Why promotion must be staged
 
 Do not copy all three SQL files into `supabase/migrations` and run a bulk push. That would remove the verification pause between authorization changes and private-bucket cutover. Promote only the next separately approved stage after its prerequisites pass. Keep later stages outside the migration directory until their own gate is satisfied.
