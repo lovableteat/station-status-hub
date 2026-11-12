@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import test from 'node:test';
 const read = name => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
 const fullWorkflow = read('.github/workflows/audit-regression.yml');
-const workflow = fullWorkflow.slice(fullWorkflow.indexOf('  exact96:\n'));
+const workflow = fullWorkflow.slice(fullWorkflow.indexOf('  exact96:\n')).split(/\n  [a-zA-Z0-9_-]+:\n/)[0];
 assert.ok(fullWorkflow.indexOf('  exact96:\n') > 0, 'Research must be an independent job in the existing isolated workflow');
 const browser = read('tests/exact96/exact96-crossrelease.browser.cjs');
 const manifestText = read('tests/exact96/exact96-manifest.json');
