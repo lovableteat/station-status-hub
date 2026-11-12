@@ -1,6 +1,46 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{createRequire}=require('node:module');
 const {chromium}=createRequire(path.resolve(process.env.AUDIT_QA_DIR||'../qa-tools','package.json'))('playwright');
 const evidence=path.resolve(process.env.CIRCUIT_AI_EVIDENCE_DIR||'../circuit-pdf-ai-review-evidence');
+const findingTitle='CON2A A1 差分 P/N 名稱不同';
+const findingMarker=(region, side)=>region.getByRole('button',{name:`${side} F1：${findingTitle}`,exact:true});
+
+async function verifyAnnotations(dialog,page,width) {
+  const region=dialog.getByRole('region',{name:'AI 圖面標註',exact:true});
+  const baseline=findingMarker(region,'基準版');
+  const working=findingMarker(region,'比對版');
+  await baseline.waitFor();
+  await working.waitFor();
+  const unclear=region.getByRole('button',{name:'比對版 F3：A1 接點需確認',exact:true});
+  await unclear.waitFor();
+  assert.equal(await baseline.getAttribute('data-certainty'),'suspected');
+  assert.equal(await unclear.getAttribute('data-certainty'),'unclear');
+  for(const marker of [baseline,working]) {
+    const placement=await marker.evaluate(node=>{
+      const rect=node.getBoundingClientRect(), canvas=node.parentElement.querySelector('canvas').getBoundingClientRect();
+      return {
+        error:Math.max(Math.abs(rect.left-canvas.left-canvas.width*.125),Math.abs(rect.top-canvas.top-canvas.height*.283),
+          Math.abs(rect.width-canvas.width*.15),Math.abs(rect.height-canvas.height*.058)),
+        labelOverlaps:node.firstElementChild.getBoundingClientRect().bottom>rect.top+2,
+      };
+    });
+    assert.ok(placement.error<=1.1,`annotation coordinate error ${placement.error}px at viewport ${width}px`);
+    assert.equal(placement.labelOverlaps,false);
+  }
+  assert.equal(await unclear.evaluate(node=>getComputedStyle(node).borderTopStyle),'dashed');
+  assert.equal(await region.getByRole('button',{name:/^(基準版|比對版) F2：/}).count(),0);
+  assert.equal(await region.getByText('位置未能確認',{exact:true}).count(),2);
+  assert.ok((await region.innerText()).includes('元件／接腳名稱'));
+  const first=dialog.locator('.circuit-pdf-ai-finding').first();
+  await baseline.scrollIntoViewIfNeeded();
+  await page.screenshot({path:path.join(evidence,`annotations-${width}.png`)});
+  if(width<768) {
+    await working.scrollIntoViewIfNeeded();
+    await page.screenshot({path:path.join(evidence,`annotations-working-${width}.png`)});
+    await working.tap();
+  } else await working.click();
+  await first.locator('textarea').waitFor();
+  assert.equal(await first.getAttribute('open'),'');
+}
 
 async function runSelectedBatch(browser,origin,width) {
   const context=await browser.newContext({viewport:{width,height:884},isMobile:width<768,hasTouch:width<768,reducedMotion:'reduce'});
@@ -115,13 +155,14 @@ async function runParallelBatch(browser,origin,width) {
 (async()=>{fs.mkdirSync(evidence,{recursive:true});const{createServer}=await import('vite');const mock=path.resolve('tests/support/circuitPdfAiReviewMock.ts');const server=await createServer({configFile:false,root:process.cwd(),cacheDir:path.join(evidence,'.vite'),resolve:{alias:[{find:'@/integrations/supabase/client',replacement:mock},{find:'../api-management/aiUsageTelemetry',replacement:mock},{find:'@',replacement:path.resolve('src')}]},optimizeDeps:{entries:['tests/support/circuitPdfAiReviewFixture.jsx'],include:['react/jsx-dev-runtime','pdfjs-dist','jspdf']},worker:{format:'es'},server:{host:'127.0.0.1',port:0,fs:{allow:[process.cwd(),evidence,fs.realpathSync('node_modules')]}},plugins:[{name:'circuit-ai-fixture',configureServer(vite){vite.middlewares.use((req,res,next)=>{if(req.url?.split('?')[0]!=='/')return next();res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html lang="zh-Hant"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="/tests/support/circuitPdfAiReviewFixture.jsx"></script></html>')})}}]});let browser;const results=[];
 try{await server.listen();const origin='http://127.0.0.1:'+server.httpServer.address().port;browser=await chromium.launch({channel:'chrome'});
 for(const width of[1440,1173,390]){const context=await browser.newContext({viewport:{width,height:884},hasTouch:true,isMobile:width<768,reducedMotion:'reduce'});await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());const page=await context.newPage(),errors=[];page.on('pageerror',error=>{errors.push(error.message);console.error('Browser error:',error.message)});page.setDefaultTimeout(20000);await page.goto(origin);const open=page.getByRole('button',{name:'開啟本頁 AI 初審',exact:true});await open.click();const dialog=page.getByTestId('circuit-pdf-ai-review');await dialog.waitFor();await dialog.getByRole('combobox',{name:'AI 初審服務',exact:true}).selectOption('qa-vision');
-await dialog.getByRole('button',{name:'只比對這一頁',exact:true}).click();await page.waitForFunction(()=>window.__circuitAiQA.rows.length===1);assert.equal((await page.evaluate(()=>window.__circuitAiQA.calls))[0].images,2);assert.deepEqual((await page.evaluate(()=>window.__circuitAiQA.calls))[0].detail,['high','high']);assert.match((await page.evaluate(()=>window.__circuitAiQA.calls))[0].text,/PCIE_RX_P/);assert.match(await dialog.innerText(),/不能證明完整電氣連通/);const first=await page.evaluate(()=>window.__circuitAiQA.rows[0].id);
-await dialog.locator('.circuit-pdf-ai-finding summary').click();await dialog.getByRole('button',{name:'已確認',exact:true}).click();await dialog.getByRole('textbox',{name:'F1 人工核對備註',exact:true}).fill('QA 已核對原生 netlist，應更正 P/N。');await dialog.getByRole('button',{name:'返回圖面',exact:true}).click();assert.ok(await dialog.isVisible());assert.match(await dialog.getByRole('alert').innerText(),/尚未儲存/);await dialog.getByRole('button',{name:'儲存人工判讀',exact:true}).click();await page.waitForFunction(()=>window.__circuitAiQA.saves===2);assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows[0].id),first);assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows[0].findings[0].decision),'confirmed');await dialog.getByRole('button',{name:'返回圖面',exact:true}).click();await dialog.waitFor({state:'hidden'});await open.click();assert.match(await dialog.innerText(),/已確認/);
-await dialog.getByRole('button',{name:'重新比對這一頁',exact:true}).click();await page.waitForFunction(()=>window.__circuitAiQA.rows.length===2);assert.notEqual(await page.evaluate(()=>window.__circuitAiQA.rows.at(-1).id),first);await dialog.getByRole('combobox',{name:'歷次 AI 初審',exact:true}).selectOption(first);assert.match(await dialog.innerText(),/正在查看歷史初審/);await dialog.locator('.circuit-pdf-ai-finding summary').click();assert.equal(await dialog.getByRole('button',{name:'已確認',exact:true}).isEnabled(),false);await dialog.getByRole('combobox',{name:'歷次 AI 初審',exact:true}).selectOption('');
+await dialog.getByRole('button',{name:'只比對這一頁',exact:true}).click();await page.waitForFunction(()=>window.__circuitAiQA.rows.length===1);assert.equal((await page.evaluate(()=>window.__circuitAiQA.calls))[0].images,2);assert.deepEqual((await page.evaluate(()=>window.__circuitAiQA.calls))[0].detail,['high','high']);assert.match((await page.evaluate(()=>window.__circuitAiQA.calls))[0].text,/PCIE_RX_P/);assert.match(await dialog.innerText(),/有疑點或證據不足就標註/);const first=await page.evaluate(()=>window.__circuitAiQA.rows[0].id);
+await verifyAnnotations(dialog,page,width);const confirmed=dialog.getByRole('group',{name:'F1 人工判讀',exact:true}).getByRole('button',{name:'已確認',exact:true});await confirmed.click();await dialog.getByRole('textbox',{name:'F1 人工核對備註',exact:true}).fill('QA 已核對原生 netlist，應更正 P/N。');await dialog.getByRole('button',{name:'返回圖面',exact:true}).click();assert.ok(await dialog.isVisible());assert.match(await dialog.getByRole('alert').innerText(),/尚未儲存/);await dialog.getByRole('button',{name:'儲存人工判讀',exact:true}).click();await page.waitForFunction(()=>window.__circuitAiQA.saves===2);assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows[0].id),first);assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows[0].findings[0].decision),'confirmed');assert.deepEqual(await page.evaluate(()=>window.__circuitAiQA.rows[0].findings[0].workingBox),{x:.125,y:.283,width:.15,height:.058});await dialog.getByRole('button',{name:'返回圖面',exact:true}).click();await dialog.waitFor({state:'hidden'});await open.click();assert.match(await dialog.innerText(),/已確認/);await findingMarker(dialog.getByRole('region',{name:'AI 圖面標註',exact:true}),'基準版').waitFor();
+await dialog.getByRole('button',{name:'重新比對這一頁',exact:true}).click();await page.waitForFunction(()=>window.__circuitAiQA.rows.length===2);assert.notEqual(await page.evaluate(()=>window.__circuitAiQA.rows.at(-1).id),first);await dialog.getByRole('combobox',{name:'歷次 AI 初審',exact:true}).selectOption(first);assert.match(await dialog.innerText(),/正在查看歷史初審/);if(!await confirmed.isVisible())await dialog.locator('.circuit-pdf-ai-finding summary').first().click();assert.equal(await confirmed.isEnabled(),false);await dialog.getByRole('combobox',{name:'歷次 AI 初審',exact:true}).selectOption('');
 if(width===1440){const saved=await page.evaluate(()=>window.__circuitAiQA.rows.at(-1).id);await page.evaluate(()=>window.__circuitAiQA.mode='invalid');await dialog.getByRole('button',{name:'重新比對這一頁',exact:true}).click();await dialog.getByRole('alert').waitFor();assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows.at(-1).id),saved);await page.evaluate(()=>{window.__circuitAiQA.mode='normal';window.__circuitAiQA.saveFail=true});await dialog.getByRole('button',{name:'重新比對這一頁',exact:true}).click();await dialog.getByRole('alert').filter({hasText:'QA 模擬儲存失敗'}).waitFor();assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows.length),2);await page.evaluate(()=>window.__circuitAiQA.saveFail=false);await dialog.getByRole('button',{name:'儲存人工判讀',exact:true}).click();await page.waitForFunction(()=>window.__circuitAiQA.rows.length===3);const count=await page.evaluate(()=>window.__circuitAiQA.calls.length);await page.evaluate(()=>window.__circuitAiQA.mode='slow');await dialog.getByRole('button',{name:'重新比對這一頁',exact:true}).click();await page.waitForFunction(count=>window.__circuitAiQA.calls.length>count,count);await dialog.getByRole('button',{name:'取消初審',exact:true}).click();await dialog.getByRole('button',{name:'重新比對這一頁',exact:true}).waitFor({state:'visible'});assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows.length),3);}
 await page.setViewportSize({width,height:500});
 await page.waitForFunction(()=>{const box=document.querySelector('[data-testid="circuit-pdf-ai-review"]').getBoundingClientRect();return box.y>=-1&&box.bottom<=501}).catch(async error=>{await page.screenshot({path:path.join(evidence,`failure-short-${width}.png`)});console.error(await dialog.boundingBox());throw error});
 await dialog.locator('.circuit-pdf-ai-body').evaluate(node=>node.scrollTop=node.scrollHeight);const box=await dialog.boundingBox(),footer=await dialog.locator('.circuit-pdf-ai-footer').boundingBox();assert.ok(box.y>=-1&&box.y+box.height<=501);assert.ok(footer.y>=0&&footer.y+footer.height<=501);assert.ok(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth+1));await page.screenshot({path:path.join(evidence,`short-${width}.png`)});await page.setViewportSize({width,height:884});await dialog.locator('.circuit-pdf-ai-body').evaluate(node=>node.scrollTop=0);await page.screenshot({path:path.join(evidence,`review-${width}.png`)});await dialog.getByRole('button',{name:'關閉 AI 比對',exact:true}).click();await dialog.waitFor({state:'hidden'});await page.getByRole('button',{name:'切換檢視權限',exact:true}).click();await open.click();assert.equal(await dialog.getByRole('button',{name:'重新比對這一頁',exact:true}).isEnabled(),false);assert.deepEqual(errors,[]);results.push({width,result:'passed',checks:['real PDF images and coordinate text sent','manual review save/reopen','old AI runs read-only','cancellation and failure preserve reports','short viewport no clipping','read-only permissions respected']});await context.close();}
+for(const result of results) result.checks.push('PDF markers open the matching finding and reopen after save','unknown coordinates show page-level flags and no precise marker');
 const parallelBatch=[];
 for(const width of [1440,390])parallelBatch.push(await runParallelBatch(browser,origin,width));
 const selectedBatch=[];
