@@ -19,6 +19,7 @@ import {
   ImageIcon,
   KeyRound,
   LibraryBig,
+  LoaderCircle,
   MessageSquareText,
   Paperclip,
   Pencil,
@@ -106,6 +107,7 @@ import { searchMaterialSpecs } from "./materialSpecKnowledgeService";
 import { parseMaterialSpecReport, type MaterialSpecReport } from "./materialSpecKnowledge";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { useMobileAiChatViewport } from "./useMobileAiChatViewport";
+import "./aiChatFeedback.css";
 import {
   MaintenanceCitation,
   MaintenanceProjectOption,
@@ -643,8 +645,8 @@ function ConnectionBanner({
   const isSuccess = result.status === "success";
 
   if (compact) return (
-    <div data-ai-connection-banner role={isSuccess ? "status" : "alert"} className="mx-3 mb-2 flex shrink-0 items-start gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground">
-      {isSuccess ? <CheckCircle2 aria-hidden="true" className="mt-3 h-4 w-4 shrink-0 text-primary" /> : <AlertTriangle aria-hidden="true" className="mt-3 h-4 w-4 shrink-0 text-warning" />}
+    <div data-ai-connection-banner role={isSuccess ? "status" : "alert"} className={cn("ai-feedback-enter mx-3 mb-2 flex shrink-0 items-start gap-2 rounded-lg border px-3 py-2 text-sm text-foreground", isSuccess ? "border-success/40 bg-success/10" : "border-destructive/40 bg-destructive/10")}>
+      {isSuccess ? <CheckCircle2 aria-hidden="true" className="mt-3 h-4 w-4 shrink-0 text-success" /> : <AlertTriangle aria-hidden="true" className="mt-3 h-4 w-4 shrink-0 text-destructive" />}
       <div className="min-w-0 flex-1 py-2"><p className="font-semibold">{result.title}</p><p className="mt-1 break-words leading-5 text-muted-foreground">{result.message}</p></div>
       <Button type="button" variant="ghost" size="icon" aria-label="關閉查詢狀態" onClick={onDismiss} className="h-11 w-11 shrink-0"><X className="h-4 w-4" /></Button>
     </div>
@@ -655,15 +657,15 @@ function ConnectionBanner({
       data-ai-connection-banner
       role={isSuccess ? "status" : "alert"}
       className={cn(
-        "shrink-0 rounded-xl border px-3 py-2 text-foreground",
+        "ai-feedback-enter shrink-0 rounded-xl border px-3 py-2 text-foreground",
         isSuccess
-          ? "border-emerald-300/30 bg-emerald-500/5"
-          : "border-rose-300/30 bg-rose-500/5"
+          ? "border-success/40 bg-success/10"
+          : "border-destructive/40 bg-destructive/10"
       )}
     >
       <div className="flex min-w-0 items-start gap-2">
         <span className="flex h-6 w-6 shrink-0 items-center justify-center">
-          {isSuccess ? <CheckCircle2 aria-hidden="true" className="h-4 w-4 text-primary" /> : <AlertTriangle aria-hidden="true" className="h-4 w-4 text-warning" />}
+          {isSuccess ? <CheckCircle2 aria-hidden="true" className="h-4 w-4 text-success" /> : <AlertTriangle aria-hidden="true" className="h-4 w-4 text-destructive" />}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
@@ -728,26 +730,14 @@ function SectionTitle({
 
 function QueryLoadingCard({ message }: { message: string }) {
   return (
-    <div data-ai-message-loading className="flex gap-3">
-      <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/18 bg-emerald-400/10 text-emerald-100">
-        <Bot className="h-4.5 w-4.5" />
+    <div data-ai-message-loading className="ai-feedback-enter flex gap-3">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-info/30 bg-info/10 text-info">
+        <Bot className="h-4 w-4" aria-hidden="true" />
       </div>
-      <div className="max-w-[88%] overflow-hidden rounded-[24px] border border-emerald-400/12 bg-[linear-gradient(180deg,#09110f_0%,#05080a_100%)] px-5 py-4 text-slate-200 shadow-[0_16px_36px_rgba(0,0,0,0.28)]">
-        <div className="flex items-center gap-3">
-          <span role="status" className="text-sm font-bold text-slate-100">{message || '查詢中…'}</span>
-          <div className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-300/90 animate-pulse [animation-delay:180ms]" />
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-200/80 animate-pulse [animation-delay:360ms]" />
-          </div>
-        </div>
-        <div className="mt-3 space-y-2">
-          <div className="h-2 rounded-full bg-white/6">
-            <div className="h-2 w-2/3 rounded-full bg-[linear-gradient(90deg,rgba(16,185,129,0.15),rgba(52,211,153,0.7),rgba(16,185,129,0.15))] animate-pulse" />
-          </div>
-          <div className="h-2 rounded-full bg-white/6">
-            <div className="h-2 w-1/2 rounded-full bg-[linear-gradient(90deg,rgba(16,185,129,0.12),rgba(110,231,183,0.58),rgba(16,185,129,0.12))] animate-pulse [animation-delay:240ms]" />
-          </div>
+      <div className="flex min-w-0 max-w-[88%] items-center gap-2.5 rounded-xl border border-info/30 bg-info/10 px-3 py-2.5 text-sm font-medium text-info">
+        <div role="status" className="flex min-w-0 items-center gap-2.5">
+          <LoaderCircle aria-hidden="true" className="size-4 shrink-0 motion-safe:animate-spin" />
+          <span className="[overflow-wrap:anywhere]">{message || "查詢中…"}</span>
         </div>
       </div>
     </div>
@@ -3115,9 +3105,9 @@ export function ApiChatConsole({
   );
 
   const uploadControl = (
-    <Button type="button" variant={compactChat ? "ghost" : "outline"} onClick={() => imageInputRef.current?.click()} disabled={loading || readingAttachments || (isChatOnly && !conversationRemoteReadyRef.current) || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT} aria-label="上傳 PDF、PPT、Excel、Word 或圖片" className={cn("h-11 shrink-0 gap-2 px-3", compactChat && "w-11 p-0 text-muted-foreground")}>
-      <Paperclip className="h-4 w-4" />
-      {!compactChat && <span className="hidden sm:inline">上傳檔案</span>}
+    <Button type="button" variant={compactChat ? "ghost" : "outline"} onClick={() => imageInputRef.current?.click()} disabled={loading || readingAttachments || (isChatOnly && !conversationRemoteReadyRef.current) || uploadedAttachments.length >= MAX_UPLOAD_ATTACHMENT_COUNT} aria-label="上傳 PDF、PPT、Excel、Word 或圖片" aria-busy={readingAttachments || undefined} className={cn("h-11 shrink-0 gap-2 px-3", compactChat && "w-11 p-0 text-muted-foreground")}>
+      {readingAttachments ? <LoaderCircle aria-hidden="true" className="size-4 motion-safe:animate-spin" /> : <Paperclip aria-hidden="true" className="h-4 w-4" />}
+      {!compactChat && <span className="hidden sm:inline">{readingAttachments ? "讀取附件…" : "上傳檔案"}</span>}
     </Button>
   );
   const sendControl = (
@@ -3132,7 +3122,7 @@ export function ApiChatConsole({
       aria-busy={loading}
       className={cn("h-11 shrink-0 gap-2 px-3", compactChat ? "w-11 rounded-full p-0 [&_svg]:size-5" : "min-w-24")}
     >
-      {compactChat ? <ArrowUp className="h-5 w-5" /> : <Send className="h-4 w-4" />}
+      {loading ? <LoaderCircle aria-hidden="true" className="size-4 motion-safe:animate-spin" /> : compactChat ? <ArrowUp aria-hidden="true" className="h-5 w-5" /> : <Send aria-hidden="true" className="h-4 w-4" />}
       <span className={compactChat ? "sr-only" : undefined}>{loading ? "查詢中" : "送出"}</span>
     </Button>
   );
@@ -3306,7 +3296,7 @@ export function ApiChatConsole({
               <Button type="button" variant="outline" aria-label="重試對話同步" onClick={() => conversationRemoteReadyRef.current ? setConversationSaveRetry(value => value + 1) : setConversationRetry(value => value + 1)} className="h-11 shrink-0">重試</Button>
             </div>
           )}
-          {readingAttachments && <p role="status" className="mb-2 text-sm text-blue-100">正在讀取附件，完成後即可送出查詢。</p>}
+          {readingAttachments && <p role="status" className="ai-feedback-enter mb-2 rounded-lg border border-info/30 bg-info/10 px-3 py-2 text-sm text-info">正在讀取附件，完成後即可送出查詢。</p>}
           <input
             ref={imageInputRef}
             type="file"
@@ -3348,7 +3338,7 @@ export function ApiChatConsole({
               {uploadedAttachments.map((attachment, index) => (
                 <div
                   key={attachment.id}
-                  className="flex min-w-0 items-center gap-3 rounded-2xl border border-cyan-300/12 bg-[#0b1421] px-3 py-3"
+                  className="ai-feedback-enter flex min-w-0 items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-3 py-3"
                 >
                   {attachment.kind === "image" && attachment.src ? (
                     <img
@@ -3761,8 +3751,8 @@ export function ApiChatConsole({
             </div>}
             {compactChat && <span role="status" className="sr-only">{mobileApiSwitchNotice ? `${API_MODEL_SWITCH_MESSAGE}。${model}` : ""}</span>}
             {compactChat && mobileApiSwitchNotice && (
-              <div data-mobile-ai-model-notice className="mx-4 mt-2 flex shrink-0 items-center gap-2 self-start rounded-xl border border-primary/25 bg-primary/10 pl-3">
-                <CheckCircle2 aria-hidden="true" className="size-4 shrink-0 text-primary" />
+              <div data-mobile-ai-model-notice className="ai-feedback-enter mx-4 mt-2 flex shrink-0 items-center gap-2 self-start rounded-xl border border-success/40 bg-success/10 pl-3">
+                <CheckCircle2 aria-hidden="true" className="size-4 shrink-0 text-success" />
                 <span className="min-w-0 py-1.5 text-sm font-medium leading-5 text-foreground">{API_MODEL_SWITCH_MESSAGE}</span>
                 <Button
                   type="button"

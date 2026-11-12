@@ -9,7 +9,6 @@ import {
   Bell,
   CheckCheck,
   Inbox,
-  LoaderCircle,
   Megaphone,
   MessageSquareText,
   Minus,
@@ -22,6 +21,7 @@ import {
 } from "lucide-react";
 import { UserAvatar } from "@/components/account/UserAvatar";
 import { Button } from "@/components/ui/button";
+import { LoadingStatus } from "@/components/ui/loading-status";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -565,11 +565,10 @@ export function CollaborationCenter() {
             </Button>
             <Button
               onClick={() => void acknowledgeAnnouncement()}
-              disabled={acknowledgingAnnouncement}
+              pending={acknowledgingAnnouncement}
               className="bg-cyan-300 font-bold text-[#06111f] shadow-[0_12px_28px_-14px_rgba(34,211,238,0.9)] hover:bg-cyan-200"
             >
-              {acknowledgingAnnouncement && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
-              我知道了，標為已讀
+              {acknowledgingAnnouncement ? "正在標為已讀…" : "我知道了，標為已讀"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -621,8 +620,8 @@ export function CollaborationCenter() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-sm text-slate-400">共 {notifications.length} 則 · {unreadCount} 則未讀</div>
                 <div className="flex flex-wrap gap-1.5">
-                <Button variant="ghost" size="sm" onClick={() => void loadNotifications()} disabled={loading} className="rounded-lg text-slate-300">
-                  <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", loading && "animate-spin")} />重新載入
+                <Button variant="ghost" size="sm" onClick={() => void loadNotifications()} pending={loading} className="rounded-lg text-slate-300">
+                  {!loading && <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}{loading ? "正在載入…" : "重新載入"}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => void markAllAsRead()} disabled={unreadCount === 0} className="rounded-lg text-cyan-200">
                   <CheckCheck className="mr-1.5 h-3.5 w-3.5" />全部標為已讀
@@ -647,7 +646,7 @@ export function CollaborationCenter() {
             </div>
             <ScrollArea className="min-h-0 flex-1 px-4 py-3">
               {loading && notifications.length === 0 ? (
-                <div className="flex h-56 flex-col items-center justify-center text-slate-400"><LoaderCircle className="mb-3 h-8 w-8 animate-spin text-cyan-300" />正在同步通知</div>
+                <div className="grid h-56 place-items-center"><LoadingStatus label="正在同步通知…" /></div>
               ) : error ? (
                 <div className="flex h-56 flex-col items-center justify-center rounded-2xl border border-rose-300/20 bg-rose-400/5 p-6 text-center">
                   <AlertCircle className="mb-3 h-8 w-8 text-rose-300" /><p className="text-sm text-rose-100">{error}</p><Button onClick={() => void loadNotifications()} className="mt-4">重試</Button>
@@ -718,7 +717,7 @@ export function CollaborationCenter() {
             </div>
             <ScrollArea className="min-h-0 flex-1 px-4 py-3">
               {directoryLoading ? (
-                <div className="flex h-56 flex-col items-center justify-center px-8 text-center text-slate-500"><LoaderCircle className="mb-3 h-9 w-9 animate-spin text-cyan-200/60" /><p className="font-semibold text-slate-300">正在載入可私訊的帳號</p><p className="mt-1 text-sm">在線狀態會在不重整頁面的情況下持續更新。</p></div>
+                <div className="grid h-56 place-items-center px-8 text-center"><LoadingStatus label="正在載入可私訊的帳號…" /></div>
               ) : directoryError ? (
                 <div className="flex h-56 flex-col items-center justify-center px-8 text-center text-slate-500"><AlertCircle className="mb-3 h-10 w-10 text-rose-200/60" /><p className="font-semibold text-slate-300">帳號目錄暫時無法使用</p><p className="mt-1 text-sm">請重新登入後重試，系統不會用假資料取代目錄。</p></div>
               ) : collaborationMembers.length === 0 ? (

@@ -16,6 +16,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       className="toaster group lg:!right-5 lg:!top-[calc(env(safe-area-inset-top)+5rem)]"
       position={compact ? "bottom-right" : "top-right"}
       offset={20}
+      closeButton
       toastOptions={{
         classNames: {
           toast:

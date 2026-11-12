@@ -18,7 +18,8 @@ async function geometry(page) {
   });
 }
 async function run(browser, origin, width) {
-  const compact = width < 1024, context = await browser.newContext({ viewport:{width,height:884}, hasTouch:compact, isMobile:compact, reducedMotion:'reduce', locale:'zh-TW' });
+  const compact = width < 1024, reducedMotion = width === 557;
+  const context = await browser.newContext({ viewport:{width,height:884}, hasTouch:compact, isMobile:compact, reducedMotion:reducedMotion ? 'reduce' : 'no-preference', locale:'zh-TW' });
   await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   const page = await context.newPage(), errors = [], result = { width, checks:[] };
   page.on('pageerror', error => errors.push(error.message)); page.setDefaultTimeout(15000);
@@ -59,7 +60,20 @@ async function run(browser, origin, width) {
     await errorBubble(page).getByRole('button',{name:'重填這個問題',exact:true}).click(); assert.equal(await input.inputValue(),'1*1');
     assert.equal(await page.evaluate(()=>window.__aiModelErrorQA.requests.length),1,'refill must not send automatically');
     if(compact) await page.setViewportSize({width,height:884});
-    await send.click(); await page.getByText('1 × 1 = 1（隔離測試成功）',{exact:true}).waitFor();
+    await page.evaluate(() => {
+      window.__aiModelErrorQA.responseGate = new Promise(resolve => { window.__aiModelErrorQA.releaseResponse = resolve; });
+    });
+    await send.click();
+    const pending = page.locator('[data-ai-message-loading]').getByRole('status');
+    await pending.waitFor();
+    assert.equal(await send.getAttribute('aria-busy'),'true');
+    assert.equal(await send.isDisabled(),true);
+    assert.equal(await pending.locator('svg').evaluate(element => getComputedStyle(element).animationName), reducedMotion ? 'none' : 'spin');
+    await page.screenshot({path:path.join(evidence,`pending-${width}.png`)});
+    await page.evaluate(() => window.__aiModelErrorQA.releaseResponse());
+    await page.getByText('1 × 1 = 1（隔離測試成功）',{exact:true}).waitFor();
+    await pending.waitFor({state:'hidden'});
+    assert.notEqual(await send.getAttribute('aria-busy'),'true');
     const requests = await page.evaluate(()=>window.__aiModelErrorQA.requests);
     assert.deepEqual(requests.map(request=>request.model),['gpt-6.1-sol','gpt-5.4']);
     assert.doesNotMatch(JSON.stringify(requests[1].messages),/API 呼叫失敗|尚未開通|單次使用已/);

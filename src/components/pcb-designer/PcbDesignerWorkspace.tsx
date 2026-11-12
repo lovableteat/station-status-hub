@@ -1,6 +1,6 @@
 import { recoverableLazy } from "@/components/common/recoverableLazy";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { CircuitBoard, LayoutTemplate, MoreHorizontal, PanelLeft, PanelRight, Settings2 } from "lucide-react";
+import { Check, CircuitBoard, LayoutTemplate, LoaderCircle, MoreHorizontal, PanelLeft, PanelRight, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -282,6 +282,7 @@ export function PcbDesignerWorkspace({
       await presence.broadcastProjectSaved(workspace.data.updatedAt);
     }
     toast({
+      variant: "success",
       title: remoteClient ? "儲存與同步完成" : "本機草稿已儲存",
       description: remoteClient
         ? "雲端版本已更新，同案檢視者會立即看到最新內容。"
@@ -607,7 +608,9 @@ export function PcbDesignerWorkspace({
             ))}
           </select>
           <span className="pcb-status-chip">{statusLabel(workspace.activeProject.status)}</span>
-          <span className="pcb-save-state" data-status={workspace.persistenceStatus} title={persistenceLabel(workspace.persistenceStatus)}>
+          <span className="pcb-save-state" data-status={workspace.persistenceStatus} role="status">
+            {workspace.persistenceStatus === "saving" && <LoaderCircle aria-hidden="true" className="h-3 w-3 motion-safe:animate-spin" />}
+            {workspace.persistenceStatus === "synced" && <Check aria-hidden="true" className="h-3 w-3" />}
             {persistenceLabel(workspace.persistenceStatus)}
           </span>
           {remoteClient ? (
@@ -857,7 +860,7 @@ export function PcbDesignerWorkspace({
             onPlacementCancel={cancelPlacement}
           />
         ) : (
-          <Suspense fallback={<div className="pcb-3d-loading">正在建立 3D 板件與元件...</div>}>
+          <Suspense fallback={<div className="pcb-3d-loading" role="status"><LoaderCircle aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />正在建立 3D 板件與元件…</div>}>
             <Pcb3DCanvas
               workspace={workspace}
               visibleLayer={workspace.visibleLayer}

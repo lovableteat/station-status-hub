@@ -11,6 +11,7 @@ import { MobileWorkspaceDock } from '../../src/components/layout/MobileWorkspace
 import { DirectMessageLauncher } from '../../src/components/collaboration/CollaborationCenter';
 import { fixtureState, mobileReply, setFixtureAccount } from './aiWorkspaceMock';
 import '../../src/index.css';
+import '../../src/platform-interaction.css';
 
 // The provider is isolated below the real chat/recovery/telemetry code.
 const modelErrorQa = new URLSearchParams(location.search).has('qaModelError');

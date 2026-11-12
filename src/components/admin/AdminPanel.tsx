@@ -187,6 +187,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
       toast({
         title: "新增成功",
+        variant: "success",
         description: "工程師已成功新增"
       });
 
@@ -239,6 +240,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
       toast({
         title: "新增成功",
+        variant: "success",
         description: "帳號已新增，請接著設定此人員可使用的工作區。"
       });
 
@@ -272,6 +274,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
       toast({
         title: "狀態更新成功",
+        variant: "success",
         description: `工程師狀態已更新為${newStatus === 'active' ? '啟用' : '停用'}`
       });
 
@@ -298,6 +301,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
       toast({
         title: "狀態更新成功",
+        variant: "success",
         description: `帳號狀態已更新為${newStatus === 'active' ? '啟用' : '停用'}`
       });
 
@@ -317,7 +321,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
       const { data, error } = await supabase.rpc("approve_system_user", { p_user_id: id });
       if (error) throw error;
       if (!data) throw new Error("帳號已核准或狀態已變更");
-      toast({ title: "帳號已核准", description: "使用者現在可用原帳號密碼登入。" });
+      toast({ title: "帳號已核准", description: "使用者現在可用原帳號密碼登入。", variant: "success" });
       await loadSystemUsers();
     } catch (error) {
       const rawMessage = error && typeof error === "object" && "message" in error
@@ -343,6 +347,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
       toast({
         title: "刪除成功",
+        variant: "success",
         description: "帳號已刪除"
       });
 
@@ -367,6 +372,7 @@ export function AdminPanel({ initialTab = "users" }: { initialTab?: AdminTab }) 
 
       toast({
         title: "刪除成功",
+        variant: "success",
         description: "工程師已成功刪除"
       });
 
