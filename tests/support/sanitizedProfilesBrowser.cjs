@@ -23,7 +23,10 @@ async function buildSanitizedProfilesFixture() {
         if (args.path.startsWith('@/')) return builder.resolve(path.join(root, 'src', args.path.slice(2)), { resolveDir: root, kind: args.kind });
       });
       builder.onLoad({ filter: /.*/, namespace: 'unexercised-cad' }, () => ({ loader: 'js', contents: "export function Pcb3DCanvasSafe(){throw new Error('No CAD in profile fixture')} export function PcbStepModelDialog(){return null} export function importStepModel(){throw new Error('No CAD import')}" }));
-      builder.onLoad({ filter: /.*/, namespace: 'unexercised-profile-surface' }, args => ({ loader: 'js', contents: `export function ${excluded.get(args.path)}(){ return null; }` }));
+      // Preserve the actual grid slot without running the sidebar's localStorage effect.
+      builder.onLoad({ filter: /.*/, namespace: 'unexercised-profile-surface' }, args => ({ loader: 'js', resolveDir: root, contents: args.path === './AdminSidebar'
+        ? `import { createElement } from 'react'; export function AdminSidebar(){ return createElement('aside', { className: 'admin-sidebar', 'data-testid': 'synthetic-admin-sidebar', 'aria-hidden': true }); }`
+        : `export function ${excluded.get(args.path)}(){ return null; }` }));
     } }],
   });
   const inputs = Object.keys(build.metafile.inputs);

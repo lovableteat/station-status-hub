@@ -7,17 +7,36 @@ const blocked = (page, status) => page.waitForFunction(status => {
   const state = pcbRecoveryFixture.state;
   return state?.hasUnsavedChanges && !state.canEdit && !state.remoteReady && document.querySelector('[data-testid="pcb-cloud-access"]')?.getAttribute('data-status') === status;
 }, status);
-async function dirty(page) {
+function assertRecoverySnapshot(recovery, data, allowSaveAttribution = false) {
+  assert.equal(recovery.version, 1);
+  assert.equal(recovery.savedRevision, '2026-11-12T10:00:00.000Z');
+  let expected = data;
+  if (allowSaveAttribution && JSON.stringify(recovery.state) !== JSON.stringify(data)) {
+    // Only saveNow's exact attribution on the active project may differ. Never
+    // strip fields: wrong/missing attribution or any other changed bytes fail.
+    assert.ok(data.projects.some(project => project.id === data.activeProjectId));
+    expected = { ...data, projects: data.projects.map(project => project.id === data.activeProjectId
+      ? { ...project, lastEditedBy: 'Synthetic editor', lastEditedById: '10000000-0000-4000-8000-000000000001' }
+      : project) };
+  }
+  assert.deepEqual(recovery.state, expected, 'Recovery retains the entire unsaved workspace, with only exact authorized save attribution');
+  assert.equal(JSON.stringify(recovery.state), JSON.stringify(expected), 'All recovery content bytes outside the two exact attribution fields remain unchanged');
+}
+async function dirty(page, allowSaveAttribution = false) {
   await page.waitForFunction(() => pcbRecoveryFixture.state?.hasUnsavedChanges);
   const value = await page.evaluate(() => ({ state: pcbRecoveryFixture.state, storage: pcbRecoveryFixture.storageSnapshot(), key: pcbRecoveryFixture.recoveryKey }));
   assert.equal(value.state.hasUnsavedChanges, true); assert.notEqual(value.state.persistenceStatus, 'synced');
   const recovery = JSON.parse(value.storage[value.key]);
-  assert.equal(recovery.savedRevision, '2026-11-12T10:00:00.000Z');
-  assert.deepEqual(recovery.state.projects, value.state.data.projects, 'Recovery retains the full unsaved project');
+  assertRecoverySnapshot(recovery, value.state.data, allowSaveAttribution);
   assert.equal(value.storage['unrelated-synthetic-sentinel'], 'keep exact bytes\t\u0000🧪 {"partial":');
   return value.state.data;
 }
-const unchanged = async (page, before) => assert.deepEqual(await dirty(page), before, 'No legacy result may overwrite existing dirty content');
+const unchanged = async (page, before, allowSaveAttribution = false) => {
+  const actual = await dirty(page, allowSaveAttribution);
+  assert.deepEqual(actual, before, 'No legacy result may overwrite existing dirty content');
+  assert.equal(JSON.stringify(actual), JSON.stringify(before), 'The complete mounted draft retains its exact content bytes');
+};
+const noRemoteWrites = async page => assert.equal(await page.evaluate(() => pcbRecoveryFixture.calls.some(call => /^(?:save|delete)_/.test(call.name))), false, 'Recovery never reimports, saves or deletes cloud data');
 const protectedCalls = page => page.evaluate(() => pcbRecoveryFixture.calls.filter(call => call.name === 'load_pcb_designer_legacy_workspace'));
 function test(name, query, run) { scenarios.push({ name, query, run }); }
 
@@ -45,10 +64,11 @@ for (const [mode, ownership] of [['ok', 'own'], ['absent', 'shared-only']]) test
   assert.equal(await page.getByRole('button', { name: '匯入 JSON', exact: true }).isDisabled(), true);
   assert.equal(await page.evaluate(() => pcbRecoveryFixture.api.saveNow()), false);
   await page.keyboard.press('Control+s'); await page.getByTestId('pcb-cloud-retry').click(); await blocked(page, 'legacy-recovery');
-  await unchanged(page, before); await screenshot('read-only');
-  assert.equal(await page.evaluate(() => pcbRecoveryFixture.calls.some(call => call.name.startsWith('save_'))), false, 'Recovery never reimports or writes modern data');
+  await unchanged(page, before, true); await screenshot('read-only');
+  await noRemoteWrites(page);
   await page.evaluate(() => { pcbRecoveryFixture.controls.load = 'ok'; });
-  await page.getByTestId('pcb-cloud-retry').click(); await ready(page); await unchanged(page, before);
+  await page.getByTestId('pcb-cloud-retry').click(); await ready(page); await unchanged(page, before, true);
+  await noRemoteWrites(page);
   assert.equal(await page.evaluate(() => pcbRecoveryFixture.state.legacyRecovery), null);
 });
 
@@ -63,7 +83,8 @@ for (const mode of ['401', '42501', 'view-denied', 'missing-rpc', 'transport', '
     const before = await dirty(page);
     assert.equal(await page.evaluate(() => pcbRecoveryFixture.api.saveNow()), false);
     await page.getByTestId('pcb-cloud-retry').click();
-    await blocked(page, actual); await unchanged(page, before);
+    await blocked(page, actual); await unchanged(page, before, true);
+    await noRemoteWrites(page);
     assert.ok((await protectedCalls(page)).length >= 1);
     assert.equal(await page.evaluate(() => pcbRecoveryFixture.state.legacyRecovery), null, 'Invalid/denied envelope is not successful recovery');
   });
@@ -119,9 +140,8 @@ test('missing-locked-save-never-falls-through', {}, async ({ page }) => {
   await page.waitForFunction(() => pcbRecoveryFixture.toasts.some(toast => toast.title.includes('失敗')));
   const calls = await page.evaluate(() => pcbRecoveryFixture.calls.filter(call => call.name.startsWith('save_')));
   assert.deepEqual(calls.map(call => call.name), ['save_pcb_designer_workspace_locked']);
-  // Save attribution may be added to the recovery copy, but never remove or replace content.
-  const state = await page.evaluate(() => pcbRecoveryFixture.state.data);
-  assert.deepEqual(state, before); assert.equal(await page.evaluate(() => pcbRecoveryFixture.state.hasUnsavedChanges), true);
+  // A failed locked save retains the full draft/recovery and never claims success.
+  await unchanged(page, before, true);
 });
 
 runProtectedReadBrowser({ build: buildPcbRecoveryFixture, buildOnly: 'PCB_LEGACY_BUILD_ONLY', evidenceEnv: 'PCB_LEGACY_EVIDENCE_DIR', name: 'pcb-legacy-recovery', scenarios,

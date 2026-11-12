@@ -32,6 +32,14 @@ function DialogHost() {
     <UserPermissionsDialog isOpen={open} onClose={() => setOpen(false)} userId={target} username={target === TARGET ? 'Synthetic Target' : 'Synthetic Second'} /></>;
 }
 function Fixture() {
+  // Index.tsx user-management shell: finite viewport, flex main, admin's own scroll container.
+  // Keep the observer outside main so it cannot consume an admin grid/flex slot.
+  if (fixture.surface === 'admin') return <TooltipProvider><PermissionsProvider>
+    <div className="app-shell flex min-h-[100dvh] min-w-0 flex-col bg-background h-[100dvh] overflow-hidden">
+      <header style={{ flexShrink: 0 }}><p className="pcb-synthetic-notice">Synthetic sanitized-profile fixture. No real account data or hosted service.</p><PermissionProbe /></header>
+      <main data-mobile-workspace-main="true" className="mobile-workspace-main flex w-full min-w-0 flex-1 flex-col min-h-0 overflow-hidden"><AdminPanel /></main>
+    </div>
+  </PermissionsProvider></TooltipProvider>;
   return <TooltipProvider><PermissionsProvider><main className={fixture.surface === 'guard' ? 'pcb-synthetic-host' : ''} style={{ minWidth: 0, maxWidth: '100%' }}>
     <p className="pcb-synthetic-notice">Synthetic sanitized-profile fixture. No real account data or hosted service.</p>
     <PermissionProbe />

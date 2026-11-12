@@ -72,6 +72,15 @@ test('profile fixture bundles actual three consumers plus actual PCB permission 
   assert.ok(!builder.includes("'@/hooks/usePermissions',"), 'Real permission logic is never aliased');
   const fixture = read('tests/support/sanitizedProfilesFixture.jsx');
   assert.match(fixture, /<PermissionGuard module="pcb-designer"><PcbDesignerWorkspace \/><\/PermissionGuard>/);
+  assert.match(builder, /createElement\('aside', \{ className: 'admin-sidebar'/, 'Excluded sidebar must retain desktop grid slot and production mobile CSS');
+  assert.match(fixture, /data-mobile-workspace-main="true" className="mobile-workspace-main flex w-full min-w-0 flex-1 flex-col min-h-0 overflow-hidden"/);
+  assert.match(fixture, /app-shell flex min-h-\[100dvh\] min-w-0 flex-col bg-background h-\[100dvh\] overflow-hidden/);
+  const browser = read('tests/sanitizedProfiles.browser.cjs');
+  assert.equal((browser.match(/await rosterLayout\(page\)/g) || []).length, 3);
+  assert.equal((browser.match(/await visibleRosterHeading\(page,/g) || []).length, 3);
+  assert.match(browser, /heading\.waitFor\(\{ state: 'visible' \}\)/);
+  assert.match(browser, /heading\.scrollIntoViewIfNeeded\(\)/);
+
   const services = read('tests/support/sanitizedProfilesServices.js');
   assert.match(services, /Raw system_users read\/write forbidden/);
   assert.match(services, /Only zero-argument sanitized profile reads allowed/);
