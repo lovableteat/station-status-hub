@@ -99,6 +99,11 @@ jobs:
         env:
           AUDIT_SCREENSHOT_PATH: ${{ runner.temp }}/private-richtext.png
         run: timeout --signal=TERM --kill-after=10s 180s node tests/auditRichText.browser.cjs
+      - name: Private HTML URL transports, network denial and session isolation
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && steps.install-browser.outcome == 'success' }}
+        env:
+          ATTACHMENT_HTML_EVIDENCE_DIR: ${{ runner.temp }}/attachment-html-urls
+        run: timeout --signal=TERM --kill-after=10s 120s node tests/attachmentHtmlUrls.browser.cjs
       - name: Public seed removal and desktop/mobile BOM data preservation
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         run: |
@@ -144,5 +149,6 @@ jobs:
             ${{ runner.temp }}/pcb-session-recovery/
             ${{ runner.temp }}/pcb-legacy-recovery/
             ${{ runner.temp }}/sanitized-profiles/
+            ${{ runner.temp }}/attachment-html-urls/
           if-no-files-found: ignore
           retention-days: 3
