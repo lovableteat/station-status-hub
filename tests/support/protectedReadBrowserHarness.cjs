@@ -5,6 +5,12 @@ const http = require('node:http');
 const path = require('node:path');
 const { createRequire } = require('node:module');
 
+function assertCompletedBrowserCases(results, expectedCount) {
+  assert.equal(results.length, expectedCount, 'Every configured browser case must finish');
+  const failures = results.filter(result => result.status !== 'passed');
+  assert.equal(failures.length, 0, `Browser cases did not pass: ${failures.map(result => `${result.viewport.width}:${result.name}:${result.status}`).join(', ')}`);
+}
+
 async function runProtectedReadBrowser({ build, buildOnly, evidenceEnv, name, scenarios, inspect, limits = [] }) {
   const bundle = await build();
   if (process.env[buildOnly] === '1') {
@@ -97,13 +103,16 @@ async function runProtectedReadBrowser({ build, buildOnly, evidenceEnv, name, sc
             profile: window.sanitizedProfilesFixture && { state: sanitizedProfilesFixture.state, calls: sanitizedProfilesFixture.calls, toasts: sanitizedProfilesFixture.toasts },
             violations: protectedReadViolations })).catch(() => null);
           result.browserErrors = errors; result.consoleErrors = consoleErrors; result.forbiddenRequests = forbidden;
-          await screenshot('failure').catch(() => {}); throw error;
+          // Collect independent case failures in fresh contexts, then fail the
+          // entire suite. One bad case must not hide later desktop/mobile evidence.
+          await screenshot('failure').catch(() => {});
         } finally { report(); await context.close(); }
       }
     }
+    assertCompletedBrowserCases(summary.results, scenarios.length * 2);
     summary.status = 'passed';
     console.log(JSON.stringify({ status: 'passed', scenarios: summary.results.length, evidence, syntheticOnly: true }));
   } catch (error) { summary.status = 'failed'; throw error; }
   finally { report(); if (browser) await browser.close(); await new Promise(resolve => server.close(resolve)); }
 }
-module.exports = { runProtectedReadBrowser };
+module.exports = { runProtectedReadBrowser, assertCompletedBrowserCases };
