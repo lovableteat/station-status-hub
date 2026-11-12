@@ -201,16 +201,36 @@ test('pending mark controls wait for the current account private marks to finish
   }finally{act(()=>root?.unmount());}
 });
 
-test('completed applications remain listed without overdue warnings and the summary distinguishes them from pending work', () => {
+test('completed applications are grouped last, can be filtered, and retain their history without overdue warnings', () => {
   const { PendingMaterialsDialog } = load('src/components/material-requests/MaterialRequestPage.tsx');
   const record = { ...groups[0].primaryRecord, needsApplication: false, trackingStatus: '已完成', trackingHistory: [{ id: 'tracking-done', status: '已完成', createdAt: '2026-10-01T00:00:00Z' }] };
   const completed = { ...groups[0], stale: true, primaryRecord: record, records: [record] };
+  const props = { canEdit: true, open: true, workspaceName: 'QA', exportedBy: 'QA', onOpenChange() {}, onOpenTracking() {}, onSetCategory() {}, onSetOwner() {}, markedGroupKeys: new Set([completed.key]), onToggleMarked() {} };
   let root;
   try {
-    act(() => { root = create(React.createElement(PendingMaterialsDialog, { groups: [completed], canEdit: true, open: true, workspaceName: 'QA', exportedBy: 'QA', onOpenChange() {}, onOpenTracking() {}, onSetCategory() {}, onSetOwner() {}, markedGroupKeys: new Set(), onToggleMarked() {} })); });
-    assert.equal(root.root.findAllByProps({ 'data-testid': 'pending-application' }).length, 1);
+    act(() => { root = create(React.createElement(PendingMaterialsDialog, { ...props, groups: [completed, groups[1]] })); });
+    const rows = () => root.root.findAllByProps({ 'data-testid': 'pending-application' }).map(node => node.props['data-pending-record-id']);
+    const tab = label => root.root.find(node => node.type === 'button' && node.props.role === 'tab' && node.props.children.includes(label));
+    assert.deepEqual(rows(), ['R1', 'J1']);
+    assert.deepEqual(root.root.findAllByType('h3').map(node => node.props.children), ['RLC 被動元件', '已完成']);
+    assert.ok(!root.root.findAllByType('h3').some(node => node.props.children === 'CONNECTOR'));
     assert.equal(root.root.findAllByProps({ 'aria-label': '逾 3 天未更新' }).length, 0);
     assert.match(JSON.stringify(root.toJSON()), /已完成 1 筆（保留紀錄）/);
+    assert.match(JSON.stringify(root.toJSON()), /待處理 1 筆/);
+    act(() => tab('RLC 被動元件').props.onClick());
+    assert.deepEqual(rows(), ['R1']);
+    act(() => tab('已完成').props.onClick());
+    assert.deepEqual(rows(), ['J1']);
+    assert.equal(tab('已完成').props['aria-selected'], true);
+    const search = () => root.root.find(node => node.type === 'stub' && node.props['aria-label'] === '搜尋待處理料');
+    act(() => search().props.onChange({ target: { value: 'MPN-R1' } }));
+    assert.deepEqual(rows(), []);
+    act(() => search().props.onChange({ target: { value: 'MPN-J1' } }));
+    assert.deepEqual(rows(), ['J1']);
+    act(() => search().props.onChange({ target: { value: '' } }));
+    act(() => tab('特別標記').props.onClick());
+    assert.deepEqual(rows(), ['J1']);
+    act(() => root.update(React.createElement(PendingMaterialsDialog, { ...props, groups: [completed] })));
     assert.match(JSON.stringify(root.toJSON()), /待處理 0 筆/);
     assert.ok(root.root.findAllByProps({ 'data-testid': 'pending-mail-button' }).every(node => node.props.disabled), 'completed history must not generate another application email');
   } finally { if (root) act(() => root.unmount()); }

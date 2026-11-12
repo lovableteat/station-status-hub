@@ -247,7 +247,7 @@ test("待處理料 opens from the header actions and groups pending parts by cat
   assert.match(dialog, /const vendorApplications = useMemo\(\(\) => buildPendingApplications\(groups, \{ includeAlternates: true \}\), \[groups\]\);/);
   assert.match(dialog, /const \[includeAlternates, setIncludeAlternates\] = useState\(false\);/, "the default view is unchanged");
   assert.match(dialog, /data-testid="pending-include-alternates"[\s\S]{0,120}?aria-pressed=\{includeAlternates\}/);
-  assert.match(dialog, /groupPendingMaterials\(applications\)/);
+  assert.match(dialog, /groupPendingMaterials\(pending\)/);
   assert.match(dialog, /data-testid="pending-application"/);
   assert.match(dialog, />優先處理</);
   assert.match(dialog, /onOpenTracking\(record\)/);

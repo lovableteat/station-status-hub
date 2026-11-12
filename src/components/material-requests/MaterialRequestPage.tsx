@@ -2194,7 +2194,7 @@ export function PendingMaterialsDialog({
   const [timingNow, setTimingNow] = useState(Date.now);
   const ownerDirectory = useMaterialRequestOwners(open, accountId);
   const [directoryOpen, setDirectoryOpen] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<PendingMaterialCategory | "all" | "marked">("all");
+  const [activeCategory, setActiveCategory] = useState<PendingMaterialCategory | "all" | "marked" | "completed">("all");
   // Default: locations with no number on any vendor row (one line each). The switch adds every vendor
   // row that has neither a 實體料號 nor a 虛擬料號, even beside vendors that already have one.
   const [includeAlternates, setIncludeAlternates] = useState(false);
@@ -2202,7 +2202,17 @@ export function PendingMaterialsDialog({
   const vendorApplications = useMemo(() => buildPendingApplications(groups, { includeAlternates: true }), [groups]);
   const applications = includeAlternates ? vendorApplications : locationApplications;
   const markedCount = applications.filter(application => markedGroupKeys.has(application.group.key)).length;
-  const categories = useMemo(() => groupPendingMaterials(applications), [applications]);
+  const { categories, completedCount } = useMemo(() => {
+    const pending: typeof applications = [], completed: typeof applications = [];
+    for (const application of applications) {
+      const bucket = getTrackingWorkflowStatus(application.record) === "已完成" ? completed : pending;
+      bucket.push(application);
+    }
+    return {
+      categories: [...groupPendingMaterials(pending), { key: "completed" as const, label: "已完成", hint: "", priority: false, groups: completed }],
+      completedCount: completed.length,
+    };
+  }, [applications]);
   const mailGroups = useMemo(() => {
     const listed = new Set(applications.map((application) => application.group.key));
     return groups
@@ -2252,14 +2262,18 @@ export function PendingMaterialsDialog({
     // Only re-run when the dialog opens; the category list may change while it is open without resetting the tab.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-  const priorityCount = categories.filter((category) => category.priority).reduce((sum, category) => sum + category.groups.filter(application => getTrackingWorkflowStatus(application.record) !== "已完成").length, 0);
+  const priorityCount = categories.reduce((sum, category) => sum + (category.priority ? category.groups.length : 0), 0);
   const staleThreshold = timingNow - STALE_PENDING_MS;
   const isStale = (group: MaterialGroup, record: MaterialRecord) => getTrackingWorkflowStatus(record) !== "已完成" && getPendingGroupUpdatedAt(group, recordMeta) < staleThreshold;
   const staleCount = applications.filter((application) => isStale(application.group, application.record)).length;
-  const completedCount = applications.filter(application => getTrackingWorkflowStatus(application.record) === "已完成").length;
   const listedLocations = new Set(applications.map((application) => application.group.key)).size;
   const description = `共 ${applications.length.toLocaleString()} 筆申請追蹤（${listedLocations.toLocaleString()} 組位號） · 待處理 ${(applications.length - completedCount).toLocaleString()} 筆 · 已完成 ${completedCount.toLocaleString()} 筆（保留紀錄） · 優先 ${priorityCount.toLocaleString()} 筆 · ${staleCount.toLocaleString()} 筆逾 3 天未更新`;
-  const exportRows = visibleCategories.flatMap(category => category.groups.map(application => ({ category: category.label, displayRef: application.displayRef, record: toWorkbookRecord(application.record) })));
+  const exportRows = visibleCategories.flatMap(category => category.groups.map(application => {
+    const materialCategory = category.key === "completed"
+      ? PENDING_MATERIAL_CATEGORIES.find(item => item.key === resolvePendingMaterialCategory(application).category)?.label
+      : category.label;
+    return { category: materialCategory ?? category.label, displayRef: application.displayRef, record: toWorkbookRecord(application.record) };
+  }));
   const exportVisible = async () => {
     if (exporting || !exportRows.length) return;
     setExporting(true); setExportError("");
@@ -2317,13 +2331,18 @@ export function PendingMaterialsDialog({
         <SupplierDirectoryDialog open={directoryOpen} onOpenChange={setDirectoryOpen} />
 
         <div role="tablist" aria-label="待處理料分類" className="flex flex-wrap gap-1.5 rounded-lg border border-border bg-background/40 p-1">
-          {[{ key: "all" as const, label: "全部", count: applications.length, priority: false }, { key: "marked" as const, label: "特別標記", count: markedCount, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority && category.groups.some(application => getTrackingWorkflowStatus(application.record) !== "已完成") }))].map((tab) => (
+          {[{ key: "all" as const, label: "全部", count: applications.length, priority: false }, { key: "marked" as const, label: "特別標記", count: markedCount, priority: false }, ...categories.map((category) => ({ key: category.key, label: category.label, count: category.groups.length, priority: category.priority }))].map((tab) => (
             <button
               key={tab.key}
               type="button"
               role="tab"
               aria-selected={selectedCategory === tab.key}
-              onClick={() => setActiveCategory(tab.key)}
+              onClick={() => {
+                if (tab.key === selectedCategory) return;
+                setActiveCategory(tab.key);
+                scrollTopRef.current = 0;
+                if (listRef.current) listRef.current.scrollTop = 0;
+              }}
               title={tab.key === "marked" ? "點每列星號加入或取消；標記只對目前帳號可見，依 BOM 分開儲存。" : undefined}
               className={cn(
                 "inline-flex h-9 items-center gap-1.5 rounded-md border px-4 text-sm font-bold transition-colors",
@@ -2346,13 +2365,13 @@ export function PendingMaterialsDialog({
         <div data-testid="pending-materials-list" ref={listRef} onScroll={(event) => { scrollTopRef.current = event.currentTarget.scrollTop; }} className="min-h-0 flex-1 space-y-1.5 overflow-auto pr-1">
           {visibleCategories.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-              {applications.length === 0 ? "目前沒有待處理的料號" : selectedCategory === "marked" && markedCount === 0 && !keyword ? "尚未特別標記待處理料，請到「全部」點選每列星號" : "目前篩選條件沒有符合的待處理料"}
+              {selectedCategory === "completed" ? (keyword ? "目前搜尋沒有符合的已完成料件" : "目前沒有已完成的料件") : applications.length === 0 ? "目前沒有待處理的料號" : selectedCategory === "marked" && markedCount === 0 && !keyword ? "尚未特別標記待處理料，請到「全部」點選每列星號" : "目前篩選條件沒有符合的待處理料"}
             </p>
           ) : visibleCategories.flatMap((category) => [
-            <div key={`category:${category.key}`} className="flex items-center gap-2 px-1 pt-2 first:pt-0">
-              <h3 className="text-xs font-bold text-foreground">{category.label}</h3>
-              <span className="text-[11px] text-muted-foreground">{category.hint}</span>
-              {category.priority && category.groups.some(application => getTrackingWorkflowStatus(application.record) !== "已完成") && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.danger)}>優先處理</span>}
+            <div key={`category:${category.key}`} className={cn("flex items-center gap-2 px-1 pt-2 first:pt-0", category.key === "completed" && "border-t border-border pb-1 pt-4 first:border-t-0")}>
+              <h3 className={cn("text-xs font-bold", category.key === "completed" ? "text-success" : "text-foreground")}>{category.label}</h3>
+              {category.hint && <span className="text-[11px] text-muted-foreground">{category.hint}</span>}
+              {category.priority && <span className={cn(CHIP_BASE, "flex-none", CHIP_TONES.danger)}>優先處理</span>}
               <span className="ml-auto flex-none font-mono text-[11px] text-muted-foreground">{category.groups.length.toLocaleString()} 筆</span>
             </div>,
             ...category.groups.map((application) => {
