@@ -43,6 +43,35 @@ test('stored reports retain human decisions and reject malformed provenance or u
   const last={...stored,officialPage:3000,workingPage:3000};last.key=k.circuitPdfAiReviewKey(last);assert.ok(k.normalizeCircuitPdfAiReviewReport(last));
 });
 
+test('annotation coordinates survive reload and invalid sides stay unlocated',()=>{
+  const k=service(), value=analysis();
+  const officialBox={x:.14,y:.28,width:.22,height:.11};
+  const workingBox={x:.53,y:.32,width:.25,height:.09};
+  value.findings=[
+    {...value.findings[0],certainty:'suspected',officialBox,workingBox},
+    {...value.findings[0],category:'connectivity',certainty:'unclear',officialBox:{x:.95,y:.5,width:.1,height:.12},workingBox},
+    {...value.findings[0],category:'connectivity',certainty:'unclear',officialBox:null,workingBox:{...workingBox,x:'0.53'}},
+  ];
+  const result=k.parseCircuitPdfAiAnalysis(JSON.stringify(value),target);
+  assert.equal(result.findings[0].certainty,'suspected');
+  assert.deepEqual({...result.findings[0].officialBox},officialBox);
+  assert.deepEqual({...result.findings[0].workingBox},workingBox);
+  assert.equal(result.findings[1].certainty,'unclear');
+  assert.equal(result.findings[1].officialBox??null,null);
+  assert.deepEqual({...result.findings[1].workingBox},workingBox);
+  assert.equal(result.findings[2].officialBox??null,null);
+  assert.equal(result.findings[2].workingBox??null,null);
+  const stored=JSON.parse(JSON.stringify({...report(),...result}));
+  stored.findings[0].decision='confirmed';
+  const reopened=k.normalizeCircuitPdfAiReviewReport(stored);
+  assert.deepEqual({...reopened.findings[0].officialBox},officialBox);
+  assert.deepEqual({...reopened.findings[0].workingBox},workingBox);
+  assert.equal(reopened.findings[0].decision,'confirmed');
+  assert.equal(reopened.findings[1].officialBox??null,null);
+  const legacyFinding=k.normalizeCircuitPdfAiReviewReport(report()).findings[0];
+  assert.ok(['certainty','officialBox','workingBox'].every(key=>!Object.hasOwn(legacyFinding,key)));
+});
+
 function adapter(payloadFactory=()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(analysis())}}]}), {status=200, headers=new Headers()}={}) {
   const sent=[],renders=[];
   const canvas={width:0,height:0,toBlob(done){done(new Blob(['PNG'],{type:'image/png'}));}};
@@ -51,7 +80,7 @@ function adapter(payloadFactory=()=>({choices:[{finish_reason:'stop',message:{co
     '../api-management/apiKeyHelpers':{normalizeApiKeyPermissions:()=>({read:true,metadata:{provider:'openai',baseUrl:'https://api.openai.com/v1',model:'gpt-5.4'}})},
     '../api-management/aiUsageTelemetry':{trackedProviderFetch:async request=>{sent.push(request);return{ok:status>=200&&status<300,status,headers,json:async()=>payloadFactory()};}},
   }})('src/components/circuit-changes/circuitPdfAiReview.ts');
-  const pdf={numPages:3000,getPage:async page=>({getViewport:({scale})=>({width:1000*scale,height:700*scale}),render:options=>{renders.push({page,width:options.canvas.width,height:options.canvas.height});return{promise:Promise.resolve(),cancel(){}};},getTextContent:async()=>({items:[{str:'PCIE_RX_P',transform:[1,0,0,1,10,20]}]})})};
+  const pdf={numPages:3000,getPage:async page=>({getViewport:({scale})=>({width:1000*scale,height:700*scale,convertToViewportPoint:(x,y)=>[x*scale,(700-y)*scale]}),render:options=>{renders.push({page,width:options.canvas.width,height:options.canvas.height});return{promise:Promise.resolve(),cancel(){}};},getTextContent:async()=>({items:[{str:'PCIE_RX_P',transform:[1,0,0,1,10,20]}]})})};
   const input={official:{id:'official',name:'官方.pdf',page:2,pdf},working:{id:'working',name:'工作.pdf',page:3,pdf},model:{id:'model-key::gpt-5.4',label:'QA GPT',record:{id:'model-key',api_key:'qa-test-secret',is_active:true}},userName:'RD 工程師',signal:new AbortController().signal};
   return {k,input,sent,renders};
 }
@@ -61,7 +90,7 @@ test('real provider adapter sends both full-page images at high detail and coord
   assert.equal(sent.length,1);assert.equal(sent[0].apiKeyId,'model-key');assert.equal(sent[0].source,'ai-chat');
   const body=JSON.parse(sent[0].init.body), images=body.messages.flatMap(message=>message.content).filter(part=>part.type==='image_url');
   assert.equal(images.length,2);assert.ok(images.every(image=>image.image_url.detail==='high'));
-  assert.match(JSON.stringify(body),/官方.pdf/);assert.match(JSON.stringify(body),/工作.pdf/);assert.match(JSON.stringify(body),/PCIE_RX_P/);assert.match(JSON.stringify(body),/不得.*核准/);
+  assert.match(JSON.stringify(body),/官方.pdf/);assert.match(JSON.stringify(body),/工作.pdf/);assert.match(JSON.stringify(body),/PCIE_RX_P（x=0\.010, y=0\.971）/);assert.match(JSON.stringify(body),/不可聲稱通過電氣驗證或正式審核/);
   assert.deepEqual(renders.map(item=>[item.page,item.width,item.height]),[[2,4000,2800],[3,4000,2800]]);
   assert.match(result.id,/^[0-9a-f-]{36}$/);assert.equal(result.createdAt,result.updatedAt);assert.equal(result.generatedBy,'RD 工程師');assert.equal(result.findings[0].decision,'pending');
 });
