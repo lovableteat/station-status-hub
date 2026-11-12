@@ -3,6 +3,45 @@ begin;
 set local lock_timeout = '1s';
 set local statement_timeout = '20s';
 
+-- Already applied by 20261112001122_restrict_internal_stats_cleanup_execution.
+-- Read metadata only: never invoke, redefine or repair these internal RPCs here.
+-- Drift requires separate review, not an implicit grant/revoke in this proposal.
+do $internal_rpc_preflight$
+declare
+  signature text;
+  target oid;
+begin
+  foreach signature in array array[
+    'public.calculate_daily_production_stats()',
+    'workspace.calculate_daily_production_stats()',
+    'public.cleanup_old_notifications()',
+    'workspace.cleanup_old_notifications()'
+  ] loop
+    target := to_regprocedure(signature);
+    if target is null then
+      raise exception 'Applied internal RPC baseline missing: %', signature;
+    end if;
+    if has_function_privilege('anon', target, 'execute')
+      or has_function_privilege('authenticated', target, 'execute')
+      or exists (
+        select 1 from pg_proc p,
+          lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) permission
+        where p.oid = target and permission.grantee = 0
+          and permission.privilege_type = 'EXECUTE'
+      ) then
+      raise exception 'Applied internal RPC baseline drift: browser EXECUTE: %', signature;
+    end if;
+    if not has_function_privilege('service_role', target, 'execute')
+      or not has_function_privilege('postgres', target, 'execute')
+      or not (select has_schema_privilege('service_role', p.pronamespace, 'usage')
+        and has_schema_privilege('postgres', p.pronamespace, 'usage')
+        from pg_proc p where p.oid = target) then
+      raise exception 'Applied internal RPC baseline drift: maintenance access missing: %', signature;
+    end if;
+  end loop;
+end;
+$internal_rpc_preflight$;
+
 -- These are replacements for reviewed APIs, never silently created new APIs.
 do $preflight$
 declare signature text;
@@ -267,8 +306,7 @@ BEGIN
 END;
 $function$;
 
--- Internal scheduler/maintenance RPCs are not browser operations.
--- Be explicit even when existing ACLs or creator defaults drift between stages.
+-- These browser RPC replacements must not retain anonymous EXECUTE.
 revoke execute on function public.delete_test_system(uuid),
   workspace.delete_test_system(uuid),
   workspace.pcb_designer_can_view(uuid),
@@ -276,19 +314,6 @@ revoke execute on function public.delete_test_system(uuid),
   workspace.release_pcb_designer_project_lock(uuid, text, text),
   workspace.save_pcb_designer_workspace_locked(uuid, text, text, jsonb)
 from public, anon;
-
--- Cron executes as postgres; its schedule and command are unchanged.
-revoke execute on function public.cleanup_old_notifications(),
-  workspace.cleanup_old_notifications(),
-  public.calculate_daily_production_stats(),
-  workspace.calculate_daily_production_stats()
-from public, anon, authenticated;
-
-grant execute on function public.cleanup_old_notifications(),
-  workspace.cleanup_old_notifications(),
-  public.calculate_daily_production_stats(),
-  workspace.calculate_daily_production_stats()
-to service_role;
 
 notify pgrst, 'reload schema';
 commit;

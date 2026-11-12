@@ -36,10 +36,30 @@ test("remaining exposure proposals preserve rows and reject anonymous and forged
     await db.exec(await read("fixtures/remaining-security-postgres-setup.sql"));
     const before = await snapshot();
     assert.equal(await count("anon", null, "workspace.tasks"), 1);
-    await db.exec(await read("../docs/security-proposals/01-close-anonymous-access.sql"));
-    await db.exec(await read("../docs/security-proposals/02-bind-rpc-identities.sql"));
-    await db.exec(await read("../docs/security-proposals/03-private-attachments.sql"));
-    assert.equal(await snapshot(), before, "all fixture business rows and Storage objects must be byte-for-byte unchanged");
+    const internalState = async () => (await db.query(`
+      select n.nspname, p.proname, p.proacl::text, pg_get_functiondef(p.oid) definition,
+        has_function_privilege('anon', p.oid, 'execute') anon,
+        has_function_privilege('authenticated', p.oid, 'execute') authenticated,
+        has_function_privilege('service_role', p.oid, 'execute') service_role,
+        has_function_privilege('postgres', p.oid, 'execute') postgres
+      from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+      where n.nspname in ('public','workspace') and p.pronargs=0
+        and p.proname in ('calculate_daily_production_stats','cleanup_old_notifications')
+      order by 1,2
+    `)).rows;
+    const internalBefore = await internalState();
+    assert.equal(internalBefore.length, 4);
+    for (const row of internalBefore) {
+      assert.equal(row.anon, false);
+      assert.equal(row.authenticated, false);
+      assert.equal(row.service_role, true);
+      assert.equal(row.postgres, true);
+    }
+    for (const stage of ['01-close-anonymous-access', '02-bind-rpc-identities', '03-private-attachments']) {
+      await db.exec(await read('../docs/security-proposals/' + stage + '.sql'));
+      assert.equal(await snapshot(), before, stage + ': all business rows and Storage objects remain unchanged');
+      assert.deepEqual(await internalState(), internalBefore, stage + ': preserve all four applied internal ACLs and definitions');
+    }
 
     await t.test("all workspace tables and legacy column grants deny anonymous reads", async () => {
       const tables = (await db.query("select tablename from pg_tables where schemaname='workspace'")).rows;
@@ -76,8 +96,14 @@ test("remaining exposure proposals preserve rows and reject anonymous and forged
         await assert.rejects(as("authenticated", uid(2), sql), /not found/, "authorized editor reaches existence validation");
       }
       for (const name of ["cleanup_old_notifications","calculate_daily_production_stats"]) {
-        await assert.rejects(as("authenticated", uid(1), "select workspace." + name + "()"), /permission denied/);
-        await as("service_role", null, "select workspace." + name + "()");
+        for (const schema of ["public", "workspace"]) {
+          const call = "select " + schema + "." + name + "()";
+          await assert.rejects(as("anon", null, call), /permission denied/);
+          await assert.rejects(as("authenticated", uid(1), call), /permission denied/);
+          // Harmless synthetic stubs only, never the production implementations.
+          await as("service_role", null, call);
+          await as("postgres", null, call);
+        }
       }
       // Execute the destructive workflow only on local, synthetic targets.
       const retained = "20000000-0000-4000-8000-000000000099";

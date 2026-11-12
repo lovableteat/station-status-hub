@@ -138,3 +138,42 @@ test('schema-specific anon defaults close future tables without claiming to chan
     assert.equal((await db.query("select has_function_privilege('anon','workspace.future_fixture_fn()','execute') as allowed")).rows[0].allowed, false);
   });
 });
+
+
+// Internal RPC ACLs are already applied, not work for either pending SQL stage.
+test('applied internal RPC baseline drift fails closed without silent ACL repair', async () => {
+  await isolated(async db => {
+    for (const proposal of proposals.slice(0, 2)) {
+      for (const schema of ['public', 'workspace']) {
+        for (const name of ['calculate_daily_production_stats', 'cleanup_old_notifications']) {
+          const signature = schema + '.' + name + '()';
+          for (const role of ['public', 'anon', 'authenticated']) {
+            await db.exec('grant execute on function ' + signature + ' to ' + role);
+            await rejectedAndRolledBack(db, proposal, /Applied internal RPC baseline drift: browser EXECUTE/);
+            await db.exec('revoke execute on function ' + signature + ' from ' + role);
+          }
+          await db.exec('revoke execute on function ' + signature + ' from service_role');
+          await rejectedAndRolledBack(db, proposal, /Applied internal RPC baseline drift: maintenance access missing/);
+          await db.exec('grant execute on function ' + signature + ' to service_role');
+        }
+      }
+    }
+  });
+});
+
+test('missing internal signature or schema access cannot silently pass pending stage preflight', async () => {
+  await isolated(async db => {
+    // public schema USAGE can be inherited from PUBLIC; remove both sources.
+    for (const schema of ['workspace', 'public']) {
+      await db.exec('revoke usage on schema ' + schema + ' from public, service_role');
+      for (const proposal of proposals.slice(0, 2)) {
+        await rejectedAndRolledBack(db, proposal, /Applied internal RPC baseline drift: maintenance access missing/);
+      }
+      await db.exec('grant usage on schema ' + schema + ' to service_role');
+    }
+    await db.exec('drop function workspace.cleanup_old_notifications()');
+    for (const proposal of proposals.slice(0, 2)) {
+      await rejectedAndRolledBack(db, proposal, /Applied internal RPC baseline missing/);
+    }
+  });
+});

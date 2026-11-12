@@ -1,8 +1,10 @@
-# Prepared security changes: not deployed
+# Remaining security proposals and applied baseline
 
-The owner is using the live system. **Do not run these SQL files, deploy the Edge Function, reset sessions, change credentials, or delete any history while the current no-production-change restriction remains in force.**
+The owner is using the live system. **These three broad SQL proposals and the compatible frontend remain undeployed. Do not run them, merge/deploy the frontend, change buckets, reset sessions, change credentials, or delete history as part of repository reconciliation.**
 
-These SQL proposals are deliberately outside `supabase/migrations` so ordinary migration deployment cannot apply them accidentally. Do not move them into that directory until the release prerequisites and concrete authorization below are satisfied. No production mutation was performed while preparing them.
+A separately authorized narrow cutover is complete: migration `20261112001122_restrict_internal_stats_cleanup_execution` closes browser EXECUTE on four internal RPCs, and daily-stats v13 has the service-credential gate. See the [applied baseline and exact history synchronization](../security/applied-internal-rpc-cutover-20261112.md). This does not close the remaining table, browser-RPC, attachment or historical exposure.
+
+These three SQL proposals are deliberately outside `supabase/migrations` so ordinary migration deployment cannot apply them accidentally. Do not move them into that directory until the release prerequisites and concrete authorization below are satisfied. The one new migration file is an exact copy of an already-applied server ledger entry, not a new pending cutover. Do not rerun it or use a bulk push to reconcile history.
 
 ## Scope and data invariants
 
@@ -16,7 +18,7 @@ These SQL proposals are deliberately outside `supabase/migrations` so ordinary m
 2. **02-bind-rpc-identities.sql**
    - Guards both public/workspace machine-delete entry points with existing station edit authorization before looking up a target.
    - Binds PCB permission helpers to the caller's real Auth identity and closes the otherwise unguarded lock-release and locked-save paths.
-   - Restricts notification cleanup and daily statistics RPCs to existing server-role/owner execution.
+   - Verifies the already-applied service/owner-only notification cleanup and daily statistics RPC baseline without repeating its revoke/grant. Stage 01 excludes those four exact signatures from its function-grant sweep; both stages fail closed on reopened browser access or missing maintenance access.
    - Only replaces function definitions and privileges. It does not call those data-changing functions.
    - Requires every reviewed replacement signature to exist and explicitly revokes PUBLIC/anon EXECUTE from all replacements without widening owner-only helper grants.
 3. **03-private-attachments.sql**
@@ -25,12 +27,12 @@ These SQL proposals are deliberately outside `supabase/migrations` so ordinary m
    - Restrictive policies protect the two buckets even if another permissive policy is too broad. Other buckets retain their policy behavior.
    - Does not delete, move, rename or rewrite object contents, object paths, rich text, attachment rows or tools URLs.
    - Preserves legacy policies even when they use generic names, because those policies may also serve unrelated buckets. Requires Storage RLS and both target buckets to exist before any change.
-4. **daily-stats Edge code**
+4. **daily-stats Edge code: v13 already deployed separately**
    - Requires POST and the exact existing server service credential before constructing a privileged database client.
    - Does not trust an unverified decoded role claim. An anon JWT or regular user JWT is insufficient.
    - Uses the current credential; no credential is generated, rotated or disclosed.
 
-This closes the specific anonymous paths and identity-spoofing defects. It is not a claim that every legacy signed-in table policy has complete per-page RBAC. Existing signed-in cooperation is deliberately preserved. Any further policy narrowing must first be reconciled against the live UI permissions and tested separately.
+Once separately released and verified, the remaining proposals address the specific anonymous paths and identity-spoofing defects. It is not a claim that every legacy signed-in table policy has complete per-page RBAC. Existing signed-in cooperation is deliberately preserved. Any further policy narrowing must first be reconciled against the live UI permissions and tested separately.
 
 ## Verified read-only facts
 
@@ -42,7 +44,7 @@ This closes the specific anonymous paths and identity-spoofing defects. It is no
 
 ## Release prerequisites: all are mandatory
 
-1. Obtain permission for the exact production metadata/Edge changes and a suitable release window. The current restriction forbids deployment now.
+1. Reconfirm the exact remaining scope and safe release window against current authorization and active work. The completed four-RPC/Edge cutover does not authorize executing these broader proposals or merging/deploying the frontend.
 2. Confirm a recent hosted database backup and its restore procedure. Verify a restore to an isolated destination before claiming recoverability. The current MCP tool set did not expose hosted backup/PITR status, so a successful full backup/restore has **not** been established.
 3. Confirm Storage object backups separately. A database backup preserves Storage metadata, not necessarily object bytes. Do not mistake the metadata snapshot for a file backup.
 4. Capture fresh schema/policies/ACL/column grants, function definitions, bucket settings and Edge source/version. Keep these private and checksum them. Compare against the reviewed versions and investigate drift.
@@ -62,7 +64,7 @@ This closes the specific anonymous paths and identity-spoofing defects. It is no
 
 ## Recovery
 
-Metadata-only snapshots of policies/buckets, functions, ACLs/column grants/default ACLs and the currently deployed daily-stats v12 source were saved privately with SHA-256 hashes. They are configuration recovery material, **not a complete database or object backup**.
+Metadata-only snapshots of policies/buckets, functions, ACLs/column grants/default ACLs and the previous daily-stats v12 source were saved privately with SHA-256 hashes. The narrow cutover also retained its exact preimage, applied SQL, postflight metadata and byte-matched v13 source readback. They are configuration recovery material, **not a complete database or object backup**.
 
 An explicit original-configuration rollback script was prepared privately but has not been run. Reverting to those ACLs reopens the known exposure, so it must not be automatic. Prefer a targeted compatibility correction that preserves the anonymous boundary. If a transaction times out or fails, it rolls back without partially applying that stage.
 
@@ -78,10 +80,10 @@ node --test tests/dailyStatsAuthorization.test.ts
 PGLITE_MODULE=/path/to/@electric-sql/pglite/dist/index.js node --test tests/securityProposalCutover.postgres.mjs
 ```
 
-The PGlite test uses only synthetic accounts, rows and objects. It executes all three SQL proposals and verifies every synthetic business row and Storage object is byte-for-byte unchanged. It covers anonymous access across 116 tables and column grants, inactive/unlinked accounts, browser TRUNCATE, audit/role restrictions, both delete RPC aliases, PCB identity spoofing, service-only maintenance, and attachment read/write separation including a deliberately broad competing policy.
+The PGlite test starts with the already-applied four-RPC ACL baseline and uses only synthetic accounts, rows and objects. Each later stage preserves those four ACLs and definitions exactly; reopening PUBLIC/anon/authenticated EXECUTE, missing service EXECUTE/schema USAGE, or a missing signature makes stages 01/02 stop without silently repairing the baseline. It executes all three SQL proposals and verifies every synthetic business row and Storage object is byte-for-byte unchanged. It covers anonymous access across 116 tables and column grants, inactive/unlinked accounts, browser TRUNCATE, audit/role restrictions, both delete RPC aliases, PCB identity spoofing, service-only maintenance, and attachment read/write separation including a deliberately broad competing policy.
 
 The Edge tests verify exact service-credential matching and that unauthorized requests never construct a privileged client or invoke the statistics RPC.
 
-Limits: this is PostgreSQL engine and handler logic testing. It is not a hosted Supabase Storage/CDN test, a Deno deployment check, a real-user browser regression, a full database restore rehearsal or proof that production is already fixed.
+Limits: this is PostgreSQL engine and handler logic testing. It is not a hosted Supabase Storage/CDN test, a live Deno positive-path invocation, a real-user browser regression, a full database restore rehearsal or proof that all production exposure is fixed.
 
 See [migration promotion and safe cutover](migration-promotion.md) before moving any proposal into an automatic migration directory.
