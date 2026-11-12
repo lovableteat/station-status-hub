@@ -9,6 +9,27 @@ const loaded = page => page.waitForFunction(() => sanitizedProfilesFixture.state
 const event = (page, id) => page.evaluate(id => window.dispatchEvent(new CustomEvent('station-permissions-updated', { detail: { userId: id } })), id);
 const save = page => page.getByRole('button', { name: '儲存權限', exact: true });
 const dialogReady = page => page.waitForFunction(() => { const button = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === '儲存權限'); return button && !button.disabled; });
+async function rosterLayout(page) {
+  const geometry = await page.locator('.admin-content').evaluate(element => {
+    const box = element.getBoundingClientRect(), main = element.closest('main').getBoundingClientRect();
+    return { width: box.width, height: box.height, x: box.x, right: box.right, mainWidth: main.width,
+      overflow: getComputedStyle(element).overflowY, viewport: innerWidth };
+  });
+  assert.ok(geometry.mainWidth >= geometry.viewport - 2, 'Real full-width app main');
+  assert.ok(geometry.width > geometry.viewport * (geometry.viewport > 1180 ? 0.65 : 0.85), 'Roster occupies content track, never the sidebar slot');
+  assert.ok(geometry.height > 100 && geometry.x >= 0 && geometry.right <= geometry.viewport + 1, 'Bounded responsive roster');
+  assert.equal(geometry.overflow, 'auto', 'Actual admin-content remains the scroller');
+}
+async function visibleRosterHeading(page, name) {
+  const heading = page.getByRole('heading', { name, exact: true });
+  await heading.waitFor({ state: 'visible' });
+  await heading.scrollIntoViewIfNeeded();
+  assert.equal(await heading.isVisible(), true);
+  assert.ok(await heading.evaluate(element => {
+    const box = element.getBoundingClientRect(), clip = element.closest('.admin-content').getBoundingClientRect();
+    return box.width > 0 && box.height > 0 && box.right > clip.left && box.left < clip.right && box.bottom > clip.top && box.top < clip.bottom;
+  }), 'Updated roster heading is visible inside the real scroll container');
+}
 const scenarios = [];
 function test(name, surface, run, expectedConsoleErrors = []) { scenarios.push({ name, query: { surface }, run, expectedConsoleErrors }); }
 
@@ -71,6 +92,7 @@ for (const mode of ['error', 'missing-rpc', 'extra-secret', 'raw-snapshot']) tes
 
 test('admin-roster-order-filter-refresh-and-failed-read-retention', 'admin', async ({ page }) => {
   await page.waitForFunction(() => document.querySelectorAll('.admin-account-card').length === 3);
+  await rosterLayout(page);
   assert.deepEqual(await page.locator('.admin-account-card h3').allTextContents(), ['Synthetic Second', 'Synthetic Target', 'Synthetic Owner']);
   const search = page.getByPlaceholder('搜尋帳號、顯示名稱、建立者或工作區');
   await search.fill('Target'); assert.equal(await page.locator('.admin-account-card').count(), 1);
@@ -83,7 +105,7 @@ test('admin-roster-order-filter-refresh-and-failed-read-retention', 'admin', asy
   assert.equal(await page.locator('.admin-account-card').count(), 3, 'Read failure cannot impersonate deletion of every account');
   await page.evaluate(() => { sanitizedProfilesFixture.modes.roster = 'ok'; sanitizedProfilesFixture.profiles[1].display_name = 'Synthetic Target Updated'; });
   await event(page, TARGET);
-  await page.getByRole('heading', { name: 'Synthetic Target Updated', exact: true }).waitFor();
+  await visibleRosterHeading(page, 'Synthetic Target Updated');
   await page.evaluate(() => { sanitizedProfilesFixture.profiles[0].role = 'engineer'; sanitizedProfilesFixture.profiles[0].permissions = { pagePermissions: [], workspaceAccess: {} }; });
   await event(page, OWNER);
   await page.waitForFunction(() => !sanitizedProfilesFixture.state.canEditUsers);
@@ -92,12 +114,13 @@ test('admin-roster-order-filter-refresh-and-failed-read-retention', 'admin', asy
 
 test('admin-delayed-roster-error-after-newer-refresh', 'admin', async ({ page }) => {
   await page.waitForFunction(() => document.querySelectorAll('.admin-account-card').length === 3);
+  await rosterLayout(page);
   await page.evaluate(() => { sanitizedProfilesFixture.modes.roster = 'hold'; });
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.waitForFunction(() => sanitizedProfilesFixture.held.some(item => item.key === 'roster'));
   await page.evaluate(() => { sanitizedProfilesFixture.modes.roster = 'ok'; sanitizedProfilesFixture.profiles[1].display_name = 'Synthetic Newest Roster'; });
   await event(page, TARGET);
-  await page.getByRole('heading', { name: 'Synthetic Newest Roster' }).waitFor();
+  await visibleRosterHeading(page, 'Synthetic Newest Roster');
   const toasts = await page.evaluate(() => sanitizedProfilesFixture.toasts.length);
   await page.evaluate(() => sanitizedProfilesFixture.resolveHeld('roster', 'error')); await page.waitForTimeout(30);
   assert.equal(await page.getByRole('heading', { name: 'Synthetic Newest Roster' }).count(), 1);
@@ -106,11 +129,12 @@ test('admin-delayed-roster-error-after-newer-refresh', 'admin', async ({ page })
 
 test('admin-old-actor-roster-cannot-overwrite-current-actor', 'admin', async ({ page }) => {
   await page.waitForFunction(() => document.querySelectorAll('.admin-account-card').length === 3);
+  await rosterLayout(page);
   await page.evaluate(() => { sanitizedProfilesFixture.modes.roster = 'hold'; });
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.waitForFunction(() => sanitizedProfilesFixture.held.some(item => item.key === 'roster'));
   await page.evaluate(() => { sanitizedProfilesFixture.modes.roster = 'ok'; sanitizedProfilesFixture.profiles[1].display_name = 'Synthetic Current Actor Roster'; sanitizedProfilesFixture.switchUser(); });
-  await page.getByRole('heading', { name: 'Synthetic Current Actor Roster' }).waitFor();
+  await visibleRosterHeading(page, 'Synthetic Current Actor Roster');
   await page.evaluate(() => sanitizedProfilesFixture.resolveHeld('roster')); await page.waitForTimeout(30);
   assert.equal(await page.getByRole('heading', { name: 'Synthetic Current Actor Roster' }).count(), 1);
   assert.equal(await page.getByRole('heading', { name: 'Synthetic Target', exact: true }).count(), 0);
