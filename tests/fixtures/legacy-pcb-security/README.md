@@ -29,3 +29,11 @@
 No external URL, database endpoint, real user UUID, credentials or real PCB content
 is stored here. SQL source/hash assertions are not hosted Auth, PostgREST or
 Realtime integration results. Keep the release gate in the repository candidate.
+
+The legacy suite separately exercises the exact applied additive migration
+`20261112064452` inside a synthetic runner-owned transaction and writes its exact
+statement to the throwaway ledger. It compares all API definitions/ACLs with the
+unchanged preparation candidate, tests ledger-write failure and replay refusal,
+and runs the read-only four-ledger/API verifier after every full-sequence stage.
+The baseline fixture still starts with the three original containment ledgers;
+adding the fourth row without actually installing its APIs would be a false state.

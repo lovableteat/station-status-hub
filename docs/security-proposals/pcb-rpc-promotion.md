@@ -2,10 +2,12 @@
 
 ## Status and scope
 
-This is an isolated, repository-only preparation. **No PCB SQL has been applied,
-no hosted session tested, and no production board or model content inspected by
-these tests.** The three applied containment migrations recorded in the main
-promotion guide remain immutable and are not rerun by this work.
+The **twelve-RPC candidate remains pending**. The separately authorized
+[additive protected-read APIs](../security/applied-legacy-pcb-read-apis-20261112.md)
+are now applied as version `20261112064452`; that did not install this candidate
+or close raw permissions reads. No production board/model content is inspected by
+these synthetic tests. The three prior applied containment migrations and the new
+additive ledger remain immutable and must not be replayed.
 
 `pcb-rpc-cutover-PENDING.sql` retains the reviewed 39,502 bytes, SHA-256
 `eb164dac09eba533cf2006c42c12d259608c64f9b42a668f16ed09881800a77a`.
@@ -33,12 +35,16 @@ per-statement timeout, not a total execution deadline.
    denial handling, retained local drafts, and already-open clients. Denied
    remote load must not become an empty successful workspace. Compatibility
    fallback is allowed only for a missing RPC, not authentication failure.
-2. Recheck current metadata and release state without reading real PCB payloads.
+2. First reconcile/skip the already-applied additive read APIs and verify the
+   compatible client cutover, following the [combined sequence](migration-promotion.md).
+   Recheck current metadata and release state without reading real PCB payloads.
    Apply only the exact narrow PCB candidate after its original baseline checks
    pass. Do not replace a failed preflight hash with the newly observed hash just
    to make deployment succeed. An uncertain result requires read-only metadata
    reconciliation before any retry. A duplicate candidate rejects intentionally.
-3. Promote `01-close-anonymous-access.sql` under its separate release gates.
+3. In the combined legacy route, complete the separately gated raw-column
+   enforcement **before** broad stage 01; its published pending file still refuses
+   execution. Then promote `01-close-anonymous-access.sql` under its own gates.
    It preserves all twelve hardened PCB definitions/ACLs, but removes PUBLIC/anon
    from the mapping helper ACL. Running it before the narrow candidate invalidates
    the candidate's reviewed baseline and is rejected. Do not restore anonymous

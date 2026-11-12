@@ -2,11 +2,16 @@
 
 ## Status
 
-These are new **pending database proposals**, outside automatic migrations.
-The prior session/draft-recovery frontend was merged separately at `96a6f05`.
-That release neither installed these APIs nor revoked raw permissions access.
-Do not describe every frontend change as undeployed, or these new database changes
-as deployed. The compatible profile/legacy-API client is a separate pending release.
+The **additive APIs are applied**, recorded as
+`20261112064452_add_protected_profile_and_legacy_pcb_read_apis`. Their
+[exact server-ledger copy](../../../supabase/migrations/20261112064452_add_protected_profile_and_legacy_pcb_read_apis.sql)
+is now in migrations for history reconciliation, not replay. The historical
+`01-add-read-apis-PENDING.sql` candidate stays unchanged outside migrations.
+**Raw-column enforcement and the twelve-RPC/broad/Storage proposals remain pending.**
+The prior session/draft-recovery frontend was released separately at `96a6f05`;
+the compatible profile/legacy client has its own cutover status and must not be
+inferred deployed from this database step. See the
+[applied scope and verification limits](../../security/applied-legacy-pcb-read-apis-20261112.md).
 
 No actual account row, PCB snapshot, model payload, password or session was read,
 rewritten, moved or deleted by this implementation. All five historical snapshots
@@ -15,7 +20,13 @@ those snapshots and modern PCB tables is assumed, and no reimport is performed.
 
 ## Two distinct stages
 
-### 01-add-read-apis-PENDING.sql
+### Additive APIs: applied; original candidate retained
+
+`01-add-read-apis-PENDING.sql` is the immutable preparation artifact, not an action
+still waiting to run. The applied server statement removes only its outer
+BEGIN/COMMIT for the migration runner; it has no SET ROLE and no body/ACL changes.
+Do not execute either copy against a target where the ledger/API already exists.
+Use `verify-applied-read-apis.sql` for the standalone read-only metadata check.
 
 Adds only two zero-argument, authenticated RPCs. It rejects name/overload collisions
 rather than replacing an existing API. Default PUBLIC/anon/service grants on these
@@ -115,9 +126,14 @@ No legacy permissions-write fallback is permitted.
    effective internal/delete/audit boundaries, the exact seventeen-column source
    schema, table/column ACLs, six authorization/setter definitions and ACLs, and
    the absence of unexpected API role inheritance/bypass.
-2. Separately review and install the additive APIs against that original baseline.
-   Check positive/negative behavior with isolated or explicitly approved synthetic
-   accounts, not real PCB content. Do not deploy API-dependent clients first.
+2. Reconcile and skip the already-applied additive version `20261112064452`.
+   The read-only applied verifier checks all four immutable ledgers and the two
+   exact API definitions/owners/ACLs without reading account/PCB content. It is
+   not submitted to the migration tool and does not replace later release gates.
+   A fresh isolated database can rehearse the exact transport with a runner-owned
+   transaction and ledger write; this is not permission for bulk history replay.
+   Anonymous POST returned 401 for both APIs; SQL anonymous/no-subject guards
+   returned 42501. Scalar RPC HEAD 200 is not an authorization or data-read proof.
 3. Release the compatible three profile consumers and protected PCB client. Verify
    session restoration, roster/filter/order behavior, permission saves and draft
    preservation. The owner's willingness to save and refresh does not prove that
@@ -175,7 +191,8 @@ These blockers are why the enforcement gate is unconditional.
 
 ## Recovery and data integrity
 
-Keep both protected APIs and the twelve actor guards after enforcement. A bad
+Keep the already-applied protected APIs now, and retain the twelve actor guards
+once applied. A bad
 client release must be repaired forward or reverted only to another compatible
 client. Regranting raw permissions SELECT would reopen the same exposure and is
 not an automatic rollback. A failed transaction requires immediate ROLLBACK or
@@ -189,22 +206,28 @@ metadata drift fail instead of silently granting access or overwriting functions
 
 ## Local verification
 
-On 2026-11-12, the SQL/real-parser suite passed **113/113** on each of PostgreSQL
+On 2026-11-12, the SQL/real-parser suite passed **120/120** on each of PostgreSQL
 17.5 and 18.3. New source contracts passed **6/6**; combined with frozen PCB
-contracts and the three applied-migration byte suites, **23/23** passed.
+contracts and all four applied-migration byte suites, **27/27** passed.
+The original 113 SQL cases remain covered; seven additional cases reconcile the
+exact applied transport, ledger and read-only verifier.
 These are local results. The separate actual PostgREST HTTP/SDK CI run must report
 its own outcome, and is not implied by these SQL passes.
 
 Run:
 
 ```sh
-node --test tests/legacyPcbSecurityProposal.test.mjs
+node --test tests/legacyPcbSecurityProposal.test.mjs tests/appliedLegacyPcbReadApisMigration.test.mjs
 PGLITE_MODULE=/path/to/node_modules/@electric-sql/pglite/dist/index.js \
   node --test tests/legacyPcbSecurity.postgres.mjs
 ```
 
 Tests use new in-memory databases, catalog-only fixtures and fabricated accounts,
-snapshots, model markers and machine rows. They execute the additive SQL unchanged.
+snapshots, model markers and machine rows. They retain tests of the original
+additive candidate unchanged and execute the exact
+applied server transport plus synthetic ledger in the full sequence. Additional
+checks compare both resulting function/ACL configurations and exercise runner-owned
+rollback, late ledger failure, replay rejection and read-only reconciliation.
 They prove the original enforcement file rejects unchanged, then validate exactly
 one fixed gate and its SHA-256 before removing only that gate for an isolated body
 rehearsal. That rehearsal is not successful application of the published pending
@@ -218,7 +241,7 @@ and real SQL envelopes consumed by the
 actual frontend parser for revision/tie/tombstone/absence behavior. Existing modern
 PCB and deployment recovery suites remain separate required regressions.
 
-The new sequence regression executes **additive APIs → frozen twelve-RPC candidate
+The sequence regression executes **exact applied additive transport + ledger → frozen twelve-RPC candidate
 → isolated enforcement body → unchanged broad 01 → station-only 02 → 03** in one
 fresh database. After every stage it checks protected profile/legacy reads, every
 other profile field, ordinary machine access, authorized/denied permission setters,
