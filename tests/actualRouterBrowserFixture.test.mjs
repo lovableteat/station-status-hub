@@ -17,7 +17,7 @@ test('actual Router browser fixture keeps real runtime sources, external dynamic
 });
 
 
-test('actual Router fixture keeps spacing inside the full-width body without hiding overflow', () => {
+test('actual Router fixture keeps spacing and long route text inside the body without hiding overflow', () => {
   const source = readFileSync(new URL('./support/actualRouterBrowser.cjs', import.meta.url), 'utf8');
   const style = source.match(/<style>([^]*?)<\/style>/)?.[1];
   assert.ok(style, 'The actual served fixture stylesheet is inspected');
@@ -28,7 +28,24 @@ test('actual Router fixture keeps spacing inside the full-width body without hid
   assert.equal(declarations.margin, '0', 'A margin must not enlarge the app full-width body');
   assert.equal(declarations.padding, '16px', 'Keep readable spacing inside the body');
   assert.equal(declarations['box-sizing'], 'border-box', 'Padding stays within width:100%');
+  const output = css.nodes.find(rule => rule.selector === 'output');
+  assert.ok(output);
+  const outputDeclarations = Object.fromEntries(output.nodes.map(node => [node.prop, node.value]));
+  assert.equal(outputDeclarations['overflow-wrap'], 'anywhere', 'Encoded route/query strings wrap without clipping');
   css.walkDecls(declaration => {
-    assert.doesNotMatch(declaration.prop, /^overflow/, 'Fixture CSS must not mask width failures by clipping');
+    assert.doesNotMatch(declaration.prop, /^overflow(?:-[xy])?$/, 'Fixture CSS must not mask width failures by clipping');
   });
+});
+
+
+test('completed Router browser scenarios reject and report viewport and content-width expansion', () => {
+  const source = readFileSync(new URL('./support/actualRouterBrowser.cjs', import.meta.url), 'utf8');
+  const completed = source.slice(source.indexOf('await body({'), source.indexOf('} catch (error) {'));
+  assert.match(completed, /innerWidth: window\.innerWidth/);
+  assert.match(completed, /documentScrollWidth: document\.documentElement\.scrollWidth/);
+  assert.match(completed, /bodyScrollWidth: document\.body\.scrollWidth/);
+  assert.match(completed, /assert\.equal\(actualWidths\.innerWidth, viewport\.width/);
+  assert.match(completed, /assert\.ok\(actualWidths\.documentScrollWidth <= viewport\.width/);
+  assert.match(completed, /assert\.ok\(actualWidths\.bodyScrollWidth <= viewport\.width/);
+  assert.match(completed, /reports\.push\(\{ width: viewport\.width, actualWidths,/);
 });
