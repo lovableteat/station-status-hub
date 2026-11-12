@@ -1,17 +1,15 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import test from "node:test";
-import ts from "typescript";
+import XLSX from "xlsx";
+import { compareNvBomSheets, readNvBomFile, validateNvBomMapping } from "./nvBomCompare.ts";
 
-const source = ts.transpileModule(fs.readFileSync(new URL("./nvBomCompare.ts", import.meta.url), "utf8"), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
-const { compareNvBomSheets, validateNvBomMapping } = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 const columns = ["NV PN", "MPN", "Manufacturer", "Description", "Qty", "Ref Des"];
 const mapping = { headerRow: 1, partNumber: 1, mpn: 2, manufacturer: 3, description: 4, qty: 5, refs: 6 };
 const sheet = rows => ({ name: "BOM", rows: [columns, ...rows] });
 const part = (pn, mpn, qty = "1", refs = "R1") => [pn, mpn, "Maker", "Part", qty, refs];
 
 test("new and removed original NV parts retain source rows and leading zeros", () => {
-  const diff = compareNvBomSheets(sheet([part("001", "KEEP"), part("002", "OLD")]), sheet([part("003", "NEW"), part("001", "KEEP")]), mapping, mapping);
+  const diff = compareNvBomSheets(sheet([part("001", "KEEP"), part("002", "OLD", "1", "R2")]), sheet([part("003", "NEW", "1", "R3"), part("001", "KEEP")]), mapping, mapping);
   assert.equal(diff.unchanged, 1);
   assert.deepEqual(diff.changes.map(row => [row.kind, (row.after ?? row.before).partNumber]), [["removed", "002"], ["added", "003"]]);
   assert.deepEqual(diff.changes[0].before.sourceRows, [3]);
@@ -42,4 +40,90 @@ test("rows with no common identifier are reported, and are not collapsed into a 
 test("incompatible identity columns and duplicate AI column mappings are explicit errors", () => {
   assert.throws(() => compareNvBomSheets(sheet([part("001", "A")]), sheet([part("001", "A")]), { ...mapping, mpn: null }, { ...mapping, partNumber: null }), /沒有可共同核對/);
   assert.throws(() => validateNvBomMapping({ ...mapping, mpn: 1 }, sheet([part("001", "A")])), /欄位無法確認/);
+});
+
+test("a unique placement with a replacement shows one change with both source rows", () => {
+  const diff = compareNvBomSheets(sheet([part("001", "OLD", "1", "U17")]), sheet([part("002", "NEW", "1", "U17")]), mapping, mapping);
+  assert.equal(diff.unresolved.length, 0);
+  assert.deepEqual(diff.changes.map(({ kind, changedFields }) => [kind, changedFields]), [["changed", ["partNumber", "mpn"]]]);
+  assert.deepEqual(diff.changes[0].before.sourceRows, [2]);
+  assert.deepEqual(diff.changes[0].after.sourceRows, [2]);
+});
+
+test("one newly filled identifier with the same unique identity is a change", () => {
+  const diff = compareNvBomSheets(sheet([part("001", "", "1", "-")]), sheet([part("001", "NEW", "1", "-")]), mapping, mapping);
+  assert.deepEqual(diff.changes.map(({ kind, changedFields }) => [kind, changedFields]), [["changed", ["mpn"]]]);
+  assert.equal(diff.unresolved.length, 0);
+});
+
+test("a compatible MPN takes precedence over a new occupant at the old placement", () => {
+  const before = sheet([["", "A", "", "Part", "1", "R1"]]);
+  const after = sheet([part("", "A", "1", "R2"), part("", "B", "1", "R1")]);
+  const diff = compareNvBomSheets(before, after, mapping, mapping);
+  assert.deepEqual(diff.changes.map(({ kind, before, after }) => [kind, before?.mpn, after?.mpn]), [["changed", "A", "A"], ["added", undefined, "B"]]);
+  assert.deepEqual(diff.changes[0].changedFields, ["manufacturer", "refs"]);
+  assert.equal(diff.unresolved.length, 0);
+});
+
+test("a location cannot overrule another plausible MPN with conflicting manufacturer", () => {
+  const before = sheet([part("", "A", "1", "R1")]);
+  const after = sheet([["", "A", "Other Maker", "Part", "1", "R2"], part("", "B", "1", "R1")]);
+  const diff = compareNvBomSheets(before, after, mapping, mapping);
+  assert.deepEqual(diff.changes, []);
+  assert.equal(diff.unresolved.length, 3);
+});
+
+test("different sole identifiers with the same placement are listed for manual review", () => {
+  const diff = compareNvBomSheets(sheet([part("001", "", "1", "R1")]), sheet([part("", "A", "1", "R1")]), mapping, mapping);
+  assert.deepEqual(diff.changes, []);
+  assert.deepEqual(diff.unresolved.map(({ side, part }) => [side, part.sourceRows]), [["before", [2]], ["after", [2]]]);
+});
+
+test("one-sided identity values alone cannot prove additions or removals", () => {
+  const diff = compareNvBomSheets(sheet([part("001", "", "1", "-")]), sheet([part("", "A", "1", "-")]), mapping, mapping);
+  assert.deepEqual(diff.changes, []);
+  assert.equal(diff.unresolved.length, 2);
+  assert.ok(diff.unresolved.every(row => row.reason.includes("識別欄位填寫不一致")));
+});
+
+test("reused reference designators do not turn unrelated AML rows into a replacement", () => {
+  const before = sheet([part("001", "KEEP"), part("002", "OLD")]);
+  const after = sheet([part("003", "NEW"), part("001", "KEEP")]);
+  const diff = compareNvBomSheets(before, after, mapping, mapping);
+  assert.equal(diff.unchanged, 1);
+  assert.deepEqual(diff.changes, []);
+  assert.deepEqual(diff.unresolved.map(({ side, part }) => [side, part.mpn]), [["before", "OLD"], ["after", "NEW"]]);
+});
+
+test("overlapping duplicate quantities and conflicting descriptions remain visible as original rows", () => {
+  const before = sheet([part("001", "A", "1", "R1"), part("001", "A", "1", "R1"), part("002", "B", "1", "R2"), ["002", "B", "Maker", "Different description", "1", "R3"]]);
+  const after = sheet([part("001", "A", "2", "R1"), part("002", "B", "2", "R2,R3")]);
+  const diff = compareNvBomSheets(before, after, mapping, mapping);
+  assert.deepEqual(diff.changes, []);
+  assert.equal(diff.unchanged, 0);
+  assert.deepEqual(diff.unresolved.map(({ id, part }) => [id, part.qty]), [["before:2", "1"], ["before:3", "1"], ["before:4", "1"], ["before:5", "1"], ["after:2", "2"], ["after:3", "2"]]);
+});
+
+test("an additional approved manufacturer stays an addition and does not inflate quantity", () => {
+  const original = part("001", "A");
+  const diff = compareNvBomSheets(sheet([original]), sheet([original, ["001", "B", "Alternate", "Part", "1", "R1"]]), mapping, mapping);
+  assert.equal(diff.unchanged, 1);
+  assert.deepEqual(diff.changes.map(({ kind, after }) => [kind, after.mpn, after.qty]), [["added", "B", "1"]]);
+  assert.deepEqual(diff.unresolved, []);
+});
+
+test("repeated headers are omitted while preserving each original Excel row number", () => {
+  const diff = compareNvBomSheets(sheet([part("001", "OLD", "1", "R1")]), sheet([columns, part("002", "NEW", "1", "R2")]), mapping, mapping);
+  assert.deepEqual(diff.changes.map(({ kind, before, after }) => [kind, (before ?? after).sourceRows]), [["removed", [2]], ["added", [3]]]);
+});
+
+test("the reader preserves physical Excel columns and rows and leading-zero CSV identifiers", async () => {
+  const book = XLSX.utils.book_new(), worksheet = XLSX.utils.aoa_to_sheet([]);
+  XLSX.utils.sheet_add_aoa(worksheet, [["NV PN", "MPN"], ["000001", "0002"]], { origin: "B6" });
+  XLSX.utils.book_append_sheet(book, worksheet, "Coordinates");
+  const xlsx = await readNvBomFile(new File([XLSX.write(book, { type: "array", bookType: "xlsx" })], "coordinates.xlsx"));
+  assert.deepEqual(xlsx.sheets[0].rows[5], ["", "NV PN", "MPN"]);
+  assert.deepEqual(xlsx.sheets[0].rows[6], ["", "000001", "0002"]);
+  const csv = await readNvBomFile(new File(["NV PN,MPN\n000001,0002"], "leading-zero.csv"));
+  assert.deepEqual(csv.sheets[0].rows[1], ["000001", "0002"]);
 });
