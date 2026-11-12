@@ -20,6 +20,9 @@ import {
 import { CHIP, CHIP_TONE, formatBomRelativeTime, formatBomTimestamp } from "./bomVersionPresentation";
 import { groupBomWorkspacesByProject } from "./materialRequestPresentation";
 import type { MaterialWorkbookRecord } from "./materialRequestUtils";
+import type { NvBomChange } from "./nvBomCompare";
+import type { NvBomTableCandidate, NvBomTableLink } from "./nvBomTableMatch";
+import type { NvBomCompareSession } from "./NvBomComparePanel";
 import "./bomVersionCenter.css";
 
 const UNASSIGNED_VALUE = "__unassigned__";
@@ -52,6 +55,9 @@ export interface BomVersionCenterProps {
   seriesList: BomSeries[];
   exportedBy: string;
   loadRecords: (workspaceId: string) => Promise<MaterialWorkbookRecord[]>;
+  currentBomName?: string;
+  matchCurrentBom?: (change: NvBomChange) => NvBomTableLink;
+  onLocateCurrentBom?: (candidate: NvBomTableCandidate) => boolean;
   onView: (workspaceId: string) => void;
   onSetCurrent: (version: BomSeriesVersion, series: BomSeries) => void;
   onUploadVersion: (series: BomSeries) => void;
@@ -107,7 +113,7 @@ function VersionEditor({ version, busy, onSave, onCancel }: { version: BomSeries
 export function BomVersionCenter(props: BomVersionCenterProps) {
   const {
     open, onOpenChange, canEdit, ready, busy = false, activeBomId, activeProjectId, activeProjectName, projects, projectNames, seriesList, exportedBy,
-    loadRecords, onView, onSetCurrent, onUploadVersion, onUploadNew, onAssignProject, onRenameSeries, onUpdateVersion, onSetArchived, onDeleteVersion, onDeleteSeries, onOpenPageTracker, onDownloadSource,
+    loadRecords, currentBomName, matchCurrentBom, onLocateCurrentBom, onView, onSetCurrent, onUploadVersion, onUploadNew, onAssignProject, onRenameSeries, onUpdateVersion, onSetArchived, onDeleteVersion, onDeleteSeries, onOpenPageTracker, onDownloadSource,
   } = props;
   const compact = useCompact();
   const [query, setQuery] = useState("");
@@ -118,6 +124,9 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
   const [mode, setMode] = useState<"series" | "diff" | "nv">("series");
   const [nvVisited, setNvVisited] = useState(false);
+  const [nvBomTargetId, setNvBomTargetId] = useState<string | null>(null);
+  const [nvSession, setNvSession] = useState<NvBomCompareSession>();
+  const nvLocateClosing = useRef(false);
   const [diffPair, setDiffPair] = useState<{ before: string; after: string } | null>(null);
   const [diffResult, setDiffResult] = useState<BomDiffResult | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
@@ -139,13 +148,21 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const selectedProjectName = selectedSeries?.project
     ? projectNames.get(selectedSeries.project.projectId) || selectedSeries.project.projectName || "未指定專案"
     : "未指定專案";
-  const description = mode === "nv" ? "選擇兩份 NV 原始 BOM 與要使用的 AI，查看新增、刪除與變更。"
+  const description = mode === "nv" ? "比較兩份 NV 原始 BOM，查看實際變更並定位目前料號申請表。"
     : `工作區專案：${activeProjectName ?? "未選擇"} · 所選 BOM 專案：${selectedProjectName} · 全部 ${seriesList.length} 個系列 · ${totalVersions} 個版本${archivedSeries.length > 0 ? ` · 已封存 ${archivedSeries.length} 個` : ""} · 使用中：${activeSeries ? `${activeSeries.series.name} ${activeSeries.version.displayNumber}` : "未選擇"}`;
-  const nvCompareButton = <Button type="button" variant="outline" size="sm" data-testid="bom-nv-compare-entry" onClick={() => { setNvVisited(true); setMode("nv"); }} title="另選兩份 NV 原始 Excel 比對，不受此系列版本數限制" className="bom-nv-compare-entry h-9 gap-2 border-primary/40 text-primary"><GitCompareArrows aria-hidden="true" className="h-4 w-4" />NV 原始 BOM 比對</Button>;
+  const nvCompareButton = <Button type="button" variant="outline" size="sm" data-testid="bom-nv-compare-entry" onClick={() => { setNvBomTargetId(activeBomId); setNvVisited(true); setMode("nv"); }} title="另選兩份 NV 原始 Excel 比對，不受此系列版本數限制" className="bom-nv-compare-entry h-9 gap-2 border-primary/40 text-primary"><GitCompareArrows aria-hidden="true" className="h-4 w-4" />NV 原始 BOM 比對</Button>;
+  const nvCanLocateCurrentBom = nvBomTargetId === activeBomId;
+  const locateNvResult = (candidate: NvBomTableCandidate, session: NvBomCompareSession) => {
+    if (!nvCanLocateCurrentBom || !onLocateCurrentBom?.(candidate)) return;
+    setNvSession(session);
+    nvLocateClosing.current = true;
+    onOpenChange(false);
+  };
 
   useEffect(() => {
     if (!open) return;
-    setMode("series");
+    setMode(nvSession && nvCanLocateCurrentBom ? "nv" : "series");
+    if (!nvCanLocateCurrentBom) setNvSession(undefined);
     setDiffPair(null);
     setDiffResult(null);
     setEditingVersionId(null);
@@ -398,16 +415,25 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="bom-version-center" className="bom-version-center flex flex-col overflow-hidden">
+      <DialogContent data-testid="bom-version-center" className="bom-version-center flex flex-col overflow-hidden" onCloseAutoFocus={event => {
+        if (!nvLocateClosing.current) return;
+        nvLocateClosing.current = false;
+        event.preventDefault();
+      }}>
         <DialogHeader className="bom-version-header">
           <div className="flex flex-wrap items-center gap-3"><DialogTitle className="text-xl">{mode === "nv" ? "NV 原始 BOM 比對" : "BOM 版本管理"}</DialogTitle>{mode !== "nv" && !selectedSeries && nvCompareButton}</div>
           <DialogDescription className="sr-only">{description}</DialogDescription>
-          <div className="bom-version-overview">{mode !== "nv" && selectedSeries && <span className="bom-version-project" title={`「${selectedSeries.name}」所屬專案：${selectedProjectName}`}><Layers3 aria-hidden="true" />所選 BOM 專案：{selectedProjectName}</span>}<span className="bom-version-workspace" title="目前工作區的導覽專案，不會改變所選 BOM 的專案歸屬">工作區專案：{activeProjectName ?? "未選擇"}</span><span>全部 {seriesList.length} 個系列</span><span>{totalVersions} 個版本</span>{archivedSeries.length > 0 && <span className="bom-version-archived">已封存 {archivedSeries.length} 個</span>}</div>
+          {mode !== "nv" && <div className="bom-version-overview">{selectedSeries && <span className="bom-version-project" title={`「${selectedSeries.name}」所屬專案：${selectedProjectName}`}><Layers3 aria-hidden="true" />所選 BOM 專案：{selectedProjectName}</span>}<span className="bom-version-workspace" title="目前工作區的導覽專案，不會改變所選 BOM 的專案歸屬">工作區專案：{activeProjectName ?? "未選擇"}</span><span>全部 {seriesList.length} 個系列</span><span>{totalVersions} 個版本</span>{archivedSeries.length > 0 && <span className="bom-version-archived">已封存 {archivedSeries.length} 個</span>}</div>}
         </DialogHeader>
         {/* Action feedback lives above both modes so an export started from the diff view is acknowledged there too. */}
         {feedback && <p role="status" data-testid="bom-version-feedback" className={cn("rounded-lg border px-3 py-1.5 text-xs", feedback.tone === "ok" ? "border-success/35 bg-success/10 text-success" : "border-destructive/35 bg-destructive/10 text-destructive")}>{feedback.text}</p>}
 
-        {nvVisited && <Suspense fallback={mode === "nv" ? <p role="status">正在開啟 NV 原始 BOM 比對…</p> : null}><NvBomCompare active={open && mode === "nv"} onBack={() => setMode("series")} /></Suspense>}
+        {nvVisited && <Suspense fallback={mode === "nv" ? <p role="status">正在開啟 NV 原始 BOM 比對…</p> : null}>
+          <NvBomCompare key={nvBomTargetId} active={open && mode === "nv"} onBack={() => setMode("series")} currentBomName={currentBomName}
+            initialSession={nvCanLocateCurrentBom ? nvSession : undefined}
+            matchCurrentBom={nvCanLocateCurrentBom ? matchCurrentBom : undefined}
+            onLocateCurrentBom={nvCanLocateCurrentBom && onLocateCurrentBom ? locateNvResult : undefined} />
+        </Suspense>}
         {mode === "nv" ? null : mode === "diff" && diffSeries && diffBefore && diffAfter ? (
           <BomDiffView
             series={diffSeries}

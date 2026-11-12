@@ -127,12 +127,12 @@ const compiled = ts.transpileModule([
   'return { groupRuntimeIndex, getMatchingGroup, getColumnFilterOptions, filteredGroups, filteredMarkKeysByGroup, toggleMarkedGroup, orderedRecordRows, visibleGroupRows, snapshot: () => createExportSnapshot(false) };',
 ].join('\n'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 
-function pagePipeline(displayGroups, { filters = {}, query = '', searchColumn = 'all', showMarkedOnly = false, markedKeys = [] } = {}) {
+function pagePipeline(displayGroups, { filters = {}, query = '', searchColumn = 'all', showMarkedOnly = false, markedKeys = [], locatedBomCandidate = null } = {}) {
   const markWrites = [];
   const bindings = {
     ...utils, ...search, normalizeMaterialTrackingStatus, MATERIAL_TRACKING_STATUS_OPTIONS, sortMaterialTableRows,
     filterMaterialMainGroup, searchMaterialMainGroup, getMaterialMarkKeys, getSortedAlternatives: sortMaterialAlternatives,
-    displayGroups, columnFilters: filters, deferredQuery: query, searchColumn, availability: 'all',
+    displayGroups, columnFilters: filters, deferredQuery: query, searchColumn, availability: 'all', locatedBomCandidate,
     showMarkedOnly, personalMarks: { keys: new Set(markedKeys), toggle: keys => markWrites.push(Array.from(keys)) },
     markKeysByGroup: new Map(displayGroups.map(group => [group.key, getMaterialMarkKeys(group)])),
     sortMode: 'reference', columnSort: null,
@@ -148,6 +148,23 @@ function pagePipeline(displayGroups, { filters = {}, query = '', searchColumn = 
   };
   return { ...new Function(...Object.keys(bindings), compiled)(...Object.values(bindings)), markWrites };
 }
+
+test('NV location isolates an exact alternate and restores the original search cohort when cleared', () => {
+  const groups = display([
+    raw('main-1', 'R1', { isGroupStart: true, manufacturerPartNumber: 'MPN-MAIN-1', virtualAlternative: 'VIRTUAL-1' }),
+    raw('alternate-1', 'R1', { manufacturerPartNumber: 'MPN-ALT-01' }),
+    raw('alternate-2', 'R1', { manufacturerPartNumber: 'MPN-ALT-010' }),
+    raw('main-2', 'R2', { isGroupStart: true, manufacturerPartNumber: 'MPN-MAIN-2', virtualAlternative: 'VIRTUAL-2' }),
+  ]);
+  const view = { filters: { virtualAlternative: ['VIRTUAL-2'] } };
+  const location = pagePipeline(groups, { ...view, locatedBomCandidate: { id: 'alternate-1' } });
+  assert.equal(location.filteredGroups.length, 1);
+  assert.equal(location.filteredGroups[0].primaryRecord.id, 'main-1');
+  assert.deepEqual(ids(location.filteredGroups[0].records), ['main-1', 'alternate-1']);
+  assert.deepEqual(Array.from(location.orderedRecordRows, row => row.record.id), ['alternate-1']);
+  const restored = pagePipeline(groups, view);
+  assert.deepEqual(Array.from(restored.filteredGroups, group => group.primaryRecord.id), ['main-2']);
+});
 
 test('the actual page cache and matching-group predicate exclude numbered mains and nonmatching alternatives for blank virtual PN', () => {
   const groups = display([

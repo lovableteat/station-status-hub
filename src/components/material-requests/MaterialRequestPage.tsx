@@ -155,6 +155,8 @@ import type { BomTableColorTheme, BomWorkspaceArchive, BomWorkspaceProject } fro
 import { loadBomWorkspaceArchives, loadBomWorkspaceProjects, saveBomWorkspaceArchive, saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
 import { loadBomWorkspaceRecords, loadBomWorkspaceVersions, saveBomWorkspaceVersion } from "./materialBomStorage";
 import { BomVersionCenter } from "./BomVersionCenter";
+import { buildNvBomTableIndex, matchNvBomTableChange, type NvBomTableCandidate } from "./nvBomTableMatch";
+import type { NvBomChange } from "./nvBomCompare";
 import { BomUploadDialog, NEW_BOM_SERIES_TARGET, type BomUploadMeta, type PendingBomUpload } from "./BomUploadDialog";
 import { carryBomTracking } from "./bomDiff";
 import {
@@ -3004,6 +3006,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   row,
   itemValue,
   expanded,
+  locatedRecordId,
   editingNames,
   latestRecordUpdate,
   latestUpdater,
@@ -3017,6 +3020,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
   row: VisibleGroupRow;
   itemValue: number;
   expanded: boolean;
+  locatedRecordId?: string;
   editingNames: string;
   latestRecordUpdate: string;
   latestUpdater: string;
@@ -3064,6 +3068,8 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
       <tr
         data-material-kind={isAlternateRow ? "alternative" : "primary"}
         data-record-id={primaryAlternative.id}
+        data-nv-bom-located={locatedRecordId === primaryAlternative.id ? locatedRecordId : undefined}
+        tabIndex={locatedRecordId === primaryAlternative.id ? -1 : undefined}
         onClick={() => !row.isLocation && hasAlternatives && actions.toggleExpanded(group.key)}
         style={mainRowStyle}
         className={cn(
@@ -3272,7 +3278,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
       </tr>
       </tbody>
       {expanded && hasLocations && row.locations!.map(location => (
-        <MaterialGroupRow key={location.key} row={{ ...row, group: location, locations: undefined, isLocation: true, matchingRecords: getSortedAlternatives(location), primaryAlternative: location.primaryRecord, virtualAlternativeRecord: location.primaryRecord, secondaryAlternatives: getSortedAlternatives(location).slice(1) }} itemValue={itemValue} expanded editingNames={editingNames} latestRecordUpdate={latestRecordUpdate} latestUpdater={latestUpdater} colorTheme={colorTheme} columns={columns} canEditNote={canEditNote} markedLocationIds={JSON.stringify(markedIds.includes(location.primaryRecord.id) ? [location.primaryRecord.id] : [])} markDisabled={markDisabled} actions={actions} />
+        <MaterialGroupRow key={location.key} row={{ ...row, group: location, locations: undefined, isLocation: true, matchingRecords: getSortedAlternatives(location), primaryAlternative: location.primaryRecord, virtualAlternativeRecord: location.primaryRecord, secondaryAlternatives: getSortedAlternatives(location).slice(1) }} itemValue={itemValue} expanded locatedRecordId={locatedRecordId} editingNames={editingNames} latestRecordUpdate={latestRecordUpdate} latestUpdater={latestUpdater} colorTheme={colorTheme} columns={columns} canEditNote={canEditNote} markedLocationIds={JSON.stringify(markedIds.includes(location.primaryRecord.id) ? [location.primaryRecord.id] : [])} markDisabled={markDisabled} actions={actions} />
       ))}
       {expanded && !hasLocations && (
         <tbody><CompactAlternativeRows
@@ -3280,6 +3286,7 @@ const MaterialGroupRow = memo(function MaterialGroupRow({
           records={matchingRecords}
           primaryRecord={primaryAlternative}
           itemValue={itemValue}
+          locatedRecordId={locatedRecordId}
           colorTheme={colorTheme}
           columns={columns}
           onCopy={actions.copy}
@@ -3298,6 +3305,7 @@ function CompactAlternativeRows({
   records,
   primaryRecord,
   itemValue,
+  locatedRecordId,
   colorTheme,
   columns,
   onCopy,
@@ -3310,6 +3318,7 @@ function CompactAlternativeRows({
   records: MaterialRecord[];
   primaryRecord: MaterialRecord;
   itemValue: number;
+  locatedRecordId?: string;
   colorTheme: BomTableColorTheme;
   columns: MaterialColumnVisibility;
   onCopy: (value: string) => void;
@@ -3340,6 +3349,8 @@ function CompactAlternativeRows({
           <tr
             key={record.id}
             data-material-kind="alternative"
+            data-nv-bom-located={locatedRecordId === record.id ? locatedRecordId : undefined}
+            tabIndex={locatedRecordId === record.id ? -1 : undefined}
             style={rowStyle}
             className={cn(
               "group/material-row border-b border-white/15 text-slate-200 transition-colors",
@@ -3588,6 +3599,8 @@ export function MaterialRequestPage() {
   const [tableSettingsOpen, setTableSettingsOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [bomManagerOpen, setBomManagerOpen] = useState(false);
+  const [nvBomTableLocation, setNvBomTableLocation] = useState<NvBomTableCandidate | null>(null);
+  const tableResultsRef = useRef<HTMLDivElement>(null);
   const [circuitChangesOpen, setCircuitChangesOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ title: string; description: string; workspaceIds: string[] } | null>(null);
   const [pendingCurrent, setPendingCurrent] = useState<{ version: BomSeriesVersion; series: BomSeries } | null>(null);
@@ -3653,6 +3666,7 @@ export function MaterialRequestPage() {
   useEffect(() => { setMobileToolsOpen(false); }, [activeBomId, isCompactLayout, user?.userId]);
   useEffect(() => {
     setShowMarkedOnly(false);
+    setNvBomTableLocation(null);
     setEditorOpen(false);
     setReturnToPending(false);
     setPendingDialogOpen(false);
@@ -3734,6 +3748,15 @@ export function MaterialRequestPage() {
     : "";
   const isFullDatasetLoaded = activeWorkspace.isLoaded !== false
     && activeWorkspace.payload.records.length >= activeWorkspace.payload.recordCount;
+  const canMatchNvBom = canViewModuleAccess && isFullDatasetLoaded && !isWorkspaceLoading && activeWorkspace.id === activeBomId;
+  const currentNvBomName = [activeWorkspaceProjectLabel, `${activeSeriesName} ${activeVersionInfo?.version.displayNumber ?? "V1"}${isHistoricalVersion ? "（歷史版本）" : ""}`].filter(Boolean).join(" / ");
+  const matchCurrentBom = useMemo(() => {
+    let index: ReturnType<typeof buildNvBomTableIndex> | undefined;
+    return (change: NvBomChange) => matchNvBomTableChange(change, canMatchNvBom
+      ? (index ??= buildNvBomTableIndex(activeWorkspace.id, activeWorkspace.payload.records))
+      : null);
+  }, [activeWorkspace.id, activeWorkspace.payload.records, canMatchNvBom]);
+  const locatedBomCandidate = canMatchNvBom && nvBomTableLocation?.workspaceId === activeWorkspace.id ? nvBomTableLocation : null;
   const isPreviewDataset = !isFullDatasetLoaded && activeWorkspace.payload.records.length > 0;
   const activeTableColorTheme = useMemo(
     () => normalizeBomTableColorTheme(activeWorkspace.tableColorTheme),
@@ -4374,6 +4397,7 @@ export function MaterialRequestPage() {
   }, [markedFilterSet]);
 
   const getMatchingGroup = useCallback((group: MaterialMainGroup, ignoredKey?: ColumnFilterKey) => {
+    if (locatedBomCandidate) return searchMaterialMainGroup(group, record => record.id === locatedBomCandidate.id);
     const scoped = !markedLocationFilterSet && !hasActiveColumnFilters ? group
       : filterMaterialMainGroup(group, (record, location) => (!markedLocationFilterSet
         || getMaterialMarkKeys(location).some(key => markedLocationFilterSet.has(key)))
@@ -4386,11 +4410,12 @@ export function MaterialRequestPage() {
           return cachedValues.raw.some(value => selectedSet.has(value));
         }));
     return scoped && searchTokens.length > 0 ? searchMaterialMainGroup(scoped, matchesRecordSearch) : scoped;
-  }, [columnFilterSets, groupRuntimeIndex, hasActiveColumnFilters, markedLocationFilterSet, matchesRecordSearch, searchTokens.length]);
+  }, [columnFilterSets, groupRuntimeIndex, hasActiveColumnFilters, locatedBomCandidate, markedLocationFilterSet, matchesRecordSearch, searchTokens.length]);
 
   const searchAvailabilityGroups = useMemo(
-    () => displayGroups.filter((group) => matchesMarkedState(group) && matchesSearch(group) && matchesAvailability(group)),
-    [displayGroups, matchesAvailability, matchesMarkedState, matchesSearch],
+    () => locatedBomCandidate ? displayGroups.filter(group => group.records.some(record => record.id === locatedBomCandidate.id))
+      : displayGroups.filter((group) => matchesMarkedState(group) && matchesSearch(group) && matchesAvailability(group)),
+    [displayGroups, locatedBomCandidate, matchesAvailability, matchesMarkedState, matchesSearch],
   );
 
   const getColumnFilterOptions = useCallback((key: ColumnFilterKey) => {
@@ -4445,6 +4470,7 @@ export function MaterialRequestPage() {
   }, [filteredGroups]);
 
   const activeFilterChips = useMemo(() => {
+    if (locatedBomCandidate) return [{ key: "nv-location", label: `NV 比對定位：${locatedBomCandidate.mpn} · ${locatedBomCandidate.refDes}` }];
     const chips: Array<{ key: string; label: string }> = [];
 
     if (query) chips.push({ key: "query", label: `關鍵字：${query}` });
@@ -4463,7 +4489,7 @@ export function MaterialRequestPage() {
     });
 
     return chips;
-  }, [availability, columnFilters, query, searchColumn, showMarkedOnly]);
+  }, [availability, columnFilters, locatedBomCandidate, query, searchColumn, showMarkedOnly]);
 
   const totalPages = isFullDatasetLoaded
     ? Math.max(1, Math.ceil(filteredGroups.length / pageSize))
@@ -4568,6 +4594,20 @@ export function MaterialRequestPage() {
   useEffect(() => {
     setPage(1);
   }, [availability, columnFilters, columnSort, deferredQuery, pageSize, showMarkedOnly, sortMode]);
+
+  useEffect(() => {
+    setNvBomTableLocation(null);
+  }, [availability, columnFilters, columnSort, query, searchColumn, showMarkedOnly, sortMode]);
+
+  useEffect(() => {
+    if (!locatedBomCandidate || bomManagerOpen) return;
+    const frame = requestAnimationFrame(() => {
+      const row = tableResultsRef.current?.querySelector<HTMLElement>("[data-nv-bom-located]");
+      row?.focus({ preventScroll: true });
+      row?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [bomManagerOpen, locatedBomCandidate]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -5606,6 +5646,7 @@ export function MaterialRequestPage() {
     if (isSearchPending || isWorkspaceLoading) return;
 
     startSearchTransition(() => {
+      setNvBomTableLocation(null);
       setQuery(normalizedQuery);
       setExpandedKey(null);
       setPage(1);
@@ -5613,6 +5654,12 @@ export function MaterialRequestPage() {
   };
 
   const clearFilters = () => {
+    if (locatedBomCandidate) {
+      setNvBomTableLocation(null);
+      setExpandedKey(null);
+      setPage(1);
+      return;
+    }
     setQuery("");
     setSearchColumn("all");
     setSearchDraft("");
@@ -5625,7 +5672,9 @@ export function MaterialRequestPage() {
   };
 
   const removeFilterChip = (key: string) => {
-    if (key === "query") {
+    if (key === "nv-location") {
+      setNvBomTableLocation(null);
+    } else if (key === "query") {
       setQuery("");
       setSearchDraft("");
     } else if (key === "searchColumn") {
@@ -5643,6 +5692,21 @@ export function MaterialRequestPage() {
 
     setExpandedKey(null);
     setPage(1);
+  };
+
+  const locateCurrentBom = (candidate: NvBomTableCandidate) => {
+    const group = canMatchNvBom && candidate.workspaceId === activeWorkspace.id
+      ? displayGroups.find(item => item.records.some(record => record.id === candidate.id))
+      : undefined;
+    if (!group) {
+      toast({ title: "無法定位這筆料件", description: "目前 BOM 版本或資料已變更。請回到版本管理重新確認。", variant: "destructive" });
+      return false;
+    }
+    setNvBomTableLocation(candidate);
+    setExpandedKey(group.key);
+    setPage(1);
+    if (isCompactLayout) setMobileView("table");
+    return true;
   };
 
   const loadLatestBomData = async () => {
@@ -5754,6 +5818,7 @@ export function MaterialRequestPage() {
   const activeFilterControls = activeFilterChips.length > 0 && (
     <div data-testid="material-active-filters" className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
       {activeFilterChips.map(chip => <button key={chip.key} type="button" onClick={() => removeFilterChip(chip.key)} aria-label={`移除篩選：${chip.label}`} className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 text-foreground lg:min-h-8"><span className="max-w-[20rem] truncate">{chip.label}</span><X className="h-3 w-3 shrink-0" /></button>)}
+      {locatedBomCandidate && <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)}>返回 NV 比對</Button>}
       <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="min-h-11 text-muted-foreground hover:text-foreground lg:min-h-8">全部清除</Button>
     </div>
   );
@@ -5847,6 +5912,9 @@ export function MaterialRequestPage() {
         seriesList={seriesList}
         exportedBy={user?.displayName || user?.username || ""}
         loadRecords={loadVersionRecords}
+        currentBomName={currentNvBomName}
+        matchCurrentBom={matchCurrentBom}
+        onLocateCurrentBom={locateCurrentBom}
         onView={(id) => { switchActiveBom(id); setBomManagerOpen(false); }}
         onSetCurrent={requestSetCurrentBomVersion}
         onUploadVersion={(series) => { uploadTargetSeriesRef.current = series.id; fileInputRef.current?.click(); }}
@@ -6223,7 +6291,7 @@ export function MaterialRequestPage() {
         </div>
       )}
 
-      <div data-material-results="true" className={cn("mt-2 transition-opacity", isWorkspaceLoading && "pointer-events-none opacity-35")} aria-busy={isWorkspaceLoading}>
+      <div ref={tableResultsRef} data-material-results="true" className={cn("mt-2 transition-opacity", isWorkspaceLoading && "pointer-events-none opacity-35")} aria-busy={isWorkspaceLoading}>
         <div className="min-w-0">
       <section
         data-testid="material-table-card"
@@ -6469,6 +6537,7 @@ export function MaterialRequestPage() {
                   row={row}
                   itemValue={getGroupItemValue(row.group, (page - 1) * pageSize + rowIndex + 1)}
                   expanded={expandedKey === row.group.key}
+                  locatedRecordId={locatedBomCandidate?.id}
                   editingNames={editingNames}
                   latestRecordUpdate={latestRecordUpdate}
                   latestUpdater={latestUpdater}

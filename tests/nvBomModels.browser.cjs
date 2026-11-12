@@ -7,12 +7,18 @@ const expected=['gpt-5.4','gpt-6.1-sol','gemini-2.5-flash','gemini-3.5-flash-lit
 const keyIds=['00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000004'];
 const modelKey=model=>model.startsWith('gpt-')?keyIds[0]:model.startsWith('gemini-')?keyIds[1]:model==='qa-claude'?keyIds[2]:keyIds[3];
 const startButton=page=>page.getByRole('button',{name:/^確認欄位並比對/});
+const changes=page=>page.locator('.nv-bom-result article[data-kind]');
+async function showRemovedDetail(page){
+ const card=page.locator('.nv-bom-result article[data-kind="removed"]');
+ const expand=card.getByRole('button',{name:'查看詳情',exact:true});
+ if(await expand.count())await expand.click();
+}
 async function showSettings(page){
  const settings=page.locator('.nv-bom-settings');
  if(!await settings.evaluate(details=>details.open))await settings.locator('summary').click();
 }
 async function waitForComparison(page,requestCount){
- await page.waitForFunction(count=>window.__nvQA.requests.length===count&&[...document.querySelectorAll('button')].some(button=>button.textContent.startsWith('確認欄位並比對')&&!button.disabled),requestCount);
+ await page.waitForFunction(count=>window.__nvQA.requests.length===count&&!Array.from(document.querySelectorAll('button')).some(button=>button.textContent.trim()==='停止 AI 核對'),requestCount);
 }
 async function run(browser,origin,width){
  const context=await browser.newContext({viewport:{width,height:884},deviceScaleFactor:1,isMobile:width<768,hasTouch:width<768,reducedMotion:'reduce',locale:'zh-TW'});
@@ -34,15 +40,15 @@ async function run(browser,origin,width){
    await picker.getByRole('button',{name:'選擇檔案',exact:true}).click();const chooser=await chooserPromise;
    await chooser.setFiles(path.join(evidence,`QA_NV_${side}.csv`));await picker.getByText(`QA_NV_${side}.csv`,{exact:true}).waitFor();
   }
-  await start.click();await page.locator('.nv-bom-table tbody tr[data-kind]').first().waitFor();
-  assert.equal(await page.locator('.nv-bom-table tbody tr').count(),3);
+  await start.click();await changes(page).first().waitFor();
+  assert.equal(await changes(page).count(),3);
   assert.equal(await page.evaluate(()=>window.__nvQA.requests.length),0);
   report.checks.push('confirmed workbook columns produce a complete local diff without contacting an AI model');
   await showSettings(page);await models.getByRole('checkbox',{name:/qa-text$/}).check();await start.click();
   await waitForComparison(page,1);
   assert.deepEqual(await page.evaluate(()=>window.__nvQA.requests.map(request=>request.model)),['qa-text']);
   await page.getByRole('tab').filter({hasText:'qa-text'}).click();
-  assert.equal(await page.locator('.nv-bom-table tbody tr').count(),3);
+  assert.equal(await changes(page).count(),3);
   report.checks.push('one selected custom model receives only the complete three-difference review request');
   await showSettings(page);await page.getByRole('button',{name:'全選',exact:true}).click();await start.click();
   await waitForComparison(page,8);
@@ -64,16 +70,17 @@ async function run(browser,origin,width){
   }
   for(const model of expected.filter(model=>model!=='gpt-6.1-sol')){
    await tabs.filter({hasText:model}).click();
-   for(const kind of ['added','removed','changed'])assert.equal(await page.locator(`.nv-bom-table tr[data-kind="${kind}"]`).count(),1,model+' '+kind);
+   for(const kind of ['added','removed','changed'])assert.equal(await page.locator(`.nv-bom-result article[data-kind="${kind}"]`).count(),1,model+' '+kind);
    assert.match(await page.locator('.nv-bom-summary').innerText(),/AI 已核對 3／3/);
   }
   await tabs.filter({hasText:'gpt-6.1-sol'}).click();assert.match(await page.getByRole('alert').innerText(),/尚未開通.*gpt-6.1-sol/);
   await tabs.filter({hasText:'gemini-3.8-flash'}).click();assert.equal(await page.getByRole('alert').count(),0);
   report.checks.push('all seven model routes use their selected model and raw key UUID; one Sol 403 does not discard six completed results');
+  await showRemovedDetail(page);
   const annotation=page.getByRole('textbox',{name:'QA-NV-002 人工備註',exact:true}),checked=page.getByRole('checkbox',{name:'已核對 QA-NV-002',exact:true});
   await annotation.fill('QA reviewed removal');await checked.check();
-  await tabs.filter({hasText:'gpt-5.4'}).click();assert.equal(await page.getByRole('textbox',{name:'QA-NV-002 人工備註',exact:true}).inputValue(),'');
-  await tabs.filter({hasText:'gemini-3.8-flash'}).click();assert.equal(await annotation.inputValue(),'QA reviewed removal');assert.equal(await checked.isChecked(),true);
+  await tabs.filter({hasText:'gpt-5.4'}).click();await showRemovedDetail(page);assert.equal(await annotation.inputValue(),'');
+  await tabs.filter({hasText:'gemini-3.8-flash'}).click();await showRemovedDetail(page);assert.equal(await annotation.inputValue(),'QA reviewed removal');assert.equal(await checked.isChecked(),true);
   const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'匯出此 AI 結果',exact:true}).click();const download=await downloadPromise;
   const exported=path.join(evidence,`export-${width}.xlsx`);await download.saveAs(exported);
   const {Workbook}=require('exceljs'),book=new Workbook();await book.xlsx.readFile(exported);const data=book.getWorksheet('新增刪除與變更');
@@ -82,7 +89,7 @@ async function run(browser,origin,width){
   assert.ok(removed);assert.equal(removed.getCell(14).value,'是');assert.equal(removed.getCell(15).value,'QA reviewed removal');
   assert.match(String(book.getWorksheet('比對來源').getRow(3).getCell(2).value),/gemini-3.8-flash/);
   report.checks.push('per-model annotations survive result switches and export retains every difference plus selected AI and manual note');
-  report.geometry=await page.evaluate(()=>({width:innerWidth,pageWidth:document.documentElement.scrollWidth,rows:[...document.querySelectorAll('.nv-bom-table tbody tr')].map(row=>row.getBoundingClientRect().height)}));
+  report.geometry=await page.evaluate(()=>({width:innerWidth,pageWidth:document.documentElement.scrollWidth,rows:[...document.querySelectorAll('.nv-bom-result article[data-kind]')].map(row=>row.getBoundingClientRect().height)}));
   assert.equal(report.geometry.width,report.geometry.pageWidth);assert.deepEqual(errors,[]);report.errors=errors;report.result='passed';
   await page.screenshot({path:path.join(evidence,`results-${width}.png`)});return report;
  }catch(error){await page.screenshot({path:path.join(evidence,`failure-${width}.png`)}).catch(()=>{});throw error;}finally{await context.close();}
