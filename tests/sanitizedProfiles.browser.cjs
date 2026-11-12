@@ -13,6 +13,12 @@ const dialogReady = page => page.waitForFunction(() => { const button = [...docu
 // frame before the centered transform settles. Do not change/disable CSS, retry
 // the scenario or relax the viewport boundary. Wait for actual root animations
 // and Playwright's stable actionability, then retain measured geometry as evidence.
+// A closing Radix node can still be counted while its exit animation runs.
+// Cases whose intended final state is closed must prove actual unmount before
+// the shared geometry inspector; never convert its timeout into a success.
+async function waitForPermissionsDialogClosed(page) {
+  await page.locator('[data-admin-dialog=permissions]').waitFor({ state: 'detached' });
+}
 async function dialogGeometry(page) {
   const selector = '[data-admin-dialog=permissions]';
   const dialog = page.locator(selector);
@@ -194,6 +200,7 @@ test('dialog-target-switch-delayed-load-and-retry-guard', 'dialog', async ({ pag
   await page.getByRole('button', { name: '重新載入權限' }).click(); await dialogReady(page);
   assert.equal(await page.locator('#pcb-designer-none').getAttribute('aria-checked'), 'true');
   await page.getByRole('button', { name: '取消', exact: true }).click();
+  await waitForPermissionsDialogClosed(page);
   assert.equal(await page.evaluate(() => sanitizedProfilesFixture.writes.length), 0);
 }, errors);
 
@@ -228,6 +235,7 @@ test('dialog-save-failure-cancel-and-controlled-retry-preserve-source', 'dialog'
   assert.equal(await page.getByRole('button', { name: '儲存中...' }).isDisabled(), true);
   await page.evaluate(() => sanitizedProfilesFixture.finishSave());
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
+  await waitForPermissionsDialogClosed(page);
   const writes = await page.evaluate(() => sanitizedProfilesFixture.writes);
   assert.equal(writes.length, 1); assert.equal(writes[0].name, 'set_user_access_permissions'); assert.equal(writes[0].args.p_user_id, TARGET);
   assert.deepEqual(Object.keys(writes[0].args).sort(), ['p_granted_by', 'p_performance_manager', 'p_permissions', 'p_user_id', 'p_workspace_access']);
