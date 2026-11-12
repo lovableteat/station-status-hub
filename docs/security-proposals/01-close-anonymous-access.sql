@@ -5,6 +5,45 @@ begin;
 set local lock_timeout = '1s';
 set local statement_timeout = '20s';
 
+-- Already applied by 20261112001122_restrict_internal_stats_cleanup_execution.
+-- Read metadata only: never invoke, redefine or repair these internal RPCs here.
+-- Drift requires separate review, not an implicit grant/revoke in this proposal.
+do $internal_rpc_preflight$
+declare
+  signature text;
+  target oid;
+begin
+  foreach signature in array array[
+    'public.calculate_daily_production_stats()',
+    'workspace.calculate_daily_production_stats()',
+    'public.cleanup_old_notifications()',
+    'workspace.cleanup_old_notifications()'
+  ] loop
+    target := to_regprocedure(signature);
+    if target is null then
+      raise exception 'Applied internal RPC baseline missing: %', signature;
+    end if;
+    if has_function_privilege('anon', target, 'execute')
+      or has_function_privilege('authenticated', target, 'execute')
+      or exists (
+        select 1 from pg_proc p,
+          lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) permission
+        where p.oid = target and permission.grantee = 0
+          and permission.privilege_type = 'EXECUTE'
+      ) then
+      raise exception 'Applied internal RPC baseline drift: browser EXECUTE: %', signature;
+    end if;
+    if not has_function_privilege('service_role', target, 'execute')
+      or not has_function_privilege('postgres', target, 'execute')
+      or not (select has_schema_privilege('service_role', p.pronamespace, 'usage')
+        and has_schema_privilege('postgres', p.pronamespace, 'usage')
+        from pg_proc p where p.oid = target) then
+      raise exception 'Applied internal RPC baseline drift: maintenance access missing: %', signature;
+    end if;
+  end loop;
+end;
+$internal_rpc_preflight$;
+
 -- Fail closed on dependency/configuration drift before changing any grants.
 do $preflight$
 declare target record;
@@ -140,6 +179,13 @@ begin
     select p.oid::regprocedure as signature
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname in ('workspace', 'public') and p.prokind = 'f'
+      -- Preserve the already-applied internal RPC ACLs exactly.
+      and p.oid not in (
+        'public.calculate_daily_production_stats()'::regprocedure,
+        'workspace.calculate_daily_production_stats()'::regprocedure,
+        'public.cleanup_old_notifications()'::regprocedure,
+        'workspace.cleanup_old_notifications()'::regprocedure
+      )
       and not (
         (p.proname = 'authenticate_user' and pg_get_function_identity_arguments(p.oid) = 'username_input text, password_input text')
         or (p.proname = 'register_system_user' and pg_get_function_identity_arguments(p.oid) = 'username_input text, password_input text, display_name_input text')

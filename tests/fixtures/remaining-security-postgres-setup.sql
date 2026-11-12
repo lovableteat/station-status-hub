@@ -953,6 +953,11 @@ create function workspace.cleanup_old_notifications() returns void language sql 
 create function public.calculate_daily_production_stats() returns void language sql security definer as $$ select; $$;
 create function workspace.calculate_daily_production_stats() returns void language sql security definer as $$ select; $$;
 grant execute on all functions in schema workspace, public to anon, authenticated, service_role;
+-- Synthetic post-cutover baseline: the four internal ACLs were already applied.
+-- Bodies above are harmless stubs, not a copy or invocation of production RPCs.
+revoke execute on function public.calculate_daily_production_stats(),
+  workspace.calculate_daily_production_stats(), public.cleanup_old_notifications(),
+  workspace.cleanup_old_notifications() from public, anon, authenticated;
 -- Exercise legacy column privileges too.
 grant select (note) on workspace.tasks to anon;
 insert into workspace.system_users (id,auth_user_id,status,role,username,display_name,permissions) values ('00000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','active','admin','fixture-1','Fixture 1','{"workspaceAccess":{"station-status":"edit","pcb-designer":"edit"}}');
