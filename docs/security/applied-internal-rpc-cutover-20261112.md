@@ -39,3 +39,8 @@ The frontend, broader table/RPC restrictions, private attachment buckets and his
 Private configuration preimages, SQL and readbacks are checksum-verified recovery material, not a complete database/PITR or Storage-object backup. A full isolated restore remains unverified. Existing cron permissions were retained, but no claim is made here about its next execution or unknown endpoint clients. A narrowly scoped correction is preferable to automatic rollback into the former anonymous access.
 
 Tests pin the migration file's exact bytes and identity, replay the unchanged narrow SQL only against captured function definitions with synthetic local rows, and exercise later proposal preservation and rollback on drift. No production function invocation or production write is required for these checks. Exact-head PR CI must still pass after synchronization; it does not deploy this frontend or execute hosted migrations.
+
+
+## Later separately applied containment
+
+Migration `20261112013540` subsequently removed anonymous EXECUTE from the two machine-delete aliases without changing their bodies or existing authenticated/service access. See [the separate applied-delete record](applied-delete-rpc-cutover-20261112.md). That synchronization does not reapply this four-RPC migration or redeploy daily-stats v13.
