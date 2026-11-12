@@ -88,6 +88,89 @@ begin
 end;
 $delete_rpc_preflight$;
 
+-- Already applied by 20261112022029_restrict_anonymous_login_audit_access.
+-- Anonymous table/column/PUBLIC/inherited access must already be closed. This
+-- stage narrows authenticated audit access; it must never silently redo the
+-- applied anonymous fix. Snapshot metadata only, not audit rows or credentials.
+do $login_audit_preflight$
+declare
+  target oid := to_regclass('workspace.login_audit');
+  signature text;
+  role_name text;
+begin
+  if target is null then
+    raise exception 'Applied login audit baseline missing: workspace.login_audit';
+  end if;
+  if not exists (select 1 from pg_class where oid = target and relkind = 'r'
+    and relowner = 'postgres'::regrole and relrowsecurity and not relforcerowsecurity) then
+    raise exception 'Applied login audit baseline drift: owner or RLS';
+  end if;
+  if has_table_privilege('anon', target, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')
+    or has_any_column_privilege('anon', target, 'SELECT,INSERT,UPDATE,REFERENCES') then
+    raise exception 'Applied login audit baseline drift: anonymous table or column access';
+  end if;
+  -- Signed-in SELECT remains; the pending proposal intentionally removes writes.
+  -- Do not require authenticated to retain the old full table ACL after stage 01.
+  if not has_table_privilege('authenticated', target, 'SELECT')
+    or not has_schema_privilege('authenticated', 'workspace', 'USAGE') then
+    raise exception 'Applied login audit baseline drift: authenticated read access missing';
+  end if;
+  foreach role_name in array array['service_role', 'postgres'] loop
+    if not has_schema_privilege(role_name, 'workspace', 'USAGE') or exists (
+      select 1 from unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) privilege
+      where not has_table_privilege(role_name, target, privilege)
+    ) then
+      raise exception 'Applied login audit baseline drift: maintenance access missing';
+    end if;
+  end loop;
+  foreach signature in array array[
+    'public.authenticate_user(text,text)', 'workspace.authenticate_user(text,text)'
+  ] loop
+    if to_regprocedure(signature) is null then
+      raise exception 'Applied login audit baseline missing: %', signature;
+    end if;
+    if not exists (select 1 from pg_proc where oid = to_regprocedure(signature)
+      and proowner = 'postgres'::regrole and prosecdef) then
+      raise exception 'Applied login audit baseline drift: login owner or SECURITY DEFINER';
+    end if;
+    foreach role_name in array array['anon', 'authenticated', 'service_role', 'postgres'] loop
+      if not has_function_privilege(role_name, signature, 'EXECUTE')
+        or not (select has_schema_privilege(role_name, pronamespace, 'USAGE')
+          from pg_proc where oid = to_regprocedure(signature)) then
+        raise exception 'Applied login audit baseline drift: login caller access missing';
+      end if;
+    end loop;
+  end loop;
+  create temporary table security_proposal_login_audit_baseline on commit drop as
+  select
+    (select jsonb_agg(jsonb_build_object('signature', p.oid::regprocedure::text,
+      'owner', p.proowner, 'definer', p.prosecdef, 'acl', p.proacl,
+      'definition', pg_get_functiondef(p.oid)) order by p.oid)
+      from pg_proc p where p.oid in ('public.authenticate_user(text,text)'::regprocedure,
+        'workspace.authenticate_user(text,text)'::regprocedure)) as login,
+    -- Preserve non-browser grants and authenticated SELECT/MAINTAIN exactly,
+    -- including grantor/grant options. Only browser write ACLs narrow here;
+    -- anonymous/PUBLIC must stay absent.
+    (select coalesce(jsonb_agg(to_jsonb(permission) order by permission.grantor,
+      permission.grantee, permission.privilege_type), '[]'::jsonb)
+      from pg_class c, lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) permission
+      where c.oid = target and (permission.grantee not in
+        (0, 'anon'::regrole::oid, 'authenticated'::regrole::oid)
+        or (permission.grantee = 'authenticated'::regrole
+          and permission.privilege_type in ('SELECT', 'MAINTAIN')))) as retained_acl,
+    (select coalesce(jsonb_agg(jsonb_build_object('column', a.attname, 'permission', to_jsonb(permission))
+      order by a.attnum, permission.grantor, permission.grantee, permission.privilege_type), '[]'::jsonb)
+      from pg_attribute a, lateral aclexplode(a.attacl) permission
+      where a.attrelid = target and a.attnum > 0 and not a.attisdropped
+        and (permission.grantee <> 'authenticated'::regrole or permission.privilege_type = 'SELECT')) as retained_column_acl,
+    (select coalesce(jsonb_agg(jsonb_build_object('name', polname,
+      'command', polcmd, 'permissive', polpermissive,
+      'roles', case when polroles = array[0]::oid[] then array['authenticated'::regrole::oid] else polroles end,
+      'using', pg_get_expr(polqual, polrelid), 'check', pg_get_expr(polwithcheck, polrelid)) order by polname), '[]'::jsonb)
+      from pg_policy where polrelid = target) as expected_legacy_policies;
+end;
+$login_audit_preflight$;
+
 -- Fail closed on dependency/configuration drift before changing any grants.
 do $preflight$
 declare target record;
@@ -155,7 +238,20 @@ alter default privileges for role postgres in schema workspace, public
 
 -- Both exposed schemas must be covered. Preserve all explicit authenticated
 -- grants and all existing RLS predicates; this phase closes the anonymous path.
-revoke all privileges on all tables in schema workspace, public from public, anon;
+-- Exclude the applied audit boundary, including from the column sweep below.
+-- A newly reopened audit grant must fail postflight, not be silently repaired.
+do $anonymous_table_grants$
+declare target record;
+begin
+  for target in select n.nspname, c.relname
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname in ('workspace', 'public') and c.relkind in ('r', 'p', 'v', 'm', 'f')
+      and c.oid <> 'workspace.login_audit'::regclass
+  loop
+    execute format('revoke all privileges on table %I.%I from public, anon', target.nspname, target.relname);
+  end loop;
+end;
+$anonymous_table_grants$;
 revoke all privileges on all sequences in schema workspace, public from public, anon;
 -- Browser roles need row operations, never TRUNCATE (which bypasses RLS).
 revoke truncate, references, trigger on all tables in schema workspace, public
@@ -172,6 +268,7 @@ begin
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname in ('workspace', 'public')
       and c.relkind in ('r', 'p', 'v', 'm', 'f')
+      and c.oid <> 'workspace.login_audit'::regclass
       and a.attnum > 0 and not a.attisdropped and a.attacl is not null
   loop
     execute format(
@@ -247,8 +344,22 @@ $block$;
 revoke all privileges on table workspace.users from authenticated;
 -- Login audit writes are performed by the credential-verifying definer RPC.
 -- Keep records intact; client code cannot forge or remove audit events.
+-- MAINTAIN is unchanged by this reviewed proposal; it is not a row-write grant.
 revoke insert, update, delete, truncate, references, trigger
   on workspace.login_audit from authenticated;
+-- Column-level writes are independent of table ACLs. Do not remove SELECT or
+-- alter grants belonging to service/owner/other roles.
+do $audit_column_writes$
+declare target record;
+begin
+  for target in select attname from pg_attribute
+    where attrelid = 'workspace.login_audit'::regclass
+      and attnum > 0 and not attisdropped and attacl is not null
+  loop
+    execute format('revoke insert (%1$I), update (%1$I), references (%1$I) on workspace.login_audit from authenticated', target.attname);
+  end loop;
+end;
+$audit_column_writes$;
 
 -- Role editing and audit visibility have explicit server-derived identities.
 create policy security_guard_user_roles on workspace.user_roles
@@ -260,6 +371,101 @@ create policy security_guard_login_audit on workspace.login_audit
 as restrictive for select to authenticated
 using (user_id = (select workspace.current_system_user_id())
   or (select workspace.can_manage_system_users()));
+
+-- Independent semantic checks reject drift even after preflight/capture. An
+-- old rollback granting anonymous access cannot commit as part of this stage.
+-- The permitted differences are authenticated write revocation, legacy PUBLIC
+-- policy roles becoming authenticated, and the two reviewed restrictive guards.
+do $login_audit_postflight$
+declare
+  target oid := to_regclass('workspace.login_audit');
+  role_name text;
+  signature text;
+  actual jsonb;
+  baseline record;
+begin
+  if target is null then
+    raise exception 'Applied login audit postflight missing: workspace.login_audit';
+  end if;
+  if not exists (select 1 from pg_class where oid = target and relkind = 'r'
+    and relowner = 'postgres'::regrole and relrowsecurity and not relforcerowsecurity) then
+    raise exception 'Applied login audit postflight drift: owner or RLS';
+  end if;
+  if has_table_privilege('anon', target, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN')
+    or has_any_column_privilege('anon', target, 'SELECT,INSERT,UPDATE,REFERENCES') then
+    raise exception 'Applied login audit postflight drift: anonymous table or column access';
+  end if;
+  if not has_table_privilege('authenticated', target, 'SELECT')
+    or not has_schema_privilege('authenticated', 'workspace', 'USAGE') then
+    raise exception 'Applied login audit postflight drift: authenticated read access missing';
+  end if;
+  if has_table_privilege('authenticated', target, 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    or has_any_column_privilege('authenticated', target, 'INSERT,UPDATE,REFERENCES') then
+    raise exception 'Login audit postflight drift: authenticated write access remains';
+  end if;
+  foreach role_name in array array['service_role', 'postgres'] loop
+    if not has_schema_privilege(role_name, 'workspace', 'USAGE') or exists (
+      select 1 from unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) privilege
+      where not has_table_privilege(role_name, target, privilege)
+    ) then
+      raise exception 'Applied login audit postflight drift: maintenance access missing';
+    end if;
+  end loop;
+  foreach signature in array array[
+    'public.authenticate_user(text,text)', 'workspace.authenticate_user(text,text)'
+  ] loop
+    if to_regprocedure(signature) is null then
+      raise exception 'Applied login audit postflight missing: %', signature;
+    end if;
+    if not exists (select 1 from pg_proc where oid = to_regprocedure(signature)
+      and proowner = 'postgres'::regrole and prosecdef) then
+      raise exception 'Applied login audit postflight drift: login owner or SECURITY DEFINER';
+    end if;
+    foreach role_name in array array['anon', 'authenticated', 'service_role', 'postgres'] loop
+      if not has_function_privilege(role_name, signature, 'EXECUTE')
+        or not (select has_schema_privilege(role_name, pronamespace, 'USAGE')
+          from pg_proc where oid = to_regprocedure(signature)) then
+        raise exception 'Applied login audit postflight drift: login caller access missing';
+      end if;
+    end loop;
+  end loop;
+  select * into strict baseline from pg_temp.security_proposal_login_audit_baseline;
+  select jsonb_agg(jsonb_build_object('signature', p.oid::regprocedure::text,
+    'owner', p.proowner, 'definer', p.prosecdef, 'acl', p.proacl,
+    'definition', pg_get_functiondef(p.oid)) order by p.oid) into actual
+    from pg_proc p where p.oid in ('public.authenticate_user(text,text)'::regprocedure,
+      'workspace.authenticate_user(text,text)'::regprocedure);
+  if actual is distinct from baseline.login then
+    raise exception 'Applied login audit baseline changed: login metadata or definition';
+  end if;
+  select coalesce(jsonb_agg(to_jsonb(permission) order by permission.grantor,
+    permission.grantee, permission.privilege_type), '[]'::jsonb) into actual
+    from pg_class c, lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) permission
+    where c.oid = target and (permission.grantee not in
+      (0, 'anon'::regrole::oid, 'authenticated'::regrole::oid)
+      or (permission.grantee = 'authenticated'::regrole
+        and permission.privilege_type in ('SELECT', 'MAINTAIN')));
+  if actual is distinct from baseline.retained_acl then
+    raise exception 'Applied login audit baseline changed: retained table ACL';
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object('column', a.attname, 'permission', to_jsonb(permission))
+    order by a.attnum, permission.grantor, permission.grantee, permission.privilege_type), '[]'::jsonb) into actual
+    from pg_attribute a, lateral aclexplode(a.attacl) permission
+    where a.attrelid = target and a.attnum > 0 and not a.attisdropped
+      and (permission.grantee <> 'authenticated'::regrole or permission.privilege_type = 'SELECT');
+  if actual is distinct from baseline.retained_column_acl then
+    raise exception 'Applied login audit baseline changed: retained column ACL';
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object('name', polname,
+    'command', polcmd, 'permissive', polpermissive, 'roles', polroles,
+    'using', pg_get_expr(polqual, polrelid), 'check', pg_get_expr(polwithcheck, polrelid)) order by polname), '[]'::jsonb)
+    into actual from pg_policy where polrelid = target
+      and polname not in ('security_active_account_guard', 'security_guard_login_audit');
+  if actual is distinct from baseline.expected_legacy_policies then
+    raise exception 'Applied login audit baseline changed: legacy policy predicates';
+  end if;
+end;
+$login_audit_postflight$;
 
 notify pgrst, 'reload schema';
 commit;

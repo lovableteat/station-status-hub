@@ -355,6 +355,9 @@ create table workspace.users (id uuid primary key default gen_random_uuid(), pas
 alter table workspace.users enable row level security;
 create policy fixture_permissive on workspace.users for all to public using (true) with check (true);
 grant all on all tables in schema workspace to anon, authenticated, service_role;
+-- Applied 20261112022029 baseline: only anonymous audit table ACL is closed.
+-- Keep authenticated/service/owner grants, RLS/policies and all synthetic rows.
+revoke all privileges on table workspace.login_audit from anon;
 create table storage.buckets (id text primary key, public boolean);
 create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text, note text);
 alter table storage.objects enable row level security;
@@ -943,8 +946,22 @@ $function$;
 
 
 create function workspace.save_pcb_designer_workspace_shared(p_user_id uuid,p_payload jsonb) returns void language sql security definer as $$ select workspace.save_pcb_designer_workspace(p_user_id,p_payload); $$;
-create function public.authenticate_user(username_input text,password_input text) returns boolean language sql security definer as $$ select false; $$;
-create function workspace.authenticate_user(username_input text,password_input text) returns boolean language sql security definer as $$ select false; $$;
+-- Synthetic login implementation, never real credentials or production RPCs.
+create function workspace.authenticate_user(username_input text,password_input text)
+returns boolean language plpgsql security definer set search_path = '' as $$
+begin
+  if username_input = 'fixture-2' and password_input = 'fixture-only-valid' then
+    insert into workspace.login_audit(user_id,note)
+      values ('00000000-0000-4000-8000-000000000002','synthetic definer login event');
+    return true;
+  end if;
+  return false;
+end;
+$$;
+create function public.authenticate_user(username_input text,password_input text)
+returns boolean language sql security definer set search_path = '' as $$
+  select workspace.authenticate_user(username_input,password_input);
+$$;
 create function public.register_system_user(username_input text,password_input text,display_name_input text) returns boolean language sql security definer as $$ select false; $$;
 create function workspace.register_system_user(username_input text,password_input text,display_name_input text) returns boolean language sql security definer as $$ select false; $$;
 create function public.database_healthcheck() returns boolean language sql as $$ select true; $$;

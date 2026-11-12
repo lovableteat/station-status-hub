@@ -84,6 +84,37 @@ test("remaining exposure proposals preserve rows and reject anonymous and forged
       assert.equal(row.postgres, true);
       assert.ok(!row.definition.includes(identityGuard), 'applied ACL migration did not add the pending authorization guard');
     }
+    const auditState = async () => (await db.query(`
+      select c.relowner::regrole::text owner, c.relrowsecurity rls, c.relforcerowsecurity force_rls,
+        has_table_privilege('anon',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN') anon_table,
+        has_any_column_privilege('anon',c.oid,'SELECT,INSERT,UPDATE,REFERENCES') anon_column,
+        has_table_privilege('authenticated',c.oid,'SELECT') authenticated_select,
+        has_table_privilege('authenticated',c.oid,'MAINTAIN') authenticated_maintain,
+        has_table_privilege('authenticated',c.oid,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') authenticated_write,
+        (select jsonb_agg(to_jsonb(permission) order by permission.grantee, permission.privilege_type)
+          from aclexplode(c.relacl) permission where permission.grantee in
+            ('postgres'::regrole::oid,'service_role'::regrole::oid)) maintenance_acl
+      from pg_class c where c.oid='workspace.login_audit'::regclass
+    `)).rows[0];
+    const loginState = async () => (await db.query(`
+      select p.oid::regprocedure::text signature, p.proacl::text,
+        p.proowner::regrole::text owner, p.prosecdef security_definer,
+        pg_get_functiondef(p.oid) definition
+      from pg_proc p where p.oid in ('public.authenticate_user(text,text)'::regprocedure,
+        'workspace.authenticate_user(text,text)'::regprocedure) order by 1
+    `)).rows;
+    const auditBefore = await auditState();
+    const loginBefore = await loginState();
+    assert.equal(auditBefore.anon_table, false);
+    assert.equal(auditBefore.anon_column, false);
+    assert.equal(auditBefore.authenticated_select, true);
+    assert.equal(auditBefore.authenticated_maintain, true, 'MAINTAIN is outside the reviewed write-revocation scope');
+    assert.equal(auditBefore.authenticated_write, true, 'only anonymous audit ACL closure is already applied');
+    assert.equal(auditBefore.owner, 'postgres');
+    assert.equal(auditBefore.rls, true);
+    assert.equal(auditBefore.force_rls, false);
+    await assert.rejects(as('anon', null, 'select note from workspace.login_audit'), /permission denied/);
+    assert.equal(await count('authenticated', uid(2), 'workspace.login_audit'), 5, 'signed-in row scope narrowing is still pending');
     let deletePrevious = deleteBefore;
     for (const stage of ['01-close-anonymous-access', '02-bind-rpc-identities', '03-private-attachments']) {
       await db.exec(await read('../docs/security-proposals/' + stage + '.sql'));
@@ -100,6 +131,10 @@ test("remaining exposure proposals preserve rows and reject anonymous and forged
       } else {
         assert.deepEqual(deleteAfter, deletePrevious, stage + ': delete definitions are unchanged');
       }
+      const auditAfter = await auditState();
+      assert.deepEqual(auditAfter, { ...auditBefore, authenticated_write: false },
+        stage + ': anonymous audit closure and maintenance grants remain; only browser writes narrow');
+      assert.deepEqual(await loginState(), loginBefore, stage + ': credential-verifying login metadata stays unchanged');
       deletePrevious = deleteAfter;
     }
 
@@ -128,6 +163,21 @@ test("remaining exposure proposals preserve rows and reject anonymous and forged
       assert.equal(await count("authenticated", uid(1), "workspace.user_roles"), 1);
       await assert.rejects(as("authenticated", uid(2), "delete from workspace.login_audit"), /permission denied/);
       await assert.rejects(as("authenticated", uid(1), "select * from workspace.users"), /permission denied/);
+    });
+
+    await t.test("both synthetic login definers still record successful login without browser table writes", async () => {
+      const beforeLogin = await snapshot();
+      // Local fixture calls only. The inserted synthetic events are rolled back.
+      await db.exec('begin');
+      try {
+        for (const schema of ['public', 'workspace']) {
+          assert.equal((await as('anon', null, `select ${schema}.authenticate_user('fixture-2','fixture-only-valid') ok`))[0].ok, true);
+        }
+        assert.equal((await db.query("select count(*)::int n from workspace.login_audit where note='synthetic definer login event'")).rows[0].n, 2);
+        assert.equal(await count('authenticated', uid(2), 'workspace.login_audit'), 3);
+        assert.equal(await count('service_role', null, 'workspace.login_audit'), 7);
+      } finally { await db.exec('rollback'); }
+      assert.equal(await snapshot(), beforeLogin);
     });
 
     await t.test("both delete RPC schemas reject anonymous, unrelated, inactive and view-only callers", async () => {
