@@ -11,7 +11,7 @@ const context=vm.createContext({require(name){
  if(name.endsWith('sanitizedProfilesBrowser.cjs'))return {buildSanitizedProfilesFixture(){throw new Error('No browser or build in geometry unit tests');}};
  throw new Error('Unexpected import '+name);
 },console,process:{exitCode:0},document:{querySelector(){return context.element;}}});
-vm.runInContext(source+'\nglobalThis.inspectGeometry=dialogGeometry;',context);
+vm.runInContext(source+'\nglobalThis.inspectGeometry=dialogGeometry;globalThis.waitForClosed=waitForPermissionsDialogClosed;',context);
 const viewport={width:1280,height:800};
 function fixture(bounds={x:60,y:12,width:1160,height:776},count=1){
  const calls=[];
@@ -41,4 +41,21 @@ test('no open dialog skips geometry only, while an unresolved animation remains 
  const absent=fixture(null,0);assert.equal(await context.inspectGeometry(absent.page),null);assert.deepEqual(absent.calls,[]);
  const present=fixture();present.page.waitForFunction=async()=>{throw new Error('synthetic animation timeout');};
  await assert.rejects(context.inspectGeometry(present.page),/synthetic animation timeout/);assert.deepEqual(present.calls,[]);
+});
+
+test('closed-case completion waits through closing-to-unmount before inspection and never swallows timeout',async()=>{
+ const calls=[];let mounted=true;
+ const dialog={count:async()=>mounted?1:0,waitFor:async options=>{
+  calls.push('closing');assert.equal(options.state,'detached');assert.equal(mounted,true);
+  await Promise.resolve();mounted=false;calls.push('detached');
+ }};
+ const page={locator:selector=>{assert.equal(selector,'[data-admin-dialog=permissions]');return dialog;},
+  waitForFunction:async()=>{throw new Error('Closed cases must not wait for animations of a detached node');}};
+ assert.equal(await dialog.count(),1);await context.waitForClosed(page);
+ assert.equal(await context.inspectGeometry(page),null);assert.deepEqual(calls,['closing','detached']);
+ dialog.waitFor=async()=>{throw new Error('synthetic close timeout');};
+ await assert.rejects(context.waitForClosed(page),/synthetic close timeout/);
+ const target=source.slice(source.indexOf("test('dialog-target-switch-delayed-load-and-retry-guard'"),source.indexOf("test('dialog-old-target-completion-never-enables-new-target'"));
+ assert.ok(target.indexOf('await waitForPermissionsDialogClosed(page)')>target.lastIndexOf("name: '取消'"));
+ assert.doesNotMatch(target,/catch|ignore.*timeout/);
 });
