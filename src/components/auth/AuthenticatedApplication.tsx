@@ -73,7 +73,8 @@ export default function AuthenticatedApplication() {
       <PermissionsProvider>
         <TestProjectProvider>
           <UnifiedDataProvider>
-            <HashRouter>
+            {/* Keep pre-v7 route update timing while retaining the existing dirty-work guards. */}
+            <HashRouter useTransitions={false}>
               <PreparedRoutes />
             </HashRouter>
           </UnifiedDataProvider>
