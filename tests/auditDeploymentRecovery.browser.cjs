@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createRequire } = require('node:module');
 const qa = createRequire(path.resolve(process.env.AUDIT_QA_DIR || '../qa-tools', 'package.json'));
+const { buildActualRouterFixture, runActualRouterBrowser } = require('./support/actualRouterBrowser.cjs');
 
 (async () => {
   const { assembleSafeAssetRetention, inventoryDigest, sha256 } = await import('../scripts/plan-safe-asset-retention.mjs');
@@ -74,13 +75,14 @@ const qa = createRequire(path.resolve(process.env.AUDIT_QA_DIR || '../qa-tools',
           </Suspense>
         </main>;
       }
-      createRoot(document.getElementById('root')).render(<AppRuntimeBoundary><HashRouter><Fixture /></HashRouter></AppRuntimeBoundary>);
+      createRoot(document.getElementById('root')).render(<AppRuntimeBoundary><HashRouter useTransitions={false}><Fixture /></HashRouter></AppRuntimeBoundary>);
     `, resolveDir: process.cwd(), loader: 'jsx' },
     bundle: true, write: false, format: 'iife', platform: 'browser', jsx: 'automatic',
     external: ['/assets/*'], define: { 'process.env.NODE_ENV': '"test"' },
     plugins: [{ name: 'source-alias', setup(build) { build.onResolve({ filter: /^@\// }, args => build.resolve(path.resolve('src', args.path.slice(2)), { resolveDir: process.cwd(), kind: args.kind })); } }],
   });
-  if (process.env.AUDIT_BUILD_ONLY === '1') { console.log('PASS isolated deployment-recovery browser fixture bundle and retained-assets plan'); return; }
+  const actualRouterBundle = await buildActualRouterFixture();
+  if (process.env.AUDIT_BUILD_ONLY === '1') { console.log('PASS isolated deployment-recovery and actual AuthenticatedApplication browser fixture bundles, safe service aliases, genuine dynamic-import contracts and retained-assets plan'); return; }
   const boot = fs.readFileSync('index.html', 'utf8').match(/<script>\s*([\s\S]*?)<\/script>/)?.[1];
   assert.ok(boot, 'Use the actual inline boot policy');
   let deployed = false;
@@ -203,8 +205,9 @@ const qa = createRequire(path.resolve(process.env.AUDIT_QA_DIR || '../qa-tools',
         throw error;
       } finally { await context.close(); }
     }
+    reports.push(...await runActualRouterBrowser(browser, actualRouterBundle, process.env.AUDIT_DEPLOYMENT_EVIDENCE_DIR));
     assert.ok(requested.includes('/' + safePath), 'The old safe chunk was fetched after release replacement');
     if (process.env.AUDIT_DEPLOYMENT_EVIDENCE_DIR) fs.writeFileSync(path.join(process.env.AUDIT_DEPLOYMENT_EVIDENCE_DIR, 'results.json'), JSON.stringify(reports, null, 2));
-    console.log(JSON.stringify({ scope: 'synthetic local release switch, actual recovery components and navigation hook; not proof about previously opened production tabs', reports }));
+    console.log(JSON.stringify({ scope: 'synthetic local release switch plus actual AuthenticatedApplication/PreparedRoutes and installed Router in Chromium, with synthetic page/provider boundaries; not production or real-device evidence', reports }));
   } finally { if (browser) await browser.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
