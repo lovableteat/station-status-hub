@@ -9,6 +9,28 @@ const loaded = page => page.waitForFunction(() => sanitizedProfilesFixture.state
 const event = (page, id) => page.evaluate(id => window.dispatchEvent(new CustomEvent('station-permissions-updated', { detail: { userId: id } })), id);
 const save = page => page.getByRole('button', { name: '儲存權限', exact: true });
 const dialogReady = page => page.waitForFunction(() => { const button = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === '儲存權限'); return button && !button.disabled; });
+// Visibility is not layout stability: reopening may expose an animation's first
+// frame before the centered transform settles. Do not change/disable CSS, retry
+// the scenario or relax the viewport boundary. Wait for actual root animations
+// and Playwright's stable actionability, then retain measured geometry as evidence.
+async function dialogGeometry(page) {
+  const selector = '[data-admin-dialog=permissions]';
+  const dialog = page.locator(selector);
+  if (!await dialog.count()) return null;
+  await page.waitForFunction(selector => {
+    const element = document.querySelector(selector);
+    return element && element.getAnimations().every(animation => !animation.pending && animation.playState !== 'running');
+  }, selector, { timeout: 8000 });
+  await dialog.scrollIntoViewIfNeeded({ timeout: 8000 });
+  const bounds = await dialog.boundingBox(), viewport = page.viewportSize();
+  assert.ok(bounds && [bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite)
+    && bounds.width > 0 && bounds.height > 0
+    && bounds.x >= -1 && bounds.y >= -1
+    && bounds.x + bounds.width <= viewport.width + 1
+    && bounds.y + bounds.height <= viewport.height + 1,
+  'Permission dialog remains inside viewport after layout settles: ' + JSON.stringify({ bounds, viewport }));
+  return { bounds, viewport, settled: true };
+}
 async function rosterLayout(page) {
   const geometry = await page.locator('.admin-content').evaluate(element => {
     const box = element.getBoundingClientRect(), main = element.closest('main').getBoundingClientRect();
@@ -223,6 +245,20 @@ for (const mode of ['missing-rpc', 'extra-secret', 'raw-snapshot']) test(`dialog
 }, errors);
 
 
+test('dialog-rapid-reopen-rejected-profile-stable-viewport', 'dialog', async ({ page }) => {
+  await dialogReady(page);
+  for (let cycle = 0; cycle < 3; cycle++) {
+    await page.getByRole('button', { name: '取消', exact: true }).click();
+    await page.getByRole('dialog').waitFor({ state: 'hidden' });
+    await page.evaluate(() => { sanitizedProfilesFixture.modes[sanitizedProfilesFixture.target] = 'raw-snapshot'; });
+    await page.getByRole('button', { name: 'Open target', exact: true }).click();
+    await page.getByRole('button', { name: '重新載入權限' }).waitFor({ state: 'visible' });
+    assert.equal(await save(page).isDisabled(), true);
+    await dialogGeometry(page);
+    assert.equal(await page.evaluate(() => sanitizedProfilesFixture.writes.length), 0);
+  }
+}, errors);
+
 async function pcbSettings(page, viewport) {
   if (viewport.width === 390) {
     await page.getByRole('button', { name: '開啟 PCB 專案操作', exact: true }).click();
@@ -314,8 +350,7 @@ runProtectedReadBrowser({ build: buildSanitizedProfilesFixture, buildOnly: 'SANI
     assert.deepEqual(result.rawAttempts, []); assert.deepEqual(result.authMutations, []); assert.equal(result.snapshotsIntact, true);
     assert.ok(result.profileCalls > 0);
     if (result.pcb) { assert.equal(result.pcb.permissionsReads, 0); assert.deepEqual(result.pcb.destructiveWrites, []); assert.equal(result.pcb.hasUnsavedChanges, true); assert.ok(!result.pcb.storageReads.includes('work-platform:pcb-designer:v1')); }
-    const bounds = await page.locator('[data-admin-dialog=permissions]').count() ? await page.locator('[data-admin-dialog=permissions]').boundingBox() : null;
-    if (bounds) { const viewport = page.viewportSize(); assert.ok(bounds.x >= -1 && bounds.y >= -1 && bounds.x + bounds.width <= viewport.width + 1 && bounds.y + bounds.height <= viewport.height + 1, 'Permission dialog remains inside viewport'); }
+    result.dialogGeometry = await dialogGeometry(page);
     return result;
   },
 }).catch(error => { console.error(error); process.exitCode = 1; });

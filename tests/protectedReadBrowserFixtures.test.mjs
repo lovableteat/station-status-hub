@@ -56,12 +56,13 @@ test('PCB protected recovery defines all added scenarios without removing the or
 
 test('profile fixture bundles actual three consumers plus actual PCB permission guard, not replacement permission logic', () => {
   const spec = definition('tests/sanitizedProfiles.browser.cjs');
-  assert.equal(spec.name, 'sanitized-profiles'); assert.equal(spec.scenarios.length, 21);
-  assert.equal(new Set(spec.scenarios.map(item => item.name)).size, 21);
+  assert.equal(spec.name, 'sanitized-profiles'); assert.equal(spec.scenarios.length, 22);
+  assert.equal(new Set(spec.scenarios.map(item => item.name)).size, 22);
   for (const name of ['permissions-background-refresh-preserves-mounted-draft', 'permissions-old-actor-error-discarded',
     'admin-roster-order-filter-refresh-and-failed-read-retention', 'admin-delayed-roster-error-after-newer-refresh',
     'dialog-target-switch-delayed-load-and-retry-guard', 'dialog-old-target-completion-never-enables-new-target',
     'dialog-save-failure-cancel-and-controlled-retry-preserve-source', 'dialog-old-save-receipt-cannot-close-new-target',
+    'dialog-rapid-reopen-rejected-profile-stable-viewport',
     'actual-guard-unmount-storage-failure-same-owner-recovers', 'actual-guard-owner-remount-never-inherits-other-draft']) {
     assert.ok(spec.scenarios.some(item => item.name === name), name);
   }
