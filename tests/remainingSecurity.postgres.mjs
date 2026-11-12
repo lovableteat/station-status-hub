@@ -37,7 +37,8 @@ test("remaining exposure proposals preserve rows and reject anonymous and forged
     const before = await snapshot();
     assert.equal(await count("anon", null, "workspace.tasks"), 1);
     const internalState = async () => (await db.query(`
-      select n.nspname, p.proname, p.proacl::text, pg_get_functiondef(p.oid) definition,
+      select n.nspname, p.proname, p.proacl::text, p.proowner::regrole::text owner,
+        p.prosecdef security_definer, pg_get_functiondef(p.oid) definition,
         has_function_privilege('anon', p.oid, 'execute') anon,
         has_function_privilege('authenticated', p.oid, 'execute') authenticated,
         has_function_privilege('service_role', p.oid, 'execute') service_role,
@@ -55,10 +56,51 @@ test("remaining exposure proposals preserve rows and reject anonymous and forged
       assert.equal(row.service_role, true);
       assert.equal(row.postgres, true);
     }
+    const deleteState = async () => (await db.query(`
+      select p.oid::regprocedure::text signature, p.proacl::text,
+        p.proowner::regrole::text owner, p.prosecdef security_definer,
+        pg_get_functiondef(p.oid) definition,
+        has_function_privilege('anon', p.oid, 'execute') anon,
+        has_function_privilege('authenticated', p.oid, 'execute') authenticated,
+        has_function_privilege('service_role', p.oid, 'execute') service_role,
+        has_function_privilege('postgres', p.oid, 'execute') postgres
+      from pg_proc p where p.oid in (
+        'public.delete_test_system(uuid)'::regprocedure,
+        'workspace.delete_test_system(uuid)'::regprocedure
+      ) order by 1
+    `)).rows;
+    const deleteBefore = await deleteState();
+    const withoutDefinition = rows => rows.map(({ definition, ...metadata }) => metadata);
+    const identityGuard = "  IF NOT coalesce(workspace.current_user_can_workspace('station-status', 'edit'), false) THEN\n"
+      + "    RAISE EXCEPTION 'Station edit access denied' USING ERRCODE = '42501';\n"
+      + "  END IF;\n\n";
+    assert.equal(deleteBefore.length, 2);
+    for (const row of deleteBefore) {
+      assert.equal(row.owner, 'postgres');
+      assert.equal(row.security_definer, true);
+      assert.equal(row.anon, false);
+      assert.equal(row.authenticated, true);
+      assert.equal(row.service_role, true);
+      assert.equal(row.postgres, true);
+      assert.ok(!row.definition.includes(identityGuard), 'applied ACL migration did not add the pending authorization guard');
+    }
+    let deletePrevious = deleteBefore;
     for (const stage of ['01-close-anonymous-access', '02-bind-rpc-identities', '03-private-attachments']) {
       await db.exec(await read('../docs/security-proposals/' + stage + '.sql'));
       assert.equal(await snapshot(), before, stage + ': all business rows and Storage objects remain unchanged');
       assert.deepEqual(await internalState(), internalBefore, stage + ': preserve all four applied internal ACLs and definitions');
+      const deleteAfter = await deleteState();
+      assert.deepEqual(withoutDefinition(deleteAfter), withoutDefinition(deleteBefore), stage + ': preserve both applied delete ACLs, owners and SECURITY DEFINER flags');
+      if (stage === '02-bind-rpc-identities') {
+        for (const [index, row] of deleteAfter.entries()) {
+          assert.notEqual(row.definition, deletePrevious[index].definition);
+          assert.ok(row.definition.includes(identityGuard));
+          assert.equal(row.definition.replace(identityGuard, ''), deletePrevious[index].definition, 'only the reviewed authorization guard changes');
+        }
+      } else {
+        assert.deepEqual(deleteAfter, deletePrevious, stage + ': delete definitions are unchanged');
+      }
+      deletePrevious = deleteAfter;
     }
 
     await t.test("all workspace tables and legacy column grants deny anonymous reads", async () => {

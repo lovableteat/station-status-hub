@@ -3,3 +3,4 @@ tests/comparison/fixtures/*.pdf binary
 tests/comparison/fixtures/**/*.pdf binary
 # Preserve the exact already-applied server migration bytes on every platform.
 supabase/migrations/20261112001122_restrict_internal_stats_cleanup_execution.sql text eol=lf
+supabase/migrations/20261112013540_restrict_anonymous_delete_test_system_execution.sql text eol=lf

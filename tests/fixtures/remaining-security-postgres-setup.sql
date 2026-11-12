@@ -958,6 +958,10 @@ grant execute on all functions in schema workspace, public to anon, authenticate
 revoke execute on function public.calculate_daily_production_stats(),
   workspace.calculate_daily_production_stats(), public.cleanup_old_notifications(),
   workspace.cleanup_old_notifications() from public, anon, authenticated;
+-- Applied 20261112013540 baseline: anonymous delete access is already closed.
+-- Keep the original bodies above: authenticated station-edit guards are pending.
+revoke execute on function public.delete_test_system(uuid),
+  workspace.delete_test_system(uuid) from public, anon;
 -- Exercise legacy column privileges too.
 grant select (note) on workspace.tasks to anon;
 insert into workspace.system_users (id,auth_user_id,status,role,username,display_name,permissions) values ('00000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','active','admin','fixture-1','Fixture 1','{"workspaceAccess":{"station-status":"edit","pcb-designer":"edit"}}');

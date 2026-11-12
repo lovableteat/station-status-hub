@@ -24,7 +24,8 @@ async function snapshot(db) {
     policies: await rows("select * from pg_policies where schemaname in ('workspace','public','storage') order by schemaname,tablename,policyname"),
     relations: await rows("select n.nspname,c.relname,c.relacl::text,c.relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('workspace','public','storage') order by 1,2"),
     columns: await rows("select n.nspname,c.relname,a.attname,a.attacl::text from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('workspace','public','storage') and a.attnum>0 order by 1,2,3"),
-    functions: await rows("select n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args,p.proacl::text,pg_get_functiondef(p.oid) definition from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('workspace','public','storage') and p.prokind='f' order by 1,2,3"),
+    functions: await rows("select n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args,p.proacl::text,p.proowner::regrole::text owner,p.prosecdef security_definer,pg_get_functiondef(p.oid) definition from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('workspace','public','storage') and p.prokind='f' order by 1,2,3"),
+    schemas: await rows("select nspname,nspowner::regrole::text,nspacl::text from pg_namespace where nspname in ('workspace','public','storage') order by 1"),
     defaults: await rows("select defaclrole::regrole::text,defaclnamespace::regnamespace::text,defaclobjtype,defaclacl::text from pg_default_acl order by 1,2,3"),
   });
 }
@@ -174,6 +175,240 @@ test('missing internal signature or schema access cannot silently pass pending s
     await db.exec('drop function workspace.cleanup_old_notifications()');
     for (const proposal of proposals.slice(0, 2)) {
       await rejectedAndRolledBack(db, proposal, /Applied internal RPC baseline missing/);
+    }
+  });
+});
+
+// Both delete aliases already have the anonymous ACL fix. Stage 02 changes only
+// their authorization bodies, never repairs/repeats that applied ACL cutover.
+const deleteSignatures = ['public.delete_test_system(uuid)', 'workspace.delete_test_system(uuid)'];
+const deleteMetadata = async db => (await db.query(`
+  select p.oid::regprocedure::text signature, p.proacl::text,
+    p.proowner::regrole::text owner, p.prosecdef security_definer
+  from pg_proc p where p.oid in (
+    'public.delete_test_system(uuid)'::regprocedure,
+    'workspace.delete_test_system(uuid)'::regprocedure
+  ) order by 1
+`)).rows;
+
+test('applied delete RPC anonymous and existing caller ACL drift fail closed without repair', async () => {
+  await isolated(async db => {
+    for (const signature of deleteSignatures) {
+      for (const role of ['public', 'anon']) {
+        await db.exec('grant execute on function ' + signature + ' to ' + role);
+        for (const proposal of proposals.slice(0, 2)) {
+          await rejectedAndRolledBack(db, proposal, /Applied delete RPC baseline drift: anonymous EXECUTE/);
+        }
+        await db.exec('revoke execute on function ' + signature + ' from ' + role);
+      }
+      for (const role of ['authenticated', 'service_role']) {
+        await db.exec('revoke execute on function ' + signature + ' from ' + role);
+        for (const proposal of proposals.slice(0, 2)) {
+          await rejectedAndRolledBack(db, proposal, /Applied delete RPC baseline drift: existing caller access missing/);
+        }
+        await db.exec('grant execute on function ' + signature + ' to ' + role);
+      }
+    }
+    // Effective inherited access is drift too, even without a direct anon ACL.
+    await db.exec('create role fixture_inherited_execute; grant fixture_inherited_execute to anon');
+    for (const signature of deleteSignatures) {
+      await db.exec('grant execute on function ' + signature + ' to fixture_inherited_execute');
+      for (const proposal of proposals.slice(0, 2)) {
+        await rejectedAndRolledBack(db, proposal, /Applied delete RPC baseline drift: anonymous EXECUTE/);
+      }
+      await db.exec('revoke execute on function ' + signature + ' from fixture_inherited_execute');
+    }
+  });
+});
+
+test('missing delete signature, owner or definer drift stops both pending stages without data changes', async () => {
+  for (const signature of deleteSignatures) {
+    await isolated(async db => {
+      for (const [mutation, restoration] of [
+        ['alter function ' + signature + ' security invoker', 'alter function ' + signature + ' security definer'],
+        ['alter function ' + signature + ' owner to service_role', 'alter function ' + signature + ' owner to postgres'],
+      ]) {
+        await db.exec(mutation);
+        for (const proposal of proposals.slice(0, 2)) {
+          await rejectedAndRolledBack(db, proposal, /Applied delete RPC baseline drift: owner or SECURITY DEFINER/);
+        }
+        await db.exec(restoration);
+      }
+      await db.exec('drop function ' + signature);
+      for (const proposal of proposals.slice(0, 2)) {
+        await rejectedAndRolledBack(db, proposal, /Applied delete RPC baseline missing/);
+      }
+      assert.equal((await db.query('select to_regprocedure($1) as signature', [signature])).rows[0].signature, null);
+    });
+  }
+});
+
+async function modelNonSuperuserPostgres(db) {
+  // The bootstrap role must stay SUPERUSER. Rename that synthetic bootstrap
+  // and create a non-superuser postgres to test lost effective privileges.
+  // No external database or real role is involved.
+  await db.exec('create role fixture_maintenance superuser; set session authorization fixture_maintenance; alter role postgres rename to fixture_bootstrap; create role postgres');
+  await db.exec('grant usage on schema workspace, public to postgres');
+  await db.exec('grant execute on function public.calculate_daily_production_stats(), workspace.calculate_daily_production_stats(), public.cleanup_old_notifications(), workspace.cleanup_old_notifications() to postgres');
+  for (const signature of deleteSignatures) await db.exec('alter function ' + signature + ' owner to postgres');
+}
+
+test('delete baseline checks effective postgres EXECUTE and every existing caller schema USAGE', async () => {
+  await isolated(async db => {
+    await modelNonSuperuserPostgres(db);
+    for (const signature of deleteSignatures) {
+      await db.exec('revoke execute on function ' + signature + ' from postgres');
+      for (const proposal of proposals.slice(0, 2)) {
+        await rejectedAndRolledBack(db, proposal, /Applied delete RPC baseline drift: existing caller access missing/);
+      }
+      await db.exec('grant execute on function ' + signature + ' to postgres');
+    }
+    for (const schema of ['workspace', 'public']) {
+      for (const role of ['authenticated', 'service_role', 'postgres']) {
+        const sharedUsage = (await db.query(`
+          select case when permission.grantee = 0 then 'public'
+            else permission.grantee::regrole::text end grantee
+          from pg_namespace n, lateral aclexplode(n.nspacl) permission
+          where n.nspname = $1 and permission.privilege_type = 'USAGE'
+            and permission.grantee in (0, 'pg_database_owner'::regrole::oid)
+        `, [schema])).rows;
+        // public schema may inherit USAGE from PUBLIC or pg_database_owner.
+        await db.exec('revoke usage on schema ' + schema + ' from public, pg_database_owner, ' + role);
+        assert.equal((await db.query("select has_schema_privilege($1,$2,'usage') allowed", [role, schema])).rows[0].allowed, false);
+        for (const proposal of proposals.slice(0, 2)) {
+          // The earlier internal-RPC preflight also guards shared service/postgres
+          // schema access. Verify the delete-specific readonly check separately.
+          await rejectedAndRolledBack(db, proposal, /Applied (internal|delete) RPC baseline drift: (maintenance|existing caller) access missing/);
+          const check = proposal.match(/do \$delete_rpc_preflight\$[\s\S]*?\$delete_rpc_preflight\$;/)?.[0];
+          assert.ok(check);
+          await rejectedAndRolledBack(db, 'begin;\n' + check + '\ncommit;', /Applied delete RPC baseline drift: existing caller access missing/);
+        }
+        await db.exec('grant usage on schema ' + schema + ' to ' + role);
+        for (const { grantee } of sharedUsage) await db.exec('grant usage on schema ' + schema + ' to ' + grantee);
+      }
+    }
+  });
+});
+
+test('CREATE OR REPLACE preserves exact applied delete grants under broad defaults and duplicate 02 replay', async () => {
+  await isolated(async db => {
+    await db.exec('create role fixture_future_default; alter default privileges for role postgres in schema workspace, public grant execute on functions to public, anon, authenticated, service_role, fixture_future_default');
+    await db.exec('grant execute on function public.delete_test_system(uuid), workspace.delete_test_system(uuid) to authenticated with grant option');
+    const before = await deleteMetadata(db);
+    // Confirm the defaults really are broad, without invoking any delete RPC.
+    for (const schema of ['public', 'workspace']) {
+      await db.exec('create function ' + schema + '.fixture_future_default() returns int language sql as $$select 1$$');
+      for (const role of ['anon', 'fixture_future_default']) {
+        assert.equal((await db.query("select has_function_privilege($1,$2,'execute') allowed", [role, schema + '.fixture_future_default()'])).rows[0].allowed, true);
+      }
+    }
+    for (let replay = 0; replay < 2; replay++) {
+      await db.exec(proposals[1]);
+      assert.deepEqual(await deleteMetadata(db), before, 'replacement retains exact ACLs including grant options');
+      for (const signature of deleteSignatures) {
+        for (const role of ['anon', 'fixture_future_default']) {
+          assert.equal((await db.query("select has_function_privilege($1,$2,'execute') allowed", [role, signature])).rows[0].allowed, false);
+        }
+      }
+    }
+  });
+});
+
+test('delete replacement postflight rejects unexpected ACL or metadata changes atomically', async () => {
+  await isolated(async db => {
+    const proposal = proposals[1];
+    const secondDefinition = proposal.indexOf('CREATE OR REPLACE FUNCTION workspace.delete_test_system');
+    const postflight = proposal.indexOf('  select jsonb_agg(', secondDefinition);
+    assert.ok(secondDefinition > 0 && postflight > secondDefinition);
+    for (const drift of [
+      'grant execute on function public.delete_test_system(uuid) to anon;',
+      'alter function workspace.delete_test_system(uuid) security invoker;',
+      'alter function public.delete_test_system(uuid) owner to service_role;',
+    ]) {
+      const changed = proposal.slice(0, postflight) + drift + '\n' + proposal.slice(postflight);
+      await rejectedAndRolledBack(db, changed, /Applied delete RPC baseline changed during identity replacement/);
+    }
+  });
+});
+
+test('stage 01 excludes only the applied UUID delete signatures, not unrelated overloads', async () => {
+  await isolated(async db => {
+    const before = await deleteMetadata(db);
+    for (const schema of ['public', 'workspace']) {
+      await db.exec('create function ' + schema + '.delete_test_system(p_system_id text) returns void language sql as $$select$$');
+      await db.exec('grant execute on function ' + schema + '.delete_test_system(text) to anon, authenticated, service_role');
+    }
+    await db.exec(proposals[0]);
+    assert.deepEqual(await deleteMetadata(db), before);
+    for (const schema of ['public', 'workspace']) {
+      const signature = schema + '.delete_test_system(text)';
+      assert.equal((await db.query("select has_function_privilege('anon',$1,'execute') allowed", [signature])).rows[0].allowed, false);
+      assert.equal((await db.query("select has_function_privilege('authenticated',$1,'execute') allowed", [signature])).rows[0].allowed, true);
+    }
+  });
+});
+
+test('drift before delete metadata capture cannot become an accepted replacement baseline', async () => {
+  await isolated(async db => {
+    const proposal = proposals[1];
+    const capture = proposal.indexOf('  select jsonb_agg(');
+    assert.ok(capture > proposal.indexOf('$delete_rpc_preflight$;'));
+    await db.exec('create role fixture_late_inherited_execute; grant fixture_late_inherited_execute to anon');
+    for (const signature of deleteSignatures) {
+      for (const [drift, expected] of [
+        ['grant execute on function ' + signature + ' to public;', /Applied delete RPC postflight drift: anonymous EXECUTE/],
+        ['grant execute on function ' + signature + ' to anon;', /Applied delete RPC postflight drift: anonymous EXECUTE/],
+        ['grant execute on function ' + signature + ' to fixture_late_inherited_execute;', /Applied delete RPC postflight drift: anonymous EXECUTE/],
+        ['revoke execute on function ' + signature + ' from authenticated;', /Applied delete RPC postflight drift: existing caller access missing/],
+        ['revoke execute on function ' + signature + ' from service_role;', /Applied delete RPC postflight drift: existing caller access missing/],
+        ['alter function ' + signature + ' owner to service_role;', /Applied delete RPC postflight drift: owner or SECURITY DEFINER/],
+        ['alter function ' + signature + ' security invoker;', /Applied delete RPC baseline changed during identity replacement/],
+      ]) {
+        const changed = proposal.slice(0, capture) + drift + '\n' + proposal.slice(capture);
+        await rejectedAndRolledBack(db, changed, expected);
+      }
+    }
+    for (const schema of ['public', 'workspace']) {
+      for (const role of ['authenticated', 'service_role']) {
+        const drift = 'revoke usage on schema ' + schema + ' from public, ' + role + ';';
+        const changed = proposal.slice(0, capture) + drift + '\n' + proposal.slice(capture);
+        await rejectedAndRolledBack(db, changed, /Applied delete RPC postflight drift: existing caller access missing/);
+      }
+    }
+  });
+});
+
+
+test('pre-capture loss of effective postgres EXECUTE or schema USAGE cannot pass delete postflight', async () => {
+  await isolated(async db => {
+    await modelNonSuperuserPostgres(db);
+    const proposal = proposals[1];
+    const capture = proposal.indexOf('  select jsonb_agg(');
+    assert.ok(capture > proposal.indexOf('$delete_rpc_preflight$;'));
+    const mutations = [
+      ...deleteSignatures.map(signature => 'revoke execute on function ' + signature + ' from postgres;'),
+      ...['public', 'workspace'].map(schema => 'revoke usage on schema ' + schema + ' from public, pg_database_owner, postgres;'),
+    ];
+    for (const drift of mutations) {
+      const changed = proposal.slice(0, capture) + drift + '\n' + proposal.slice(capture);
+      await rejectedAndRolledBack(db, changed, /Applied delete RPC postflight drift: existing caller access missing/);
+    }
+  });
+});
+
+test('final delete postflight independently rejects missing signatures and definer drift', async () => {
+  await isolated(async db => {
+    const proposal = proposals[1];
+    const postflight = proposal.indexOf('do $delete_rpc_postflight$');
+    assert.ok(postflight > proposal.indexOf('$delete_rpc_replacements$;'));
+    for (const signature of deleteSignatures) {
+      for (const [drift, expected] of [
+        ['drop function ' + signature + ';', /Applied delete RPC postflight missing/],
+        ['alter function ' + signature + ' security invoker;', /Applied delete RPC postflight drift: owner or SECURITY DEFINER/],
+      ]) {
+        const changed = proposal.slice(0, postflight) + drift + '\n' + proposal.slice(postflight);
+        await rejectedAndRolledBack(db, changed, expected);
+      }
     }
   });
 });

@@ -2,9 +2,9 @@
 
 The owner is using the live system. **These three broad SQL proposals and the compatible frontend remain undeployed. Do not run them, merge/deploy the frontend, change buckets, reset sessions, change credentials, or delete history as part of repository reconciliation.**
 
-A separately authorized narrow cutover is complete: migration `20261112001122_restrict_internal_stats_cleanup_execution` closes browser EXECUTE on four internal RPCs, and daily-stats v13 has the service-credential gate. See the [applied baseline and exact history synchronization](../security/applied-internal-rpc-cutover-20261112.md). This does not close the remaining table, browser-RPC, attachment or historical exposure.
+A separately authorized narrow cutover is complete: migration `20261112001122_restrict_internal_stats_cleanup_execution` closes browser EXECUTE on four internal RPCs, and daily-stats v13 has the service-credential gate. See the [applied baseline and exact history synchronization](../security/applied-internal-rpc-cutover-20261112.md). A later narrow migration, `20261112013540_restrict_anonymous_delete_test_system_execution`, also removed PUBLIC/anon EXECUTE from both machine-delete aliases while retaining authenticated/service access and their bodies; see [anonymous-delete containment](../security/applied-delete-rpc-cutover-20261112.md). Signed-in station-edit authorization remains pending. These cutovers do not close the remaining table, browser-RPC, attachment or historical exposure.
 
-These three SQL proposals are deliberately outside `supabase/migrations` so ordinary migration deployment cannot apply them accidentally. Do not move them into that directory until the release prerequisites and concrete authorization below are satisfied. The one new migration file is an exact copy of an already-applied server ledger entry, not a new pending cutover. Do not rerun it or use a bulk push to reconcile history.
+These three SQL proposals are deliberately outside `supabase/migrations` so ordinary migration deployment cannot apply them accidentally. Do not move them into that directory until the release prerequisites and concrete authorization below are satisfied. The two synchronized narrow migration files are exact copies of already-applied server ledger entries, not new pending cutovers. Do not rerun them or use a bulk push to reconcile history.
 
 ## Scope and data invariants
 
@@ -16,11 +16,11 @@ These three SQL proposals are deliberately outside `supabase/migrations` so ordi
    - Does not change any password, account, operational row, history row, object path or file.
    - Stops on missing identity helpers, disabled workspace RLS, or an authenticated RPC relying only on PUBLIC EXECUTE. Removes the reviewed postgres schema-specific anon defaults for future tables/sequences/functions; global PUBLIC function defaults are a separate boundary described in the promotion guide.
 2. **02-bind-rpc-identities.sql**
-   - Guards both public/workspace machine-delete entry points with existing station edit authorization before looking up a target.
+   - Still adds station-edit authorization to both public/workspace machine-delete bodies before looking up a target. Anonymous ACL containment is already applied, but signed-in identity authorization is not.
    - Binds PCB permission helpers to the caller's real Auth identity and closes the otherwise unguarded lock-release and locked-save paths.
    - Verifies the already-applied service/owner-only notification cleanup and daily statistics RPC baseline without repeating its revoke/grant. Stage 01 excludes those four exact signatures from its function-grant sweep; both stages fail closed on reopened browser access or missing maintenance access.
    - Only replaces function definitions and privileges. It does not call those data-changing functions.
-   - Requires every reviewed replacement signature to exist and explicitly revokes PUBLIC/anon EXECUTE from all replacements without widening owner-only helper grants.
+   - Requires every reviewed replacement signature to exist. Both delete aliases must retain their already-applied ACLs through replacement; only the other PCB replacements repeat explicit PUBLIC/anon revocation. Owner-only helper grants are not widened. Stage 01 excludes both delete aliases from its broad revoke, and stages 01/02 reject reopened anonymous access or missing retained callers/schema access.
 3. **03-private-attachments.sql**
    - Switches only issue-attachments and task-attachments to private and adds scoped restrictive guards around legacy policies.
    - Keeps cross-account collaboration within the maintenance workspace. Viewers can read, editors can upload/replace/delete, other accounts cannot.
@@ -44,7 +44,7 @@ Once separately released and verified, the remaining proposals address the speci
 
 ## Release prerequisites: all are mandatory
 
-1. Reconfirm the exact remaining scope and safe release window against current authorization and active work. The completed four-RPC/Edge cutover does not authorize executing these broader proposals or merging/deploying the frontend.
+1. Reconfirm the exact remaining scope and safe release window against current authorization and active work. The completed internal-RPC/Edge and anonymous-delete cutovers do not authorize executing these broader proposals or merging/deploying the frontend.
 2. Confirm a recent hosted database backup and its restore procedure. Verify a restore to an isolated destination before claiming recoverability. The current MCP tool set did not expose hosted backup/PITR status, so a successful full backup/restore has **not** been established.
 3. Confirm Storage object backups separately. A database backup preserves Storage metadata, not necessarily object bytes. Do not mistake the metadata snapshot for a file backup.
 4. Capture fresh schema/policies/ACL/column grants, function definitions, bucket settings and Edge source/version. Keep these private and checksum them. Compare against the reviewed versions and investigate drift.
@@ -80,7 +80,7 @@ node --test tests/dailyStatsAuthorization.test.ts
 PGLITE_MODULE=/path/to/@electric-sql/pglite/dist/index.js node --test tests/securityProposalCutover.postgres.mjs
 ```
 
-The PGlite test starts with the already-applied four-RPC ACL baseline and uses only synthetic accounts, rows and objects. Each later stage preserves those four ACLs and definitions exactly; reopening PUBLIC/anon/authenticated EXECUTE, missing service EXECUTE/schema USAGE, or a missing signature makes stages 01/02 stop without silently repairing the baseline. It executes all three SQL proposals and verifies every synthetic business row and Storage object is byte-for-byte unchanged. It covers anonymous access across 116 tables and column grants, inactive/unlinked accounts, browser TRUNCATE, audit/role restrictions, both delete RPC aliases, PCB identity spoofing, service-only maintenance, and attachment read/write separation including a deliberately broad competing policy.
+The PGlite test starts with the already-applied internal-RPC and anonymous-delete ACL baselines and uses only synthetic accounts, rows and objects. Each later stage preserves the four internal RPC ACLs and definitions exactly; reopening their PUBLIC/anon/authenticated EXECUTE, missing maintenance access, or a missing signature makes stages 01/02 stop without silently repairing the baseline. Both delete aliases retain their applied ACLs and owner/definer metadata, while stage 02 intentionally adds their station-edit body guards. Their checks reject anonymous access or loss of authenticated/service/owner EXECUTE or schema USAGE, including drift before replacement metadata capture. It executes all three SQL proposals and verifies every synthetic business row and Storage object is byte-for-byte unchanged. It covers anonymous access across 116 tables and column grants, inactive/unlinked accounts, browser TRUNCATE, audit/role restrictions, both delete RPC aliases, PCB identity spoofing, service-only maintenance, and attachment read/write separation including a deliberately broad competing policy.
 
 The Edge tests verify exact service-credential matching and that unauthorized requests never construct a privileged client or invoke the statistics RPC.
 

@@ -44,6 +44,50 @@ begin
 end;
 $internal_rpc_preflight$;
 
+-- Already applied by 20261112013540_restrict_anonymous_delete_test_system_execution.
+-- The anonymous ACL closure is a prerequisite, not a repair in either proposal.
+-- Read metadata only. Authenticated per-user authorization still requires stage 02.
+do $delete_rpc_preflight$
+declare
+  signature text;
+  target oid;
+begin
+  foreach signature in array array[
+    'public.delete_test_system(uuid)',
+    'workspace.delete_test_system(uuid)'
+  ] loop
+    target := to_regprocedure(signature);
+    if target is null then
+      raise exception 'Applied delete RPC baseline missing: %', signature;
+    end if;
+    if not exists (
+      select 1 from pg_proc p where p.oid = target
+        and p.proowner = 'postgres'::regrole and p.prosecdef
+    ) then
+      raise exception 'Applied delete RPC baseline drift: owner or SECURITY DEFINER: %', signature;
+    end if;
+    if has_function_privilege('anon', target, 'execute')
+      or exists (
+        select 1 from pg_proc p,
+          lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) permission
+        where p.oid = target and permission.grantee = 0
+          and permission.privilege_type = 'EXECUTE'
+      ) then
+      raise exception 'Applied delete RPC baseline drift: anonymous EXECUTE: %', signature;
+    end if;
+    if not has_function_privilege('authenticated', target, 'execute')
+      or not has_function_privilege('service_role', target, 'execute')
+      or not has_function_privilege('postgres', target, 'execute')
+      or not (select has_schema_privilege('authenticated', p.pronamespace, 'usage')
+        and has_schema_privilege('service_role', p.pronamespace, 'usage')
+        and has_schema_privilege('postgres', p.pronamespace, 'usage')
+        from pg_proc p where p.oid = target) then
+      raise exception 'Applied delete RPC baseline drift: existing caller access missing: %', signature;
+    end if;
+  end loop;
+end;
+$delete_rpc_preflight$;
+
 -- Fail closed on dependency/configuration drift before changing any grants.
 do $preflight$
 declare target record;
@@ -179,12 +223,14 @@ begin
     select p.oid::regprocedure as signature
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname in ('workspace', 'public') and p.prokind = 'f'
-      -- Preserve the already-applied internal RPC ACLs exactly.
+      -- Preserve the already-applied internal and delete RPC ACLs exactly.
       and p.oid not in (
         'public.calculate_daily_production_stats()'::regprocedure,
         'workspace.calculate_daily_production_stats()'::regprocedure,
         'public.cleanup_old_notifications()'::regprocedure,
-        'workspace.cleanup_old_notifications()'::regprocedure
+        'workspace.cleanup_old_notifications()'::regprocedure,
+        'public.delete_test_system(uuid)'::regprocedure,
+        'workspace.delete_test_system(uuid)'::regprocedure
       )
       and not (
         (p.proname = 'authenticate_user' and pg_get_function_identity_arguments(p.oid) = 'username_input text, password_input text')
