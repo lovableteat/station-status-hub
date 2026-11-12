@@ -120,10 +120,13 @@ test('real Storage HTTP preserves historical paths and enforces attachment matri
     const seed = Buffer.from('Synthetic original attachment bytes\n% 中文\n');
     for (const bucket of buckets) {
       await success(await request('/bucket', 'service', json('POST', { id: bucket, name: bucket, public: true })), 'create synthetic bucket');
-      await success(await request('/object/' + objectPath(bucket, 'history/old 100% image.txt'), 'service', {
+      await denied(await request('/object/' + objectPath(bucket, 'history/invalid%name.txt'), 'service', {
+        method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: 'must not be stored' }), 'service rejects literal percent in a new object key');
+      await success(await request('/object/' + objectPath(bucket, 'history/old image.txt'), 'service', {
         method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'cache-control': '0' }, body: seed }), 'seed synthetic file');
     }
-    const original = bucket => objectPath(bucket, 'history/old 100% image.txt');
+    const original = bucket => objectPath(bucket, 'history/old image.txt');
+    assert.equal(sql("select count(*) from storage.objects where name like '%invalid%name%'"), '0');
     const historical = `/storage/v1/object/public/${original(buckets[0])}`;
     sql(`create table workspace.synthetic_documents(html text); insert into workspace.synthetic_documents values(${quote(`<p>unchanged</p><img src="${historical}">`)});`);
     const snapshot = () => sql(`select jsonb_build_object('objects',(select jsonb_agg(to_jsonb(o) order by bucket_id,name) from storage.objects o),

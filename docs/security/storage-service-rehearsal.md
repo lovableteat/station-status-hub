@@ -50,6 +50,10 @@ downloads work, signed URLs expire, and already-issued signed URLs remain bearer
 capabilities until expiry even after the account loses access. A new signature
 must be denied after that revocation.
 
+Real v1.89.12 rejects a new object key containing a literal percent sign. That is
+an explicit negative case; lossless client URL parsing is not proof the service
+accepts every historical path. The positive fixture uses an encoded space.
+
 ## Not covered
 
 Hosted Auth/session restoration, Realtime OLD/NEW filtering, production Storage
