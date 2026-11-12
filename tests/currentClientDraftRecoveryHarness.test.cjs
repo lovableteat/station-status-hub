@@ -143,3 +143,20 @@ test('source guard: actual app identity, native File telemetry and exact raw sna
  assert.match(source,/beforeUnload\(h\.page\),dirty/);assert.match(source,/JSON and PNG/);
  assert.equal(source.includes('page.setContent'),false);assert.equal(source.includes('addScriptTag'),false);
 });
+
+
+test('native status label contains options but the scoped select retains its exact direct label',()=>{
+ const {createRequire}=require('node:module');
+ const {JSDOM}=createRequire(path.resolve(process.env.AUDIT_QA_DIR||'../qa-tools','package.json'))('jsdom');
+ const dom=new JSDOM('<form><label data-pcb-field-tone="review">狀態<select><option value="draft">草稿</option><option value="review" selected>審核中</option><option value="approved">已核准</option></select></label><label>名稱<input value="synthetic"></label></form>');
+ try{
+  const form=dom.window.document.querySelector('form'),select=form.querySelector(h.PCB_STATUS_SELECTOR);
+  assert.equal(form.querySelectorAll(h.PCB_STATUS_SELECTOR).length,1);
+  assert.notEqual(select.labels[0].textContent.trim(),'狀態','An exact getByLabel text selector includes the option descendants');
+  assert.equal(h.pcbStatusLabel(select),'狀態');assert.equal(select.value,'review');
+  assert.equal(h.pcbStatusLabel(form.querySelector('input')),null);
+  select.remove();assert.equal(h.pcbStatusLabel(select),null);
+ }finally{dom.window.close();}
+ const source=fs.readFileSync(path.resolve(__dirname,'../src/components/pcb-designer/PcbDialogs.tsx'),'utf8');
+ assert.match(source,/<label data-pcb-field-tone=\{values\.status \|\| "draft"\}[\s\S]*?狀態\s*<select/);
+});

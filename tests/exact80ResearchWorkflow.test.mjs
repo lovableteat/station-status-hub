@@ -3,7 +3,7 @@ import {readFileSync,readdirSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import test from 'node:test';
 const read=n=>readFileSync(new URL('../'+n,import.meta.url),'utf8');
-const full=read('.github/workflows/audit-regression.yml'),workflow=full.slice(full.indexOf('  exact80:\n'));
+const full=read('.github/workflows/audit-regression.yml'),workflow=full.slice(full.indexOf('  exact80:\n')).split(/\n  [a-zA-Z0-9_-]+:\n/)[0];
 const browser=read('tests/exact80/exact80-crossrelease.browser.cjs'),manifestText=read('tests/exact80/exact80-manifest.json'),m=JSON.parse(manifestText);
 test('exact80 is a separate same-repository PR-only research job with no deployment authority',()=>{
  assert.ok(full.indexOf('  exact80:\n')>full.indexOf('  exact96:\n'));
