@@ -7,6 +7,8 @@ const MAX_BULLET_LENGTH = 85;
 const MAX_NOTES_LENGTH = 450;
 const MAX_SOURCE_IDS = 3;
 const MAX_RESPONSE_LENGTH = 30_000;
+// XML 1.0 forbids these control characters; retain the exact validation range.
+// eslint-disable-next-line no-control-regex
 const INVALID_XML_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/u;
 
 export interface PresentationSlide {

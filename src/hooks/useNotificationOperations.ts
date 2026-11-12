@@ -121,7 +121,7 @@ export function useNotificationOperations() {
 
       // 發送結果通知給原發送人
       if (originalNotification.sender_id && originalNotification.sender_id !== user.userId) {
-        const metadata = originalNotification.metadata as any;
+        const metadata = originalNotification.metadata as { referenceType?: string; referenceId?: string } | null;
         const { error: resultNotificationError } = await supabase
           .from('user_notifications')
           .insert({

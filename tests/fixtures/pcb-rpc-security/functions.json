@@ -1,0 +1,172 @@
+[
+  {
+    "schema_name": "workspace",
+    "proname": "acquire_pcb_designer_project_lock",
+    "signature": "workspace.acquire_pcb_designer_project_lock(uuid,text,text,text,integer)",
+    "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}",
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.acquire_pcb_designer_project_lock(p_user_id uuid, p_project_id text, p_project_name text, p_editor_client_id text, p_lease_seconds integer DEFAULT 30)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\nDECLARE\r\n  lease_seconds integer;\r\n  current_lock record;\r\nBEGIN\r\n  IF NOT workspace.pcb_designer_can_edit(p_user_id) THEN\r\n    RAISE EXCEPTION 'PCB workspace edit access denied';\r\n  END IF;\r\n  IF NULLIF(btrim(p_project_id), '') IS NULL\r\n    OR char_length(p_project_id) > 200\r\n    OR NULLIF(btrim(p_editor_client_id), '') IS NULL\r\n    OR char_length(p_editor_client_id) > 200 THEN\r\n    RAISE EXCEPTION 'Invalid PCB project lock request';\r\n  END IF;\r\n\r\n  lease_seconds := LEAST(120, GREATEST(10, COALESCE(p_lease_seconds, 30)));\r\n\r\n  INSERT INTO workspace.pcb_designer_project_locks (\r\n    project_id,\r\n    project_name,\r\n    editor_user_id,\r\n    editor_client_id,\r\n    heartbeat_at,\r\n    lease_expires_at\r\n  )\r\n  VALUES (\r\n    p_project_id,\r\n    left(COALESCE(p_project_name, ''), 300),\r\n    p_user_id,\r\n    p_editor_client_id,\r\n    clock_timestamp(),\r\n    clock_timestamp() + make_interval(secs => lease_seconds)\r\n  )\r\n  ON CONFLICT (project_id) DO UPDATE\r\n  SET\r\n    project_name = EXCLUDED.project_name,\r\n    editor_user_id = EXCLUDED.editor_user_id,\r\n    editor_client_id = EXCLUDED.editor_client_id,\r\n    heartbeat_at = EXCLUDED.heartbeat_at,\r\n    lease_expires_at = EXCLUDED.lease_expires_at\r\n  WHERE workspace.pcb_designer_project_locks.lease_expires_at <= clock_timestamp()\r\n    OR (\r\n      workspace.pcb_designer_project_locks.editor_user_id = EXCLUDED.editor_user_id\r\n      AND workspace.pcb_designer_project_locks.editor_client_id = EXCLUDED.editor_client_id\r\n    );\r\n\r\n  SELECT\r\n    project_lock.project_id,\r\n    project_lock.project_name,\r\n    project_lock.editor_user_id,\r\n    project_lock.editor_client_id,\r\n    project_lock.heartbeat_at,\r\n    project_lock.lease_expires_at,\r\n    account.username,\r\n    COALESCE(account.display_name, account.username) AS display_name\r\n  INTO current_lock\r\n  FROM workspace.pcb_designer_project_locks AS project_lock\r\n  JOIN workspace.system_users AS account ON account.id = project_lock.editor_user_id\r\n  WHERE project_lock.project_id = p_project_id;\r\n\r\n  RETURN jsonb_build_object(\r\n    'available', true,\r\n    'acquired', current_lock.editor_user_id = p_user_id\r\n      AND current_lock.editor_client_id = p_editor_client_id,\r\n    'lock', jsonb_build_object(\r\n      'projectId', current_lock.project_id,\r\n      'projectName', current_lock.project_name,\r\n      'editorUserId', current_lock.editor_user_id::text,\r\n      'editorClientId', current_lock.editor_client_id,\r\n      'editorUsername', current_lock.username,\r\n      'editorDisplayName', current_lock.display_name,\r\n      'heartbeatAt', current_lock.heartbeat_at::text,\r\n      'leaseExpiresAt', current_lock.lease_expires_at::text\r\n    )\r\n  );\r\nEND;\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "current_system_user_id",
+    "signature": "workspace.current_system_user_id()",
+    "proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": true,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.current_system_user_id()\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'auth', 'pg_temp'\nAS $function$\r\n  SELECT id\r\n  FROM workspace.system_users\r\n  WHERE auth_user_id = auth.uid()\r\n    AND status = 'active'\r\n  LIMIT 1;\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "delete_pcb_designer_project_locked",
+    "signature": "workspace.delete_pcb_designer_project_locked(uuid,text,text)",
+    "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}",
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.delete_pcb_designer_project_locked(p_user_id uuid, p_project_id text, p_editor_client_id text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\nBEGIN\r\n  IF NOT workspace.pcb_designer_can_edit(p_user_id) THEN\r\n    RAISE EXCEPTION 'PCB workspace edit access denied';\r\n  END IF;\r\n\r\n  PERFORM 1\r\n  FROM workspace.pcb_designer_project_locks AS project_lock\r\n  WHERE project_lock.project_id = p_project_id\r\n    AND project_lock.editor_user_id = p_user_id\r\n    AND project_lock.editor_client_id = p_editor_client_id\r\n    AND project_lock.lease_expires_at > clock_timestamp()\r\n  FOR UPDATE;\r\n\r\n  IF NOT FOUND THEN\r\n    RAISE EXCEPTION 'PCB project edit lock required';\r\n  END IF;\r\n\r\n  INSERT INTO workspace.pcb_designer_shared_projects (\r\n    id,\r\n    payload,\r\n    project_updated_at,\r\n    updated_by,\r\n    deleted_at\r\n  )\r\n  VALUES (\r\n    p_project_id,\r\n    NULL,\r\n    NULL,\r\n    p_user_id,\r\n    clock_timestamp()\r\n  )\r\n  ON CONFLICT (id) DO UPDATE\r\n  SET\r\n    payload = NULL,\r\n    project_updated_at = NULL,\r\n    updated_by = EXCLUDED.updated_by,\r\n    deleted_at = EXCLUDED.deleted_at;\r\n\r\n  DELETE FROM workspace.pcb_designer_project_locks\r\n  WHERE project_id = p_project_id\r\n    AND editor_user_id = p_user_id\r\n    AND editor_client_id = p_editor_client_id;\r\n\r\n  RETURN true;\r\nEND;\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "list_pcb_designer_model_assets",
+    "signature": "workspace.list_pcb_designer_model_assets(uuid)",
+    "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}",
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.list_pcb_designer_model_assets(p_user_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\nDECLARE\r\n  result jsonb;\r\nBEGIN\r\n  IF NOT workspace.pcb_designer_can_view(p_user_id) THEN\r\n    RAISE EXCEPTION 'PCB workspace access denied';\r\n  END IF;\r\n\r\n  SELECT COALESCE(jsonb_agg(asset.metadata ORDER BY asset.updated_at DESC), '[]'::jsonb)\r\n  INTO result\r\n  FROM workspace.pcb_designer_model_assets AS asset;\r\n\r\n  RETURN result;\r\nEND;\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "load_pcb_designer_model_asset",
+    "signature": "workspace.load_pcb_designer_model_asset(uuid,text)",
+    "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}",
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.load_pcb_designer_model_asset(p_user_id uuid, p_asset_id text)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\nDECLARE\r\n  result jsonb;\r\nBEGIN\r\n  IF NOT workspace.pcb_designer_can_view(p_user_id) THEN\r\n    RAISE EXCEPTION 'PCB workspace access denied';\r\n  END IF;\r\n\r\n  SELECT jsonb_build_object(\r\n    'metadata', asset.metadata,\r\n    'payloadBase64', replace(encode(asset.compressed_payload, 'base64'), E'\\n', '')\r\n  )\r\n  INTO result\r\n  FROM workspace.pcb_designer_model_assets AS asset\r\n  WHERE asset.id = p_asset_id;\r\n\r\n  RETURN result;\r\nEND;\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "load_pcb_designer_project_lock",
+    "signature": "workspace.load_pcb_designer_project_lock(uuid,text)",
+    "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}",
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.load_pcb_designer_project_lock(p_user_id uuid, p_project_id text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\nDECLARE\r\n  current_lock record;\r\nBEGIN\r\n  IF NOT workspace.pcb_designer_can_view(p_user_id) THEN\r\n    RAISE EXCEPTION 'PCB workspace access denied';\r\n  END IF;\r\n\r\n  DELETE FROM workspace.pcb_designer_project_locks\r\n  WHERE project_id = p_project_id\r\n    AND lease_expires_at <= clock_timestamp();\r\n\r\n  SELECT\r\n    project_lock.project_id,\r\n    project_lock.project_name,\r\n    project_lock.editor_user_id,\r\n    project_lock.editor_client_id,\r\n    project_lock.heartbeat_at,\r\n    project_lock.lease_expires_at,\r\n    account.username,\r\n    COALESCE(account.display_name, account.username) AS display_name\r\n  INTO current_lock\r\n  FROM workspace.pcb_designer_project_locks AS project_lock\r\n  JOIN workspace.system_users AS account ON account.id = project_lock.editor_user_id\r\n  WHERE project_lock.project_id = p_project_id;\r\n\r\n  IF NOT FOUND THEN\r\n    RETURN jsonb_build_object('available', true, 'acquired', false, 'lock', NULL);\r\n  END IF;\r\n\r\n  RETURN jsonb_build_object(\r\n    'available', true,\r\n    'acquired', false,\r\n    'lock', jsonb_build_object(\r\n      'projectId', current_lock.project_id,\r\n      'projectName', current_lock.project_name,\r\n      'editorUserId', current_lock.editor_user_id::text,\r\n      'editorClientId', current_lock.editor_client_id,\r\n      'editorUsername', current_lock.username,\r\n      'editorDisplayName', current_lock.display_name,\r\n      'heartbeatAt', current_lock.heartbeat_at::text,\r\n      'leaseExpiresAt', current_lock.lease_expires_at::text\r\n    )\r\n  );\r\nEND;\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "load_pcb_designer_workspace",
+    "signature": "workspace.load_pcb_designer_workspace(uuid)",
+    "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}",
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.load_pcb_designer_workspace(p_user_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\nDECLARE\r\n  personal_payload jsonb;\r\n  shared_projects jsonb;\r\n  deleted_project_ids jsonb;\r\n  shared_revision timestamptz;\r\n  personal_revision timestamptz;\r\n  combined_revision timestamptz;\r\n  active_project_id text;\r\n  result jsonb;\r\nBEGIN\r\n  IF NOT workspace.pcb_designer_can_view(p_user_id) THEN\r\n    RAISE EXCEPTION 'PCB workspace access denied';\r\n  END IF;\r\n\r\n  SELECT account_workspace.payload\r\n  INTO personal_payload\r\n  FROM workspace.pcb_designer_workspaces AS account_workspace\r\n  WHERE account_workspace.owner_id = p_user_id;\r\n\r\n  personal_payload := COALESCE(\r\n    personal_payload,\r\n    jsonb_build_object(\r\n      'projects', '[]'::jsonb,\r\n      'templates', '[]'::jsonb,\r\n      'library', '[]'::jsonb,\r\n      'activeProjectId', NULL,\r\n      'modelAssets', '{}'::jsonb,\r\n      'pendingPlacementsByProject', '{}'::jsonb,\r\n      'remoteDeletions', jsonb_build_object(\r\n        'projects', '[]'::jsonb,\r\n        'templates', '[]'::jsonb,\r\n        'library', '[]'::jsonb\r\n      ),\r\n      'updatedAt', '1970-01-01T00:00:00.000Z'\r\n    )\r\n  );\r\n\r\n  SELECT\r\n    COALESCE(\r\n      jsonb_agg(shared.payload ORDER BY shared.project_updated_at DESC, shared.id)\r\n        FILTER (WHERE shared.deleted_at IS NULL),\r\n      '[]'::jsonb\r\n    ),\r\n    COALESCE(\r\n      jsonb_agg(to_jsonb(shared.id) ORDER BY shared.deleted_at DESC, shared.id)\r\n        FILTER (WHERE shared.deleted_at IS NOT NULL),\r\n      '[]'::jsonb\r\n    ),\r\n    MAX(COALESCE(shared.deleted_at, shared.project_updated_at))\r\n  INTO shared_projects, deleted_project_ids, shared_revision\r\n  FROM workspace.pcb_designer_shared_projects AS shared;\r\n\r\n  active_project_id := personal_payload ->> 'activeProjectId';\r\n  IF active_project_id IS NULL OR NOT EXISTS (\r\n    SELECT 1\r\n    FROM jsonb_array_elements(shared_projects) AS project(payload)\r\n    WHERE project.payload ->> 'id' = active_project_id\r\n  ) THEN\r\n    active_project_id := shared_projects -> 0 ->> 'id';\r\n  END IF;\r\n\r\n  personal_revision := workspace.pcb_designer_project_revision(\r\n    personal_payload,\r\n    '1970-01-01 00:00:00+00'::timestamptz\r\n  );\r\n  combined_revision := GREATEST(\r\n    personal_revision,\r\n    COALESCE(shared_revision, '1970-01-01 00:00:00+00'::timestamptz)\r\n  );\r\n\r\n  result := jsonb_set(personal_payload, '{projects}', shared_projects, true);\r\n  result := jsonb_set(\r\n    result,\r\n    '{activeProjectId}',\r\n    COALESCE(to_jsonb(active_project_id), 'null'::jsonb),\r\n    true\r\n  );\r\n  result := jsonb_set(\r\n    result,\r\n    '{remoteDeletions}',\r\n    COALESCE(result -> 'remoteDeletions', '{}'::jsonb)\r\n      || jsonb_build_object('projects', deleted_project_ids),\r\n    true\r\n  );\r\n  result := jsonb_set(result, '{updatedAt}', to_jsonb(combined_revision::text), true);\r\n  RETURN result;\r\nEND;\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "load_pcb_designer_workspace_shared",
+    "signature": "workspace.load_pcb_designer_workspace_shared(uuid)",
+    "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}",
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.load_pcb_designer_workspace_shared(p_user_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\nDECLARE\r\n  result jsonb;\r\n  shared_library jsonb;\r\n  deleted_library_ids jsonb;\r\nBEGIN\r\n  result := workspace.load_pcb_designer_workspace(p_user_id);\r\n  SELECT\r\n    COALESCE(\r\n      jsonb_agg(shared.payload ORDER BY shared.component_updated_at DESC, shared.id)\r\n        FILTER (WHERE shared.deleted_at IS NULL),\r\n      '[]'::jsonb\r\n    ),\r\n    COALESCE(\r\n      jsonb_agg(to_jsonb(shared.id) ORDER BY shared.deleted_at DESC, shared.id)\r\n        FILTER (WHERE shared.deleted_at IS NOT NULL),\r\n      '[]'::jsonb\r\n    )\r\n  INTO shared_library, deleted_library_ids\r\n  FROM workspace.pcb_designer_shared_library AS shared;\r\n\r\n  result := jsonb_set(result, '{library}', shared_library, true);\r\n  result := jsonb_set(\r\n    result,\r\n    '{remoteDeletions}',\r\n    COALESCE(result -> 'remoteDeletions', '{}'::jsonb)\r\n      || jsonb_build_object('library', deleted_library_ids),\r\n    true\r\n  );\r\n  RETURN result;\r\nEND;\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "pcb_designer_can_edit",
+    "signature": "workspace.pcb_designer_can_edit(uuid)",
+    "proacl": "{postgres=X/postgres}",
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.pcb_designer_can_edit(p_user_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\n  SELECT EXISTS (\r\n    SELECT 1\r\n    FROM workspace.system_users AS account\r\n    WHERE account.id = p_user_id\r\n      AND account.status = 'active'\r\n      AND (\r\n        account.role IN ('admin', 'super_admin')\r\n        OR COALESCE(\r\n          account.permissions #>> '{workspaceAccess,pcb-designer}',\r\n          'none'\r\n        ) = 'edit'\r\n      )\r\n  );\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "pcb_designer_can_view",
+    "signature": "workspace.pcb_designer_can_view(uuid)",
+    "proacl": "{postgres=X/postgres}",
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.pcb_designer_can_view(p_user_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\n  SELECT EXISTS (\r\n    SELECT 1\r\n    FROM workspace.system_users AS account\r\n    WHERE account.id = p_user_id\r\n      AND account.status = 'active'\r\n      AND (\r\n        account.role IN ('admin', 'super_admin')\r\n        OR COALESCE(\r\n          account.permissions #>> '{workspaceAccess,pcb-designer}',\r\n          'none'\r\n        ) IN ('view', 'edit')\r\n      )\r\n  );\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "pcb_designer_project_revision",
+    "signature": "workspace.pcb_designer_project_revision(jsonb,timestamp with time zone)",
+    "proacl": "{postgres=X/postgres}",
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.pcb_designer_project_revision(p_payload jsonb, p_fallback timestamp with time zone)\n RETURNS timestamp with time zone\n LANGUAGE plpgsql\n IMMUTABLE\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\nBEGIN\r\n  RETURN COALESCE(NULLIF(p_payload ->> 'updatedAt', '')::timestamptz, p_fallback);\r\nEXCEPTION WHEN OTHERS THEN\r\n  RETURN p_fallback;\r\nEND;\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "release_pcb_designer_project_lock",
+    "signature": "workspace.release_pcb_designer_project_lock(uuid,text,text)",
+    "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}",
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.release_pcb_designer_project_lock(p_user_id uuid, p_project_id text, p_editor_client_id text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\nDECLARE\r\n  released boolean;\r\nBEGIN\r\n  WITH removed AS (\r\n    DELETE FROM workspace.pcb_designer_project_locks\r\n    WHERE project_id = p_project_id\r\n      AND editor_user_id = p_user_id\r\n      AND editor_client_id = p_editor_client_id\r\n    RETURNING 1\r\n  )\r\n  SELECT EXISTS (SELECT 1 FROM removed) INTO released;\r\n  RETURN released;\r\nEND;\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "save_pcb_designer_model_asset",
+    "signature": "workspace.save_pcb_designer_model_asset(uuid,text,jsonb,text)",
+    "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}",
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.save_pcb_designer_model_asset(p_user_id uuid, p_asset_id text, p_metadata jsonb, p_payload_base64 text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\nDECLARE\r\n  decoded_payload bytea;\r\nBEGIN\r\n  IF NOT workspace.pcb_designer_can_edit(p_user_id) THEN\r\n    RAISE EXCEPTION 'PCB workspace edit access denied';\r\n  END IF;\r\n  IF NULLIF(trim(p_asset_id), '') IS NULL\r\n    OR length(p_asset_id) > 200\r\n    OR jsonb_typeof(p_metadata) <> 'object'\r\n    OR NULLIF(p_payload_base64, '') IS NULL THEN\r\n    RAISE EXCEPTION 'Invalid PCB model asset';\r\n  END IF;\r\n\r\n  decoded_payload := decode(regexp_replace(p_payload_base64, '\\s', '', 'g'), 'base64');\r\n  IF octet_length(decoded_payload) NOT BETWEEN 1 AND 67108864 THEN\r\n    RAISE EXCEPTION 'PCB model asset exceeds the 64 MB compressed limit';\r\n  END IF;\r\n\r\n  INSERT INTO workspace.pcb_designer_model_assets (\r\n    id,\r\n    metadata,\r\n    compressed_payload,\r\n    updated_by\r\n  )\r\n  VALUES (\r\n    p_asset_id,\r\n    p_metadata,\r\n    decoded_payload,\r\n    p_user_id\r\n  )\r\n  ON CONFLICT (id) DO UPDATE\r\n  SET\r\n    metadata = EXCLUDED.metadata,\r\n    compressed_payload = EXCLUDED.compressed_payload,\r\n    updated_by = EXCLUDED.updated_by;\r\n  RETURN true;\r\nEND;\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "save_pcb_designer_workspace",
+    "signature": "workspace.save_pcb_designer_workspace(uuid,jsonb)",
+    "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}",
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.save_pcb_designer_workspace(p_user_id uuid, p_payload jsonb)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\nDECLARE\r\n  project_payload jsonb;\r\n  project_id text;\r\n  project_revision timestamptz;\r\n  deleted_project_id text;\r\n  personal_payload jsonb;\r\nBEGIN\r\n  IF NOT workspace.pcb_designer_can_edit(p_user_id) THEN\r\n    RAISE EXCEPTION 'PCB workspace edit access denied';\r\n  END IF;\r\n  IF jsonb_typeof(p_payload) <> 'object'\r\n    OR jsonb_typeof(p_payload -> 'projects') <> 'array'\r\n    OR jsonb_typeof(p_payload -> 'templates') <> 'array'\r\n    OR jsonb_typeof(p_payload -> 'library') <> 'array'\r\n    OR octet_length(p_payload::text) > 20 * 1024 * 1024 THEN\r\n    RAISE EXCEPTION 'Invalid or oversized PCB workspace payload';\r\n  END IF;\r\n\r\n  FOR deleted_project_id IN\r\n    SELECT deleted_id\r\n    FROM jsonb_array_elements_text(\r\n      CASE\r\n        WHEN jsonb_typeof(p_payload #> '{remoteDeletions,projects}') = 'array'\r\n          THEN p_payload #> '{remoteDeletions,projects}'\r\n        ELSE '[]'::jsonb\r\n      END\r\n    ) AS deleted(deleted_id)\r\n    WHERE NULLIF(deleted_id, '') IS NOT NULL\r\n  LOOP\r\n    INSERT INTO workspace.pcb_designer_shared_projects (\r\n      id, payload, project_updated_at, updated_by, deleted_at\r\n    )\r\n    VALUES (deleted_project_id, NULL, NULL, p_user_id, clock_timestamp())\r\n    ON CONFLICT (id) DO UPDATE\r\n    SET\r\n      payload = NULL,\r\n      project_updated_at = NULL,\r\n      updated_by = EXCLUDED.updated_by,\r\n      deleted_at = EXCLUDED.deleted_at;\r\n  END LOOP;\r\n\r\n  FOR project_payload IN\r\n    SELECT project.value\r\n    FROM jsonb_array_elements(p_payload -> 'projects') AS project(value)\r\n  LOOP\r\n    project_id := NULLIF(project_payload ->> 'id', '');\r\n    IF project_id IS NULL OR jsonb_typeof(project_payload) <> 'object' THEN\r\n      RAISE EXCEPTION 'Invalid PCB project payload';\r\n    END IF;\r\n    project_revision := workspace.pcb_designer_project_revision(\r\n      project_payload,\r\n      clock_timestamp()\r\n    );\r\n    INSERT INTO workspace.pcb_designer_shared_projects (\r\n      id, payload, project_updated_at, updated_by\r\n    )\r\n    VALUES (project_id, project_payload, project_revision, p_user_id)\r\n    ON CONFLICT (id) DO UPDATE\r\n    SET\r\n      payload = EXCLUDED.payload,\r\n      project_updated_at = EXCLUDED.project_updated_at,\r\n      updated_by = EXCLUDED.updated_by,\r\n      deleted_at = NULL\r\n    WHERE workspace.pcb_designer_shared_projects.deleted_at IS NULL\r\n      AND workspace.pcb_designer_shared_projects.project_updated_at <= EXCLUDED.project_updated_at;\r\n  END LOOP;\r\n\r\n  personal_payload := jsonb_set(p_payload, '{projects}', '[]'::jsonb, true);\r\n  personal_payload := jsonb_set(\r\n    personal_payload,\r\n    '{remoteDeletions}',\r\n    COALESCE(personal_payload -> 'remoteDeletions', '{}'::jsonb)\r\n      || jsonb_build_object('projects', '[]'::jsonb),\r\n    true\r\n  );\r\n  INSERT INTO workspace.pcb_designer_workspaces (owner_id, payload)\r\n  VALUES (p_user_id, personal_payload)\r\n  ON CONFLICT (owner_id) DO UPDATE\r\n  SET payload = EXCLUDED.payload;\r\nEND;\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "save_pcb_designer_workspace_locked",
+    "signature": "workspace.save_pcb_designer_workspace_locked(uuid,text,text,jsonb)",
+    "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}",
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.save_pcb_designer_workspace_locked(p_user_id uuid, p_project_id text, p_editor_client_id text, p_payload jsonb)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\nDECLARE\r\n  active_project jsonb;\r\n  scoped_payload jsonb;\r\n  scoped_deletions jsonb;\r\nBEGIN\r\n  IF p_payload ->> 'activeProjectId' IS DISTINCT FROM p_project_id THEN\r\n    RAISE EXCEPTION 'PCB active project does not match edit lock';\r\n  END IF;\r\n\r\n  PERFORM 1\r\n  FROM workspace.pcb_designer_project_locks AS project_lock\r\n  WHERE project_lock.project_id = p_project_id\r\n    AND project_lock.editor_user_id = p_user_id\r\n    AND project_lock.editor_client_id = p_editor_client_id\r\n    AND project_lock.lease_expires_at > clock_timestamp()\r\n  FOR UPDATE;\r\n\r\n  IF NOT FOUND THEN\r\n    RAISE EXCEPTION 'PCB project edit lock required';\r\n  END IF;\r\n\r\n  SELECT project_item.value\r\n  INTO active_project\r\n  FROM jsonb_array_elements(COALESCE(p_payload -> 'projects', '[]'::jsonb)) AS project_item(value)\r\n  WHERE project_item.value ->> 'id' = p_project_id\r\n  LIMIT 1;\r\n\r\n  IF active_project IS NULL THEN\r\n    RAISE EXCEPTION 'PCB locked project is missing from payload';\r\n  END IF;\r\n\r\n  scoped_payload := jsonb_set(p_payload, '{projects}', jsonb_build_array(active_project), true);\r\n  scoped_deletions := COALESCE(scoped_payload -> 'remoteDeletions', '{}'::jsonb)\r\n    || jsonb_build_object('projects', '[]'::jsonb);\r\n  scoped_payload := jsonb_set(scoped_payload, '{remoteDeletions}', scoped_deletions, true);\r\n\r\n  UPDATE workspace.pcb_designer_project_locks\r\n  SET\r\n    heartbeat_at = clock_timestamp(),\r\n    lease_expires_at = clock_timestamp() + interval '30 seconds'\r\n  WHERE project_id = p_project_id;\r\n\r\n  PERFORM workspace.save_pcb_designer_workspace_shared(p_user_id, scoped_payload);\r\nEND;\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "save_pcb_designer_workspace_shared",
+    "signature": "workspace.save_pcb_designer_workspace_shared(uuid,jsonb)",
+    "proacl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres}",
+    "anon_execute": true,
+    "authenticated_execute": true,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.save_pcb_designer_workspace_shared(p_user_id uuid, p_payload jsonb)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\nDECLARE\r\n  component_payload jsonb;\r\n  component_id text;\r\n  component_revision timestamptz;\r\n  deleted_component_id text;\r\nBEGIN\r\n  PERFORM workspace.save_pcb_designer_workspace(p_user_id, p_payload);\r\n  component_revision := workspace.pcb_designer_project_revision(\r\n    p_payload,\r\n    clock_timestamp()\r\n  );\r\n\r\n  FOR deleted_component_id IN\r\n    SELECT deleted_id\r\n    FROM jsonb_array_elements_text(\r\n      CASE\r\n        WHEN jsonb_typeof(p_payload #> '{remoteDeletions,library}') = 'array'\r\n          THEN p_payload #> '{remoteDeletions,library}'\r\n        ELSE '[]'::jsonb\r\n      END\r\n    ) AS deleted(deleted_id)\r\n    WHERE NULLIF(deleted_id, '') IS NOT NULL\r\n  LOOP\r\n    INSERT INTO workspace.pcb_designer_shared_library (\r\n      id, payload, component_updated_at, updated_by, deleted_at\r\n    )\r\n    VALUES (deleted_component_id, NULL, NULL, p_user_id, clock_timestamp())\r\n    ON CONFLICT (id) DO UPDATE\r\n    SET\r\n      payload = NULL,\r\n      component_updated_at = NULL,\r\n      updated_by = EXCLUDED.updated_by,\r\n      deleted_at = EXCLUDED.deleted_at;\r\n  END LOOP;\r\n\r\n  FOR component_payload IN\r\n    SELECT component.value\r\n    FROM jsonb_array_elements(p_payload -> 'library') AS component(value)\r\n    WHERE COALESCE(component.value ->> 'source', '') <> 'built-in'\r\n      AND NOT EXISTS (\r\n        SELECT 1\r\n        FROM jsonb_array_elements_text(\r\n          CASE\r\n            WHEN jsonb_typeof(p_payload #> '{remoteDeletions,library}') = 'array'\r\n              THEN p_payload #> '{remoteDeletions,library}'\r\n            ELSE '[]'::jsonb\r\n          END\r\n        ) AS deleted(deleted_id)\r\n        WHERE deleted.deleted_id = component.value ->> 'id'\r\n      )\r\n  LOOP\r\n    component_id := NULLIF(component_payload ->> 'id', '');\r\n    IF component_id IS NULL OR jsonb_typeof(component_payload) <> 'object' THEN\r\n      RAISE EXCEPTION 'Invalid PCB library component payload';\r\n    END IF;\r\n    INSERT INTO workspace.pcb_designer_shared_library (\r\n      id, payload, component_updated_at, updated_by\r\n    )\r\n    VALUES (component_id, component_payload, component_revision, p_user_id)\r\n    ON CONFLICT (id) DO UPDATE\r\n    SET\r\n      payload = EXCLUDED.payload,\r\n      component_updated_at = EXCLUDED.component_updated_at,\r\n      updated_by = EXCLUDED.updated_by,\r\n      deleted_at = NULL\r\n    WHERE workspace.pcb_designer_shared_library.deleted_at IS NULL\r\n      AND workspace.pcb_designer_shared_library.component_updated_at <= EXCLUDED.component_updated_at;\r\n  END LOOP;\r\nEND;\r\n$function$\n"
+  },
+  {
+    "schema_name": "workspace",
+    "proname": "set_pcb_designer_updated_at",
+    "signature": "workspace.set_pcb_designer_updated_at()",
+    "proacl": "{postgres=X/postgres}",
+    "anon_execute": false,
+    "authenticated_execute": false,
+    "service_execute": false,
+    "definition": "CREATE OR REPLACE FUNCTION workspace.set_pcb_designer_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'workspace', 'public', 'pg_temp'\nAS $function$\r\nBEGIN\r\n  NEW.updated_at := clock_timestamp();\r\n  RETURN NEW;\r\nEND;\r\n$function$\n"
+  }
+]

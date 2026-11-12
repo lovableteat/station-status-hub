@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import { recoverableLazy } from "@/components/common/recoverableLazy";
+import { Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, Download, FileArchive, GitCompareArrows, Layers3, Pencil, Search, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ import type { MaterialWorkbookRecord } from "./materialRequestUtils";
 import "./bomVersionCenter.css";
 
 const UNASSIGNED_VALUE = "__unassigned__";
-const NvBomCompare = lazy(() => import("./NvBomComparePanel"));
+const NvBomCompare = recoverableLazy(() => import("./NvBomComparePanel"));
 export const BOM_SERIES_EMPTY_TEXT = "找不到符合條件的 BOM 系列";
 
 function UploadTimestamp({ value }: { value: string }) {

@@ -144,7 +144,7 @@ export function CabinetCreateDialog({ onCreateCabinet }: CabinetCreateDialogProp
 
           <div className="space-y-2">
             <Label htmlFor="status">初始狀態</Label>
-            <Select value={formData.status} onValueChange={(value: any) => setFormData({ ...formData, status: value })}>
+            <Select value={formData.status} onValueChange={(value: typeof formData.status) => setFormData({ ...formData, status: value })}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

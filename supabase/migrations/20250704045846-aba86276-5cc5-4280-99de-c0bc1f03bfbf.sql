@@ -48,9 +48,7 @@ BEFORE UPDATE ON public.production_targets
 FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
 
--- Insert default super admin
-INSERT INTO public.system_users (username, password_hash, role, permissions, created_by)
-VALUES ('liu52417', 'liu52417', 'super_admin', '{"all": true}', 'system');
+-- Historical embedded credential provisioning removed. No operational data is changed by this source edit.
 
 -- Insert default production targets
 INSERT INTO public.production_targets (daily_target, weekly_target) 

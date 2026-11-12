@@ -62,6 +62,10 @@ export function usePcbPersistence({
   const repository = useMemo(() => new PcbLocalRepository(storage ?? browserStorage()), [storage]);
   const client = allowRemoteSync ? remoteClient ?? null : null;
   const stateRef = useRef(state);
+  const syncPermissionRef = useRef({ client, remoteClient, generation: 0 });
+  if (syncPermissionRef.current.client !== client || syncPermissionRef.current.remoteClient !== remoteClient) {
+    syncPermissionRef.current = { client, remoteClient, generation: syncPermissionRef.current.generation + 1 };
+  }
   const repositoryRef = useRef(repository);
   const activeRef = useRef(true);
   const requestRef = useRef(0);
@@ -96,8 +100,8 @@ export function usePcbPersistence({
 
   useEffect(() => {
     requestRef.current += 1;
-    setStatus(client ? "synced" : "local");
-  }, [client]);
+    setStatus(client ? "synced" : remoteClient ? "unsaved" : "local");
+  }, [client, remoteClient]);
 
   useEffect(() => {
     if (!hasUnsavedChanges) return undefined;
@@ -140,6 +144,13 @@ export function usePcbPersistence({
     // after the shared cloud write confirms success.
     repositoryRef.current.save(snapshot);
 
+    if (!client && remoteClient) {
+      // Cloud access/lease is unavailable. This is a recovery copy, not a local-mode save.
+      repositoryRef.current.saveRecovery(ownerId, snapshot, savedRevision, recoveryClientId);
+      setStatus("unsaved");
+      return false;
+    }
+
     if (!client) {
       setSavedRevision(snapshot.updatedAt);
       setLastSavedEditor(editorLabel);
@@ -151,12 +162,16 @@ export function usePcbPersistence({
     const request = requestRef.current + 1;
     requestRef.current = request;
     setStatus("saving");
-    const remoteSave = saveQueueRef.current.then(
-      () => syncPcbRemote(client, snapshot),
-      () => syncPcbRemote(client, snapshot),
-    );
+    const syncGeneration = syncPermissionRef.current.generation;
+    const stillAllowed = () => syncPermissionRef.current.client === client
+      && syncPermissionRef.current.generation === syncGeneration;
+    const syncIfStillAllowed = () => {
+      if (!stillAllowed()) return false;
+      return syncPcbRemote(client, snapshot);
+    };
+    const remoteSave = saveQueueRef.current.then(syncIfStillAllowed, syncIfStillAllowed);
     saveQueueRef.current = remoteSave;
-    const saved = await remoteSave;
+    const saved = await remoteSave && stillAllowed();
     if (activeRef.current && request === requestRef.current) {
       if (saved) {
         setSavedRevision(snapshot.updatedAt);
@@ -168,7 +183,7 @@ export function usePcbPersistence({
       }
     }
     return saved;
-  }, [client, editor]);
+  }, [client, editor, ownerId, recoveryClientId, remoteClient, savedRevision]);
 
   return {
     hasUnsavedChanges,

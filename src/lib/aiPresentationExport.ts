@@ -15,7 +15,7 @@ const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.
 
 function estimatedLines(text: string, fontSize: number, boxWidth = TEXT_WIDTH) {
   const estimatedWidth = Array.from(text).reduce((width, character) => (
-    width + (character === " " ? 0.4 : /^[\x00-\x7F]$/.test(character) ? 0.72 : 1)
+    width + (character === " " ? 0.4 : character.codePointAt(0)! <= 0x7F ? 0.72 : 1)
   ), 0) * fontSize;
   return Math.max(1, Math.ceil(estimatedWidth / (boxWidth * 72 * 0.95)));
 }
@@ -79,7 +79,7 @@ export async function createAiPresentationBlob(draft: PresentationDraft): Promis
       ...bulletStyle(content.bullets, bulletHeight, cover),
     });
 
-    const source = content.source ? `資料來源　${content.source}` : "";
+    const source = content.source ? `資料來源\u3000${content.source}` : "";
     if (source) {
       const characters = Array.from(source);
       const displaySource = characters.length <= 120 ? source : `${characters.slice(0, 102).join("")}…（完整來源見講者備註）`;

@@ -1,3 +1,5 @@
+import type { Tables } from "@/integrations/supabase/types";
+type AuditValues = Partial<Tables<"test_progress">> & { user?: string };
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,8 +14,8 @@ interface AuditEntry {
   station_id: string;
   item_id: string;
   change_type: string;
-  old_values?: any;
-  new_values?: any;
+  old_values?: AuditValues;
+  new_values?: AuditValues;
   user_id?: string;
   created_at: string;
   system_users?: {
@@ -57,7 +59,7 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
           .filter(Boolean)
           .filter((id, index, arr) => arr.indexOf(id) === index); // 去重
 
-        let usersMap: { [key: string]: any } = {};
+        let usersMap: Record<string, AuditEntry["system_users"]> = {};
         
         if (userIds.length > 0) {
           const { data: usersData, error: usersError } = await supabase
@@ -75,6 +77,8 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
         // 合併用戶信息到審計記錄
         const enrichedAuditData = auditData.map(audit => ({
           ...audit,
+          old_values: audit.old_values as AuditValues,
+          new_values: audit.new_values as AuditValues,
           system_users: audit.user_id ? usersMap[audit.user_id] : null
         }));
 
@@ -116,7 +120,7 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
         return `完成計時${newValues.actual_hours ? `，耗時 ${newValues.actual_hours} 小時` : ''}`;
       case 'insert':
         return `新增測試項目${newValues.status ? `，狀態: ${newValues.status}` : ''}${newValues.started_at ? '，開始計時' : ''}`;
-      case 'update':
+      case 'update': {
         const changes = [];
         if (oldValues.status !== newValues.status) {
           changes.push(`狀態: ${oldValues.status || '未設定'} → ${newValues.status || '未設定'}`);
@@ -139,6 +143,7 @@ export function TestProgressAuditLog({ systemId, systemName }: TestProgressAudit
           changes.push(`處理時間: ${newValues.actual_hours} 小時`);
         }
         return changes.join(', ') || '資料已更新';
+      }
       case 'delete':
         return `刪除測試項目${oldValues.status ? `，原狀態: ${oldValues.status}` : ''}`;
       default:

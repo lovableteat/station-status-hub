@@ -8,7 +8,8 @@ permissions:
   contents: read
 jobs:
   regression:
-    runs-on: ubuntu-latest
+    # Playwright 1.58.2 supports 24.04, not the newer ubuntu-latest image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       VITE_SUPABASE_URL: http://127.0.0.1:54321
@@ -19,10 +20,12 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci --legacy-peer-deps
+      - id: app-dependencies
+        run: npm ci --legacy-peer-deps
       - name: Set isolated QA directory
         run: echo "AUDIT_QA_DIR=$RUNNER_TEMP/station-audit-qa" >> "$GITHUB_ENV"
       - name: Install isolated QA dependencies
+        id: qa-dependencies
         run: npm install --prefix "$AUDIT_QA_DIR" --no-package-lock react@18.3.1 react-test-renderer@18.3.1 jsdom@29.1.1 @electric-sql/pglite@0.5.8 playwright@1.58.2
       - name: Anonymous data exposure and authenticated compatibility
         run: node tests/anonymousExposure.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
@@ -30,6 +33,10 @@ jobs:
         run: node --test tests/audit*.integration.cjs
       - name: Application and build configuration types
         run: npm run typecheck
+      - name: Historical migration cleanup preserves accounts and fails closed
+        run: PGLITE_MODULE="$AUDIT_QA_DIR/node_modules/@electric-sql/pglite/dist/index.js" node --test tests/historicalCredentialSanitization.postgres.mjs
+      - name: PCB verified identity, data preservation and staged cutover
+        run: PGLITE_MODULE="$AUDIT_QA_DIR/node_modules/@electric-sql/pglite/dist/index.js" node --test tests/pcbRpcSecurity.postgres.mjs
       - name: Complete unit and source contracts
         run: npm test
       - name: Mobile workspace and query contracts
@@ -40,22 +47,83 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/app" -w /app/supabase/functions/account-admin-sync denoland/deno:2.1.4@sha256:3bf75873714baa410dcf7fabaf76d806d20f0ac8a7579df11577b4ed97416e34 deno check --frozen index.ts
           docker run --rm -v "$PWD:/app" -w /app denoland/deno:2.1.4@sha256:3bf75873714baa410dcf7fabaf76d806d20f0ac8a7579df11577b4ed97416e34 deno run --allow-run --allow-net --allow-read --allow-env tests/edge/accountAdminSync.synthetic.ts
+      - name: Daily statistics service authorization in real Deno
+        run: |
+          docker run --rm -v "$PWD:/app" -w /app denoland/deno:2.1.4@sha256:3bf75873714baa410dcf7fabaf76d806d20f0ac8a7579df11577b4ed97416e34 sh -ec '
+            deno cache --frozen --config=supabase/functions/account-admin-sync/deno.json supabase/functions/daily-stats/index.ts
+            deno check --frozen --config=supabase/functions/account-admin-sync/deno.json supabase/functions/daily-stats/index.ts tests/edge/dailyStats.synthetic.ts
+            deno run --cached-only --frozen --config=supabase/functions/account-admin-sync/deno.json --allow-run --allow-read --allow-env --allow-net=127.0.0.1:54322,127.0.0.1:8000 tests/edge/dailyStats.synthetic.ts
+          '
       - name: PGlite performance workflow and RLS
         run: |
           node tests/performanceOrganization.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
           node tests/performanceSubmission.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
       - name: PGlite AI model usage telemetry and RLS
         run: node tests/aiModelUsageTelemetry.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
+      - name: Install isolated Chromium
+        id: install-browser
+        if: ${{ !cancelled() && steps.qa-dependencies.outcome == 'success' }}
+        run: '"$AUDIT_QA_DIR/node_modules/.bin/playwright" install --with-deps chromium'
+      - name: PCB session recovery, authorization denial and draft preservation
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && steps.install-browser.outcome == 'success' }}
+        env:
+          PCB_RECOVERY_EVIDENCE_DIR: ${{ runner.temp }}/pcb-session-recovery
+        run: timeout --signal=TERM --kill-after=10s 240s node tests/pcbSessionRecovery.browser.cjs
       - name: Browser history cancellation
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
+        run: timeout --signal=TERM --kill-after=10s 180s node tests/auditHistory.browser.cjs
+      - name: Cross-release lazy modules, retained assets and memory-only draft protection
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
+        env:
+          AUDIT_DEPLOYMENT_EVIDENCE_DIR: ${{ runner.temp }}/deployment-recovery
+        run: timeout --signal=TERM --kill-after=10s 180s node tests/auditDeploymentRecovery.browser.cjs
+      - name: Private rich-text previews, sign-out and document preservation
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
+        env:
+          AUDIT_SCREENSHOT_PATH: ${{ runner.temp }}/private-richtext.png
+        run: timeout --signal=TERM --kill-after=10s 180s node tests/auditRichText.browser.cjs
+      - name: Public seed removal and desktop/mobile BOM data preservation
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
         run: |
-          "$AUDIT_QA_DIR/node_modules/.bin/playwright" install --with-deps chromium
-          node tests/auditHistory.browser.cjs
+          MATERIAL_QA_PORT=8106 node tests/materialWorkspace.browser.cjs > "$RUNNER_TEMP/material-fixture.log" 2>&1 &
+          fixture_pid=$!
+          trap 'kill "$fixture_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8106/ > /dev/null; then ready=true; break; fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then cat "$RUNNER_TEMP/material-fixture.log"; exit 1; fi
+          MATERIAL_QA_URL=http://127.0.0.1:8106 MATERIAL_SEED_EVIDENCE_DIR="$RUNNER_TEMP/material-seed-evidence" timeout --signal=TERM --kill-after=10s 180s node tests/materialSeedRemoval.browser.cjs
       - name: Permissions dialog layout and isolated interactions
-        run: node tests/auditPermissionsDialog.browser.cjs
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
+        run: timeout --signal=TERM --kill-after=10s 180s node tests/auditPermissionsDialog.browser.cjs
       - name: BOM version upload, carry-over, diff export and phone layout
-        run: node tests/auditBomVersions.browser.cjs
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
+        env:
+          AUDIT_BOM_VERSION_SCREENSHOT_PATH: ${{ runner.temp }}/bom-version-phone.png
+        run: timeout --signal=TERM --kill-after=10s 180s node tests/auditBomVersions.browser.cjs
       - name: Phone shell across files, AutoCheck, admin, performance and maintenance
-        run: node tests/auditMobileWorkspaces.browser.cjs
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
+        run: timeout --signal=TERM --kill-after=10s 180s node tests/auditMobileWorkspaces.browser.cjs
       - name: Short landscape maintenance navigation and touch scrolling
-        run: node tests/auditShortLandscape.browser.cjs
-      - run: npm run build
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
+        env:
+          AUDIT_SCREENSHOT_DIR: ${{ runner.temp }}/short-landscape
+        run: timeout --signal=TERM --kill-after=10s 180s node tests/auditShortLandscape.browser.cjs
+      - if: ${{ !cancelled() && steps.app-dependencies.outcome == 'success' }}
+        run: npm run build
+      - name: Preserve synthetic browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-browser-evidence
+          path: |
+            ${{ runner.temp }}/private-richtext*.png
+            ${{ runner.temp }}/material-seed-evidence/
+            ${{ runner.temp }}/bom-version-phone*.png
+            ${{ runner.temp }}/short-landscape/
+            ${{ runner.temp }}/deployment-recovery/
+            ${{ runner.temp }}/pcb-session-recovery/
+          if-no-files-found: ignore
+          retention-days: 3

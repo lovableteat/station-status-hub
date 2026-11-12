@@ -83,7 +83,7 @@ export function WorkTimeSettings() {
         .from('system_settings')
         .upsert({
           category: 'work_time',
-          settings: config as any,
+          settings: { ...config },
           updated_at: new Date().toISOString()
         });
 

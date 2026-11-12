@@ -1,3 +1,5 @@
+import { PrivateAttachmentImage } from "@/components/attachments/PrivateAttachmentImage";
+import { PrivateAttachmentHtml } from "@/components/attachments/PrivateAttachmentHtml";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -375,8 +377,6 @@ export function IssueTracker() {
     URL.revokeObjectURL(url);
   };
 
-  const publicAttachmentUrl = (path: string) =>
-    supabase.storage.from("issue-attachments").getPublicUrl(path).data.publicUrl;
 
   return (
     <div className="maintenance-page space-y-3">
@@ -492,9 +492,9 @@ export function IssueTracker() {
 
               <section>
                 <h3 className="text-sm font-semibold text-[#f3f8fc]">問題描述</h3>
-                <div
+                <PrivateAttachmentHtml
                   className="prose prose-invert mt-2 max-w-none rounded-lg border border-[#2a526f] bg-[#0b1b2d] p-4 text-sm leading-6 text-[#d8e6f0]"
-                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedIssue.description || "尚無描述") }}
+                  html={DOMPurify.sanitize(selectedIssue.description || "尚無描述")}
                 />
               </section>
 
@@ -507,9 +507,9 @@ export function IssueTracker() {
               {selectedIssue.solution && (
                 <section>
                   <h3 className="text-sm font-semibold text-[#f3f8fc]">解決方案</h3>
-                  <div
+                  <PrivateAttachmentHtml
                     className="prose prose-invert mt-2 max-w-none rounded-lg border border-emerald-300/25 bg-emerald-300/[0.08] p-4 text-sm leading-6 text-emerald-50"
-                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedIssue.solution) }}
+                    html={DOMPurify.sanitize(selectedIssue.solution)}
                   />
                 </section>
               )}
@@ -581,8 +581,8 @@ export function IssueTracker() {
           {previewImage && (
             <>
               <div className="relative flex min-h-[360px] items-center justify-center bg-[#030a11] px-14 py-4 sm:min-h-[520px]">
-                <img
-                  src={publicAttachmentUrl(previewImage.file_path)}
+                <PrivateAttachmentImage
+                  path={previewImage.file_path}
                   alt={previewImage.file_name}
                   className="max-h-[68vh] max-w-full object-contain"
                 />
@@ -630,8 +630,8 @@ export function IssueTracker() {
                       )}
                       onClick={() => setPreviewImageIndex(index)}
                     >
-                      <img
-                        src={publicAttachmentUrl(attachment.file_path)}
+                      <PrivateAttachmentImage
+                  path={attachment.file_path}
                         alt=""
                         loading="lazy"
                         className="h-full w-full object-cover"

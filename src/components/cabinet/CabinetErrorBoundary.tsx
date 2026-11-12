@@ -1,3 +1,4 @@
+import { requestApplicationUpdate } from "@/lib/applicationUpdate";
 import React, { Component, ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -60,7 +61,7 @@ export class CabinetErrorBoundary extends Component<Props, State> {
                 <RefreshCw className="h-4 w-4 mr-2" />
                 重新載入
               </Button>
-              <Button onClick={() => window.location.reload()} variant="default">
+              <Button onClick={requestApplicationUpdate} variant="default">
                 重新整理頁面
               </Button>
             </div>

@@ -1,19 +1,22 @@
-name: Audit tests on main
-# Runs the audit integration tests on every push to main, next to the Pages deploy.
-# It does not hold the deploy back; a failure marks the commit red and notifies the person who pushed.
+name: Release quality gate
+# Pages calls this workflow for the exact main commit before building or deploying.
+# The same checks run on pull requests; isolated fixtures never use production secrets.
 on:
-  push:
+  workflow_call:
+  pull_request:
     branches: [main]
+  push:
+    branches: ["fix/release-quality-*"]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: audit-on-main
+  group: release-quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       VITE_SUPABASE_URL: http://127.0.0.1:54321
       VITE_SUPABASE_ANON_KEY: isolated-test-key
@@ -28,7 +31,21 @@ jobs:
         run: echo "AUDIT_QA_DIR=$RUNNER_TEMP/station-audit-qa" >> "$GITHUB_ENV"
       - name: Install isolated QA dependencies
         run: npm install --prefix "$AUDIT_QA_DIR" --no-package-lock react@18.3.1 react-test-renderer@18.3.1 jsdom@29.1.1 @electric-sql/pglite@0.5.8
+      - name: Application and build configuration types
+        run: npm run typecheck
+      - name: Source quality
+        run: npm run lint
+      - name: Historical migration cleanup preserves accounts and fails closed
+        run: PGLITE_MODULE="$AUDIT_QA_DIR/node_modules/@electric-sql/pglite/dist/index.js" node --test tests/historicalCredentialSanitization.postgres.mjs
+      - name: PCB verified identity, data preservation and staged cutover
+        run: PGLITE_MODULE="$AUDIT_QA_DIR/node_modules/@electric-sql/pglite/dist/index.js" node --test tests/pcbRpcSecurity.postgres.mjs
+      - name: Complete unit and source contracts
+        run: npm test
+      - name: Reject high and critical dependency advisories
+        run: npm audit --audit-level=high
       - name: Anonymous data exposure and authenticated compatibility
         run: node tests/anonymousExposure.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
+      - name: Staged security proposals preserve operating data and attachment access
+        run: PGLITE_MODULE="$AUDIT_QA_DIR/node_modules/@electric-sql/pglite/dist/index.js" node --test tests/remainingSecurity.postgres.mjs tests/securityProposalCutover.postgres.mjs
       - name: Deferred requests, live events, drafts and permissions
         run: node --test tests/audit*.integration.cjs

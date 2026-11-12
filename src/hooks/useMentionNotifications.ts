@@ -1,3 +1,4 @@
+import type { Json } from '@/integrations/supabase/types';
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useUser } from '@/components/auth/UserContext';
@@ -15,7 +16,7 @@ interface NotificationData {
   message: string;
   referenceType: string;
   referenceId: string;
-  metadata?: any;
+  metadata?: Record<string, Json | undefined>;
 }
 
 export function useMentionNotifications() {

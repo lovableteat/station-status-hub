@@ -58,7 +58,7 @@ test("leaving comparison clears its filters while preserving project context and
 });
 
 test("comparison entry and page inherit the exact AI workspace permission boundary", () => {
-  assert.match(index, /const ComparisonWorkspace = React\.lazy\(\(\) =>\s*import\("@\/components\/comparison\/ComparisonWorkspace"\)\s*\)/);
+  assert.match(index, /const ComparisonWorkspace = recoverableLazy\(\(\) =>\s*import\("@\/components\/comparison\/ComparisonWorkspace"\)\s*\)/);
   assert.match(index, /"comparison":\s*"comparison"/);
   assert.match(index, /id: "file-uploads"[\s\S]*?id: "comparison"[\s\S]*?label: "比對系統"[\s\S]*?visible: canViewModule\("ai-chat"\)/);
   assert.match(index, /case "comparison":[\s\S]{0,160}<PermissionGuard module="ai-chat">[\s\S]{0,120}<ComparisonWorkspace/);

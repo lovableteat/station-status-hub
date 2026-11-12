@@ -1,13 +1,4 @@
--- Ensure there's a super admin account and fix RLS for user creation
--- First, create or update the super admin account with proper password
-INSERT INTO public.system_users (username, password_hash, role, status, created_by)
-VALUES ('liu52417', public.hash_password('admin123'), 'super_admin', 'active', 'system')
-ON CONFLICT (username) 
-DO UPDATE SET 
-  password_hash = public.hash_password('admin123'),
-  role = 'super_admin',
-  status = 'active',
-  updated_at = now();
+-- Historical embedded credential provisioning removed. No operational data is changed by this source edit.
 
 -- Also ensure RLS policies allow the super admin to create new users
 -- Update the RLS policies to allow super admin operations

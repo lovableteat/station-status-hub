@@ -1,3 +1,4 @@
+import type { Tables } from "@/integrations/supabase/types";
 // 進度計算邏輯
 export interface SystemProgressData {
   systemId: string;
@@ -24,10 +25,10 @@ export interface StationProgressInfo {
 
 export class ProgressCalculator {
   static calculateSystemProgress(
-    systems: any[],
-    stations: any[],
-    testItems: any[],
-    progress: any[]
+    systems: Partial<Tables<"test_systems">>[],
+    stations: Partial<Tables<"test_flow_stations">>[],
+    testItems: Partial<Tables<"test_flow_items">>[],
+    progress: Partial<Tables<"test_progress">>[]
   ): SystemProgressData[] {
     return systems.map(system => {
       const systemProgress = progress.filter(p => p.system_id === system.id);
@@ -76,9 +77,9 @@ export class ProgressCalculator {
 
   private static calculateStationProgresses(
     systemId: string,
-    stations: any[],
-    testItems: any[],
-    systemProgress: any[]
+    stations: Partial<Tables<"test_flow_stations">>[],
+    testItems: Partial<Tables<"test_flow_items">>[],
+    systemProgress: Partial<Tables<"test_progress">>[]
   ): StationProgressInfo[] {
     return stations.map(station => {
       const stationItems = testItems.filter(item => item.station_id === station.id);

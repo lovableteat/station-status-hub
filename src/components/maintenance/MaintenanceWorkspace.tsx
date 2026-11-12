@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, ClipboardList, Plus, Search, UserRound, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUser } from '@/components/auth/UserContext';
@@ -21,6 +21,7 @@ export function MaintenanceWorkspace() {
   const [filters, setFilters] = useState(() => readFaultFilters(window.location.search));
   const [selectedId, setSelectedId] = useState(() => new URLSearchParams(window.location.search).get('openIssue'));
   const [report, setReport] = useState({ open: false, session: 0 });
+  const reportTriggerRef = useRef<HTMLButtonElement>(null);
   const [limit, setLimit] = useState(75), [retrying, setRetrying] = useState(false);
   const [assignmentRequest, setAssignmentRequest] = useState<{ issueId: string }>();
   const canEdit = canEditModule('issues') && !activeProject?.is_archived;
@@ -66,7 +67,7 @@ export function MaintenanceWorkspace() {
   ];
   if (!activeProjectId) return <div className="maintenance-center mf-empty">請先選擇或建立專案，再開始記錄維修問題。</div>;
   return <div className="maintenance-center maintenance-fault-center" data-detail-open={!!selected}>
-    <header className="mf-page-head"><div><p className="mf-eyebrow">{activeProject?.name}{activeProject?.is_archived && ' · 已封存，僅供查閱'}</p><h1>故障清單 <span>{loading || error ? '—' : `${data.issues.filter(issue => getFaultStatus(issue) !== 'resolved').length} 件未解決`}</span></h1></div>{canEdit && <Button onClick={() => setReport(previous => ({ open: true, session: previous.session + 1 }))}><Plus size={17}/>快速報修</Button>}</header>
+    <header className="mf-page-head"><div><p className="mf-eyebrow">{activeProject?.name}{activeProject?.is_archived && ' · 已封存，僅供查閱'}</p><h1>故障清單 <span>{loading || error ? '—' : `${data.issues.filter(issue => getFaultStatus(issue) !== 'resolved').length} 件未解決`}</span></h1></div>{canEdit && <Button ref={reportTriggerRef} onClick={() => setReport(previous => ({ open: true, session: previous.session + 1 }))}><Plus size={17}/>快速報修</Button>}</header>
     <div className="mf-layout" data-selected={!!selected}>
       <section className="mf-list-panel" aria-label="故障清單">
         <div className="mf-filter-bar"><label className="mf-search"><Search size={17}/><input aria-label="搜尋機台或故障" value={filters.query} placeholder="搜尋序號、資產編號或故障" onChange={event => setFilter({ ...filters, query: event.target.value })}/>{filters.query && <button aria-label="清除搜尋" onClick={() => setFilter({ ...filters, query: '' })}><X size={15}/></button>}</label>
@@ -91,6 +92,6 @@ export function MaintenanceWorkspace() {
       </section>
       {selected ? <MaintenanceDetail key={selected.id} issue={selected} data={data} canEdit={canEdit} onBack={() => selectIssue(null)} refresh={refresh} assignmentRequest={assignmentRequest} onAssignmentHandled={() => setAssignmentRequest(undefined)}/> : <section className="mf-detail-placeholder"><ClipboardList size={24} aria-hidden="true"/><h2>選擇故障查看詳情</h2><p>可在這裡查看處理紀錄、照片與交接重點。</p></section>}
     </div>
-    {report.session > 0 && <MaintenanceReport key={report.session} open={report.open} projectId={activeProjectId} systems={data.systems} assetSuggestions={[...new Set(data.issues.map(assetLabel).filter(value => value !== '未記錄機台'))]} onClose={() => { closeReport(); void refresh(); }} onExited={() => setReport(previous => previous.session === report.session && !previous.open ? { open: false, session: 0 } : previous)} onCreated={id => { closeReport(); selectIssue(id); void refresh(); showMaintenanceSuccess('報修已建立'); }}/ >}
+    {report.session > 0 && <MaintenanceReport key={report.session} open={report.open} projectId={activeProjectId} systems={data.systems} assetSuggestions={[...new Set(data.issues.map(assetLabel).filter(value => value !== '未記錄機台'))]} onClose={() => { closeReport(); void refresh(); }} onExited={() => { setReport(previous => previous.session === report.session && !previous.open ? { open: false, session: 0 } : previous); reportTriggerRef.current?.focus({ preventScroll: true }); }} onCreated={id => { closeReport(); selectIssue(id); void refresh(); showMaintenanceSuccess('報修已建立'); }}/ >}
   </div>;
 }

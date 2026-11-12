@@ -1,3 +1,5 @@
+import type { AdditiveClient } from "@/components/circuit-changes/storage";
+import type { Database } from "@/integrations/supabase/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useUser } from "@/components/auth/UserContext";
@@ -28,7 +30,35 @@ const MESSAGE_SELECT = `
     id,storage_path,file_name,mime_type,file_size,media_kind,position
   )
 `;
-const database = supabase as any;
+type ThreadRow = Database["workspace"]["Functions"]["list_direct_chat_threads"]["Returns"][number];
+type AttachmentRow = {
+  id: string; storage_path: string; file_name: string; mime_type: string;
+  file_size: number; media_kind: DirectMessageAttachment["mediaKind"]; position: number;
+};
+type MessageRow = {
+  id: string; thread_id: string; sender_id: string; client_id: string; body: string;
+  created_at: string; edited_at: string | null; deleted_at: string | null;
+  chat_message_attachments?: AttachmentRow[];
+};
+type ChatClient = AdditiveClient<{
+  chat_messages: MessageRow;
+  chat_history_clears: { cleared_at: string };
+  chat_read_receipts: { user_id: string; last_read_at: string };
+}, {
+  list_direct_chat_threads: ThreadRow[];
+  start_direct_chat: string;
+  clear_direct_chat_history: boolean;
+  mark_chat_thread_read: unknown;
+  send_direct_chat_message: string;
+  delete_direct_chat_message: { deleted: boolean; storage_paths: string[] };
+}>;
+type BroadcastReference = {
+  table?: string; table_name?: string; thread_id?: string; record_id?: string;
+  record?: { thread_id?: string; id?: string };
+  new?: { thread_id?: string; id?: string };
+  payload?: BroadcastReference;
+};
+const database = supabase as unknown as ChatClient;
 
 function describeDirectMessageFailure(error: unknown, fallback: string) {
   if (!error || typeof error !== "object") return fallback;
@@ -87,7 +117,7 @@ function createClientId() {
   return `message-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
-function mapThread(row: any): DirectThread {
+function mapThread(row: ThreadRow): DirectThread {
   return {
     threadId: row.thread_id,
     otherUserId: row.other_user_id,
@@ -102,7 +132,7 @@ function mapThread(row: any): DirectThread {
   };
 }
 
-function mapMessage(row: any): DirectMessage {
+function mapMessage(row: MessageRow): DirectMessage {
   return {
     id: row.id,
     threadId: row.thread_id,
@@ -114,7 +144,7 @@ function mapMessage(row: any): DirectMessage {
     deletedAt: row.deleted_at ?? null,
     delivery: "sent",
     attachments: (row.chat_message_attachments ?? [])
-      .map((attachment: any) => ({
+      .map((attachment) => ({
         id: attachment.id,
         storagePath: attachment.storage_path,
         fileName: attachment.file_name,
@@ -140,7 +170,7 @@ async function resolveSignedAttachmentUrls(messages: DirectMessage[]) {
   if (error || !data) return messages;
 
   const urls = new Map<string, string>();
-  data.forEach((item: any, index: number) => {
+  data.forEach((item, index: number) => {
     const path = item.path ?? paths[index];
     if (path && item.signedUrl) urls.set(path, item.signedUrl);
   });
@@ -153,7 +183,8 @@ async function resolveSignedAttachmentUrls(messages: DirectMessage[]) {
   }));
 }
 
-function extractBroadcastReference(payload: any) {
+function extractBroadcastReference(input: unknown) {
+  const payload = input as BroadcastReference;
   const envelope = payload?.payload ?? payload;
   const table = envelope?.table ?? envelope?.table_name;
   const record = envelope?.record ?? envelope?.new ?? payload?.new;
@@ -209,7 +240,7 @@ export function useDirectMessageThreads() {
     );
   }, [reload]);
 
-  const handleInboxChange = useCallback((payload: any) => {
+  const handleInboxChange = useCallback((payload: unknown) => {
     const { table, threadId } = extractBroadcastReference(payload);
     if (table === "chat_history_clears" && threadId) {
       notifyDirectChatCleared(threadId);
@@ -576,7 +607,7 @@ export function useDirectMessages(threadId: string | null, { isVisible = true }:
         p_attachments: attachments,
       });
 
-      let savedRow: any = null;
+      let savedRow: MessageRow | null = null;
       if (!insertError && typeof messageId === "string") {
         const { data } = await database
           .from("chat_messages")

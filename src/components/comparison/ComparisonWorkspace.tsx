@@ -1,4 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { recoverableLazy } from "@/components/common/recoverableLazy";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { GitCompareArrows, Play, Square, Download, Upload, Plus, Check, CheckCircle2, TriangleAlert, FileText, ChevronDown, FilePlus2, X, MoreHorizontal } from "lucide-react";
 import { useUser } from "@/components/auth/UserContext";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -32,7 +33,7 @@ import type { Artifact, ComparisonResult, ComparisonSession, InputFile, ReviewRe
 import "./comparison.css";
 import { applyReplyPatches, type ReplyPatches } from "./reviewTools";
 
-const ComparisonDiagramEditor = lazy(() => import("./ComparisonDiagramWorkspace"));
+const ComparisonDiagramEditor = recoverableLazy(() => import("./ComparisonDiagramWorkspace"));
 const tabLabels = { compare: "比對檢查", review: "審查追蹤", power: "Power Tree", i2c: "I²C Map", library: "位址庫", diagram: "圖表編輯器" } as const;
 type DiagramSource = { accountId: string; sessionId: string; kind: "power" | "i2c"; revision: "a" | "b" };
 type OptionalKey = "config" | "railMap" | "railDomain" | "i2cDeclared";

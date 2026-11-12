@@ -1,3 +1,4 @@
+import { requestApplicationUpdate } from "@/lib/applicationUpdate";
 import React, { Component, ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,23 +29,7 @@ export class TestTrackerErrorBoundary extends Component<Props, State> {
     console.error('TestTracker Error Boundary caught an error:', error, errorInfo);
     this.setState({ errorInfo });
     
-    // 清理可能的內存洩漏
-    try {
-      // 清理localStorage中可能損壞的數據
-      const keys = Object.keys(localStorage);
-      keys.forEach(key => {
-        if (key.includes('test-tracker') || key.includes('testtracker')) {
-          try {
-            JSON.parse(localStorage.getItem(key) || '');
-          } catch {
-            localStorage.removeItem(key);
-            console.warn(`Removed corrupted localStorage key: ${key}`);
-          }
-        }
-      });
-    } catch (cleanupError) {
-      console.error('Error during cleanup:', cleanupError);
-    }
+    // Preserve all stored bytes, including partial or legacy draft formats.
   }
 
   handleReset = () => {
@@ -80,7 +65,6 @@ export class TestTrackerErrorBoundary extends Component<Props, State> {
                 <ul className="list-disc list-inside space-y-1 text-xs">
                   <li>重新載入組件</li>
                   <li>返回主頁面重新進入</li>
-                  <li>清理瀏覽器快取</li>
                   <li>重新整理頁面</li>
                 </ul>
               </div>
@@ -106,7 +90,7 @@ export class TestTrackerErrorBoundary extends Component<Props, State> {
                   <Home className="h-4 w-4 mr-2" />
                   返回主頁
                 </Button>
-                <Button onClick={() => window.location.reload()} variant="default">
+                <Button onClick={requestApplicationUpdate} variant="default">
                   重新整理頁面
                 </Button>
               </div>

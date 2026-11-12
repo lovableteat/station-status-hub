@@ -3,64 +3,71 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { runInNewContext } from "node:vm";
 
-const [indexSource, appSource, boundarySource] = await Promise.all([
-  readFile(new URL("../index.html", import.meta.url), "utf8"),
-  readFile(new URL("../src/App.tsx", import.meta.url), "utf8"),
-  readFile(
-    new URL("../src/components/common/AppRuntimeBoundary.tsx", import.meta.url),
-    "utf8",
-  ),
-]);
+const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+const bootScript = indexSource.match(/<script>([\s\S]*?)<\/script>/)[1];
+function fixture({ ready = false, storageBlocked = false } = {}) {
+  const events = new Map(), timers = [], replacements = [], storage = new Map();
+  let writes = 0;
+  const root = { children: [], get innerHTML() { return "memory-only draft"; }, set innerHTML(value) { writes++; this.fallback = value; } };
+  const window = {
+    __STATION_APP_READY__: ready,
+    location: { href: "https://fixture.invalid/app/?workspace=pcb-designer#/?project=A", replace: url => replacements.push(url) },
+    sessionStorage: {
+      getItem: key => { if (storageBlocked) throw new Error("blocked"); return storage.get(key) ?? null; },
+      setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key),
+    },
+    addEventListener: (name, callback) => events.set(name, callback), setTimeout: callback => timers.push(callback),
+  };
+  runInNewContext(bootScript, { window, document: { getElementById: () => root }, URL, Date, console: { error() {}, warn() {} } });
+  return { window, storage, replacements, root, get writes() { return writes; }, emit: (name, event = {}) => events.get(name)?.(event), tick: () => { while (timers.length) timers.shift()(); } };
+}
 
-test("slow mobile startup never triggers a cache-busting reload loop", () => {
-  assert.doesNotMatch(indexSource, /station-status-hub:html-revalidated/);
-  assert.doesNotMatch(indexSource, /empty-root-after-load/);
-  assert.doesNotMatch(indexSource, /retryBoot\("runtime-error-before-mount"\)/);
-  assert.doesNotMatch(indexSource, /retryBoot\("unhandled-rejection-before-mount"\)/);
-  assert.match(indexSource, /retryBoot\("asset-load-error", target\.src\)/);
-  assert.match(indexSource, /renderFallbackMessage\(true\)/);
+test("slow startup shows recovery without repeatedly reloading", () => {
+  const f = fixture(); f.tick();
+  assert.equal(f.writes, 1); assert.equal(f.replacements.length, 0);
 });
 
-test("automatic recovery retries recent deployed assets once without looping", () => {
-  assert.doesNotMatch(
-    appSource,
-    /sessionStorage\.removeItem\("station-status-hub:(?:boot-retry|chunk-retry|html-revalidated)"\)/,
-  );
-  assert.doesNotMatch(appSource, /pagehide/);
-  assert.match(indexSource, /function retryBoot\(reason, fingerprint\)/);
-  assert.match(indexSource, /const RETRY_WINDOW_MS = 30000/);
-  assert.match(indexSource, /hasRecentRetry\(/);
-  assert.match(indexSource, /JSON\.stringify\(\{ fingerprint: fingerprint, attemptedAt: now \}\)/);
-  assert.match(boundarySource, /station-status-hub:chunk-retry/);
-  assert.match(boundarySource, /CHUNK_RETRY_WINDOW_MS = 30_000/);
-  assert.match(boundarySource, /hasRecentChunkRetry\(/);
-  assert.match(boundarySource, /JSON\.stringify\(\{ fingerprint, attemptedAt: now \}\)/);
+test("initial entry asset failure retries once and preserves route/query", () => {
+  const f = fixture();
+  const error = { target: { tagName: "SCRIPT", src: "https://fixture.invalid/assets/index-old.js" } };
+  f.emit("error", error); f.emit("error", error);
+  assert.equal(f.replacements.length, 1); assert.equal(f.writes, 1);
+  const url = new URL(f.replacements[0]);
+  assert.equal(url.searchParams.get("workspace"), "pcb-designer"); assert.equal(url.hash, "#/?project=A");
 });
 
-test("versioned module failures automatically load the newest deployment", () => {
-  assert.match(indexSource, /addEventListener\("vite:preloadError"/);
-  assert.match(indexSource, /event\.preventDefault\(\)/);
-  assert.match(indexSource, /retryBoot\("vite-preload-error", fingerprint\)/);
-  assert.match(
-    boundarySource,
-    /componentDidCatch[\s\S]{0,1000}this\.setState\(\{ retrying: true \}\);[\s\S]{0,120}replaceWithCacheBuster\(\)/,
-  );
+test("a mounted application never reloads or overwrites root after preload/resource/runtime errors", () => {
+  for (const storageBlocked of [false, true]) {
+    const f = fixture({ ready: true, storageBlocked }); let prevented = false;
+    f.emit("vite:preloadError", { preventDefault: () => { prevented = true; }, payload: new Error("Failed to fetch dynamically imported module") });
+    f.emit("error", { target: { tagName: "SCRIPT", src: "https://fixture.invalid/assets/index-old.js" } });
+    f.emit("error", { error: new Error("offline") });
+    f.emit("unhandledrejection", { reason: new Error("offline") });
+    f.window.__STATION_MANUAL_RELOAD__(); f.tick();
+    assert.equal(prevented, false, "local recoverable imports must receive their failure");
+    assert.equal(f.replacements.length, 0); assert.equal(f.writes, 0); assert.equal(f.storage.size, 0);
+  }
 });
 
-test("automatic recovery lock expires so later deployments can refresh again", () => {
-  const functionMatch = indexSource.match(
-    /(function hasRecentRetry\(value, fingerprint, now\) \{[\s\S]*?\r?\n        \})\r?\n\r?\n        function retryBoot/,
-  );
-  assert.ok(functionMatch, "inline retry policy must remain executable before the app bundle loads");
+test("readiness is monotonic even when an old timer or error callback runs later", () => {
+  const f = fixture(); f.emit("station-app-ready"); f.tick();
+  f.emit("vite:preloadError", { preventDefault() { throw new Error("must not intercept"); } });
+  assert.equal(f.writes, 0); assert.equal(f.replacements.length, 0);
+});
 
-  const context = { RETRY_WINDOW_MS: 30_000, retryPolicy: null };
-  runInNewContext(`${functionMatch[1]}\nretryPolicy = hasRecentRetry;`, context);
-  const hasRecentRetry = context.retryPolicy;
-  assert.equal(typeof hasRecentRetry, "function");
+test("blocked boot storage offers manual recovery without auto-reload", () => {
+  const f = fixture({ storageBlocked: true });
+  f.emit("vite:preloadError", { preventDefault() {}, payload: new Error("offline") });
+  assert.equal(f.replacements.length, 0); assert.equal(f.writes, 1);
+});
 
-  const recentRetry = JSON.stringify({ fingerprint: "asset-v1", attemptedAt: 10_000 });
-  assert.equal(hasRecentRetry(recentRetry, "asset-v1", 39_999), true);
-  assert.equal(hasRecentRetry(recentRetry, "asset-v1", 40_000), false);
-  assert.equal(hasRecentRetry(recentRetry, "asset-v2", 20_000), false);
-  assert.equal(hasRecentRetry("invalid-json", "asset-v1", 20_000), false);
+test("every application lazy import uses local recovery rather than the global render boundary", async () => {
+  const paths = ["App.tsx", "pages/Index.tsx", "components/auth/AuthenticatedApplication.tsx", "components/material-requests/MaterialRequestPage.tsx", "components/material-requests/BomVersionCenter.tsx", "components/comparison/ComparisonWorkspace.tsx", "components/pcb-designer/PcbDesignerWorkspace.tsx", "components/test-tracker/TestTracker.tsx"];
+  for (const path of paths) {
+    const source = await readFile(new URL(`../src/${path}`, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /(?:React\.)?\blazy\(/, path);
+    assert.match(source, /recoverableLazy\(/, path);
+  }
+  const boundary = await readFile(new URL("../src/components/common/AppRuntimeBoundary.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(boundary, /location\.|removeItem|setItem|retrying/);
 });

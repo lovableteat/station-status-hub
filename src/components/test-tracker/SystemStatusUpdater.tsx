@@ -86,7 +86,7 @@ export function SystemStatusUpdater({
           const isComplete = statusResult.isComplete;
           const latestCompletionTime = getSystemLatestCompletionTime(system.id);
           
-          let updatedFields: any = {};
+          const updatedFields: Partial<TestSystem> = {};
           let needsUpdate = false;
           
           // 整體進度更新

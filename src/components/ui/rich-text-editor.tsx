@@ -1,6 +1,7 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Image from '@tiptap/extension-image';
+import { PrivateAttachmentEditorImage } from '@/components/attachments/privateAttachmentImageExtension';
+import { useAttachmentPreviewUrl } from '@/components/attachments/useAttachmentPreviewUrl';
 import Link from '@tiptap/extension-link';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
@@ -68,16 +69,22 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
   const [selectedColor, setSelectedColor] = useState('#000000');
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImage, setLightboxImage] = useState('');
+  const lightboxSource = useAttachmentPreviewUrl(lightboxImage);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const colorSelectionRef = useRef<{ from: number; to: number } | null>(null);
 
   const editor = useEditor({
+    // Toolbar state reads editor.isActive/can directly, including selection-only
+    // table changes that must not call onChange or alter the document.
+    shouldRerenderOnTransaction: true,
     extensions: [
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3, 4, 5, 6],
         },
         link: false,
+        // Preserve existing documents: newer StarterKit versions add a trailing paragraph by default.
+        trailingNode: false,
       }),
       Table.configure({
         resizable: true,
@@ -96,7 +103,7 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
           class: 'border border-border p-2 min-w-[80px]',
         },
       }),
-      Image.configure({
+      PrivateAttachmentEditorImage.configure({
         HTMLAttributes: {
           class: `max-w-full h-auto rounded-lg cursor-pointer ${disableImageResize ? '' : 'resizable-image'}`,
           style: disableImageResize ? '' : 'resize: both; overflow: auto; border: 2px dashed transparent; min-width: 50px; min-height: 50px;',
@@ -580,7 +587,7 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
           if (target.tagName === 'IMG') {
             e.preventDefault();
             e.stopPropagation();
-            const src = target.getAttribute('src');
+            const src = target.getAttribute('data-attachment-reference') || target.getAttribute('src');
             if (src) {
               // 簡單的切換邏輯：如果已經開啟且是同一張圖片就關閉，否則開啟
               if (lightboxOpen && lightboxImage === src) {
@@ -794,10 +801,40 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
           setLightboxOpen(false);
           setLightboxImage('');
         }}
-        slides={lightboxImage ? [{ src: lightboxImage }] : []}
+        slides={lightboxSource ? [{ src: lightboxSource }] : []}
         render={{
           buttonPrev: () => null,
           buttonNext: () => null,
+          // Keep the close control inside the portal; outer content is inert.
+          buttonClose: () => (
+            <button
+              type="button"
+              aria-label="關閉圖片預覽"
+              style={{
+                position: 'fixed',
+                top: '20px',
+                right: '20px',
+                zIndex: 10001,
+                background: 'rgba(0, 0, 0, 0.8)',
+                borderRadius: '50%',
+                width: '40px',
+                height: '40px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: 'white',
+                fontSize: '24px',
+                fontWeight: 'bold'
+              }}
+              onClick={() => {
+                setLightboxOpen(false);
+                setLightboxImage('');
+              }}
+            >
+              ×
+            </button>
+          ),
         }}
         carousel={{
           finite: true,
@@ -809,36 +846,6 @@ export function RichTextEditor({ content, onChange, placeholder = "開始編輯.
         }}
       />
       
-      {/* Custom close button overlay */}
-      {lightboxOpen && (
-        <button
-          type="button"
-          aria-label="關閉圖片預覽"
-          style={{
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
-            zIndex: 10001,
-            background: 'rgba(0, 0, 0, 0.8)',
-            borderRadius: '50%',
-            width: '40px',
-            height: '40px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: 'white',
-            fontSize: '24px',
-            fontWeight: 'bold'
-          }}
-          onClick={() => {
-            setLightboxOpen(false);
-            setLightboxImage('');
-          }}
-        >
-          ×
-        </button>
-      )}
     </div>
   );
 }

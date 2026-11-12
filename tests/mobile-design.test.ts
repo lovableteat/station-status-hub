@@ -88,7 +88,7 @@ test("keeps mobile maintenance navigation on one scrollable row and metrics with
 
 test("uses a responsive dashboard grid and distinct admin zone colors", () => {
   assert.match(dashboardSource, /data-mobile-dashboard-kpis="true"[^>]*className="grid grid-cols-2/);
-  assert.doesNotMatch(dashboardSource, /data-mobile-dashboard-kpis="true"[^>]*className="[^\"]*overflow-x-auto/);
+  assert.doesNotMatch(dashboardSource, /data-mobile-dashboard-kpis="true"[^>]*className="[^"]*overflow-x-auto/);
   assert.match(adminCssSource, /\[data-admin-zone="filters"\]/);
   assert.match(adminCssSource, /\[data-admin-zone="accounts"\]/);
 });

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  createPcbAccountRemoteClient,
+  createPcbAccountRemoteClient as createGuardedClient,
   isDatabaseUserId,
   mergePcbFallbackWorkspaces,
   PCB_REMOTE_FALLBACK_KEY,
@@ -9,6 +9,16 @@ import {
 } from "../../src/components/pcb-designer/core/accountRemoteSync.ts";
 import { BUILT_IN_TEMPLATES, createBlankProject } from "../../src/components/pcb-designer/defaults.ts";
 import type { PcbModelAssetMetadata, PcbSaveState } from "../../src/components/pcb-designer/types.ts";
+
+const verifiedSession = {
+  getSession: async () => ({
+    data: { session: { access_token: "synthetic-session", expires_at: 4_102_444_800, user: { id: "synthetic-auth-id" } } },
+    error: null,
+  }),
+};
+function createPcbAccountRemoteClient(database: PcbAccountDatabase, userId: string, clientId?: string) {
+  return createGuardedClient(database, userId, clientId, verifiedSession);
+}
 
 function createState(name: string): PcbSaveState {
   const project = createBlankProject(name);
@@ -42,10 +52,10 @@ function mockDatabase(options: {
         return { data: null, error: options.lockedSaveError };
       }
       if (name.endsWith("_shared") && options.sharedRpcAvailable === false) {
-        return { data: null, error: { code: "PGRST202", message: "missing shared RPC" } };
+        return { data: null, error: { code: "PGRST202", message: `Could not find the function workspace.${name}(p_user_id) in the schema cache` } };
       }
       if (!options.rpcAvailable) {
-        return { data: null, error: { code: "PGRST202", message: "missing RPC" } };
+        return { data: null, error: { code: "PGRST202", message: `Could not find the function workspace.${name}(p_user_id) in the schema cache` } };
       }
       return {
         data: name === "list_pcb_designer_model_assets"

@@ -1,12 +1,20 @@
+import type { Tables } from "@/integrations/supabase/types";
+
+type ExportSystem = Partial<Tables<"test_systems">> & { name?: string };
+type ExportStation = Partial<Tables<"test_flow_stations">> & { name?: string };
+type ExportItem = Partial<Tables<"test_flow_items">>;
+type ExportProgress = Partial<Tables<"test_progress">>;
 
 import * as XLSX from 'xlsx';
 
 // Export utility functions for generating simplified production reports
 
-export const generatePDF = async (title: string, data: any[], stations?: any[], testItems?: any[], progress?: any[]): Promise<void> => {
+export const generatePDF = async (title: string, data: object[], stations?: ExportStation[], testItems?: ExportItem[], progress?: ExportProgress[]): Promise<void> => {
   try {
+    // Both system rows and existing generic report rows are accepted.
+    const systems = data as ExportSystem[];
     // Process data for simplified production report
-    const processedData = data.map(system => ({
+    const processedData = systems.map(system => ({
       '機台編號': system.system_name,
       '當前站點': system.current_station || 'Station 0',
       '狀態': system.status === '已完成' ? '已完成' : 
@@ -47,9 +55,9 @@ export const generatePDF = async (title: string, data: any[], stations?: any[], 
         <div class="summary">
           <h2>統計摘要</h2>
           <p>總機台數: ${data.length}</p>
-          <p>已完成: ${data.filter(d => d.status === '已完成').length}</p>
-          <p>進行中: ${data.filter(d => d.status === '進行中').length}</p>
-          <p>未開始: ${data.filter(d => d.status === '未開始').length}</p>
+          <p>已完成: ${systems.filter(d => d.status === '已完成').length}</p>
+          <p>進行中: ${systems.filter(d => d.status === '進行中').length}</p>
+          <p>未開始: ${systems.filter(d => d.status === '未開始').length}</p>
         </div>
         
         <table>
@@ -109,7 +117,7 @@ export const generatePDF = async (title: string, data: any[], stations?: any[], 
 };
 
 // Helper function to calculate station progress using actual progress data
-const calculateStationProgress = (systemId: string, stationName: string, stations?: any[], testItems?: any[], progress?: any[]) => {
+const calculateStationProgress = (systemId: string, stationName: string, stations?: ExportStation[], testItems?: ExportItem[], progress?: ExportProgress[]) => {
   if (!stations || !testItems || !progress) return 0;
   
   // 找到對應的站點
@@ -134,13 +142,14 @@ const calculateStationProgress = (systemId: string, stationName: string, station
   return Math.round((completedItems.length / stationItems.length) * 100);
 };
 
-export const generateExcel = async (title: string, data: any[], stations?: any[], testItems?: any[], progress?: any[]): Promise<Blob> => {
+export const generateExcel = async (title: string, data: object[], stations?: ExportStation[], testItems?: ExportItem[], progress?: ExportProgress[]): Promise<Blob> => {
   try {
+    const systems = data as ExportSystem[];
     const workbook = XLSX.utils.book_new();
     
     if (data && data.length > 0) {
       // Process data for comprehensive Excel report with proper formatting
-      const processedData = data.map(system => {
+      const processedData = systems.map(system => {
         const systemId = system.id;
         const systemProgress = progress?.filter(p => p.system_id === systemId) || [];
         
@@ -241,7 +250,7 @@ export const generateExcel = async (title: string, data: any[], stations?: any[]
       // Add detailed progress sheet if progress data is available
       if (progress && progress.length > 0) {
         const progressData = progress.map(prog => {
-          const system = data.find(s => s.id === prog.system_id);
+          const system = systems.find(s => s.id === prog.system_id);
           const station = stations?.find(s => s.id === prog.station_id);
           const item = testItems?.find(i => i.id === prog.item_id);
           

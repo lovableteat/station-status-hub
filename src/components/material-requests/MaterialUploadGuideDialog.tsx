@@ -53,7 +53,7 @@ export function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpe
           </>}
           {chapter === "ce" && <>
             <p className="material-guide-lead">交付維持 {MATERIAL_CE_FIELDS.length} 欄。主下載檔是單一空白資料工作表，範例與網站說明不混入交付資料。</p>
-            <p className="material-guide-note"><strong>第 {MATERIAL_CE_HEADER_ROW} 列：固定表頭　／　第 {MATERIAL_CE_MEANING_ROW} 列：中文意思　／　第 {MATERIAL_CE_DATA_START_ROW} 列起：料件資料</strong></p>
+            <p className="material-guide-note"><strong>第 {MATERIAL_CE_HEADER_ROW} 列：固定表頭{'\u3000'}／{'\u3000'}第 {MATERIAL_CE_MEANING_ROW} 列：中文意思{'\u3000'}／{'\u3000'}第 {MATERIAL_CE_DATA_START_ROW} 列起：料件資料</strong></p>
             <p>{MATERIAL_HANDOFF_RULES[2]}</p>
             <h4>15 欄填寫規格</h4>
             <p>欄名、中文意思與填寫規則共用網站的交付定義。手機可逐欄展開查看。</p>

@@ -24,7 +24,7 @@ interface UserRole {
   id: string;
   user_id: string;
   role: string;
-  permissions: any;
+  permissions: unknown;
   created_at: string;
 }
 

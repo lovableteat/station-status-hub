@@ -27,6 +27,8 @@ import {
 } from "./usePcbPersistence.ts";
 import { loadPcbRemote, mergePcbRemoteState } from "../core/remoteSync.ts";
 import { usePcbProjectLock } from "./usePcbProjectLock.ts";
+import { PcbRemoteAccessError, type PcbRemoteAccessStatus } from "../core/remoteAccess.ts";
+import { usePcbRemoteAccess } from "./usePcbRemoteAccess.ts";
 import { pcbRecoveryClient } from "../core/recoveryClient.ts";
 
 export interface UsePcbWorkspaceOptions {
@@ -53,11 +55,16 @@ export function usePcbWorkspace({
   clientId = "pcb-local-client",
   recoveryClientId = pcbRecoveryClient(),
 }: UsePcbWorkspaceOptions) {
+  const remoteAccess = usePcbRemoteAccess(remoteClient);
+  // A mounted draft belongs to the account that opened it. A different login
+  // must never inherit this reducer's data or recovery namespace.
+  const draftOwnerRef = useRef(editorIdentity ?? null);
+  const ownerChanged = (draftOwnerRef.current?.userId ?? "local") !== (editorIdentity?.userId ?? "local");
   const repository = useMemo(
     () => new PcbLocalRepository(storage ?? browserStorage()),
     [storage],
   );
-  const recovery = useMemo(() => repository.loadRecovery(editorIdentity?.userId ?? "local", recoveryClientId), [repository, editorIdentity?.userId, recoveryClientId]);
+  const recovery = useMemo(() => repository.loadRecovery(draftOwnerRef.current?.userId ?? "local", recoveryClientId), [repository, recoveryClientId]);
   const [state, dispatch] = useReducer(
     reduceWorkspaceState,
     undefined,
@@ -66,6 +73,7 @@ export function usePcbWorkspace({
   const stateRef = useRef(state.data);
   const viewStateRef = useRef(state);
   const [remoteReady, setRemoteReady] = useState(!remoteClient);
+  const [remoteLoadStatus, setRemoteLoadStatus] = useState<PcbRemoteAccessStatus>(remoteClient ? "checking" : "ready");
   const hydratedCleanRevisionRef = useRef<string | null>(null);
   const hasUnsavedChangesRef = useRef(false);
   const refreshRemoteRef = useRef<() => Promise<void>>(async () => undefined);
@@ -76,26 +84,35 @@ export function usePcbWorkspace({
     client: remoteClient ?? null,
     clientId,
     permissionCanEdit: canEdit,
+    enabled: !ownerChanged,
     projectId: state.activeProject.id,
     projectName: state.activeProject.name,
   });
-  const effectiveCanEdit = canEdit && projectLock.canEdit;
+  const cloudReady = !ownerChanged && (!remoteClient || (remoteReady && remoteAccess.status === "ready" && remoteLoadStatus === "ready"));
+  const effectiveCanEdit = canEdit && projectLock.canEdit && cloudReady;
 
   const persistence = usePcbPersistence({
     state: state.data,
     storage,
     remoteClient,
     allowRemoteSync: effectiveCanEdit && Boolean(remoteClient) && remoteReady,
-    editor: editorIdentity,
+    editor: draftOwnerRef.current,
     initialSavedRevision: recovery?.savedRevision,
     recoveryClientId,
   });
-  const { markClean } = persistence;
+  const { markClean, saveNow: savePersistedNow } = persistence;
+  const { refresh: refreshProjectLock } = projectLock;
   hasUnsavedChangesRef.current = persistence.hasUnsavedChanges;
 
   useEffect(() => {
     let active = true;
     let loading = false;
+    if (ownerChanged) {
+      setRemoteReady(false);
+      setRemoteLoadStatus("denied");
+      refreshRemoteRef.current = async () => undefined;
+      return () => { active = false; };
+    }
     if (!remoteClient) {
       setRemoteReady(true);
       return () => {
@@ -104,16 +121,30 @@ export function usePcbWorkspace({
     }
 
     setRemoteReady(false);
+    setRemoteLoadStatus("checking");
+    let initialized = false;
     const refreshRemote = async (initial: boolean) => {
-      if (!active || loading || (!initial && hasUnsavedChangesRef.current)) return;
+      if (!active || loading || (!initial && initialized && hasUnsavedChangesRef.current)) return;
       loading = true;
-      const remoteState = await loadPcbRemote(remoteClient);
-      loading = false;
+      let remoteState: PcbSaveState | null;
+      try {
+        remoteState = await loadPcbRemote(remoteClient);
+      } catch (error) {
+        if (active) {
+          setRemoteReady(false);
+          setRemoteLoadStatus(error instanceof PcbRemoteAccessError ? error.status : "error");
+        }
+        return;
+      } finally {
+        loading = false;
+      }
       if (!active) return;
+      initialized = true;
+      setRemoteLoadStatus("ready");
+      setRemoteReady(true);
       // Recheck after await: a user can edit while background refresh is pending.
       // A restored dirty recovery draft must also survive initial hydration.
       if (hasUnsavedChangesRef.current) {
-        if (initial) setRemoteReady(true);
         return;
       }
       const localState = stateRef.current;
@@ -140,10 +171,9 @@ export function usePcbWorkspace({
         } else if (initial) {
           markClean(localState.updatedAt);
         }
-      } else if (initial) {
-        markClean(localState.updatedAt);
       }
-      if (initial) setRemoteReady(true);
+      // Empty cloud data is not proof that existing local content was saved.
+      // Keep its revision/recovery intact until an explicit successful save.
     };
     const refreshOnFocus = () => void refreshRemote(false);
     refreshRemoteRef.current = () => refreshRemote(false);
@@ -157,7 +187,7 @@ export function usePcbWorkspace({
       window.clearInterval(refreshTimer);
       window.removeEventListener("focus", refreshOnFocus);
     };
-  }, [markClean, remoteClient, repository]);
+  }, [markClean, remoteClient, remoteAccess.generation, repository, ownerChanged]);
 
   useEffect(() => {
     if (hydratedCleanRevisionRef.current !== state.data.updatedAt) return;
@@ -167,6 +197,13 @@ export function usePcbWorkspace({
 
   const editor = usePcbEditorActions(state, dispatch);
   const refreshRemoteNow = useCallback(() => refreshRemoteRef.current(), []);
+  const retryRemote = useCallback(async () => {
+    if (remoteClient?.retryAccess) remoteClient.retryAccess();
+    else {
+      await refreshRemoteRef.current();
+      await refreshProjectLock();
+    }
+  }, [remoteClient, refreshProjectLock]);
 
   useEffect(() => {
     dispatch({ type: "permission/set", canEdit: effectiveCanEdit });
@@ -331,19 +368,24 @@ export function usePcbWorkspace({
     () => dispatch({ type: "selection/clear-group" }),
     [],
   );
-  const saveNow = persistence.saveNow;
+  const saveNow = useCallback(() => ownerChanged ? Promise.resolve(false) : savePersistedNow(), [ownerChanged, savePersistedNow]);
   const loadModelAsset = useCallback(
-    (assetId: string) => remoteClient?.loadModelAsset?.(assetId) ?? Promise.resolve(null),
-    [remoteClient],
+    (assetId: string) => !ownerChanged ? remoteClient?.loadModelAsset?.(assetId) ?? Promise.resolve(null) : Promise.resolve(null),
+    [ownerChanged, remoteClient],
   );
 
   return {
     ...state,
     ...editor,
+    canEdit: effectiveCanEdit,
+    canMutate: editor.canMutate && effectiveCanEdit,
     visibleLayer: state.visibleLayer,
     selectedObjects: state.selectedObjects,
     persistenceStatus: persistence.status,
-    remoteReady,
+    remoteReady: cloudReady,
+    remoteAccessStatus: ownerChanged ? "denied" : remoteAccess.status !== "ready" ? remoteAccess.status : remoteLoadStatus,
+    ownerChanged,
+    retryRemote,
     hasUnsavedChanges: persistence.hasUnsavedChanges,
     lastSavedEditor: persistence.lastSavedEditor,
     lastSavedProjectId: persistence.lastSavedProjectId,

@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect } from "react";
+import { recoverableLazy } from "@/components/common/recoverableLazy";
+import { Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,7 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { UserProvider, useUser } from "@/components/auth/UserContext";
 
-const AuthenticatedApplication = lazy(() =>
+const AuthenticatedApplication = recoverableLazy(() =>
   import("@/components/auth/AuthenticatedApplication")
 );
 

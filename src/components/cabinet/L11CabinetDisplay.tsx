@@ -1,3 +1,4 @@
+import { requestApplicationUpdate } from "@/lib/applicationUpdate";
 
 import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
@@ -82,7 +83,7 @@ interface CabinetRackProps {
 }
 
 function CabinetRack({ position, color, size, serialNumber, componentType, isSelected, onComponentClick }: CabinetRackProps) {
-  const handleClick = (e: any) => {
+  const handleClick = (e: { stopPropagation: () => void }) => {
     e.stopPropagation();
     onComponentClick(componentType, serialNumber);
   };
@@ -449,7 +450,7 @@ function ErrorFallback({ onRetry }: { onRetry?: () => void }) {
               重新載入
             </Button>
           )}
-          <Button onClick={() => window.location.reload()} variant="default" size="sm">
+          <Button onClick={requestApplicationUpdate} variant="default" size="sm">
             重新整理頁面
           </Button>
         </div>
@@ -796,7 +797,7 @@ export function L11CabinetDisplay({ cabinetId: initialCabinetId }: { cabinetId?:
   }, [componentSystemMapping, currentCabinetId, deallocateSystem, getStorageKey]);
 
   // 處理系統選擇確認，添加錯誤處理
-  const handleSystemSelection = useCallback((system: any) => {
+  const handleSystemSelection = useCallback((system: ReturnType<typeof useUnifiedData>["systems"][number]) => {
     try {
       const currentSerialNumber = system.serial_number || system.system_name;
       const key = `${systemSelectionDialog.componentType}-${systemSelectionDialog.componentSn}`;
