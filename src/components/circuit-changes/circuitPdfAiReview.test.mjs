@@ -68,7 +68,8 @@ test('annotation coordinates survive reload and invalid sides stay unlocated',()
   assert.deepEqual({...reopened.findings[0].workingBox},workingBox);
   assert.equal(reopened.findings[0].decision,'confirmed');
   assert.equal(reopened.findings[1].officialBox??null,null);
-  assert.equal(k.normalizeCircuitPdfAiReviewReport(report()).findings[0].officialBox??null,null);
+  const legacyFinding=k.normalizeCircuitPdfAiReviewReport(report()).findings[0];
+  assert.ok(['certainty','officialBox','workingBox'].every(key=>!Object.hasOwn(legacyFinding,key)));
 });
 
 function adapter(payloadFactory=()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(analysis())}}]}), {status=200, headers=new Headers()}={}) {

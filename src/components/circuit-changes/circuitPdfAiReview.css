@@ -99,7 +99,7 @@
 .circuit-pdf-ai-annotation-surface { position: relative; margin-inline: 4px; }
 .circuit-pdf-ai-annotation-surface > canvas:not([hidden]) { display: block; width: 100% !important; height: auto !important; }
 .circuit-pdf-ai-annotation-surface > p { min-height: 90px; padding: 14px; }
-.circuit-pdf-ai-annotation-box { position: absolute; min-width: 0; min-height: 0; padding: 0; border: 2px solid #bc202a; background: #ff46571a; color: white; cursor: pointer; }
+.circuit-pdf-ai-annotation-box { position: absolute; padding: 0; border: 2px solid #bc202a; background: #ff46571a; color: white; cursor: pointer; }
 .circuit-pdf-ai-annotation-box[data-certainty="unclear"] { border-color: #925200; border-style: dashed; background: #ffb42724; }
 .circuit-pdf-ai-annotation-box:hover, .circuit-pdf-ai-annotation-box:focus-visible { z-index: 1; outline: 2px solid #121826; outline-offset: 2px; }
 .circuit-pdf-ai-annotation-box > span { position: absolute; bottom: 100%; left: -2px; min-width: 24px; padding-inline: 4px; border-radius: 4px 4px 0 0; background: #a31b26; text-align: center; font: 700 11px/16px system-ui, sans-serif; }
