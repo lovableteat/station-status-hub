@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compareNvBomSheets } from "./nvBomCompare.ts";
 import { inferNvBomMapping } from "./nvBomMapping.ts";
-import { interpretNvBomDiff, nvBomSourceListDelta } from "./nvBomInterpretation.ts";
+import { interpretNvBomDiff, nvBomSourceListDelta, nvBomSourceListReordered, splitNvBomSourceList } from "./nvBomInterpretation.ts";
 
 const columns = ["Level", "Parent Number", "Part Number", "Part Description", "Manufacturer", "Manufacturer Part Number", "Qty", "Location", "S/D", "Material Category", "Source", "Population"];
 const sheet = (rows, header = columns) => ({ name: "QA", rows: [header, ...rows] });
@@ -23,6 +23,15 @@ test("explains the exact additions and removals in NV source lists", () => {
   assert.deepEqual(nvBomSourceListDelta("MURATA, INC.;YAGEO;—", "murata, inc.\r\nTAIYO;N/A"),
     { added: ["TAIYO"], removed: ["YAGEO"] });
   assert.deepEqual(nvBomSourceListDelta("MURATA;YAGEO", "YAGEO;MURATA"), { added: [], removed: [] });
+});
+
+test("calls a source list reordered only when the same written entries, including repeats, move", () => {
+  const reordered = (before, after) => nvBomSourceListReordered(splitNvBomSourceList(before), splitNvBomSourceList(after));
+  assert.equal(reordered("WALSIN;RALEC;YAGEO;TAI", "TAI;RALEC;YAGEO;WALSIN"), true);
+  assert.equal(reordered("MURATA, INC.;YAGEO;YAGEO", "YAGEO；MURATA, INC.\nYAGEO"), true);
+  assert.equal(reordered("MURATA;YAGEO", "MURATA；YAGEO"), false);
+  assert.equal(reordered("MURATA;YAGEO", "YAGEO;murata"), false);
+  assert.equal(reordered("MURATA;YAGEO;YAGEO", "YAGEO;MURATA;MURATA"), false);
 });
 
 test("uses explicit population-only changes and Qty 0 at matching placements", () => {

@@ -33,13 +33,15 @@ const knownIdentifier = (value?: string) => {
   return /^(?:[-–—]+|N\/?A|N\.A\.|NONE|NULL|未提供|未填寫)$/.test(normalized) ? "" : normalized;
 };
 
+export const splitNvBomSourceList = (value: string) => value.split(/[;；\r\n]+/).map(entry => entry.trim()).filter(Boolean);
+
 export function nvBomSourceListDelta(before: string, after: string) {
   // A comma can be part of a manufacturer's name. NV lists use semicolons or line breaks.
   const members = (value: string) => {
     const result = new Map<string, string>();
-    for (const entry of value.split(/[;；\r\n]+/)) {
+    for (const entry of splitNvBomSourceList(value)) {
       const key = knownIdentifier(entry);
-      if (key && !result.has(key)) result.set(key, entry.trim());
+      if (key && !result.has(key)) result.set(key, entry);
     }
     return result;
   };
@@ -47,6 +49,12 @@ export function nvBomSourceListDelta(before: string, after: string) {
   const difference = (left: Map<string, string>, right: Map<string, string>) =>
     [...left].filter(([key]) => !right.has(key)).map(([, value]) => value);
   return { added: difference(current, previous), removed: difference(previous, current) };
+}
+
+export function nvBomSourceListReordered(before: string[], after: string[]) {
+  if (before.length !== after.length || before.every((entry, index) => entry === after[index])) return false;
+  const oldItems = [...before].sort(), newItems = [...after].sort();
+  return oldItems.every((entry, index) => entry === newItems[index]);
 }
 const differentIdentifier = (before: string, after: string) => {
   const a = knownIdentifier(before), b = knownIdentifier(after);

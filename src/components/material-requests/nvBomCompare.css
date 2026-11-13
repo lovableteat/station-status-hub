@@ -113,6 +113,9 @@
 .nv-bom-delta-values { min-width:0; color:hsl(var(--foreground)); overflow-wrap:anywhere; }
 .nv-bom-delta > small { flex:none; color:hsl(var(--muted-foreground)); font-size:11px; font-weight:400; }
 .nv-bom-delta-context { font-size:11px; color:hsl(var(--muted-foreground)); }
+.nv-bom-delta-order { color:hsl(var(--info)); font-weight:600; }
+.nv-bom-delta-sequence { display:grid; gap:3px; overflow-wrap:anywhere; }
+.nv-bom-delta-sequence strong { color:hsl(var(--muted-foreground)); font-weight:600; }
 .nv-bom-result-main > small,.nv-bom-current-cell > small,.nv-bom-result-refs small { color:hsl(var(--muted-foreground)); font-size:11px; }
 .nv-bom-result-main > small,.nv-bom-ref-preview > span,.nv-bom-current-cell > strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .nv-bom-ref-preview { display:flex; min-width:0; align-items:baseline; gap:4px; }

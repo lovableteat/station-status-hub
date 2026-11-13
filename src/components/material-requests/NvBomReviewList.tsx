@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import { ChevronDown, Copy, LocateFixed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NV_BOM_FIELDS, placementRefs, type NvBomAnnotation, type NvBomField, type NvBomPart } from "./nvBomCompare";
-import { NV_BOM_INTERPRETATION_LABELS, NV_BOM_SCOPE_LABELS, nvBomSourceListDelta, type NvBomInterpretedChange } from "./nvBomInterpretation";
+import { NV_BOM_INTERPRETATION_LABELS, NV_BOM_SCOPE_LABELS, nvBomSourceListDelta, nvBomSourceListReordered, splitNvBomSourceList, type NvBomInterpretedChange } from "./nvBomInterpretation";
 import { currentBomCandidateLabel, NV_BOM_TABLE_LINK_LABELS, type NvBomTableCandidate, type NvBomTableLink } from "./nvBomTableMatch";
 export type NvBomReviewLink = NvBomTableLink & { relatedMain?: boolean };
 
@@ -31,11 +31,13 @@ function SourceEvidence({ part, side, changedFields, onCopy }: { part?: NvBomPar
 }
 
 type SourceDelta = { field: "廠商" | "廠商料號"; direction: "added" | "removed"; values: string[] };
+type SourceListNote = { field: SourceDelta["field"]; reordered: boolean; before: string[]; after: string[] };
 
-function SourceDeltaList({ changes, preview = false }: { changes: SourceDelta[]; preview?: boolean }) {
+function SourceDeltaList({ changes, notes, preview = false }: { changes: SourceDelta[]; notes: SourceListNote[]; preview?: boolean }) {
   return <dl className="nv-bom-delta-list">{(["廠商", "廠商料號"] as const).map(field => {
     const group = changes.filter(change => change.field === field);
-    if (!group.length) return null;
+    const note = notes.find(item => item.field === field);
+    if (!group.length && !note) return null;
     return <div key={field} className="nv-bom-delta-field"><dt>{field}</dt>
       <dd>{group.map(({ direction, values }) => {
         const action = direction === "added" ? "新增" : "移除";
@@ -44,7 +46,14 @@ function SourceDeltaList({ changes, preview = false }: { changes: SourceDelta[];
           <span className="nv-bom-delta-values">{(preview ? values.slice(0, 2) : values).join("、")}</span>
           {preview && values.length > 2 && <small>另 {values.length - 2} 個</small>}
         </div>;
-      })}</dd>
+      })}
+      {note && <>
+        <span className="nv-bom-delta-order">{note.reordered ? "僅順序不同" : "原文有差異，未辨識到新增或移除"}</span>
+        {!preview && note.reordered && <div className="nv-bom-delta-sequence">
+          <p><strong>舊版順序</strong> {note.before.join(" → ")}</p>
+          <p><strong>新版順序</strong> {note.after.join(" → ")}</p>
+        </div>}
+      </>}</dd>
     </div>;
   })}</dl>;
 }
@@ -65,20 +74,27 @@ export function NvBomReviewRow({ entry, link, note, showAi, onAnnotate, onCopy, 
   const name = part.partNumber || part.mpn || `Excel 第 ${part.sourceRows[0]} 列`;
   const prior = change.before, next = change.after;
   const sourceDeltas: SourceDelta[] = [];
+  const sourceNotes: SourceListNote[] = [];
   if (prior && next && (kind === "sourceChanged" || kind === "replacement")) {
     for (const [key, field] of [["manufacturer", "廠商"], ["mpn", "廠商料號"]] as const) {
       if (!change.changedFields.includes(key)) continue;
       const { added, removed } = nvBomSourceListDelta(prior[key], next[key]);
       if (added.length) sourceDeltas.push({ field, direction: "added", values: added });
       if (removed.length) sourceDeltas.push({ field, direction: "removed", values: removed });
+      if (!added.length && !removed.length) {
+        const before = splitNvBomSourceList(prior[key]), after = splitNvBomSourceList(next[key]);
+        sourceNotes.push({ field, before, after, reordered: nvBomSourceListReordered(before, after) });
+      }
     }
   }
-  const sameList = kind === "sourceChanged" && !sourceDeltas.length && change.changedFields.some(key => key === "mpn" || key === "manufacturer");
+  const hasSourceDiff = sourceDeltas.length > 0 || sourceNotes.length > 0;
+  const onlyOrder = kind === "sourceChanged" && !sourceDeltas.length && sourceNotes.length > 0 && sourceNotes.every(item => item.reordered)
+    && change.changedFields.every(key => key === "mpn" || key === "manufacturer") && !change.changedMetadata?.length;
   const singleVersion = change.kind !== "changed";
   const detailLine = (singleVersion ? [part.partNumber || part.mpn] : [part.description, part.partNumber]).filter(Boolean).join(" · ");
   const changedLabels = kind === "other" ? NV_BOM_FIELDS.filter(({ key }) => change.changedFields.includes(key)).map(({ label }) => label) : [];
-  const title = singleVersion ? part.description || name : kind === "sourceChanged" && sourceDeltas.length ? "新版供料清單有變動"
-    : sameList ? "來源欄順序或寫法有變動" : changedLabels.length ? `${changedLabels.join("、")}有變更` : summary;
+  const title = singleVersion ? part.description || name : onlyOrder ? `只調整${sourceNotes.map(item => item.field).join("與")}的排列順序`
+    : kind === "sourceChanged" && hasSourceDiff ? "新版供料清單有變動" : changedLabels.length ? `${changedLabels.join("、")}有變更` : summary;
   const match = link?.state === "matched" ? link.candidates[0] : undefined;
   const anchorRefs = (relatedMain.after ?? relatedMain.before)?.refs;
   const refs = placementRefs(part.refs || anchorRefs || "");
@@ -87,7 +103,7 @@ export function NvBomReviewRow({ entry, link, note, showAi, onAnnotate, onCopy, 
     { label: "移除位號", values: removedRefs, direction: "removed" }, { label: "新增位號", values: addedRefs, direction: "added" },
   ].filter(({ values }) => values.length > 0);
   const sourceContext = [];
-  if (kind === "sourceChanged" && sourceDeltas.length && prior && next) {
+  if (kind === "sourceChanged" && hasSourceDiff && prior && next) {
     const oldRefs = placementRefs(prior.refs), newRefs = placementRefs(next.refs);
     const newRefSet = new Set(newRefs);
     if (oldRefs.length && oldRefs.length === newRefs.length && oldRefs.every(ref => newRefSet.has(ref)) && !refChanges.length) {
@@ -99,9 +115,9 @@ export function NvBomReviewRow({ entry, link, note, showAi, onAnnotate, onCopy, 
     <div className="nv-bom-result-line">
       <label className="nv-bom-verify"><input type="checkbox" aria-label={`已核對 ${name}`} checked={Boolean(note?.checked)} onChange={event => onAnnotate({ checked: event.target.checked })} /><span className="sr-only">已核對</span></label>
       <div className="nv-bom-result-main">
-        <div className="nv-bom-result-labels"><span className="nv-bom-kind">{NV_BOM_INTERPRETATION_LABELS[kind]}</span><span>{NV_BOM_SCOPE_LABELS[scope]}</span></div>
+        <div className="nv-bom-result-labels"><span className="nv-bom-kind">{onlyOrder ? "排列順序" : NV_BOM_INTERPRETATION_LABELS[kind]}</span><span>{NV_BOM_SCOPE_LABELS[scope]}</span></div>
         <strong>{title}</strong>
-        {sourceDeltas.length > 0 && <SourceDeltaList changes={sourceDeltas} preview />}
+        {hasSourceDiff && <SourceDeltaList changes={sourceDeltas} notes={sourceNotes} preview />}
         {sourceContext.length > 0 && <p className="nv-bom-delta-context">{sourceContext.join("")}</p>}
         {detailLine && <small title={detailLine}>{detailLine}</small>}
       </div>
@@ -121,9 +137,10 @@ export function NvBomReviewRow({ entry, link, note, showAi, onAnnotate, onCopy, 
       </button>
     </div>
     {open && <div className="nv-bom-result-details" id={detailsId}>
-      {sourceDeltas.length > 0 && <section className="nv-bom-change-evidence" aria-label="來源差異">
+      {hasSourceDiff && <section className="nv-bom-change-evidence" aria-label="來源差異">
         <h4>新舊版供料清單差異</h4>
-        <SourceDeltaList changes={sourceDeltas} />
+        <SourceDeltaList changes={sourceDeltas} notes={sourceNotes} />
+        {onlyOrder && <p>{sourceNotes.length === 2 ? "兩欄都" : "這一欄"}沒有新增或移除項目。</p>}
         {sourceContext.length > 0 && <p>{sourceContext.join("")}</p>}
         {sourceDeltas.some(({ field }) => field === "廠商") && sourceDeltas.some(({ field }) => field === "廠商料號") && <p>廠商與料號分欄比對，兩者的對應請核對原始 Excel。</p>}
       </section>}
