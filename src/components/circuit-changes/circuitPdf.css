@@ -387,6 +387,21 @@
 .circuit-pdf-compare-bar .circuit-pdf-strip { flex: 1 1 160px; min-width: 120px; }
 .circuit-pdf-compare-bar .circuit-pdf-strip-label { top: calc(100% + 6px); bottom: auto; }
 .circuit-pdf-compare-bar .circuit-pdf-ai-run { flex: none; height: 32px; gap: 6px; }
+.circuit-pdf-ai-run:enabled { position: relative; }
+.circuit-pdf-ai-run:enabled::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 1px hsl(var(--tone) 85% 76% / .55);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .circuit-pdf-ai-run:enabled::after { animation: circuit-ai-button-pulse 1.4s ease-in-out 3; }
+}
+@keyframes circuit-ai-button-pulse {
+  50% { box-shadow: 0 0 0 2px hsl(var(--tone) 90% 80% / .95), 0 0 8px hsl(var(--tone) 85% 72% / .65); }
+}
 .circuit-pdf-compare-bar .circuit-pdf-tool-group[data-group="files"] > button { width: auto; height: 32px; gap: 6px; padding-inline: 10px; }
 .circuit-pdf-ai-status { display: inline-flex; flex: none; align-items: center; gap: 6px; color: hsl(var(--muted-foreground)); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .circuit-pdf-ai-status[data-kind="diff"] { color: #ff9a9e; }
