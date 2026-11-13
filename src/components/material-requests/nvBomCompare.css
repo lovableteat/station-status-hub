@@ -103,11 +103,16 @@
 [data-kind=removed] .nv-bom-kind,[data-action=sourceRemoved] .nv-bom-kind,[data-action=unmount] .nv-bom-kind { background:hsl(0 52% 35% / .3); color:hsl(0 88% 83%); }
 [data-action=replacement] .nv-bom-kind { background:hsl(41 61% 33% / .36); color:hsl(40 90% 78%); }
 .nv-bom-result-main > strong { font-size:14px; line-height:1.35; overflow-wrap:anywhere; }
-.nv-bom-delta-list { display:flex; flex-wrap:wrap; gap:4px 6px; }
-.nv-bom-delta { display:inline-flex; min-width:0; max-width:100%; align-items:baseline; gap:5px; padding:2px 6px; border:1px solid hsl(var(--nv-direction) / .4); border-radius:5px; background:hsl(var(--nv-direction) / .14); font-size:12px; font-weight:600; overflow-wrap:anywhere; }
-.nv-bom-delta > small { flex:none; color:inherit; font-size:11px; font-weight:400; }
-.nv-bom-delta > span:first-child { flex:none; }
-.nv-bom-delta > span:nth-child(2) { min-width:0; }
+.nv-bom-delta-list { display:grid; gap:1px; margin-block:4px; }
+.nv-bom-delta-field { display:grid; grid-template-columns:5.25em minmax(0,1fr); align-items:baseline; gap:6px; padding:4px 0; font-size:12px; }
+.nv-bom-delta-field + .nv-bom-delta-field { border-top:1px solid hsl(var(--border) / .65); }
+.nv-bom-delta-field dt { color:hsl(var(--muted-foreground)); font-weight:600; }
+.nv-bom-delta-field dd { display:grid; gap:4px; min-width:0; }
+.nv-bom-delta { display:flex; align-items:baseline; gap:6px; min-width:0; font-size:12px; font-weight:600; }
+.nv-bom-delta-action { flex:none; padding:1px 5px; border-radius:4px; background:hsl(var(--nv-direction) / .16); color:hsl(var(--nv-direction)); font-size:11px; }
+.nv-bom-delta-values { min-width:0; color:hsl(var(--foreground)); overflow-wrap:anywhere; }
+.nv-bom-delta > small { flex:none; color:hsl(var(--muted-foreground)); font-size:11px; font-weight:400; }
+.nv-bom-delta-context { font-size:11px; color:hsl(var(--muted-foreground)); }
 .nv-bom-result-main > small,.nv-bom-current-cell > small,.nv-bom-result-refs small { color:hsl(var(--muted-foreground)); font-size:11px; }
 .nv-bom-result-main > small,.nv-bom-ref-preview > span,.nv-bom-current-cell > strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .nv-bom-ref-preview { display:flex; min-width:0; align-items:baseline; gap:4px; }

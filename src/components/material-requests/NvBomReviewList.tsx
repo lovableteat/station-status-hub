@@ -33,13 +33,20 @@ function SourceEvidence({ part, side, changedFields, onCopy }: { part?: NvBomPar
 type SourceDelta = { field: "廠商" | "廠商料號"; direction: "added" | "removed"; values: string[] };
 
 function SourceDeltaList({ changes, preview = false }: { changes: SourceDelta[]; preview?: boolean }) {
-  return <div className="nv-bom-delta-list">{changes.map(({ field, direction, values }) => (
-    <span key={`${field}-${direction}`} className="nv-bom-delta" data-direction={direction}>
-      <span>{direction === "added" ? "新版新增" : "新版移除"}{field}：</span>
-      <span>{(preview ? values.slice(0, 1) : values).join("、")}</span>
-      {preview && values.length > 1 && <small>另 {values.length - 1} 個</small>}
-    </span>
-  ))}</div>;
+  return <dl className="nv-bom-delta-list">{(["廠商", "廠商料號"] as const).map(field => {
+    const group = changes.filter(change => change.field === field);
+    if (!group.length) return null;
+    return <div key={field} className="nv-bom-delta-field"><dt>{field}</dt>
+      <dd>{group.map(({ direction, values }) => {
+        const action = direction === "added" ? "新增" : "移除";
+        return <div key={direction} role="group" aria-label={`新版${action}${field}：`} className="nv-bom-delta" data-direction={direction}>
+          <span className="nv-bom-delta-action" aria-hidden="true">{action}</span>
+          <span className="nv-bom-delta-values">{(preview ? values.slice(0, 2) : values).join("、")}</span>
+          {preview && values.length > 2 && <small>另 {values.length - 2} 個</small>}
+        </div>;
+      })}</dd>
+    </div>;
+  })}</dl>;
 }
 
 export function NvBomReviewRow({ entry, link, note, showAi, onAnnotate, onCopy, onLocate }: {
@@ -79,6 +86,15 @@ export function NvBomReviewRow({ entry, link, note, showAi, onAnnotate, onCopy, 
     { label: "改上件", values: mountedRefs, direction: "added" }, { label: "改不上件", values: unmountedRefs, direction: "removed" },
     { label: "移除位號", values: removedRefs, direction: "removed" }, { label: "新增位號", values: addedRefs, direction: "added" },
   ].filter(({ values }) => values.length > 0);
+  const sourceContext = [];
+  if (kind === "sourceChanged" && sourceDeltas.length && prior && next) {
+    const oldRefs = placementRefs(prior.refs), newRefs = placementRefs(next.refs);
+    const newRefSet = new Set(newRefs);
+    if (oldRefs.length && oldRefs.length === newRefs.length && oldRefs.every(ref => newRefSet.has(ref)) && !refChanges.length) {
+      sourceContext.push(`位號清單相同，共 ${newRefs.length} 個。`);
+    }
+    if (prior.qty && next.qty) sourceContext.push(prior.qty === next.qty ? `用量維持 ${next.qty}。` : `用量由 ${prior.qty} 改為 ${next.qty}。`);
+  }
   return <article data-kind={change.kind} data-action={kind} data-scope={scope} data-checked={Boolean(note?.checked)}>
     <div className="nv-bom-result-line">
       <label className="nv-bom-verify"><input type="checkbox" aria-label={`已核對 ${name}`} checked={Boolean(note?.checked)} onChange={event => onAnnotate({ checked: event.target.checked })} /><span className="sr-only">已核對</span></label>
@@ -86,6 +102,7 @@ export function NvBomReviewRow({ entry, link, note, showAi, onAnnotate, onCopy, 
         <div className="nv-bom-result-labels"><span className="nv-bom-kind">{NV_BOM_INTERPRETATION_LABELS[kind]}</span><span>{NV_BOM_SCOPE_LABELS[scope]}</span></div>
         <strong>{title}</strong>
         {sourceDeltas.length > 0 && <SourceDeltaList changes={sourceDeltas} preview />}
+        {sourceContext.length > 0 && <p className="nv-bom-delta-context">{sourceContext.join("")}</p>}
         {detailLine && <small title={detailLine}>{detailLine}</small>}
       </div>
       <div className="nv-bom-result-refs" aria-label="位號摘要">
@@ -107,7 +124,7 @@ export function NvBomReviewRow({ entry, link, note, showAi, onAnnotate, onCopy, 
       {sourceDeltas.length > 0 && <section className="nv-bom-change-evidence" aria-label="來源差異">
         <h4>新舊版供料清單差異</h4>
         <SourceDeltaList changes={sourceDeltas} />
-        {kind === "sourceChanged" && refs.length > 0 && !refChanges.length && prior?.refs && next?.refs && <p>位號清單相同，共 {refs.length} 個。{next.qty && prior.qty === next.qty && `用量維持 ${next.qty}。`}</p>}
+        {sourceContext.length > 0 && <p>{sourceContext.join("")}</p>}
         {sourceDeltas.some(({ field }) => field === "廠商") && sourceDeltas.some(({ field }) => field === "廠商料號") && <p>廠商與料號分欄比對，兩者的對應請核對原始 Excel。</p>}
       </section>}
       {link?.state === "missing" && <p className="nv-bom-help">目前選取的網站 BOM 找不到可對應的列。新舊 Excel 的比對結果仍在下方。</p>}
