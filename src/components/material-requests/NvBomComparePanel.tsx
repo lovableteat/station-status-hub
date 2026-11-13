@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, Download, FileSpreadsheet, LoaderCircle, Search, Sparkles, Upload, X } from "lucide-react";
+import { ArrowLeft, Check, Download, FileSpreadsheet, History, LoaderCircle, Search, Sparkles, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NV_BOM_FIELDS, compareNvBomSheets, exportNvBomComparison, readNvBomFile, type NvBomAnnotation, type NvBomChange, type NvBomFile, type NvBomMapping } from "./nvBomCompare";
 import { loadNvBomModels, resolveNvBomMappings, runNvBomComparison, type NvBomAiResult, type NvBomComparison, type NvBomModel } from "./nvBomCompareAi";
@@ -7,6 +7,7 @@ import { getNvBomHeaderAmbiguities, inferNvBomMapping, inferNvBomMappingAt, vali
 import { interpretNvBomDiff, NV_BOM_INTERPRETATION_LABELS, NV_BOM_SCOPE_LABELS, type NvBomInterpretedChange } from "./nvBomInterpretation";
 import { NvBomReviewRow, type NvBomReviewLink } from "./NvBomReviewList";
 import { currentBomCandidateLabel, NV_BOM_TABLE_LINK_LABELS, type NvBomTableCandidate, type NvBomTableLink } from "./nvBomTableMatch";
+import { listNvBomHistory, loadNvBomHistory, saveNvBomHistory, type NvBomHistoryEntry } from "./nvBomHistory";
 import "./nvBomCompare.css";
 
 type Source = { file: NvBomFile; sheet: number };
@@ -29,11 +30,22 @@ export interface NvBomCompareSession {
   scope: ReviewScope;
   checked: string;
   page: number;
+  historyEntry?: NvBomHistoryEntry;
 }
 const emptyMapping = (): NvBomMapping => ({ headerRow: 1, partNumber: null, mpn: null, manufacturer: null, description: null, qty: null, refs: null });
 const PAGE_SIZE = 50;
 const LOCAL_RESULT = "local";
 const EMPTY_NOTES: Record<string, NvBomAnnotation> = {};
+const historyDate = new Intl.DateTimeFormat("zh-TW", { dateStyle: "medium", timeStyle: "medium" });
+
+function settledRuns(runs: NvBomCompareSession["runs"]) {
+  return Object.fromEntries(Object.entries(runs).map(([id, run]) => [id,
+    run.state === "running" ? { ...run, state: "cancelled" as const, progress: "AI 核對未完成" } : run]));
+}
+
+function savedRunKey(runs: NvBomCompareSession["runs"]) {
+  return Object.entries(runs).map(([id, run]) => `${id}:${run.state}`).join("\n");
+}
 
 function matchReviewRow(entry: NvBomInterpretedChange, match: (change: NvBomChange) => NvBomTableLink): NvBomReviewLink {
   const { change, relatedMain } = entry;
@@ -89,13 +101,14 @@ function SourcePicker({ side, value, busy, mapping, onMapping, onChange, onReadi
   </section>;
 }
 
-export default function NvBomComparePanel({ active, onBack, currentBomName, matchCurrentBom, onLocateCurrentBom, initialSession }: {
+export default function NvBomComparePanel({ active, onBack, currentBomName, matchCurrentBom, onLocateCurrentBom, initialSession, historyScope }: {
   active: boolean;
   onBack: () => void;
   currentBomName?: string;
   matchCurrentBom?: (change: NvBomChange) => NvBomTableLink;
   onLocateCurrentBom?: (candidate: NvBomTableCandidate, session: NvBomCompareSession) => void;
   initialSession?: NvBomCompareSession;
+  historyScope?: string;
 }) {
   const [before, setBefore] = useState(initialSession?.before ?? null), [after, setAfter] = useState(initialSession?.after ?? null);
   const [beforeReading, setBeforeReading] = useState(false), [afterReading, setAfterReading] = useState(false);
@@ -111,6 +124,17 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
   const [notice, setNotice] = useState<{ message: string; tone?: "success" | "error" } | null>(null), [exporting, setExporting] = useState(false);
   const [compareError, setCompareError] = useState("");
   const [unresolvedLimit, setUnresolvedLimit] = useState(PAGE_SIZE);
+  const [historyEntry, setHistoryEntry] = useState(initialSession?.historyEntry);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyEntries, setHistoryEntries] = useState<NvBomHistoryEntry[] | null>(null);
+  const [historyError, setHistoryError] = useState("");
+  const [openingHistory, setOpeningHistory] = useState("");
+  const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "failed" | null>(initialSession?.historyEntry ? "saved" : null);
+  const [saveRetry, setSaveRetry] = useState(0);
+  const scheduledSave = useRef<{ timer: number; flush: () => void }>();
+  const saveQueue = useRef(Promise.resolve());
+  const saveSequence = useRef(0);
+  const lastSave = useRef<{ id: string; runKey: string; notes: typeof annotations; result: string; retry: number }>();
   const controller = useRef<AbortController | null>(null), mounted = useRef(true), started = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; controller.current?.abort(); }; }, []);
   useEffect(() => { if (!active) controller.current?.abort(); }, [active]);
@@ -132,6 +156,57 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
   const activeRun = runs[selectedResult], result = activeRun?.result, notes = annotations[selectedResult] ?? EMPTY_NOTES;
   const beforeSheet = before?.file.sheets[before.sheet], afterSheet = after?.file.sheets[after.sheet];
   const baseDiff = runs[LOCAL_RESULT]?.result?.diff;
+  const session = useMemo<NvBomCompareSession>(() => ({
+    before, after, beforeMap, afterMap, manual, mappingModel, selected, selectedResult, annotations, query, kind, scope, checked, page,
+    runs: settledRuns(runs), historyEntry,
+  }), [before, after, beforeMap, afterMap, manual, mappingModel, selected, selectedResult, annotations, query, kind, scope, checked, page, runs, historyEntry]);
+
+  useEffect(() => {
+    if (!historyScope || !historyEntry || !baseDiff) return;
+    const runKey = savedRunKey(runs);
+    const previous = lastSave.current;
+    if (previous?.id === historyEntry.id && previous.runKey === runKey && previous.notes === annotations
+      && previous.result === selectedResult && previous.retry === saveRetry) return;
+    lastSave.current = { id: historyEntry.id, runKey, notes: annotations, result: selectedResult, retry: saveRetry };
+    const sequence = ++saveSequence.current;
+    setSaveStatus("saving");
+    if (scheduledSave.current) {
+      if (previous?.id === historyEntry.id) window.clearTimeout(scheduledSave.current.timer);
+      else scheduledSave.current.flush();
+    }
+    const flush = () => {
+      window.clearTimeout(timer);
+      scheduledSave.current = undefined;
+      saveQueue.current = saveQueue.current.then(async () => {
+        try {
+          await saveNvBomHistory(historyScope, historyEntry, session);
+          if (!mounted.current) return;
+          setHistoryEntries(entries => entries?.some(entry => entry.id === historyEntry.id) ? entries
+            : entries && [historyEntry, ...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+          if (sequence === saveSequence.current) setSaveStatus("saved");
+        } catch {
+          if (mounted.current && sequence === saveSequence.current) setSaveStatus("failed");
+        }
+      });
+    };
+    const timer = window.setTimeout(flush, previous?.id === historyEntry.id ? 350 : 0);
+    scheduledSave.current = { timer, flush };
+  }, [annotations, baseDiff, historyEntry, historyScope, runs, saveRetry, selectedResult, session]);
+
+  useEffect(() => {
+    const flush = () => scheduledSave.current?.flush();
+    window.addEventListener("pagehide", flush);
+    return () => { window.removeEventListener("pagehide", flush); flush(); };
+  }, []);
+
+  useEffect(() => {
+    if (!active || !historyOpen || !historyScope) return;
+    let current = true;
+    setHistoryEntries(null); setHistoryError("");
+    void listNvBomHistory(historyScope).then(entries => { if (current) setHistoryEntries(entries); })
+      .catch(() => { if (current) setHistoryError("無法讀取比對紀錄，請關閉後再開啟。"); });
+    return () => { current = false; };
+  }, [active, historyOpen, historyScope]);
   const interpretation = useMemo(() => baseDiff ? interpretNvBomDiff(baseDiff) : undefined, [baseDiff]);
   const visibleChanges = useMemo(() => new Map(result?.diff.changes.map(change => [change.id, change])), [result]);
   const links = useMemo(() => new Map(interpretation?.entries.map(entry => [entry.change.id, matchCurrentBom && matchReviewRow(entry, matchCurrentBom)])), [interpretation, matchCurrentBom]);
@@ -152,6 +227,8 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
     return counts;
   }, {} as Partial<Record<NvBomInterpretedChange["scope"], number>>), [interpretation]);
   function clearResults() {
+    scheduledSave.current?.flush();
+    saveSequence.current++; setHistoryEntry(undefined); setSaveStatus(null);
     setRuns({}); setAnnotations({}); setSelectedResult(""); setNotice(null); setCompareError(""); setMappingModel(""); setPage(1); setUnresolvedLimit(PAGE_SIZE);
   }
   function editMapping(side: "before" | "after", value: NvBomMapping) {
@@ -166,8 +243,9 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
     setManual(current => ({ ...current, [side]: false }));
     clearResults();
   }
-  async function run(ids = selected) {
-    if (!beforeSheet || !afterSheet || controller.current || beforeReading || afterReading) return;
+  async function run(ids = selected, retry = false) {
+    if (!before || !after || !beforeSheet || !afterSheet || controller.current || beforeReading || afterReading || openingHistory) return;
+    scheduledSave.current?.flush();
     setCompareError(""); setNotice(null);
     const targets = selectableModels.filter(model => ids.includes(model.id));
     const request = new AbortController(); controller.current = request;
@@ -219,10 +297,15 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
         if (changed) setAnnotations({});
       }
       const local = { ...comparison, modelId: LOCAL_RESULT, modelLabel: "本機比對", reviewed: 0 };
+      if (historyScope && (!retry || !historyEntry)) {
+        setHistoryEntry({ id: crypto.randomUUID(), createdAt: new Date().toISOString(),
+          beforeName: before.file.name, afterName: after.file.name, differenceCount: comparison.diff.changes.length, aiCount: targets.length });
+      }
+      if (!retry) setAnnotations({});
       const mappingNotice = mappingFailures.length ? `欄位辨識${mappingAssistant ? `由 ${mappingAssistant.label} 完成` : "沿用已確認的本機欄位"}。\n${mappingFailures.join("\n")}` : "";
       setNotice(mappingNotice ? { message: mappingNotice } : null); setSettings(false); setPage(1);
       setSelectedResult(value => targets.some(model => model.id === value) ? value : targets[0]?.id ?? LOCAL_RESULT);
-      setRuns(value => ({ ...(changed ? {} : value), [LOCAL_RESULT]: { state: "done", progress: "依已辨識欄位", result: local },
+      setRuns(value => ({ ...(retry && !changed ? value : {}), [LOCAL_RESULT]: { state: "done", progress: "依已辨識欄位", result: local },
         ...Object.fromEntries(targets.map(model => [model.id, { state: "running", progress: "等待 AI 核對…", result: { ...local, modelId: model.id, modelLabel: model.label } }])) }));
       if (!targets.length) return;
       setBusy(true);
@@ -259,8 +342,32 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
     setter(value); setPage(1);
   }
   function locate(candidate: NvBomTableCandidate) {
-    onLocateCurrentBom?.(candidate, { before, after, beforeMap, afterMap, manual, mappingModel, selected, selectedResult, annotations, query, kind, scope, checked, page,
-      runs: Object.fromEntries(Object.entries(runs).map(([id, run]) => [id, run.state === "running" ? { ...run, state: "cancelled", progress: "已停止" } : run])) });
+    scheduledSave.current?.flush();
+    onLocateCurrentBom?.(candidate, session);
+  }
+  async function openHistory(entry: NvBomHistoryEntry) {
+    if (!historyScope || busy || controller.current || openingHistory || beforeReading || afterReading) return;
+    setOpeningHistory(entry.id); setHistoryError("");
+    scheduledSave.current?.flush();
+    try {
+      await saveQueue.current;
+      const saved = await loadNvBomHistory(historyScope, entry.id);
+      if (!saved?.before || !saved.after || !saved.runs[LOCAL_RESULT]?.result) throw new Error("找不到完整的比對紀錄。");
+      if (!mounted.current) return;
+      saveSequence.current++;
+      const resultId = saved.runs[saved.selectedResult]?.result ? saved.selectedResult : LOCAL_RESULT;
+      lastSave.current = { id: entry.id, runKey: savedRunKey(saved.runs), notes: saved.annotations, result: resultId, retry: saveRetry };
+      setBefore(saved.before); setAfter(saved.after); setBeforeMap(saved.beforeMap); setAfterMap(saved.afterMap);
+      setManual(saved.manual); setMappingModel(saved.mappingModel); setSelected(saved.selected);
+      setRuns(saved.runs); setSelectedResult(resultId); setAnnotations(saved.annotations);
+      setQuery(""); setKind("all"); setScope("all"); setChecked("all"); setPage(1); setUnresolvedLimit(PAGE_SIZE);
+      setHistoryEntry(entry); setSaveStatus("saved"); setHistoryOpen(false); setSettings(false);
+      setCompareError(""); setNotice(null);
+    } catch {
+      if (mounted.current) setHistoryError("無法開啟這筆比對紀錄，請重試。");
+    } finally {
+      if (mounted.current) setOpeningHistory("");
+    }
   }
   async function copy(value: string) {
     try { await navigator.clipboard.writeText(value); setNotice({ message: `已複製 ${value}`, tone: "success" }); }
@@ -290,17 +397,30 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
   </>;
   return <section className="nv-bom-compare" data-testid="nv-bom-compare" aria-label="NV 原始 BOM 比對">
     <div className="nv-bom-actions">
-      <Button type="button" variant="ghost" onClick={() => { controller.current?.abort(); onBack(); }}><ArrowLeft aria-hidden="true" />返回版本管理</Button>
-      {!result && <p>選擇新舊工作表，確認料號、用量與位號欄位。</p>}
+      <Button type="button" variant="ghost" onClick={() => { scheduledSave.current?.flush(); controller.current?.abort(); onBack(); }}><ArrowLeft aria-hidden="true" />返回版本管理</Button>
       <Button type="button" variant="outline" className="nv-bom-export" disabled={!result || exporting} onClick={() => void download()}>
         {exporting ? <LoaderCircle className="nv-spin" aria-hidden="true" /> : <Download aria-hidden="true" />}
         {exporting ? "匯出中…" : selectedResult && selectedResult !== LOCAL_RESULT ? "匯出此 AI 結果" : "匯出比對結果"}
       </Button>
+      {historyScope && <Button type="button" variant="outline" aria-expanded={historyOpen} onClick={() => setHistoryOpen(open => !open)}><History aria-hidden="true" />比對紀錄</Button>}
+      {saveStatus && <span className="nv-bom-help" role={saveStatus === "failed" ? "alert" : "status"}>{saveStatus === "saved" ? "已儲存比對紀錄" : saveStatus === "saving" ? "儲存比對紀錄中…" : "比對紀錄未儲存"}</span>}
+      {saveStatus === "failed" && <Button type="button" variant="outline" onClick={() => setSaveRetry(value => value + 1)}>重試儲存</Button>}
+      {!result && <p>選擇新舊工作表，確認料號、用量與位號欄位。</p>}
     </div>
+    {historyOpen && historyScope && <section className="nv-bom-history" aria-label="已儲存的比對紀錄">
+      <p>紀錄保存在這個瀏覽器，依帳號和專案顯示。</p>
+      {historyError ? <p role="alert">{historyError}</p> : historyEntries === null ? <p role="status">讀取比對紀錄中…</p> : !historyEntries.length && <p>目前沒有已儲存的比對紀錄。</p>}
+      {historyEntries && historyEntries.length > 0 && <ul>{historyEntries.map(entry => <li key={entry.id}>
+        <button type="button" disabled={busy || beforeReading || afterReading || Boolean(openingHistory)} onClick={() => void openHistory(entry)}>
+          <strong>{entry.beforeName} → {entry.afterName}</strong>
+          <small>{historyDate.format(new Date(entry.createdAt))} · {entry.aiCount ? `本機＋${entry.aiCount} 項 AI` : "本機比對"} · {entry.differenceCount.toLocaleString()} 筆差異{openingHistory === entry.id ? " · 開啟中…" : ""}</small>
+        </button>
+      </li>)}</ul>}
+    </section>}
     <details className="nv-bom-settings" open={settings} onToggle={event => setSettings(event.currentTarget.open)}><summary><FileSpreadsheet aria-hidden="true" /><strong>比對來源與欄位</strong><span>{before?.file.name ?? "選擇舊版"} → {after?.file.name ?? "選擇新版"}</span></summary><div className="nv-bom-settings-content">
       <div className="nv-bom-sources">
-        <SourcePicker side="before" value={before} busy={busy} mapping={beforeMap} onMapping={value => editMapping("before", value)} onReading={setBeforeReading} onChange={value => selectSource("before", value)} />
-        <SourcePicker side="after" value={after} busy={busy} mapping={afterMap} onMapping={value => editMapping("after", value)} onReading={setAfterReading} onChange={value => selectSource("after", value)} />
+        <SourcePicker side="before" value={before} busy={busy || Boolean(openingHistory)} mapping={beforeMap} onMapping={value => editMapping("before", value)} onReading={setBeforeReading} onChange={value => selectSource("before", value)} />
+        <SourcePicker side="after" value={after} busy={busy || Boolean(openingHistory)} mapping={afterMap} onMapping={value => editMapping("after", value)} onReading={setAfterReading} onChange={value => selectSource("after", value)} />
       </div>
       <div className="nv-bom-model-heading"><strong>用 AI 幫忙核對（選用）</strong><Button type="button" variant="ghost" disabled={busy || loading || !selectableModels.length} onClick={() => setSelected(selectableModels.map(model => model.id))}>全選可用選項</Button><Button type="button" variant="ghost" disabled={busy || !selected.length} onClick={() => setSelected([])}>清除選取</Button><Button type="button" variant="outline" disabled={busy || loading} onClick={() => void loadModels()}>重查 AI</Button></div>
       {loading && <p role="status" className="nv-bom-pending"><LoaderCircle className="nv-spin" aria-hidden="true" />正在讀取 AI 設定及模型清單…</p>}
@@ -310,7 +430,7 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
       <p className="nv-bom-help">按「開始比對」就能找出新舊差異。勾選 AI 會另外核對差異，並在欄位需要辨識時協助讀取表頭。</p>
     </div></details>
     {(!result || settings || busy) ? <div className="nv-bom-runbar">
-      <Button type="button" className="nv-bom-start" disabled={busy || beforeReading || afterReading || !beforeSheet || !afterSheet} onClick={() => void run()}>
+      <Button type="button" className="nv-bom-start" disabled={busy || beforeReading || afterReading || Boolean(openingHistory) || !beforeSheet || !afterSheet} onClick={() => void run()}>
         <Check aria-hidden="true" />開始比對{selected.length ? `（${selected.length} 項 AI 核對）` : ""}
       </Button>
       {busy && <Button type="button" variant="outline" className="nv-bom-stop" onClick={() => controller.current?.abort()}>停止 AI 核對</Button>}
@@ -318,7 +438,7 @@ export default function NvBomComparePanel({ active, onBack, currentBomName, matc
     </div> : notice && <p className="nv-bom-help nv-bom-run-notice" role="status" data-notice-tone={notice.tone}>{runNotice}</p>}
     {compareError && <p role="alert" className="nv-bom-error">{compareError}</p>}
     {Object.keys(runs).length > 1 && <div className="nv-bom-results-tabs" role="tablist" aria-label="比對結果"><button type="button" role="tab" aria-selected={selectedResult === LOCAL_RESULT} onClick={() => changeFilter(setSelectedResult, LOCAL_RESULT)}><span>本機比對</span><small>直接讀取 Excel</small></button>{Object.entries(runs).filter(([id]) => id !== LOCAL_RESULT).map(([id, run]) => <button key={id} type="button" role="tab" data-run-state={run.state} aria-selected={selectedResult === id} onClick={() => changeFilter(setSelectedResult, id)}><span>{run.result?.modelLabel || models.find(model => model.id === id)?.label || id}</span><small>{run.state === "running" ? <LoaderCircle className="nv-spin" aria-hidden="true" /> : run.state === "done" ? <Check aria-hidden="true" /> : null}{run.progress}</small></button>)}</div>}
-    {activeRun?.error && <div className="nv-bom-error"><p role="alert"><strong>AI 核對失敗</strong> {activeRun.error} 本機比對結果已保留。</p>{!busy && selectableModels.some(model => model.id === selectedResult) && <Button type="button" variant="outline" onClick={() => void run([selectedResult])}>重試這個 AI</Button>}</div>}
+    {activeRun?.error && <div className="nv-bom-error"><p role="alert"><strong>AI 核對失敗</strong> {activeRun.error} 本機比對結果已保留。</p>{!busy && selectableModels.some(model => model.id === selectedResult) && <Button type="button" variant="outline" onClick={() => void run([selectedResult], true)}>重試這個 AI</Button>}</div>}
     {result ? <>
       <div className="nv-bom-summary">
         <div className="nv-bom-summary-heading">

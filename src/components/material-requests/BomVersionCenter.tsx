@@ -62,6 +62,7 @@ export interface BomVersionCenterProps {
   activeBomId: string;
   activeProjectId?: string | null;
   activeProjectName?: string | null;
+  historyAccountId?: string;
   projects: Array<{ id: string; name: string }>;
   projectNames: ReadonlyMap<string, string>;
   seriesList: BomSeries[];
@@ -124,7 +125,7 @@ function VersionEditor({ version, busy, saving, onSave, onCancel }: { version: B
  */
 export function BomVersionCenter(props: BomVersionCenterProps) {
   const {
-    open, onOpenChange, canEdit, ready, busy = false, activeBomId, activeProjectId, activeProjectName, projects, projectNames, seriesList, exportedBy,
+    open, onOpenChange, canEdit, ready, busy = false, activeBomId, activeProjectId, activeProjectName, historyAccountId, projects, projectNames, seriesList, exportedBy,
     loadRecords, currentBomName, matchCurrentBom, onLocateCurrentBom, onView, onSetCurrent, onUploadVersion, onUploadNew, onAssignProject, onRenameSeries, onUpdateVersion, onSetArchived, onDeleteVersion, onDeleteSeries, onOpenPageTracker, onDownloadSource,
   } = props;
   const compact = useCompact();
@@ -137,7 +138,8 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const [mode, setMode] = useState<"series" | "diff" | "nv">("series");
   const [nvVisited, setNvVisited] = useState(false);
   const [nvBomTargetId, setNvBomTargetId] = useState<string | null>(null);
-  const [nvSession, setNvSession] = useState<NvBomCompareSession>();
+  const historyScope = historyAccountId ? JSON.stringify([historyAccountId, activeProjectId ?? null]) : undefined;
+  const [nvSession, setNvSession] = useState<{ scope: string | undefined; session: NvBomCompareSession }>();
   const nvLocateClosing = useRef(false);
   const [diffPair, setDiffPair] = useState<{ before: string; after: string } | null>(null);
   const [diffLoad, setDiffLoad] = useState<DiffLoad | null>(null);
@@ -164,15 +166,15 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const nvCanLocateCurrentBom = nvBomTargetId === activeBomId;
   const locateNvResult = (candidate: NvBomTableCandidate, session: NvBomCompareSession) => {
     if (!nvCanLocateCurrentBom || !onLocateCurrentBom?.(candidate)) return;
-    setNvSession(session);
+    setNvSession({ scope: historyScope, session });
     nvLocateClosing.current = true;
     onOpenChange(false);
   };
 
   useEffect(() => {
     if (!open) return;
-    setMode(nvSession && nvCanLocateCurrentBom ? "nv" : "series");
-    if (!nvCanLocateCurrentBom) setNvSession(undefined);
+    setMode(nvSession && nvSession.scope === historyScope && nvCanLocateCurrentBom ? "nv" : "series");
+    if (!nvCanLocateCurrentBom || nvSession?.scope !== historyScope) setNvSession(undefined);
     setDiffPair(null);
     setDiffLoad(null);
     setEditingVersionId(null);
@@ -442,8 +444,9 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         {busy && mode === "series" && <VersionActivity>正在讀取 BOM 檔案…</VersionActivity>}
 
         {nvVisited && <Suspense fallback={mode === "nv" ? <VersionActivity>正在開啟 NV 原始 BOM 比對…</VersionActivity> : null}>
-          <NvBomCompare key={nvBomTargetId} active={open && mode === "nv"} onBack={() => setMode("series")} currentBomName={currentBomName}
-            initialSession={nvCanLocateCurrentBom ? nvSession : undefined}
+          <NvBomCompare key={JSON.stringify([historyScope, nvBomTargetId])} active={open && mode === "nv"} onBack={() => setMode("series")} currentBomName={currentBomName}
+            historyScope={historyScope}
+            initialSession={nvCanLocateCurrentBom && nvSession?.scope === historyScope ? nvSession?.session : undefined}
             matchCurrentBom={nvCanLocateCurrentBom ? matchCurrentBom : undefined}
             onLocateCurrentBom={nvCanLocateCurrentBom && onLocateCurrentBom ? locateNvResult : undefined} />
         </Suspense>}

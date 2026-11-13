@@ -203,9 +203,51 @@ async function run(browser,origin,width){
   assert.ok(removed);assert.equal(removed.getCell(14).value,'是');assert.equal(removed.getCell(15).value,'QA reviewed removal');
   assert.match(String(book.getWorksheet('比對來源').getRow(3).getCell(2).value),/gemini-3.8-flash/);
   report.checks.push('per-model annotations survive result switches and export retains every difference plus selected AI and manual note');
+  const exportButton=page.getByRole('button',{name:'匯出此 AI 結果',exact:true});
+  const backButton=page.getByRole('button',{name:'返回版本管理',exact:true});
+  const exportBox=await exportButton.boundingBox(),backBox=await backButton.boundingBox();
+  assert.ok(exportBox&&backBox&&exportBox.x<width/2,'export should be in the left-side actions');
+  assert.ok(exportBox.x>=backBox.x-2,'export should align with or follow the back button');
+  await page.getByText('已儲存比對紀錄',{exact:true}).waitFor();
+  const historyButton=page.getByRole('button',{name:'比對紀錄',exact:true});
+  await historyButton.click();
+  const savedEntries=page.getByRole('button',{name:/QA_NV_before\.csv.*QA_NV_after\.csv/});
+  const savedEntry=savedEntries.first();
+  await savedEntry.waitFor();
+  assert.equal(await savedEntries.count(),3,'local and both AI comparison runs should be retained');
+  await page.screenshot({path:path.join(evidence,`history-before-reload-${width}.png`)});
+  await page.reload();
+  await historyButton.click();
+  await savedEntry.click();
+  await page.getByRole('tab').filter({hasText:'gemini-3.8-flash'}).click();
+  assert.equal(await changes(page).count(),5);
+  assert.equal(await page.evaluate(()=>window.__nvQA.requests.length),0,'opening history should not re-run an AI model');
+  await showRemovedDetail(page);
+  assert.equal(await annotation.inputValue(),'QA reviewed removal');
+  assert.equal(await checked.isChecked(),true);
+  const restoredDownloadPromise=page.waitForEvent('download');
+  await exportButton.click();
+  const restoredDownload=await restoredDownloadPromise;
+  const restoredExport=path.join(evidence,`history-export-${width}.xlsx`);
+  await restoredDownload.saveAs(restoredExport);
+  const restoredBook=new Workbook();
+  await restoredBook.xlsx.readFile(restoredExport);
+  const restoredRows=restoredBook.getWorksheet('新增刪除與變更');
+  assert.equal(restoredRows.rowCount,6);
+  const restoredRemoved=restoredRows.getRows(2,5).find(row=>row.getCell(3).value==='QA-OLD');
+  assert.ok(restoredRemoved);
+  assert.equal(restoredRemoved.getCell(14).value,'是');
+  assert.equal(restoredRemoved.getCell(15).value,'QA reviewed removal');
+  report.checks.push('left-side export; comparison history survives page reload and restores model results, annotations and downloadable workbook without new provider requests');
   report.geometry=await page.evaluate(()=>({width:innerWidth,pageWidth:document.documentElement.scrollWidth,rows:[...document.querySelectorAll('.nv-bom-result article[data-kind]')].map(row=>row.getBoundingClientRect().height)}));
   assert.equal(report.geometry.width,report.geometry.pageWidth);assert.deepEqual(errors,[]);report.errors=errors;report.result='passed';
-  await page.screenshot({path:path.join(evidence,`results-${width}.png`)});return report;
+  await page.screenshot({path:path.join(evidence,`results-${width}.png`)});
+  await page.goto(`${origin}/?historyScope=qa-unrelated-project`);
+  await historyButton.click();
+  await page.getByText('目前沒有已儲存的比對紀錄。',{exact:true}).waitFor();
+  assert.equal(await savedEntries.count(),0,'a different project must not see this project’s comparison history');
+  report.checks.push('saved comparison is isolated from a different project in the same browser');
+  return report;
  }catch(error){await page.screenshot({path:path.join(evidence,`failure-${width}.png`)}).catch(()=>{});throw error;}finally{await context.close();}
 }
 (async()=>{fs.mkdirSync(evidence,{recursive:true});
@@ -214,7 +256,7 @@ async function run(browser,origin,width){
  fs.writeFileSync(path.join(evidence,'QA_NV_after.csv'),header+'QA-NV-001,QA-ALT;QA-KEEP,QA Maker;QA New Vendor,Existing part,2,"R1,R4"\nQA-NV-003,QA-NEW,QA Maker,Added part,1,R3\nQA-NV-004,QA-MPN-B;QA-MPN-A,QA Vendor B;QA Vendor A,Order-only part,2,"R5,R6"\nQA-NV-005,QA-PCB-MPN,QA PCB Vendor,BARE PCB fixture,1,,Multiple\n');
  const {createServer}=await import('vite');const mock=path.resolve('tests/support/nvBomModelsMock.js');let server,browser;const reports=[];
  try{
-  server=await createServer({configFile:false,root:process.cwd(),cacheDir:path.join(evidence,'.vite'),resolve:{alias:[{find:'@/integrations/supabase/client',replacement:mock},{find:'@',replacement:path.resolve('src')}]},optimizeDeps:{entries:['tests/support/nvBomModelsFixture.jsx'],include:['react/jsx-dev-runtime']},server:{host:'127.0.0.1',port:0},plugins:[{name:'isolated-nv-models',configureServer(vite){vite.middlewares.use((req,res,next)=>{if(req.url!=='/')return next();res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html lang="zh-Hant"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="/tests/support/nvBomModelsFixture.jsx"></script></html>');});}}]});
+  server=await createServer({configFile:false,root:process.cwd(),cacheDir:path.join(evidence,'.vite'),resolve:{alias:[{find:'@/integrations/supabase/client',replacement:mock},{find:'@',replacement:path.resolve('src')}]},optimizeDeps:{entries:['tests/support/nvBomModelsFixture.jsx'],include:['react/jsx-dev-runtime']},server:{host:'127.0.0.1',port:0},plugins:[{name:'isolated-nv-models',configureServer(vite){vite.middlewares.use((req,res,next)=>{if(req.url?.split('?')[0]!=='/')return next();res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html lang="zh-Hant"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="/tests/support/nvBomModelsFixture.jsx"></script></html>');});}}]});
   await server.listen();const origin=`http://127.0.0.1:${server.httpServer.address().port}`;browser=await chromium.launch({channel:'chrome'});
   for(const width of [1543,390])reports.push(await run(browser,origin,width));console.log('NV comparison QA passed: 1543/390, local comparison, seven AI request routes, partial failure, annotations and export');
  }finally{fs.writeFileSync(path.join(evidence,'browser-report.json'),JSON.stringify({reports,provider:'isolated transport; actual loader/builders/telemetry/parser/UI',productionWrites:false},null,2));if(browser)await browser.close();if(server)await server.close();}

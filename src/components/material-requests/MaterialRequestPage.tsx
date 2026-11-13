@@ -5929,6 +5929,7 @@ export function MaterialRequestPage() {
         activeBomId={activeBomId}
         activeProjectId={activeProjectId}
         activeProjectName={activeProject?.name}
+        historyAccountId={user?.userId}
         projects={projects}
         projectNames={projectNames}
         seriesList={seriesList}

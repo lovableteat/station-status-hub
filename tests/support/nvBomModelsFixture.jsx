@@ -20,4 +20,5 @@ window.fetch=async(input,init)=>{
   const result=await providerReply(provider,model,body,url);
   return new Response(JSON.stringify(result.payload),{status:result.status,headers:{'Content-Type':'application/json'}});
 };
-createRoot(document.getElementById('root')).render(<TooltipProvider><main className="flex h-dvh min-h-0 flex-col bg-background p-3 text-foreground"><NvBomComparePanel active onBack={()=>{qa.back=true}} /></main></TooltipProvider>);
+const historyScope=new URLSearchParams(location.search).get('historyScope')??'qa-project';
+createRoot(document.getElementById('root')).render(<TooltipProvider><main className="flex h-dvh min-h-0 flex-col bg-background p-3 text-foreground"><NvBomComparePanel active historyScope={historyScope} onBack={()=>{qa.back=true}} /></main></TooltipProvider>);
