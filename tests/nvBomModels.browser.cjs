@@ -45,7 +45,7 @@ async function run(browser,origin,width){
    await chooser.setFiles(path.join(evidence,`QA_NV_${side}.csv`));await picker.getByText(`QA_NV_${side}.csv`,{exact:true}).waitFor();
   }
   await start.click();await changes(page).first().waitFor();
-  assert.equal(await changes(page).count(),4);
+  assert.equal(await changes(page).count(),5);
   assert.equal(await page.evaluate(()=>window.__nvQA.requests.length),0);
   report.checks.push('confirmed workbook columns produce a complete local diff without contacting an AI model');
   const supplyChange=page.locator('.nv-bom-result article[data-action="sourceChanged"]').filter({hasText:'QA-NV-001'});
@@ -126,12 +126,44 @@ async function run(browser,origin,width){
   await orderOnly.getByRole('button',{name:'收合詳情',exact:true}).click();
   assert.equal(await orderDetails.count(),0);
   report.checks.push('supplier and MPN order-only differences explain what moved, never claim adds or removals, and preserve raw old/new evidence');
+  const sourceChange=changes(page).filter({hasText:'QA-NV-005'});
+  const sourceSummary=sourceChange.locator('.nv-bom-result-main');
+  const expectSourceTransition=async(scope)=>{
+   const copy=await scope.innerText();
+   assert.match(copy,/來源欄/);
+   assert.match(copy,/舊版\s*單一來源（Single）/);
+   assert.match(copy,/新版\s*多個來源（Multiple）/);
+   assert.match(copy,/廠商與廠商料號相同。\s*用量維持 1。/);
+   assert.equal(await scope.getByLabel(/^新版(新增|移除)廠商/).count(),0);
+  };
+  assert.equal(await sourceChange.getAttribute('data-scope'),'board');
+  assert.match(await sourceSummary.innerText(),/供料來源由單一來源改為多個來源/);
+  await expectSourceTransition(sourceSummary);
+  await sourceSummary.scrollIntoViewIfNeeded();
+  await page.screenshot({path:path.join(evidence,`source-policy-summary-${width}.png`)});
+  const sourceToggle=sourceChange.getByRole('button',{name:'查看詳情',exact:true});
+  if(width<768)await sourceToggle.tap();else await sourceToggle.click();
+  const sourceDetails=sourceChange.locator('.nv-bom-result-details');
+  const sourceEvidence=sourceDetails.getByRole('region',{name:'來源差異',exact:true});
+  await sourceEvidence.waitFor();
+  assert.ok(await sourceEvidence.getByRole('heading',{name:'Excel 來源欄前後對照',exact:true}).isVisible());
+  await expectSourceTransition(sourceEvidence);
+  for(const [version,raw] of [['舊版','Single'],['新版','Multiple']]){
+   const original=sourceDetails.getByRole('region',{name:version,exact:true});
+   const originalSource=original.locator('[data-field-changed="true"]').filter({has:page.getByText('來源欄',{exact:true})});
+   assert.ok(await originalSource.getByText(raw,{exact:true}).isVisible(),`${version} highlighted source value`);
+  }
+  await sourceEvidence.scrollIntoViewIfNeeded();
+  await page.screenshot({path:path.join(evidence,`source-policy-details-${width}.png`)});
+  await sourceChange.getByRole('button',{name:'收合詳情',exact:true}).click();
+  assert.equal(await sourceDetails.count(),0);
+  report.checks.push('same PCB has an explicit Single to Multiple source transition and highlighted raw evidence without a supplier or MPN change');
   await showSettings(page);await models.getByRole('checkbox',{name:/qa-text$/}).check();await start.click();
   await waitForComparison(page,1);
   assert.deepEqual(await page.evaluate(()=>window.__nvQA.requests.map(request=>request.model)),['qa-text']);
   await page.getByRole('tab').filter({hasText:'qa-text'}).click();
-  assert.equal(await changes(page).count(),4);
-  report.checks.push('one selected custom model receives only the complete four-difference review request');
+  assert.equal(await changes(page).count(),5);
+  report.checks.push('one selected custom model receives only the complete five-difference review request');
   await showSettings(page);await page.getByRole('button',{name:'全選可用選項',exact:true}).click();await start.click();
   await waitForComparison(page,8);
   const tabs=page.getByRole('tab');assert.equal(await tabs.count(),8);
@@ -145,15 +177,15 @@ async function run(browser,origin,width){
    const message=request.body.contents?.at(-1)??request.body.messages?.at(-1);
    const content=message.parts??message.content;
    const input=JSON.parse(typeof content==='string'?content:content.map(part=>part.text||'').join(''));
-   assert.equal(input.items.length,4,'only verified differences should be sent for review');
+   assert.equal(input.items.length,5,'only verified differences should be sent for review');
    if(request.provider==='openai')assert.equal(request.apiKeyId,keyIds[0]);
    if(request.provider==='gemini')assert.ok(request.url.includes(`/models/${request.model}:generateContent`));
    else assert.equal(request.body.model,request.model);
   }
   for(const model of expected.filter(model=>model!=='gpt-6.1-sol')){
    await tabs.filter({hasText:model}).click();
-   for(const kind of ['added','removed','changed'])assert.equal(await page.locator(`.nv-bom-result article[data-kind="${kind}"]`).count(),kind==='changed'?2:1,model+' '+kind);
-   assert.match(await page.locator('.nv-bom-summary').innerText(),/AI 已核對 4／4/);
+   for(const kind of ['added','removed','changed'])assert.equal(await page.locator(`.nv-bom-result article[data-kind="${kind}"]`).count(),kind==='changed'?3:1,model+' '+kind);
+   assert.match(await page.locator('.nv-bom-summary').innerText(),/AI 已核對 5／5/);
   }
   await tabs.filter({hasText:'gpt-6.1-sol'}).click();assert.match(await page.getByRole('alert').innerText(),/尚未開通.*gpt-6.1-sol/);
   await tabs.filter({hasText:'gemini-3.8-flash'}).click();assert.equal(await page.getByRole('alert').count(),0);
@@ -166,8 +198,8 @@ async function run(browser,origin,width){
   const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'匯出此 AI 結果',exact:true}).click();const download=await downloadPromise;
   const exported=path.join(evidence,`export-${width}.xlsx`);await download.saveAs(exported);
   const {Workbook}=require('exceljs'),book=new Workbook();await book.xlsx.readFile(exported);const data=book.getWorksheet('新增刪除與變更');
-  assert.equal(data.rowCount,5);
-  const removed=data.getRows(2,4).find(row=>row.getCell(3).value==='QA-OLD');
+  assert.equal(data.rowCount,6);
+  const removed=data.getRows(2,5).find(row=>row.getCell(3).value==='QA-OLD');
   assert.ok(removed);assert.equal(removed.getCell(14).value,'是');assert.equal(removed.getCell(15).value,'QA reviewed removal');
   assert.match(String(book.getWorksheet('比對來源').getRow(3).getCell(2).value),/gemini-3.8-flash/);
   report.checks.push('per-model annotations survive result switches and export retains every difference plus selected AI and manual note');
@@ -177,9 +209,9 @@ async function run(browser,origin,width){
  }catch(error){await page.screenshot({path:path.join(evidence,`failure-${width}.png`)}).catch(()=>{});throw error;}finally{await context.close();}
 }
 (async()=>{fs.mkdirSync(evidence,{recursive:true});
- const header='NV PN,MPN,Manufacturer,Description,Qty,Ref Des\n';
- fs.writeFileSync(path.join(evidence,'QA_NV_before.csv'),header+'QA-NV-001,QA-KEEP;QA-BASE,QA Maker;QA Other,Existing part,2,"R1,R4"\nQA-NV-002,QA-OLD,QA Maker,Removed part,1,R2\nQA-NV-004,QA-MPN-A;QA-MPN-B,QA Vendor A;QA Vendor B,Order-only part,2,"R5,R6"\n');
- fs.writeFileSync(path.join(evidence,'QA_NV_after.csv'),header+'QA-NV-001,QA-ALT;QA-KEEP,QA Maker;QA New Vendor,Existing part,2,"R1,R4"\nQA-NV-003,QA-NEW,QA Maker,Added part,1,R3\nQA-NV-004,QA-MPN-B;QA-MPN-A,QA Vendor B;QA Vendor A,Order-only part,2,"R5,R6"\n');
+ const header='NV PN,MPN,Manufacturer,Description,Qty,Ref Des,Source\n';
+ fs.writeFileSync(path.join(evidence,'QA_NV_before.csv'),header+'QA-NV-001,QA-KEEP;QA-BASE,QA Maker;QA Other,Existing part,2,"R1,R4"\nQA-NV-002,QA-OLD,QA Maker,Removed part,1,R2\nQA-NV-004,QA-MPN-A;QA-MPN-B,QA Vendor A;QA Vendor B,Order-only part,2,"R5,R6"\nQA-NV-005,QA-PCB-MPN,QA PCB Vendor,BARE PCB fixture,1,,Single\n');
+ fs.writeFileSync(path.join(evidence,'QA_NV_after.csv'),header+'QA-NV-001,QA-ALT;QA-KEEP,QA Maker;QA New Vendor,Existing part,2,"R1,R4"\nQA-NV-003,QA-NEW,QA Maker,Added part,1,R3\nQA-NV-004,QA-MPN-B;QA-MPN-A,QA Vendor B;QA Vendor A,Order-only part,2,"R5,R6"\nQA-NV-005,QA-PCB-MPN,QA PCB Vendor,BARE PCB fixture,1,,Multiple\n');
  const {createServer}=await import('vite');const mock=path.resolve('tests/support/nvBomModelsMock.js');let server,browser;const reports=[];
  try{
   server=await createServer({configFile:false,root:process.cwd(),cacheDir:path.join(evidence,'.vite'),resolve:{alias:[{find:'@/integrations/supabase/client',replacement:mock},{find:'@',replacement:path.resolve('src')}]},optimizeDeps:{entries:['tests/support/nvBomModelsFixture.jsx'],include:['react/jsx-dev-runtime']},server:{host:'127.0.0.1',port:0},plugins:[{name:'isolated-nv-models',configureServer(vite){vite.middlewares.use((req,res,next)=>{if(req.url!=='/')return next();res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html lang="zh-Hant"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="/tests/support/nvBomModelsFixture.jsx"></script></html>');});}}]});

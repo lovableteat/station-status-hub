@@ -56,6 +56,32 @@ export function nvBomSourceListReordered(before: string[], after: string[]) {
   const oldItems = [...before].sort(), newItems = [...after].sort();
   return oldItems.every((entry, index) => entry === newItems[index]);
 }
+
+export function nvBomSourceColumnValues(part?: NvBomPart) {
+  return [...new Set((part?.metadata ?? []).map(row => row.source?.trim() || ""))];
+}
+
+export function nvBomSourceColumnChange(change: NvBomChange) {
+  if (!change.changedMetadata?.includes("source") || !change.before || !change.after) return null;
+  const before = nvBomSourceColumnValues(change.before), after = nvBomSourceColumnValues(change.after);
+  const format = (value: string) => {
+    switch (normalize(value)) {
+      case "SINGLE": return `單一來源（${value}）`;
+      case "MULTIPLE": return `多個來源（${value}）`;
+      default: return value || "未填";
+    }
+  };
+  const previous = before.length ? before.map(format).join("、") : "未填";
+  const current = after.length ? after.map(format).join("、") : "未填";
+  const oldValues = new Set(before.map(normalize)), newValues = new Set(after.map(normalize));
+  const sameValues = oldValues.size === newValues.size && [...oldValues].every(value => newValues.has(value));
+  const summary = before.length === 1 && after.length === 1 && normalize(before[0]) === "SINGLE" && normalize(after[0]) === "MULTIPLE"
+    ? "供料來源由單一來源改為多個來源"
+    : before.length === 1 && after.length === 1 && normalize(before[0]) === "MULTIPLE" && normalize(after[0]) === "SINGLE"
+      ? "供料來源由多個來源改為單一來源"
+      : sameValues ? "來源欄的分列紀錄有變動" : `來源欄由 ${previous} 改為 ${current}`;
+  return { previous, current, sameValues, summary };
+}
 const differentIdentifier = (before: string, after: string) => {
   const a = knownIdentifier(before), b = knownIdentifier(after);
   return Boolean(a && b && a !== b);
@@ -188,7 +214,8 @@ function describeChange(change: NvBomChange): NvBomInterpretedChange {
     return { ...base, kind: "refs", summary: refsSummary.filter(Boolean).join("，") };
   }
   if (qtySummary) return { ...base, kind: "qty", summary: qtySummary };
-  if (changedMetadata.includes("source")) return { ...base, kind: "sourceChanged", summary: "來源策略變更" };
+  const sourceColumn = nvBomSourceColumnChange(change);
+  if (sourceColumn) return { ...base, kind: "sourceChanged", summary: sourceColumn.summary };
   return { ...base, kind: "other", summary: changedMetadata.includes("population") || changedMetadata.includes("primary") ? "上件欄位有變動，位號或狀態仍待確認" : `${scopeLabel}資料有變更` };
 }
 

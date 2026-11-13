@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compareNvBomSheets } from "./nvBomCompare.ts";
 import { inferNvBomMapping } from "./nvBomMapping.ts";
-import { interpretNvBomDiff, nvBomSourceListDelta, nvBomSourceListReordered, splitNvBomSourceList } from "./nvBomInterpretation.ts";
+import { interpretNvBomDiff, nvBomSourceColumnChange, nvBomSourceListDelta, nvBomSourceListReordered, splitNvBomSourceList } from "./nvBomInterpretation.ts";
 
 const columns = ["Level", "Parent Number", "Part Number", "Part Description", "Manufacturer", "Manufacturer Part Number", "Qty", "Location", "S/D", "Material Category", "Source", "Population"];
 const sheet = (rows, header = columns) => ({ name: "QA", rows: [header, ...rows] });
@@ -100,5 +100,17 @@ test("does not interpret missing population columns or source strategy alone as 
   const result = compareNvBomSheets(before, after, inferNvBomMapping(before), inferNvBomMapping(after));
   assert.equal(result.changes.length, 0);
   const strategy = placed.map((value, index) => index === 10 ? "Multiple" : value);
-  assert.deepEqual(compare([placed], [strategy]).entries.map(entry => [entry.kind, entry.change.changedMetadata]), [["sourceChanged", ["source"]]]);
+  const [entry] = compare([placed], [strategy]).entries;
+  assert.equal(entry.kind, "sourceChanged");
+  assert.deepEqual(entry.change.changedFields, []);
+  assert.deepEqual(entry.change.changedMetadata, ["source"]);
+  assert.equal(entry.summary, "供料來源由單一來源改為多個來源");
+  assert.deepEqual(nvBomSourceColumnChange(entry.change), {
+    previous: "單一來源（Single）", current: "多個來源（Multiple）", sameValues: false, summary: entry.summary,
+  });
+  assert.equal(compare([strategy], [placed]).entries[0].summary, "供料來源由多個來源改為單一來源");
+  const blank = placed.map((value, index) => index === 10 ? "" : value);
+  assert.equal(compare([placed], [blank]).entries[0].summary, "來源欄由 單一來源（Single） 改為 未填");
+  const other = placed.map((value, index) => index === 10 ? "Pending review" : value);
+  assert.equal(compare([blank], [other]).entries[0].summary, "來源欄由 未填 改為 Pending review");
 });
