@@ -7,6 +7,10 @@ import {
 import { isPdfFile, openCircuitPdf } from "./pdfRender";
 import { downloadCircuitPdf, loadCircuitPdfRegistry, saveCircuitPdfRegistry, uploadCircuitPdf } from "./pdfStorage";
 import { loadCircuitPdfOfficial, saveCircuitPdfOfficial, type CircuitPdfOfficial } from "./officialPdfStorage";
+import {
+  CIRCUIT_ALIGN_MAX_PAGES, alignCircuitPdfPages, circuitAlignOffsets, clearCircuitAlignPin, invertCircuitAlignPins, normalizeCircuitAlignPins,
+  readCircuitPdfPageTokens, resolveCircuitComparePage, setCircuitAlignPin, type CircuitAlignPin, type CircuitAlignSource,
+} from "./circuitPdfAlign";
 
 export interface CircuitPdfModel {
   registry: CircuitPdfRegistry; documents: CircuitPdfDocument[];
@@ -16,6 +20,16 @@ export interface CircuitPdfModel {
   activePdf: PDFDocumentProxy | null; comparePdf: PDFDocumentProxy | null;
   opening: boolean; openError: string; needsLocalFile: boolean;
   page: number; comparePage: number; compareOffset: number;
+  /** The baseline page shown beside a working page (0: none). Pages are matched by content, then by the user's pins. */
+  comparePageFor: (page: number) => number;
+  /** How the baseline page on screen was found, and whether the two PDFs are still being read to match their pages. */
+  alignment: { source: CircuitAlignSource; offset: number | null; aligning: boolean };
+  /** Changes whenever any page's match changes; for work that keeps results per matched page pair. */
+  alignmentKey: string;
+  /** "This working page is that baseline page": holds for the following pages too, until the next pin or content step. */
+  setComparePage: (page: number) => void;
+  /** Drops the user's pin deciding the page on screen, so the automatic match applies again. */
+  clearComparePin: () => void;
   upload: (file: File) => Promise<void>; openLocal: (file: File) => Promise<void>;
   /** Opens a version at a page, e.g. the page a picture was framed on. Returns false when that version is no longer offered. */
   show: (documentId: string, page: number) => boolean;
@@ -40,6 +54,28 @@ function remember(path: string, bytes: ArrayBuffer) {
 // A PDF over the server's limit is opened from the uploader's own file; it is kept here until the page is reloaded.
 const localFiles = new Map<string, File>();
 const positionKey = (userId: string, seriesId: string) => `circuit-pdf-position:v1:${userId}:${seriesId}`;
+// The words on each page of a version (versions never change), and the page match of a pair, kept for this browser session.
+const pageWords = new Map<string, Promise<string[][]>>();
+const alignments = new Map<string, Array<number | null> | null>();
+const NO_PINS: CircuitAlignPin[] = [];
+function wordsOf(id: string, pdf: PDFDocumentProxy) {
+  let words = pageWords.get(id);
+  if (!words) {
+    words = readCircuitPdfPageTokens(pdf, new AbortController().signal);
+    pageWords.set(id, words);
+    words.catch(() => { if (pageWords.get(id) === words) pageWords.delete(id); });
+    while (pageWords.size > 12) pageWords.delete(pageWords.keys().next().value as string);
+  }
+  return words;
+}
+const pinsKey = (seriesId: string, pair: string) => `circuit-pdf-align:v1:${seriesId}:${pair}`;
+function readPins(seriesId: string, pair: string): CircuitAlignPin[] {
+  if (!pair) return NO_PINS;
+  try { return normalizeCircuitAlignPins(JSON.parse(window.localStorage.getItem(pinsKey(seriesId, pair)) || "[]")); } catch { return NO_PINS; }
+}
+function writePins(seriesId: string, pair: string, pins: CircuitAlignPin[]) {
+  try { if (pins.length) window.localStorage.setItem(pinsKey(seriesId, pair), JSON.stringify(pins)); else window.localStorage.removeItem(pinsKey(seriesId, pair)); } catch { /* the pins still hold until the window closes */ }
+}
 
 /**
  * `autoCompareOfficial` picks a default baseline when entering AI 比對. A selected baseline takes precedence.
@@ -53,8 +89,12 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
   const [uploading, setUploading] = useState("");
   const [activeId, setActiveId] = useState("");
   const [compareId, setCompareId] = useState("");
-  const [compareOffset, setCompareOffset] = useState(0);
+  // Pins per version pair ("baseline>working"), and the automatic page match per pair.
+  const [pinBook, setPinBook] = useState<Record<string, CircuitAlignPin[]>>({});
+  const [autoBook, setAutoBook] = useState<Record<string, Array<number | null> | null>>({});
+  const [aligning, setAligning] = useState("");
   const [page, setPage] = useState(1);
+  const pageRef = useRef(page); pageRef.current = page;
   const [pdfs, setPdfs] = useState<Record<string, PDFDocumentProxy>>({});
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState("");
@@ -77,10 +117,20 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
     ? official && official.id !== activeId ? official : documents.find(row => row.id !== activeId)
     : null;
   const compare = documents.find(row => row.id === compareId && row.id !== activeId) || defaultCompare || null;
-  const compareTarget = page + compareOffset;
-  const comparePage = compare && compareTarget >= 1 && compareTarget <= compare.pages ? compareTarget : 0;
-  const officialTarget = page + (compare?.id === official?.id ? compareOffset : 0);
-  const officialPage = official && officialTarget >= 1 && officialTarget <= official.pages ? officialTarget : 0;
+  const pairKey = active && compare ? `${compare.id}>${active.id}` : "";
+  const pins = useMemo(() => pinBook[pairKey] ?? readPins(seriesId, pairKey), [pinBook, pairKey, seriesId]);
+  const autoOffsets = pairKey ? autoBook[pairKey] ?? null : null;
+  const resolveFor = useCallback((target: number) => compare ? resolveCircuitComparePage(target, compare.pages, autoOffsets, pins) : null, [compare, autoOffsets, pins]);
+  const resolved = resolveFor(page);
+  const comparePage = resolved?.page || 0;
+  const compareOffset = resolved?.offset ?? 0;
+  const officialPage = compare && official && compare.id === official.id ? comparePage : official && page <= official.pages ? page : 0;
+  const alignmentKey = `${pairKey}|${autoOffsets ? autoOffsets.join(",") : "-"}|${pins.map(pin => `${pin.from}:${pin.offset}`).join(",")}`;
+  const savePins = useCallback((pair: string, next: CircuitAlignPin[]) => {
+    if (!pair) return;
+    setPinBook(book => ({ ...book, [pair]: next }));
+    writePins(seriesId, pair, next);
+  }, [seriesId]);
   // What is on screen right now, for actions that continue from it (a new upload keeps the page being read).
   const onScreen = useRef<{ documentId: string; page: number }>({ documentId: "", page: 1 });
   onScreen.current = { documentId: active?.id || "", page };
@@ -140,7 +190,7 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
 
   useEffect(() => {
     if (!open || !seriesId) return;
-    placed.current = ""; setActiveId(""); setCompareId(""); setCompareOffset(0); setOpenError(""); setLocalFileId("");
+    placed.current = ""; setActiveId(""); setCompareId(""); setPinBook({}); setAutoBook({}); setOpenError(""); setLocalFileId("");
     setRegistry(empty()); setOfficialSelection(null); pending.current = empty();
     void reload();
     const cache = opened.current;
@@ -200,6 +250,34 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
     return () => { current = false; };
   }, [open, active, compare, load, openRetry]);
 
+  // Which baseline page shows the same sheet: read both PDFs' words in the background once the pages are on screen, then
+  // match them. Until then (and when there is no usable text) the same page numbers are used.
+  const activeProxy = active ? pdfs[active.id] || null : null, compareProxy = compare ? pdfs[compare.id] || null : null;
+  useEffect(() => {
+    if (!open || !pairKey || !active || !compare || !activeProxy || !compareProxy) return;
+    const known = alignments.get(pairKey);
+    if (known !== undefined || active.pages > CIRCUIT_ALIGN_MAX_PAGES || compare.pages > CIRCUIT_ALIGN_MAX_PAGES) {
+      const offsets = known ?? null;
+      setAutoBook(book => pairKey in book && book[pairKey] === offsets ? book : { ...book, [pairKey]: offsets });
+      return;
+    }
+    let current = true;
+    setAligning(pairKey);
+    const timer = setTimeout(() => {
+      void Promise.all([wordsOf(compare.id, compareProxy), wordsOf(active.id, activeProxy)])
+        .then(([base, work]) => { const map = alignCircuitPdfPages(base, work); return map ? circuitAlignOffsets(map) : null; })
+        .catch(() => null)
+        .then(offsets => {
+          if (!current) return;
+          alignments.set(pairKey, offsets);
+          setAutoBook(book => ({ ...book, [pairKey]: offsets }));
+          setAligning(value => value === pairKey ? "" : value);
+        });
+    }, 800);
+    return () => { current = false; clearTimeout(timer); setAligning(value => value === pairKey ? "" : value); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the ids and page counts decide the match, not each new copy of the rows
+  }, [open, pairKey, active?.id, active?.pages, compare?.id, compare?.pages, activeProxy, compareProxy]);
+
   // The first time a version is shown, it opens where this person stopped (yesterday's page on today's PDF).
   useEffect(() => {
     if (!active || placed.current) return;
@@ -225,7 +303,8 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
 
   const goTo = useCallback((next: number) => {
     if (!active) return;
-    setPage(Math.min(active.pages, Math.max(1, Math.round(next) || 1)));
+    const target = Math.min(active.pages, Math.max(1, Math.round(next) || 1));
+    pageRef.current = target; setPage(target);
   }, [active]);
 
   const select = useCallback((id: string) => {
@@ -235,28 +314,35 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
     // Switching versions keeps the page on screen, so the same sheet of another date can be compared directly.
     setPage(current => Math.min(row.pages, current));
     setActiveId(row.id);
-    setCompareOffset(0);
     if (compareId === row.id) setCompareId("");
   }, [documents, activeId, compareId]);
 
   const swapComparison = useCallback(() => {
     if (!active || !compare) return;
+    // The pins turn around with the pair, so the same sheets stay side by side.
+    savePins(`${active.id}>${compare.id}`, invertCircuitAlignPins(pins));
     placed.current = compare.id;
     setActiveId(compare.id);
     setCompareId(active.id);
-    setPage(Math.min(compare.pages, Math.max(1, page + compareOffset)));
-    setCompareOffset(-compareOffset);
-  }, [active, compare, page, compareOffset]);
+    const next = comparePage || Math.min(compare.pages, Math.max(1, page + compareOffset));
+    pageRef.current = next; setPage(next);
+  }, [active, compare, page, comparePage, compareOffset, pins, savePins]);
+
+  const setCompareOffset = useCallback((offset: number) => {
+    if (!pairKey || !Number.isInteger(offset)) return;
+    savePins(pairKey, setCircuitAlignPin(pins, pageRef.current, offset));
+  }, [pairKey, pins, savePins]);
+  const comparePageFor = useCallback((target: number) => resolveFor(target)?.page || 0, [resolveFor]);
 
   const show = useCallback((documentId: string, target: number) => {
     const row = documents.find(item => item.id === documentId);
     if (!row) return false;
     placed.current = row.id; setActiveId(row.id);
-    setPage(Math.min(row.pages, Math.max(1, Math.round(target) || 1)));
-    if (activeId !== row.id) setCompareOffset(0);
+    const next = Math.min(row.pages, Math.max(1, Math.round(target) || 1));
+    pageRef.current = next; setPage(next);
     if (compareId === row.id) setCompareId("");
     return true;
-  }, [documents, activeId, compareId]);
+  }, [documents, compareId]);
 
   const register = useCallback(async (file: File) => {
     if (!canEdit) throw new Error("目前為檢視權限，無法上傳 PDF。");
@@ -284,8 +370,9 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
     try {
       const { row, localOnly } = await register(file);
       if (scopeRef.current !== captured) return;
-      placed.current = row.id; setActiveId(row.id); setOpenError(""); setLocalFileId(""); setCompareOffset(0);
-      setPage(Math.min(row.pages, Math.max(1, reading)));
+      placed.current = row.id; setActiveId(row.id); setOpenError(""); setLocalFileId("");
+      const next = Math.min(row.pages, Math.max(1, reading));
+      pageRef.current = next; setPage(next);
       if (localOnly) setError(`「${file.name}」超過雲端 50 MB 上限：已在這台電腦開啟，截圖與進度照常保存；其他同仁需要自己的檔案，之後重新開啟時請再選一次這個檔案。`);
     } catch (failure) {
       if (scopeRef.current === captured) setError(failure instanceof Error ? failure.message : "PDF 上傳失敗，請重試。");
@@ -360,8 +447,11 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
     official, officialPdf: official ? pdfs[official.id] || null : null, officialPage,
     activePdf: active ? pdfs[active.id] || null : null, comparePdf: compare ? pdfs[compare.id] || null : null,
     opening, openError, needsLocalFile: Boolean(localFileId), page, comparePage, compareOffset,
-    upload, openLocal, show, select, setCompare: id => { if (id === activeId) return; setCompareId(id); setCompareOffset(0); }, setCompareOffset, swapComparison,
-    setOfficial, compareOfficial: () => { setCompareId(official?.id || ""); setCompareOffset(0); },
+    comparePageFor, alignment: { source: resolved?.source || "same", offset: resolved?.offset ?? 0, aligning: Boolean(pairKey) && aligning === pairKey }, alignmentKey,
+    setComparePage: target => { if (Number.isInteger(target)) setCompareOffset(target - pageRef.current); },
+    clearComparePin: () => { if (pairKey) savePins(pairKey, clearCircuitAlignPin(pins, pageRef.current)); },
+    upload, openLocal, show, select, setCompare: id => { if (id === activeId) return; setCompareId(id); }, setCompareOffset, swapComparison,
+    setOfficial, compareOfficial: () => { setCompareId(official?.id || ""); },
     goTo, setChecked, updateDocument, removeDocument, restoreDocument, reload, clearError: () => setError(""),
   };
 }

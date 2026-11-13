@@ -200,9 +200,15 @@ async function managerFits(page, label) {
     await dialog(page).getByRole('tab', { name: /^AI 比對/ }).click();
     await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').waitFor();
     await panel(page).getByLabel('目前頁碼', { exact: true }).fill('5'); await panel(page).getByLabel('目前頁碼', { exact: true }).press('Enter'); await rendered(page);
-    await panel(page).getByRole('button', { name: '官方對應頁往後一頁', exact: true }).click(); await rendered(page);
+    // The baseline page is typed where it is shown; from this page on the pages pair that way, earlier pages stay.
+    const basePage = panel(page).getByLabel('基準版頁碼', { exact: true });
+    await basePage.fill('6'); await basePage.press('Enter'); await rendered(page);
     assert.equal(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), 'Official_20261101.pdf 第 6 頁');
-    report.checks.push('official comparison supports an explicitly matched page offset');
+    await panel(page).getByRole('button', { name: '改回自動對齊', exact: true }).waitFor();
+    await panel(page).getByLabel('目前頁碼', { exact: true }).fill('4'); await panel(page).getByLabel('目前頁碼', { exact: true }).press('Enter'); await rendered(page);
+    assert.equal(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), 'Official_20261101.pdf 第 4 頁', 'Pages before the pinned page keep their own match');
+    await panel(page).getByLabel('目前頁碼', { exact: true }).fill('5'); await panel(page).getByLabel('目前頁碼', { exact: true }).press('Enter'); await rendered(page);
+    report.checks.push('official comparison supports an explicitly matched page from that page on, without moving earlier pages');
 
     // The overview is a slider: drag the white marker, read the label, release to open that page.
     const strip = panel(page).locator('.circuit-pdf-strip'), box = await strip.boundingBox();
@@ -234,7 +240,7 @@ async function managerFits(page, label) {
     report.checks.push('task tabs, 匯出, 更多 and close stay on one row at 1440/1280/1173');
     await strip.focus(); await page.keyboard.press('End');
     await page.waitForFunction(() => document.querySelector('input[aria-label="目前頁碼"]').value === '500'); await rendered(page);
-    await panel(page).getByLabel('官方對應頁', { exact: true }).fill('500'); await rendered(page);
+    await panel(page).getByLabel('基準版頁碼', { exact: true }).fill('500'); await panel(page).getByLabel('基準版頁碼', { exact: true }).press('Enter'); await rendered(page);
     assert.equal(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), 'Official_20261101.pdf 第 500 頁');
     const aiButton = panel(page).getByTestId('circuit-pdf-ai-bar').getByRole('button', { name: 'AI 比對新舊版', exact: true });
     assert.equal(await aiButton.isEnabled(), true, 'Matching the last official page must resolve the out-of-range offset and enable review');
@@ -253,7 +259,7 @@ async function managerFits(page, label) {
     await dialog(page).getByRole('combobox', { name: '選擇改版紀錄', exact: true }).selectOption('qa-group-b');
     assert.equal(fixture.state.pdfOfficials.get('series:qa').documentId, baselineId);
     await dialog(page).getByRole('tab', { name: /^AI 比對/ }).click();
-    assert.match(await panel(page).getByTestId('circuit-pdf-ai-bar').locator('[data-side="old"] select').getAttribute('title'), /Official_20261101\.pdf/);
+    assert.match(await panel(page).locator('select[aria-label="選擇基準版 PDF"]').getAttribute('title'), /Official_20261101\.pdf/);
     await page.screenshot({ path: path.join(evidence, 'official-compare-1440.png') });
     await dialog(page).getByRole('button', { name: '關閉線路修改', exact: true }).click(); await dialog(page).waitFor({ state: 'hidden' });
     // Legacy version metadata may change; it must never replace the protected official file snapshot.
@@ -261,7 +267,7 @@ async function managerFits(page, label) {
     Object.assign(legacyBaseline, { name: 'Edited_legacy_metadata.pdf', path: registry().documents.find(row => row.name === 'Working_20261109.pdf').path });
     await page.getByTestId('material-circuit-changes').filter({ visible: true }).click(); await dialog(page).waitFor(); await rendered(page);
     assert.equal(await dialog(page).getByRole('tab', { name: /^AI 比對/ }).getAttribute('aria-selected'), 'true', 'the window reopens on the task used last');
-    assert.match(await panel(page).getByTestId('circuit-pdf-ai-bar').locator('[data-side="old"] select').getAttribute('title'), /Official_20261101\.pdf/);
+    assert.match(await panel(page).locator('select[aria-label="選擇基準版 PDF"]').getAttribute('title'), /Official_20261101\.pdf/);
     assert.deepEqual(fixture.state.pdfOfficials.get('series:qa').document, baselineSnapshot, 'Legacy registry metadata cannot mutate the official file snapshot');
     assert.match(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), /Official_20261101\.pdf/);
     report.checks.push('official baseline survives a modification-group switch and closing/reopening the workspace');

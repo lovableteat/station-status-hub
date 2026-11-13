@@ -17,7 +17,6 @@
 .circuit-pdf-link-bar > span { color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 18px; }
 .circuit-pdf-link-bar > .circuit-pdf-link-toggle { flex: none; height: 30px; padding-inline: 10px; gap: 5px; font-size: 13px; }
 .circuit-pdf-link-toggle[aria-pressed="true"] { border-color: hsl(var(--primary) / .4); background: hsl(var(--primary) / .12); color: hsl(var(--primary)); }
-.circuit-pdf-page-warning { color: hsl(var(--warning)); font-size: 12px; }
 
 .circuit-pdf-versions { min-width: 0; flex: 0 1 220px; }
 .circuit-pdf-row .circuit-pdf-delete { width: 32px; padding: 0; color: hsl(var(--muted-foreground)); }
@@ -91,14 +90,11 @@
 .circuit-pdf-progress-bar { position: relative; display: block; width: 48px; height: 6px; overflow: hidden; border-radius: 3px; background: hsl(var(--secondary)); }
 .circuit-pdf-progress-bar > span { position: absolute; inset: 0 auto 0 0; background: hsl(var(--primary)); }
 
-.circuit-pdf-pager, .circuit-pdf-zoom, .circuit-pdf-offset { display: flex; flex: none; align-items: center; gap: 2px; font-size: 13px; font-variant-numeric: tabular-nums; }
-.circuit-pdf-pager > button, .circuit-pdf-zoom > button, .circuit-pdf-offset > button { width: 32px; padding: 0 !important; }
+.circuit-pdf-pager, .circuit-pdf-zoom { display: flex; flex: none; align-items: center; gap: 2px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.circuit-pdf-pager > button, .circuit-pdf-zoom > button { width: 32px; padding: 0 !important; }
 .circuit-pdf-pager input { width: 44px; height: 32px; border: 1px solid hsl(var(--border)); border-radius: 6px; padding-inline: 4px; background: hsl(var(--secondary)); color: hsl(var(--foreground)); font-size: 13px; text-align: center; }
 .circuit-pdf-pager > span { padding-inline: 4px 2px; color: hsl(var(--muted-foreground)); }
 .circuit-pdf-zoom > span { min-width: 44px; color: hsl(var(--muted-foreground)); text-align: center; }
-.circuit-pdf-offset > span { padding-right: 2px; color: hsl(var(--muted-foreground)); }
-.circuit-pdf-offset > label { display: flex; align-items: center; gap: 5px; color: hsl(var(--muted-foreground)); font-size: 12px; }
-.circuit-pdf-offset input { width: 44px; height: 32px; border: 1px solid hsl(var(--border)); border-radius: 6px; padding-inline: 4px; font-size: 13px; text-align: center; }
 .circuit-pdf-page-changes { display: flex; flex: 0 1 auto; min-width: 0; max-width: 40%; align-items: center; gap: 4px; overflow-x: auto; color: hsl(var(--muted-foreground)); font-size: 12px; scrollbar-width: none; }
 .circuit-pdf-page-changes > button { flex: none; height: 28px !important; border: 1px solid hsl(var(--warning) / .5); border-radius: 5px; padding: 0 7px !important; background: hsl(var(--warning) / .1); color: hsl(var(--foreground)); font-size: 12px !important; font-variant-numeric: tabular-nums; }
 .circuit-pdf-finish { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
@@ -189,10 +185,9 @@
   .circuit-pdf-version-actions > button, .circuit-pdf-working-section > header > button, .circuit-pdf-archived-section li > button { min-height: 44px; }
   .circuit-pdf-version-edit input { height: 44px; font-size: 16px; }
   .circuit-pdf-row button { height: 44px; }
-  .circuit-pdf-pager > button, .circuit-pdf-zoom > button, .circuit-pdf-offset > button { width: 44px; }
+  .circuit-pdf-pager > button, .circuit-pdf-zoom > button { width: 44px; }
   .circuit-pdf-overview { flex-wrap: nowrap; }
   .circuit-pdf-pager input { height: 44px; font-size: 16px; }
-  .circuit-pdf-offset input { height: 44px; font-size: 16px; }
   .circuit-pdf-panel .circuit-pdf-compare select { width: 140px; height: 44px; font-size: 14px; }
   .circuit-pdf-pager input { width: 48px; }
   .circuit-pdf-pager > span { padding-inline: 2px; }
@@ -309,24 +304,12 @@
 @media (max-width: 1023px) { .circuit-pdf-tool-group[data-group="draw"] > button { height: 44px; } }
 
 /* AI 比對: the two page numbers sit side by side with their names (新版 / 官方對應頁). */
-.circuit-pdf-pager-name { padding-inline: 4px 2px; color: hsl(var(--primary)); font-size: 13px; font-weight: 600; }
-.circuit-pdf-overview > .circuit-pdf-offset { flex: none; padding-inline-start: 10px; border-inline-start: 1px solid hsl(var(--border)); }
-.circuit-pdf-overview > .circuit-pdf-offset > label { color: hsl(var(--warning)); font-weight: 600; }
-.circuit-pdf-overview > .circuit-pdf-page-warning { flex: none; }
 
 /* Colour = kind of function (2026-11-11), PDF side: adding a PDF is blue, AI is violet, the official version is gold. */
 .circuit-pdf-panel .circuit-pdf-empty { border-color: hsl(202 34% 44%); background: hsl(202 30% 14% / .7); }
 .circuit-pdf-panel .circuit-pdf-empty:hover { border-color: hsl(202 50% 60%); }
 .circuit-pdf-panel .circuit-pdf-empty > svg { color: hsl(202 64% 72%); }
-.circuit-pdf-overview > .circuit-pdf-offset > label { color: hsl(43 70% 70%); }
-.circuit-pdf-pager-name { color: hsl(170 60% 70%); }
 
-/* Phone, AI 比對: the two page numbers share the first line; the page strip takes the next one instead of being pushed off screen. */
-@media (max-width: 1023px) {
-  .circuit-pdf-panel:has(> .circuit-pdf-ai-bar) .circuit-pdf-overview { flex-wrap: wrap; row-gap: 0; }
-  .circuit-pdf-panel:has(> .circuit-pdf-ai-bar) .circuit-pdf-overview > .circuit-pdf-strip { flex: 1 0 100%; }
-  .circuit-pdf-overview > .circuit-pdf-offset { padding-inline-start: 6px; }
-}
 
 /* Phone redesign (2026-11-11), the drawing. Top: which PDF and the zoom. Under the drawing: the page row. Bottom: one row
    of actions with words (上一頁 · 截圖 · 畫筆 · 看完，下一頁) that changes with what the hand is doing. */
@@ -358,11 +341,7 @@
   .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-strip { order: 2; flex: 1 1 90px; }
   .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-progress { order: 3; flex: none; font-size: 12px; }
   .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-seen { order: 4; flex: none; height: 32px; gap: 4px; padding: 0 8px; font-size: 12px; }
-  .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-offset { order: 2; margin-left: auto; }
-  .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-page-warning { order: 5; flex: 1 0 100%; }
   /* AI 比對: the pages are turned with the bottom row, so the strip and the ± of 官方對應頁 are left out here. */
-  .circuit-pdf-panel:has(> .circuit-pdf-ai-bar) .circuit-pdf-overview > .circuit-pdf-strip { display: none; }
-  .circuit-pdf-panel:has(> .circuit-pdf-ai-bar) .circuit-pdf-overview > .circuit-pdf-offset > button { display: none; }
 
   /* AI 比對: the two PDFs side by side with 交換 between them (the drawings are one above the other on a phone); the AI
      button is in the bottom row, and 上傳 PDF shows here only while there are fewer than two PDFs. */
@@ -396,4 +375,66 @@
   .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-page-changes { max-width: none; font-size: 13px; }
   .circuit-pdf-panel .circuit-pdf-overview > .circuit-pdf-seen { margin-left: auto; }
   .circuit-pdf-phone-row > .circuit-pdf-phone-tool { font-size: 13px; }
+}
+
+/* AI 比對 (2026-11-13). The user: 「功能優化一堆使用問題」. Four rows sat above the drawings (versions, tools, pages, captions)
+   and the drawings got about half of the window. Now one tool row; each drawing carries its own version and page in its header;
+   the overview shows what AI found on each page and the findings are marked on the drawings themselves. */
+.circuit-pdf-compare-bar { align-items: stretch; }
+.circuit-pdf-compare-bar .circuit-pdf-row { overflow: visible; }
+/* Left to right as read and tabbed: tools, pages, link, zoom, then upload, this page's result and the AI review last. */
+.circuit-pdf-compare-bar .circuit-pdf-row > .circuit-pdf-tool-group { order: 0; margin-inline-start: 0; }
+.circuit-pdf-compare-bar .circuit-pdf-strip { flex: 1 1 160px; min-width: 120px; }
+.circuit-pdf-compare-bar .circuit-pdf-strip-label { top: calc(100% + 6px); bottom: auto; }
+.circuit-pdf-compare-bar .circuit-pdf-ai-run { flex: none; height: 32px; gap: 6px; }
+.circuit-pdf-compare-bar .circuit-pdf-tool-group[data-group="files"] > button { width: auto; height: 32px; gap: 6px; padding-inline: 10px; }
+.circuit-pdf-ai-status { display: inline-flex; flex: none; align-items: center; gap: 6px; color: hsl(var(--muted-foreground)); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.circuit-pdf-ai-status[data-kind="diff"] { color: #ff9a9e; }
+.circuit-pdf-ai-status[data-kind="confirmed"], .circuit-pdf-ai-status[data-kind="clear"] { color: hsl(var(--primary)); }
+.circuit-pdf-ai-status[data-kind="error"] { color: hsl(var(--warning)); }
+.circuit-pdf-ai-status > button { height: 28px !important; padding-inline: 8px !important; }
+
+/* Each drawing's header: version picker, page, how the baseline page was found, swap. */
+.circuit-pdf-page > figcaption.circuit-pdf-pane-head { display: flex; min-width: 0; align-items: center; gap: 8px; min-height: 36px; margin-bottom: 6px; color: hsl(var(--foreground)); font-size: 13px; }
+.circuit-pdf-pane-version { display: flex; flex: 1 1 auto; min-width: 0; align-items: center; gap: 8px; }
+.circuit-pdf-pane-version > span, .circuit-pdf-pane-name { flex: none; font-size: 12px; font-weight: 600; }
+.circuit-pdf-pane-version[data-side="old"] > span, .circuit-pdf-pane-name[data-side="old"] { color: hsl(var(--warning)); }
+.circuit-pdf-pane-version[data-side="new"] > span, .circuit-pdf-pane-name[data-side="new"] { color: hsl(var(--primary)); }
+.circuit-changes-dialog .circuit-pdf-pane-version select { flex: 1 1 auto; min-width: 0; height: 32px; font-size: 13px; }
+.circuit-pdf-pane-page { display: inline-flex; flex: none; align-items: center; gap: 4px; color: hsl(var(--muted-foreground)); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.circuit-pdf-pane-page input { width: 48px; height: 32px; border: 1px solid hsl(var(--border)); border-radius: 6px; padding-inline: 4px; background: hsl(var(--background)); color: hsl(var(--foreground)); font-size: 13px; text-align: center; }
+.circuit-pdf-pane-page[data-side="old"] input { border-color: hsl(var(--warning) / .5); }
+.circuit-pdf-pane-page[data-side="new"] input { border-color: hsl(var(--primary) / .5); }
+.circuit-pdf-pane-page input::placeholder { color: hsl(var(--muted-foreground)); }
+.circuit-pdf-pane-head > .circuit-pdf-pager { flex: none; gap: 2px; }
+.circuit-pdf-pane-head > .circuit-pdf-pager > button { width: 32px; height: 32px; padding: 0; }
+.circuit-pdf-pane-head > .circuit-pdf-swap { flex: none; width: 32px; height: 32px; padding: 0; }
+.circuit-pdf-align { display: inline-flex; flex: none; align-items: center; gap: 4px; color: hsl(var(--muted-foreground)); font-size: 12px; white-space: nowrap; }
+.circuit-pdf-align[data-kind="new"] { color: hsl(var(--warning)); }
+button.circuit-pdf-align { height: 28px; padding: 0 6px 0 8px; border: 1px solid hsl(var(--warning) / .5); border-radius: 6px; background: transparent; color: hsl(var(--warning)); cursor: pointer; }
+button.circuit-pdf-align:hover { background: hsl(var(--warning) / .12); }
+button.circuit-pdf-align > svg { width: 14px; height: 14px; }
+
+/* The overview in AI 比對: red, AI found something still to judge; teal, judged with confirmed differences; hollow teal, nothing
+   found; orange outline, the baseline has no such page; grey, not compared yet. */
+.circuit-pdf-strip > [data-ai="diff"] { background: #e5484d; }
+.circuit-pdf-strip > [data-ai="confirmed"] { background: hsl(var(--primary) / .75); }
+.circuit-pdf-strip > [data-ai="clear"] { box-shadow: inset 0 0 0 1px hsl(var(--primary) / .7); background: hsl(var(--primary) / .14); }
+.circuit-pdf-strip > [data-ai="new"] { box-shadow: inset 0 0 0 1px hsl(var(--warning) / .85); background: transparent; }
+.circuit-pdf-strip > [data-ai][data-current] { background: hsl(var(--foreground)); box-shadow: 0 0 0 2px hsl(var(--card)); }
+
+/* AI findings on the drawings, in the same colours as in the review: solid red, suspected; dashed amber, unclear; teal once confirmed. */
+.circuit-pdf-ai-mark { position: absolute; z-index: 3; min-width: 6px; min-height: 6px; padding: 0; border: 2px solid #e5484d; border-radius: 2px; background: #e5484d14; cursor: pointer; }
+.circuit-pdf-ai-mark[data-certainty="unclear"] { border-color: #d9822b; border-style: dashed; background: #ffb42718; }
+.circuit-pdf-ai-mark[data-decision="confirmed"] { border-color: hsl(var(--primary)); background: hsl(var(--primary) / .1); }
+.circuit-pdf-ai-mark > span { position: absolute; bottom: 100%; left: -2px; min-width: 22px; padding: 0 4px; border-radius: 3px 3px 0 0; background: #c5262c; color: #ffffff; font: 700 11px/16px system-ui, sans-serif; text-align: center; }
+.circuit-pdf-ai-mark[data-certainty="unclear"] > span { background: #a0590f; }
+.circuit-pdf-ai-mark[data-decision="confirmed"] > span { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+.circuit-pdf-ai-mark:hover, .circuit-pdf-ai-mark:focus-visible { z-index: 4; outline: 2px solid #121826; outline-offset: 2px; }
+.circuit-pdf-surface:is([data-tool="pen"], [data-tool="erase"], [data-tool="crop"]) .circuit-pdf-ai-mark { pointer-events: none; }
+
+@media (max-width: 1023px) {
+  .circuit-pdf-page > figcaption.circuit-pdf-pane-head { min-height: 40px; margin-bottom: 4px; }
+  .circuit-pdf-pane-page input { width: 56px; height: 40px; font-size: 16px; }
+  button.circuit-pdf-align { height: 44px; }
 }

@@ -19,6 +19,7 @@ import { CIRCUIT_EVENT_LABELS, circuitSetLabel, groupCircuitChangeEvents, latest
 import { CIRCUIT_CHANGE_FIELD_LIMITS, CIRCUIT_CHANGE_STATUS_LABELS, CIRCUIT_IMAGE_SIDE_LABELS, CIRCUIT_TASKS, circuitChangeMissingForReview, type CircuitTask, defaultCircuitChangeSet, isUnsavedCircuitChange, type CircuitChangeContext, type CircuitChangeContent, type CircuitChangeItem, type CircuitChangeStatus, type CircuitChangeTextField, type CircuitChangesModel, type CircuitImage, type CircuitImageSide } from "./types";
 import { CircuitBusyIcon, CircuitProgress, CircuitSkeletonRows, CircuitSpinner, CircuitToast, type CircuitToastMessage } from "./CircuitFeedback";
 import { playCircuitEnter } from "./circuitMotion";
+import type { CircuitPdfAiResults } from "./useCircuitPdfAiResults";
 import "./circuitChanges.css";
 
 const sides = Object.keys(CIRCUIT_IMAGE_SIDE_LABELS) as CircuitImageSide[];
@@ -59,8 +60,12 @@ function readLayout(): { pdf: boolean; detail: boolean; list: "auto" | "open" | 
 }
 function writeLayout(value: ReturnType<typeof readLayout>) { try { window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(value)); } catch { /* layout only */ } }
 
-export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, model, pdfs, pdfInk, onAiReview, task = "review", onTaskChange = () => {} }: {
-  open: boolean; onOpenChange: (value: boolean) => void; context: CircuitChangeContext; canEdit: boolean; model: CircuitChangesModel; pdfs: CircuitPdfModel; pdfInk?: CircuitPdfInkModel; onAiReview?: () => void;
+export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, model, pdfs, pdfInk, onAiReview, aiResults, task = "review", onTaskChange = () => {} }: {
+  open: boolean; onOpenChange: (value: boolean) => void; context: CircuitChangeContext; canEdit: boolean; model: CircuitChangesModel; pdfs: CircuitPdfModel; pdfInk?: CircuitPdfInkModel;
+  /** Opens AI 比對's review of the page on screen; with a finding id that finding opens unfolded. */
+  onAiReview?: (findingId?: string) => void;
+  /** Saved AI results of the pair on screen, for the page overview and the marks on the drawings. */
+  aiResults?: CircuitPdfAiResults;
   /** Which of the four jobs is on screen: 線路 Review, AI 比對, 改善追蹤 or 官方版本. */
   task?: CircuitTask; onTaskChange?: (task: CircuitTask) => void;
 }) {
@@ -669,7 +674,7 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
             </div>}
             </>}
           </aside>}
-          {pdfOpen && <CircuitPdfPanel mode={task === "ai" ? "ai" : "review"} captureSide={task === "track" ? "after" : "before"} pageReview={task === "review"} onAiReview={onAiReview} onSetupOfficial={() => chooseTask("official")} pdfs={pdfs} ink={pdfInk} canEdit={canEdit} captureBlocked={phone && !mobileDetail ? "" : captureBlocked} targetLabel={targetLabel} pageChanges={pageChanges} crops={pdfCrops} versionsOpen={versionsOpen} onVersionsOpenChange={setVersionsOpen} versionsOpener={versionsOpener}
+          {pdfOpen && <CircuitPdfPanel mode={task === "ai" ? "ai" : "review"} captureSide={task === "track" ? "after" : "before"} pageReview={task === "review"} onAiReview={onAiReview} aiResults={task === "ai" ? aiResults : undefined} onSetupOfficial={() => chooseTask("official")} pdfs={pdfs} ink={pdfInk} canEdit={canEdit} captureBlocked={phone && !mobileDetail ? "" : captureBlocked} targetLabel={targetLabel} pageChanges={pageChanges} crops={pdfCrops} versionsOpen={versionsOpen} onVersionsOpenChange={setVersionsOpen} versionsOpener={versionsOpener}
             phone={phone} phoneContext={phone && task !== "ai" ? (mobileDetail ? "item" : "list") : undefined} onCaptureNew={phone && task === "review" && canEdit ? addCaptureAsNew : undefined}
             onUploaded={announceUpload} onCapture={addCaptures} onSelectChange={phone ? openFromPdf : selectItem} />}
           {task !== "ai" && <section ref={detailPanel} id="circuit-change-detail" className="circuit-detail" hidden={detailCollapsed} aria-label="問題內容" data-testid="circuit-change-detail" aria-busy={model.switching}>

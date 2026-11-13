@@ -1,6 +1,6 @@
 import type { AdditiveClient, AdditiveQuery } from "./storage";
 import { supabase } from "@/integrations/supabase/client";
-import { normalizeCircuitPdfAiReviewReport, type CircuitPdfAiReviewReport } from "./circuitPdfAiReview";
+import { circuitPdfAiReviewKey, normalizeCircuitPdfAiReviewReport, type CircuitPdfAiReviewReport } from "./circuitPdfAiReview";
 
 export interface SavedCircuitPdfAiReview { report: CircuitPdfAiReviewReport; revision: number }
 type ReviewRow = { report: unknown; revision: number };
@@ -21,6 +21,18 @@ export async function loadCircuitPdfAiReviews(seriesId: string, targetKey: strin
     const page = await request(db.from("circuit_pdf_ai_reviews").select("report,revision").eq("series_id", seriesId).eq("target_key", targetKey).order("created_at", { ascending: false }).order("id").range(offset, offset + 99));
     if (!Array.isArray(page)) throw new Error("AI 初審清單回應不完整。");
     rows.push(...page.map(saved));
+    if (page.length < 100) return rows;
+  }
+}
+/** Every saved review of one baseline / working pair (all pages, newest first), read in pages of 100. */
+export async function loadCircuitPdfAiPairReviews(seriesId: string, officialVersionId: string, workingVersionId: string): Promise<SavedCircuitPdfAiReview[]> {
+  const prefix = circuitPdfAiReviewKey({ officialVersionId, workingVersionId, officialPage: 1, workingPage: 1 }).replace(/1:1$/, "");
+  const pattern = prefix.replace(/[\\%_]/g, character => `\\${character}`) + "%";
+  const rows: SavedCircuitPdfAiReview[] = [];
+  for (let offset = 0; ; offset += 100) {
+    const page = await request(db.from("circuit_pdf_ai_reviews").select("report,revision").eq("series_id", seriesId).like("target_key", pattern).order("created_at", { ascending: false }).order("id").range(offset, offset + 99));
+    if (!Array.isArray(page)) throw new Error("AI 初審清單回應不完整。");
+    rows.push(...page.map(saved).filter(row => row.report.key.startsWith(prefix)));
     if (page.length < 100) return rows;
   }
 }

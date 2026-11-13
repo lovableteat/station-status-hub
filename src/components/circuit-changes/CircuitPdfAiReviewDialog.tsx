@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Check, Clock3, Files, LoaderCircle, RotateCcw, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -16,8 +16,14 @@ export interface CircuitPdfAiReviewProps {
   userName: string; disabled?: boolean; savedReport?: CircuitPdfAiReviewReport | null;
   previousReports?: CircuitPdfAiReviewReport[];
   onSave: (report: CircuitPdfAiReviewReport) => Promise<void>;
+  /** A finding chosen on the drawing: it opens unfolded once this page's result is shown. */
+  focusFinding?: string;
   allPages?: {
     officialOffset: number;
+    /** The baseline page for each working page as matched on the drawing (0: none); replaces the single offset. */
+    officialPageFor?: (workingPage: number) => number;
+    /** Changes when any page's match changes. */
+    mappingKey?: string;
     onLoadPage: (workingPage: number) => Promise<void>;
     onSave: (report: CircuitPdfAiReviewReport) => Promise<void>;
   };
@@ -51,12 +57,15 @@ function ReviewCountdown({ deadline, retryAt, batch = false }: { deadline: numbe
   </div>;
 }
 
-export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficial, working: sourceWorking, userName, disabled = false, savedReport, previousReports = [], onSave, allPages }: CircuitPdfAiReviewProps) {
+export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficial, working: sourceWorking, userName, disabled = false, savedReport, previousReports = [], onSave, allPages, focusFinding }: CircuitPdfAiReviewProps) {
   const [reviewPage, setReviewPage] = useState(sourceWorking?.page ?? 1);
   const sourceKey = sourceOfficial && sourceWorking ? circuitPdfAiReviewKey({ officialVersionId: sourceOfficial.id, workingVersionId: sourceWorking.id, officialPage: sourceOfficial.page, workingPage: sourceWorking.page }) : "";
   const officialOffset = allPages?.officialOffset ?? ((sourceOfficial?.page ?? 1) - (sourceWorking?.page ?? 1));
   const working = sourceWorking ? { ...sourceWorking, page: reviewPage } : null;
-  const officialPage = reviewPage + officialOffset;
+  const matchedPageFor = allPages?.officialPageFor;
+  const officialPageFor = useCallback((page: number) => matchedPageFor ? matchedPageFor(page) : page + officialOffset, [matchedPageFor, officialOffset]);
+  const mappingKey = allPages?.mappingKey ?? String(officialOffset);
+  const officialPage = officialPageFor(reviewPage);
   const official = sourceOfficial && officialPage >= 1 && officialPage <= sourceOfficial.pdf.numPages ? { ...sourceOfficial, page: officialPage } : null;
   const key = official && working ? circuitPdfAiReviewKey({ officialVersionId: official.id, workingVersionId: working.id, officialPage: official.page, workingPage: working.page }) : "";
   const current = useRef(key); current.current = key;
@@ -80,7 +89,7 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
   const workingCount = sourceWorking?.pdf.numPages ?? 0;
   const officialCount = sourceOfficial?.pdf.numPages ?? 0;
   const pageSelection = useMemo(() => parseCircuitPdfAiPageSelection(pageInput, workingCount), [pageInput, workingCount]);
-  const selectedPlan = useMemo(() => pageSelection.pages ? buildCircuitPdfAiBatchPages(officialCount, workingCount, officialOffset, pageSelection.pages) : [], [pageSelection, officialCount, workingCount, officialOffset]);
+  const selectedPlan = useMemo(() => pageSelection.pages ? buildCircuitPdfAiBatchPages(officialCount, workingCount, officialPageFor, pageSelection.pages) : [], [pageSelection, officialCount, workingCount, officialPageFor]);
   const selectedUnmatched = selectedPlan.filter(page => page.officialPage === null).length;
   const batchLabel = batchScope === "selected" ? "指定頁面" : "全部頁面";
   const stopBatchLabel = batchScope === "selected" ? "停止指定比對" : "停止全部比對";
@@ -101,7 +110,7 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
     setReviewPage(sourceWorking?.page ?? 1); setBatch([]); batchRef.current = []; setBatchRunning(false); setBatchStopped(false); setLoadingPage(false); setDeadline(null); setRetryAt(null);
     setPageInput(""); setBatchScope("all");
     return () => { request.current?.abort(); };
-  }, [sourceKey, officialOffset, open]);
+  }, [sourceKey, mappingKey, open]);
 
   useEffect(() => {
     request.current?.abort(); request.current = null; setAnalysing(false); setDirty(false); setError(""); setHistoryId("");
@@ -119,6 +128,18 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
       .catch(failure => { if (present) setError(failure instanceof Error ? failure.message : "無法讀取 AI 服務。"); }).finally(() => { if (present) setLoadingModels(false); });
     return () => { present = false; request.current?.abort(); };
   }, [open, disabled]);
+
+  const focused = useRef("");
+  useEffect(() => { if (!open) focused.current = ""; }, [open]);
+  useEffect(() => {
+    if (!open || !focusFinding || !result || focused.current === `${result.id}:${focusFinding}`) return;
+    const finding = document.getElementById(`${selectionId}-${focusFinding}`);
+    if (!(finding instanceof HTMLDetailsElement)) return;
+    focused.current = `${result.id}:${focusFinding}`;
+    finding.open = true;
+    finding.scrollIntoView({ block: "start" });
+    finding.querySelector("summary")?.focus({ preventScroll: true });
+  }, [open, focusFinding, result, selectionId]);
 
   function updateBatch(page: CircuitPdfAiBatchPage) {
     const next = batchRef.current.map(item => item.workingPage === page.workingPage ? page : item);
@@ -142,7 +163,7 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
     const resume = scope === "resume";
     if (!sourceOfficial || !sourceWorking || !validSources || !allPages || !model || loadingModels || disabled || busy || request.current || (dirty && !(resume && canResumeDirty)) || (!resume && unsavedCount > 0) || historyId) return;
     const controller = new AbortController(), captured = key;
-    const pages = resume ? batchRef.current : scope === "selected" ? selectedPlan : buildCircuitPdfAiBatchPages(officialCount, workingCount, officialOffset);
+    const pages = resume ? batchRef.current : scope === "selected" ? selectedPlan : buildCircuitPdfAiBatchPages(officialCount, workingCount, officialPageFor);
     if (scope === "selected" && (!pages.length || selectedUnmatched === pages.length)) return;
     if (!resume) setBatchScope(scope);
     batchRef.current = pages; setBatch(pages); setBatchRunning(true); setBatchStopped(false); setError(""); setDeadline(null); setRetryAt(null); request.current = controller;
@@ -249,11 +270,11 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
         </p>
       </form>}
       {(analysing || batchRunning) && <ReviewCountdown deadline={deadline} retryAt={retryAt} batch={batchRunning} />}
-      {allPages && <div className="circuit-pdf-ai-batch-hint"><p>指定與全部比對沿用目前基準版的對應頁{officialOffset ? `（偏移 ${officialOffset > 0 ? "+" : ""}${officialOffset} 頁）` : ""}。最多同時比對 {CIRCUIT_PDF_AI_BATCH_CONCURRENCY} 頁，每頁完成後個別儲存。</p><label>查看頁面<select title="切換要查看哪一頁的比對結果" aria-label="查看初審頁面" value={reviewPage} disabled={busy} onChange={event => {
-        const page = Number(event.target.value), mapped = page + officialOffset;
+      {allPages && <div className="circuit-pdf-ai-batch-hint"><p>{matchedPageFor ? "指定與全部比對沿用圖面上每一頁的基準版對應頁（依內容自動對齊，可在圖面的基準版頁碼修改）。" : `指定與全部比對沿用目前基準版的對應頁${officialOffset ? `（偏移 ${officialOffset > 0 ? "+" : ""}${officialOffset} 頁）` : ""}。`}最多同時比對 {CIRCUIT_PDF_AI_BATCH_CONCURRENCY} 頁，每頁完成後個別儲存。</p><label>查看頁面<select title="切換要查看哪一頁的比對結果" aria-label="查看初審頁面" value={reviewPage} disabled={busy} onChange={event => {
+        const page = Number(event.target.value), mapped = officialPageFor(page);
         void selectPage({ workingPage: page, officialPage: mapped, status: "pending" });
       }}>{Array.from({ length: sourceWorking?.pdf.numPages ?? 0 }, (_, index) => {
-        const page = index + 1, mapped = page + officialOffset, matched = mapped > 0 && mapped <= (sourceOfficial?.pdf.numPages ?? 0);
+        const page = index + 1, mapped = officialPageFor(page), matched = mapped > 0 && mapped <= (sourceOfficial?.pdf.numPages ?? 0);
         return <option key={page} value={page} disabled={!matched}>比對版 {page} · {matched ? `基準版 ${mapped}` : "無對應頁"}</option>;
       })}</select></label></div>}
       {batch.length > 0 && <section className="circuit-pdf-ai-batch" aria-label={`${batchLabel}比對進度`}>

@@ -6,15 +6,20 @@ import { circuitPdfAiReviewKey, type CircuitPdfAiReviewReport } from "./circuitP
 import { loadCircuitPdfAiReviews, saveCircuitPdfAiReview, type SavedCircuitPdfAiReview } from "./pdfAiReviewStorage";
 import type { CircuitPdfModel } from "./useCircuitPdfs";
 
-export function CircuitPdfAiReviewSession({ open, onOpenChange, seriesId, userId, userName, canEdit, pdfs }: {
+export function CircuitPdfAiReviewSession({ open, onOpenChange, seriesId, userId, userName, canEdit, pdfs, focusFinding }: {
   open: boolean; onOpenChange: (open: boolean) => void; seriesId: string; userId: string; userName: string; canEdit: boolean; pdfs: CircuitPdfModel;
+  /** A finding chosen on the drawing, opened unfolded in the review. */
+  focusFinding?: string;
 }) {
   const baseline = pdfs.compare && pdfs.comparePdf ? { id: pdfs.compare.id, name: pdfs.compare.name, page: pdfs.comparePage, pdf: pdfs.comparePdf } : null;
   const working = pdfs.active && pdfs.activePdf ? { id: pdfs.active.id, name: pdfs.active.name, page: pdfs.page, pdf: pdfs.activePdf } : null;
   const validSources = Boolean(baseline && working && baseline.id !== working.id);
   const key = validSources && baseline && working && baseline.page > 0 ? circuitPdfAiReviewKey({ officialVersionId: baseline.id, workingVersionId: working.id, officialPage: baseline.page, workingPage: working.page }) : "";
   const officialOffset = pdfs.compareOffset;
-  const scope = `${open}:${seriesId}:${userId}:${canEdit}:${baseline?.id}:${working?.id}:${working?.page}:${key}:${officialOffset}`;
+  // The drawing matches every page by content and the user's pins; without that (older callers) one offset applies to all.
+  const matchedPageFor = pdfs.comparePageFor;
+  const mappingKey = pdfs.alignmentKey ?? String(officialOffset);
+  const scope = `${open}:${seriesId}:${userId}:${canEdit}:${baseline?.id}:${working?.id}:${working?.page}:${key}:${mappingKey}`;
   const current = useRef(scope); current.current = scope;
   const [loaded, setLoaded] = useState("");
   const [rows, setRows] = useState<SavedCircuitPdfAiReview[]>([]);
@@ -32,7 +37,7 @@ export function CircuitPdfAiReviewSession({ open, onOpenChange, seriesId, userId
   }, [open, key, scope, validSources, seriesId, retry]);
 
   const pageKey = (page: number) => {
-    const officialPage = page + officialOffset;
+    const officialPage = matchedPageFor ? matchedPageFor(page) : page + officialOffset;
     if (!baseline || !working || !Number.isInteger(page) || page < 1 || page > working.pdf.numPages || officialPage < 1 || officialPage > baseline.pdf.numPages) throw new Error("這一頁沒有有效的基準對應頁。");
     return circuitPdfAiReviewKey({ officialVersionId: baseline.id, workingVersionId: working.id, officialPage, workingPage: page });
   };
@@ -61,6 +66,6 @@ export function CircuitPdfAiReviewSession({ open, onOpenChange, seriesId, userId
   if (!open) return null;
   if (!validSources || loaded !== scope) return <Dialog open onOpenChange={onOpenChange}><DialogContent><DialogTitle>AI 比對新舊版</DialogTitle><DialogDescription>{!validSources ? "請先開啟兩份不同的 PDF。" : error || "正在讀取這兩個版本的初審紀錄…"}</DialogDescription>{error && <Button type="button" onClick={() => setRetry(value => value + 1)}>重試讀取</Button>}</DialogContent></Dialog>;
   return <CircuitPdfAiReview open onOpenChange={onOpenChange} official={baseline} working={working} userName={userName} disabled={!canEdit}
-    savedReport={rows.find(row => row.report.key === key)?.report} previousReports={rows.map(row => row.report)} onSave={save}
-    allPages={{ officialOffset, onLoadPage: loadPage, onSave: savePage }} />;
+    savedReport={rows.find(row => row.report.key === key)?.report} previousReports={rows.map(row => row.report)} onSave={save} focusFinding={focusFinding}
+    allPages={{ officialOffset, officialPageFor: matchedPageFor, mappingKey, onLoadPage: loadPage, onSave: savePage }} />;
 }

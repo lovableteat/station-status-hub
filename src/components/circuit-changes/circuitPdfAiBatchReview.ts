@@ -31,11 +31,12 @@ export function parseCircuitPdfAiPageSelection(input: string, workingCount: numb
 }
 
 /** Keep requested working pages visible, including pages without an official counterpart. */
-export function buildCircuitPdfAiBatchPages(officialCount: number, workingCount: number, officialOffset: number, selectedPages?: readonly number[]): CircuitPdfAiBatchPage[] {
+/** `officialOffset`: one offset for every page, or the baseline page for each working page (0 when it has none). */
+export function buildCircuitPdfAiBatchPages(officialCount: number, workingCount: number, officialOffset: number | ((workingPage: number) => number), selectedPages?: readonly number[]): CircuitPdfAiBatchPage[] {
   const count = Number.isInteger(workingCount) && workingCount > 0 ? workingCount : 0;
   const pages = selectedPages ?? Array.from({ length: count }, (_, index) => index + 1);
   return pages.map(workingPage => {
-    const officialPage = workingPage + officialOffset;
+    const officialPage = typeof officialOffset === "function" ? officialOffset(workingPage) : workingPage + officialOffset;
     const matched = Number.isInteger(officialPage) && officialPage > 0 && officialPage <= officialCount;
     return { workingPage, officialPage: matched ? officialPage : null, status: matched ? "pending" : "unmatched" };
   });

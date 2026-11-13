@@ -13,6 +13,7 @@ export interface AdditiveQuery<Row, Result = Row[]> extends PromiseLike<{
   is(column: string, value: null | boolean): AdditiveQuery<Row, Result>;
   lt(column: string, value: unknown): AdditiveQuery<Row, Result>;
   in(column: string, values: readonly unknown[]): AdditiveQuery<Row, Result>;
+  like(column: string, pattern: string): AdditiveQuery<Row, Result>;
   order(column: string, options?: { ascending?: boolean }): AdditiveQuery<Row, Result>;
   limit(count: number): AdditiveQuery<Row, Result>;
   range(from: number, to: number): AdditiveQuery<Row, Result>;

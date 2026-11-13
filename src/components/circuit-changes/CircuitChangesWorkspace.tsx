@@ -4,6 +4,7 @@ import { CircuitPdfAiReviewSession } from "./CircuitPdfAiReviewSession";
 import { useCircuitChanges } from "./useCircuitChanges";
 import { useCircuitPdfs } from "./useCircuitPdfs";
 import { useCircuitPdfInk } from "./useCircuitPdfInk";
+import { useCircuitPdfAiResults } from "./useCircuitPdfAiResults";
 import { readCircuitTask, writeCircuitTask, type CircuitChangeContext, type CircuitTask } from "./types";
 
 export default function CircuitChangesWorkspace({ open, onOpenChange, context, canEdit, userId, userName }: {
@@ -16,9 +17,15 @@ export default function CircuitChangesWorkspace({ open, onOpenChange, context, c
   const pdfs = useCircuitPdfs({ open, seriesId: context.seriesId, canEdit, userId, userName, autoCompareOfficial: task === "ai" });
   const pdfInk = useCircuitPdfInk({ open, seriesId: context.seriesId, canEdit, userId, userName });
   const [aiOpen, setAiOpen] = useState(false);
-  useEffect(() => { setAiOpen(false); }, [open, context.seriesId, userId]);
+  // A mark clicked on the drawing opens the review with that finding unfolded; closing the review reads the results again.
+  const [aiFocus, setAiFocus] = useState("");
+  const [aiRound, setAiRound] = useState(0);
+  useEffect(() => { setAiOpen(false); setAiFocus(""); }, [open, context.seriesId, userId]);
+  const aiResults = useCircuitPdfAiResults({ open: open && task === "ai", seriesId: context.seriesId, baselineId: pdfs.compare?.id, workingId: pdfs.active?.id,
+    workingPages: pdfs.active?.pages || 0, comparePageFor: pdfs.comparePageFor, alignmentKey: pdfs.alignmentKey, refresh: aiRound });
   const changeTask = (next: CircuitTask) => { setTask(next); writeCircuitTask(next); };
+  const changeAiOpen = (next: boolean) => { setAiOpen(next); if (!next) { setAiFocus(""); setAiRound(value => value + 1); } };
   return <><CircuitChangesDialog open={open} onOpenChange={onOpenChange} context={context} canEdit={canEdit} model={model} pdfs={pdfs} pdfInk={pdfInk}
-    task={task} onTaskChange={changeTask} onAiReview={() => setAiOpen(true)} />
-    <CircuitPdfAiReviewSession open={open && aiOpen} onOpenChange={setAiOpen} seriesId={context.seriesId} userId={userId} userName={userName} canEdit={canEdit} pdfs={pdfs} /></>;
+    task={task} onTaskChange={changeTask} onAiReview={findingId => { setAiFocus(findingId || ""); setAiOpen(true); }} aiResults={aiResults} />
+    <CircuitPdfAiReviewSession open={open && aiOpen} onOpenChange={changeAiOpen} seriesId={context.seriesId} userId={userId} userName={userName} canEdit={canEdit} pdfs={pdfs} focusFinding={aiFocus || undefined} /></>;
 }
