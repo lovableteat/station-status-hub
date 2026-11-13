@@ -30,13 +30,12 @@ function SourceEvidence({ part, side, changedFields, onCopy }: { part?: NvBomPar
   </section>;
 }
 
-type SourceDelta = { field: string; direction: "added" | "removed"; values: string[] };
+type SourceDelta = { field: "廠商" | "廠商料號"; direction: "added" | "removed"; values: string[] };
 
 function SourceDeltaList({ changes, preview = false }: { changes: SourceDelta[]; preview?: boolean }) {
   return <div className="nv-bom-delta-list">{changes.map(({ field, direction, values }) => (
     <span key={`${field}-${direction}`} className="nv-bom-delta" data-direction={direction}>
-      <span className="sr-only">{direction === "added" ? "新增" : "移除"}{field} </span>
-      <span aria-hidden="true">{direction === "added" ? "+" : "−"}</span>
+      <span>{direction === "added" ? "新版新增" : "新版移除"}{field}：</span>
       <span>{(preview ? values.slice(0, 1) : values).join("、")}</span>
       {preview && values.length > 1 && <small>另 {values.length - 1} 個</small>}
     </span>
@@ -60,19 +59,18 @@ export function NvBomReviewRow({ entry, link, note, showAi, onAnnotate, onCopy, 
   const prior = change.before, next = change.after;
   const sourceDeltas: SourceDelta[] = [];
   if (prior && next && (kind === "sourceChanged" || kind === "replacement")) {
-    for (const [key, field] of [["mpn", "廠商料號"], ["manufacturer", "廠商"]] as const) {
+    for (const [key, field] of [["manufacturer", "廠商"], ["mpn", "廠商料號"]] as const) {
       if (!change.changedFields.includes(key)) continue;
       const { added, removed } = nvBomSourceListDelta(prior[key], next[key]);
       if (added.length) sourceDeltas.push({ field, direction: "added", values: added });
       if (removed.length) sourceDeltas.push({ field, direction: "removed", values: removed });
     }
   }
-  const sourceSummary = sourceDeltas.map(({ field, direction, values }) => `${direction === "added" ? "新增" : "移除"} ${values.length} 個${field}`).join("，");
-  const sameList = kind === "sourceChanged" && !sourceSummary && change.changedFields.some(key => key === "mpn" || key === "manufacturer");
+  const sameList = kind === "sourceChanged" && !sourceDeltas.length && change.changedFields.some(key => key === "mpn" || key === "manufacturer");
   const singleVersion = change.kind !== "changed";
   const detailLine = (singleVersion ? [part.partNumber || part.mpn] : [part.description, part.partNumber]).filter(Boolean).join(" · ");
   const changedLabels = kind === "other" ? NV_BOM_FIELDS.filter(({ key }) => change.changedFields.includes(key)).map(({ label }) => label) : [];
-  const title = singleVersion ? part.description || name : kind === "sourceChanged" && sourceSummary ? sourceSummary
+  const title = singleVersion ? part.description || name : kind === "sourceChanged" && sourceDeltas.length ? "新版供料清單有變動"
     : sameList ? "來源欄順序或寫法有變動" : changedLabels.length ? `${changedLabels.join("、")}有變更` : summary;
   const match = link?.state === "matched" ? link.candidates[0] : undefined;
   const anchorRefs = (relatedMain.after ?? relatedMain.before)?.refs;
@@ -107,9 +105,10 @@ export function NvBomReviewRow({ entry, link, note, showAi, onAnnotate, onCopy, 
     </div>
     {open && <div className="nv-bom-result-details" id={detailsId}>
       {sourceDeltas.length > 0 && <section className="nv-bom-change-evidence" aria-label="來源差異">
-        <h4>{sourceSummary}</h4>
+        <h4>新舊版供料清單差異</h4>
         <SourceDeltaList changes={sourceDeltas} />
-        {kind === "sourceChanged" && refs.length > 0 && !refChanges.length && prior?.refs && next?.refs && <p>位號清單相同，共 {refs.length} 個。</p>}
+        {kind === "sourceChanged" && refs.length > 0 && !refChanges.length && prior?.refs && next?.refs && <p>位號清單相同，共 {refs.length} 個。{next.qty && prior.qty === next.qty && `用量維持 ${next.qty}。`}</p>}
+        {sourceDeltas.some(({ field }) => field === "廠商") && sourceDeltas.some(({ field }) => field === "廠商料號") && <p>廠商與料號分欄比對，兩者的對應請核對原始 Excel。</p>}
       </section>}
       {link?.state === "missing" && <p className="nv-bom-help">目前選取的網站 BOM 找不到可對應的列。新舊 Excel 的比對結果仍在下方。</p>}
       {link?.state === "ambiguous" && <section className="nv-bom-current-candidates" aria-label="目前表格候選">

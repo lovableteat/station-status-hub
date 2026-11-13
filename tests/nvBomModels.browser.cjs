@@ -48,6 +48,23 @@ async function run(browser,origin,width){
   assert.equal(await changes(page).count(),3);
   assert.equal(await page.evaluate(()=>window.__nvQA.requests.length),0);
   report.checks.push('confirmed workbook columns produce a complete local diff without contacting an AI model');
+  const supplyChange=page.locator('.nv-bom-result article[data-action="sourceChanged"]');
+  const supplySummary=supplyChange.locator('.nv-bom-result-main');
+  const supplyDetails=supplyChange.getByRole('region',{name:'來源差異',exact:true});
+  const toggle=supplyChange.getByRole('button',{name:'查看詳情',exact:true});
+  assert.match(await supplySummary.innerText(),/新版供料清單有變動/);
+  assert.match(await supplySummary.innerText(),/新版新增廠商：\s*QA New Vendor/);
+  assert.match(await supplySummary.innerText(),/新版新增廠商料號：\s*QA-ALT/);
+  assert.doesNotMatch(await supplySummary.innerText(),/新增 \d+ 個廠商/);
+  if(width<768)await toggle.tap();else await toggle.click();
+  await supplyDetails.getByRole('heading',{name:'新舊版供料清單差異',exact:true}).waitFor();
+  assert.match(await supplyDetails.innerText(),/位號清單相同，共 2 個。用量維持 2。/);
+  assert.match(await supplyDetails.innerText(),/廠商與料號分欄比對，兩者的對應請核對原始 Excel。/);
+  await supplySummary.scrollIntoViewIfNeeded();
+  await page.screenshot({path:path.join(evidence,`supply-change-${width}.png`)});
+  await supplyChange.getByRole('button',{name:'收合詳情',exact:true}).click();
+  assert.equal(await supplyDetails.count(),0);
+  report.checks.push('supplier and MPN additions are named separately, with unchanged quantity and references in the expandable evidence');
   await showSettings(page);await models.getByRole('checkbox',{name:/qa-text$/}).check();await start.click();
   await waitForComparison(page,1);
   assert.deepEqual(await page.evaluate(()=>window.__nvQA.requests.map(request=>request.model)),['qa-text']);
@@ -100,8 +117,8 @@ async function run(browser,origin,width){
 }
 (async()=>{fs.mkdirSync(evidence,{recursive:true});
  const header='NV PN,MPN,Manufacturer,Description,Qty,Ref Des\n';
- fs.writeFileSync(path.join(evidence,'QA_NV_before.csv'),header+'QA-NV-001,QA-KEEP,QA Maker,Existing part,1,R1\nQA-NV-002,QA-OLD,QA Maker,Removed part,1,R2\n');
- fs.writeFileSync(path.join(evidence,'QA_NV_after.csv'),header+'QA-NV-001,QA-KEEP,QA Maker,Existing part,2,R1\nQA-NV-003,QA-NEW,QA Maker,Added part,1,R3\n');
+ fs.writeFileSync(path.join(evidence,'QA_NV_before.csv'),header+'QA-NV-001,QA-KEEP;QA-BASE,QA Maker;QA Other,Existing part,2,"R1,R4"\nQA-NV-002,QA-OLD,QA Maker,Removed part,1,R2\n');
+ fs.writeFileSync(path.join(evidence,'QA_NV_after.csv'),header+'QA-NV-001,QA-KEEP;QA-ALT;QA-BASE,QA Maker;QA Other;QA New Vendor,Existing part,2,"R1,R4"\nQA-NV-003,QA-NEW,QA Maker,Added part,1,R3\n');
  const {createServer}=await import('vite');const mock=path.resolve('tests/support/nvBomModelsMock.js');let server,browser;const reports=[];
  try{
   server=await createServer({configFile:false,root:process.cwd(),cacheDir:path.join(evidence,'.vite'),resolve:{alias:[{find:'@/integrations/supabase/client',replacement:mock},{find:'@',replacement:path.resolve('src')}]},optimizeDeps:{entries:['tests/support/nvBomModelsFixture.jsx'],include:['react/jsx-dev-runtime']},server:{host:'127.0.0.1',port:0},plugins:[{name:'isolated-nv-models',configureServer(vite){vite.middlewares.use((req,res,next)=>{if(req.url!=='/')return next();res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html lang="zh-Hant"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="/tests/support/nvBomModelsFixture.jsx"></script></html>');});}}]});
