@@ -1,14 +1,14 @@
 name: Audit regression (isolated)
 on:
   push:
-    branches: [repair/audit-20261002-realtime-drafts, repair/quality-baseline-20261003]
+    branches: [repair/isolated-quality-ci-20261114]
   pull_request:
     branches: [main]
 permissions:
   contents: read
 jobs:
   regression:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       VITE_SUPABASE_URL: http://127.0.0.1:54321
