@@ -7,10 +7,12 @@ import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 const localRequire=createRequire(import.meta.url),candidateRequire=createRequire(path.join(process.cwd(),'package.json'));
 const manifest=localRequire('./manifest.json');
+const rewrittenSource=localRequire('../history-source-map.json')[manifest.candidateCommit];
+assert.equal(rewrittenSource.tree,manifest.candidateTree,'Rewritten source tree must preserve the reviewed tree');
 const {sha,verifiedPublicConfiguration,verifyCandidateDirectory}=localRequire('./inputs.cjs');
 const git=args=>execFileSync('git',args,{cwd:process.cwd(),encoding:'utf8'}).trim();
 function verifySource(){
- assert.equal(git(['rev-parse','HEAD']),manifest.candidateCommit,'Candidate commit is not pinned candidate');
+ assert.equal(git(['rev-parse','HEAD']),rewrittenSource.commit,'Candidate commit is not pinned candidate');
  assert.equal(git(['rev-parse','HEAD^{tree}']),manifest.candidateTree,'Candidate source tree changed');
  assert.equal(git(['status','--porcelain=v1','--untracked-files=all']),'','Candidate checkout must be clean (ignored outputs excluded)');
  assert.equal(sha(fs.readFileSync('package-lock.json')),manifest.candidateLockSha256,'Locked dependency input changed');

@@ -19,7 +19,7 @@ test('exact-old research is restricted to this same-repository PR, without deplo
   assert.match(workflow, /contents: read\n\s+actions: read/);
   assert.doesNotMatch(workflow, /secrets\.|(?:pages|contents|id-token): write|actions\/deploy|supabase\s+(?:db|functions)|pull_request_target:|workflow_dispatch:|continue-on-error:/);
   assert.match(workflow, /timeout --signal=TERM --kill-after=10s 300s node tests\/exact96\/exact96-crossrelease\.browser\.cjs/);
-  assert.ok(workflow.includes('ref: '+manifest.candidateCommit));
+  assert.ok(workflow.includes('ref: '+JSON.parse(read('tests/history-source-map.json'))[manifest.candidateCommit].commit));
   assert.ok(workflow.includes('working-directory: .exact96-candidate'));
   assert.ok(workflow.includes('cmp package-lock.json .exact96-candidate/package-lock.json'));
   assert.ok(workflow.includes('EXACT96_CANDIDATE_DIST: ${{ github.workspace }}/.exact96-candidate/dist'));

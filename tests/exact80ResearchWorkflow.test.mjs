@@ -16,7 +16,7 @@ test('actual80 and frozen f6 identities, artifact and complete build inventory s
  assert.equal(createHash('sha256').update(manifestText).digest('hex'),'642a6688f66a814253f2c0ad3f3693ea763b1b8ce3fcf2eea47f902116975821');
  assert.equal(m.sourceCommit,'80f2c4c071c3c88a85d247b7c3d48b303ccdd57c');assert.equal(m.candidateCommit,'f6fadefcf503d9326af88757a2d2d42a8dd45ad1');
  assert.equal(Object.keys(m.candidateFiles).length,334);assert.equal(Object.keys(m.oldAllowedBoot).length,53);assert.equal(m.postCutoverExtra.length,3);
- assert.ok(workflow.includes(`actions/artifacts/${m.sourceArtifact}/zip`));assert.ok(workflow.includes('ref: '+m.candidateCommit));assert.ok(workflow.includes('cmp package-lock.json .exact80-candidate/package-lock.json'));
+ assert.ok(workflow.includes(`actions/artifacts/${m.sourceArtifact}/zip`));assert.ok(workflow.includes('ref: '+JSON.parse(read('tests/history-source-map.json'))[m.candidateCommit].commit));assert.ok(workflow.includes('cmp package-lock.json .exact80-candidate/package-lock.json'));
  assert.ok(workflow.includes('working-directory: .exact80-candidate'));assert.ok(workflow.includes('EXACT80_CANDIDATE_DIST: ${{ github.workspace }}/.exact80-candidate/dist'));
  const build=read('tests/exact80/build-exact-candidate.mjs');assert.ok(build.includes('manifest.derivation.bootRoots.ENTRY'));assert.ok(build.includes('digest!==manifest.candidateFiles[filename]'));
 });

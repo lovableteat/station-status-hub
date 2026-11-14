@@ -197,12 +197,12 @@ jobs:
       - name: Read only the independently reviewed candidate commit
         uses: actions/checkout@v4
         with:
-          ref: 34419778a95132a3ee73251bbde8b4327b6cd493
+          ref: 9682ff503557595583a6c79f839e003bcf262321
           path: .exact96-candidate
           persist-credentials: false
       - name: Verify frozen candidate identity and identical locked dependencies
         run: |
-          test "$(git -C .exact96-candidate rev-parse HEAD)" = 34419778a95132a3ee73251bbde8b4327b6cd493
+          test "$(git -C .exact96-candidate rev-parse HEAD)" = 9682ff503557595583a6c79f839e003bcf262321
           cmp package-lock.json .exact96-candidate/package-lock.json
           ln -s "$GITHUB_WORKSPACE/node_modules" "$GITHUB_WORKSPACE/.exact96-candidate/node_modules"
       - name: Build and verify the pinned merged candidate static output
@@ -265,12 +265,12 @@ jobs:
       - name: Read only the independently reviewed candidate commit
         uses: actions/checkout@v4
         with:
-          ref: f6fadefcf503d9326af88757a2d2d42a8dd45ad1
+          ref: 403828d0c6ab82ed74ce8672015ce5d53c2d4c7b
           path: .exact80-candidate
           persist-credentials: false
       - name: Verify frozen candidate identity and identical locked dependencies
         run: |
-          test "$(git -C .exact80-candidate rev-parse HEAD)" = f6fadefcf503d9326af88757a2d2d42a8dd45ad1
+          test "$(git -C .exact80-candidate rev-parse HEAD)" = 403828d0c6ab82ed74ce8672015ce5d53c2d4c7b
           cmp package-lock.json .exact80-candidate/package-lock.json
           ln -s "$GITHUB_WORKSPACE/node_modules" "$GITHUB_WORKSPACE/.exact80-candidate/node_modules"
       - name: Build and verify the pinned merged candidate static output
@@ -333,7 +333,7 @@ jobs:
           python tests/exact80/extract-exact80.py "$RUNNER_TEMP/exact80-cf614-source.zip" "$EXACT80_CF614_DIST" tests/exact80cf614/manifest.json
       - uses: actions/checkout@v4
         with:
-          ref: cf6142474a7974d6a71ef0679dc549685171c40e
+          ref: e411963e92ec9c3a7086ee077fb96e0bece54366
           path: .exact80-cf614-candidate
           persist-credentials: false
       - name: Reuse only identical locked dependencies

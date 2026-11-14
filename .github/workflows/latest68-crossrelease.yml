@@ -37,7 +37,7 @@ jobs:
           python tests/exact80/extract-exact80.py "$RUNNER_TEMP/exact68-source.zip" "$EXACT68_PAIR_DIST" tests/exact68pair/manifest.json
       - uses: actions/checkout@v4
         with:
-          ref: 149184847764466db200250aff8c716dde46720a
+          ref: cf758004f22ef1e995e1318fc31c3a17cfc34771
           path: .exact68-candidate
           persist-credentials: false
       - name: Verify identical dependency lock and build immutable candidate

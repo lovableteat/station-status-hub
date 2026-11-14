@@ -61,7 +61,7 @@ test('build verifies clean exact commit/tree/lock before and after and never log
 });
 test('separate workflow is same-repository PR-only and cannot deploy or mutate production',()=>{
  const workflow=fs.readFileSync(path.join(__dirname,'../../.github/workflows/latest68-crossrelease.yml'),'utf8');
- for(const text of ["github.event_name == 'pull_request'",'github.event.pull_request.number == 49','head.repo.full_name == github.repository','contents: read','actions: read','ref: '+m.candidateCommit,'retention-days: 3','/artifacts/'+m.sourceArtifact+'/zip'])assert.ok(workflow.includes(text),text);
+ for(const text of ["github.event_name == 'pull_request'",'github.event.pull_request.number == 49','head.repo.full_name == github.repository','contents: read','actions: read','ref: '+require('../history-source-map.json')[m.candidateCommit].commit,'retention-days: 3','/artifacts/'+m.sourceArtifact+'/zip'])assert.ok(workflow.includes(text),text);
  assert.doesNotMatch(workflow,/secrets\.|(?:pages|contents|id-token): write|actions\/deploy|supabase\s+(?:db|functions)|pull_request_target|continue-on-error|--location-trusted|upload-pages-artifact|workflow_dispatch|\n  push:/);
  assert.deepEqual(workflow.split('          path: |\n')[1].trim().split('\n').map(x=>x.trim()),['${{ runner.temp }}/exact68-evidence/report.json','${{ runner.temp }}/exact68-evidence/*.png']);
 });
