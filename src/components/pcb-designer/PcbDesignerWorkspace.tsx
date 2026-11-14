@@ -1,6 +1,6 @@
 import { recoverableLazy } from "@/components/common/recoverableLazy";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { Check, CircuitBoard, LayoutTemplate, LoaderCircle, MoreHorizontal, PanelLeft, PanelRight, Settings2 } from "lucide-react";
+import { Check, CircuitBoard, FlaskConical, LayoutTemplate, LoaderCircle, MoreHorizontal, PanelLeft, PanelRight, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -44,6 +44,7 @@ import { PcbCanvas } from "./PcbCanvas.tsx";
 import { PcbCollaborators } from "./PcbCollaborators.tsx";
 import { PcbInspector } from "./PcbInspector.tsx";
 import { PcbStepModelDialog } from "./PcbStepModelDialog.tsx";
+import { PcbResearchDialog } from "./PcbResearchDialog.tsx";
 import { exportPcbSvgAsPng } from "./core/pngExport.ts";
 import type { TemplateInput } from "./core/workspace.ts";
 import type { PcbModelAsset } from "./types.ts";
@@ -154,6 +155,7 @@ export function PcbDesignerWorkspace({
     );
   }, [workspace.activeProject.components, workspace.selectedObjects, workspace.selection]);
   const [dialog, setDialog] = useState<PcbDialogState | null>(null);
+  const [researchOpen, setResearchOpen] = useState(false);
   const [exportIncludesGrid, setExportIncludesGrid] = useState(true);
   const [openDrawer, setOpenDrawer] = useState<"left" | "right" | null>(null);
   const [leftRailTab, setLeftRailTab] = useState<PcbLeftTab>("projects");
@@ -666,6 +668,11 @@ export function PcbDesignerWorkspace({
                 >
                   <LayoutTemplate className="mr-2 h-4 w-4" />開啟模板中心
                 </DropdownMenuItem>
+                {canEditModule("pcb-designer") && (
+                  <DropdownMenuItem onSelect={() => setResearchOpen(true)}>
+                    <FlaskConical className="mr-2 h-4 w-4" />研發試排
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   disabled={!workspace.canMutate}
@@ -679,6 +686,12 @@ export function PcbDesignerWorkspace({
         </div>
 
         <div className="pcb-project-actions">
+          {canEditModule("pcb-designer") && (
+            <Button type="button" variant="outline" size="sm" className="pcb-template-center-action" onClick={() => setResearchOpen(true)}>
+              <FlaskConical aria-hidden="true" className="h-4 w-4" />
+              <span>研發試排</span>
+            </Button>
+          )}
           <PcbCollaborators
             accessMode={workspace.canEdit ? "editor" : "viewer"}
             connected={presence.connected}
@@ -909,6 +922,9 @@ export function PcbDesignerWorkspace({
         onClose={() => !stepPreviewSaving && setStepPreview(null)}
         onConfirm={stepPreview?.mode === "library" ? confirmStepLibraryImport : undefined}
       />
+      {canEditModule("pcb-designer") && (
+        <PcbResearchDialog key={user?.userId ?? "local"} owner={user?.userId ?? "local"} open={researchOpen} onClose={() => setResearchOpen(false)} />
+      )}
     </section>
   );
 }

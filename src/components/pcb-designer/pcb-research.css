@@ -1,0 +1,43 @@
+.pcb-research-dialog {
+  width: min(97vw, 1480px);
+  max-width: none;
+  max-height: calc(100dvh - 1.5rem);
+  gap: .65rem;
+  padding: 1rem;
+  border-radius: 1rem;
+}
+.pcb-research-heading { padding-inline-end: 3.1rem; }
+.pcb-research-heading p { margin-block-start: .25rem; overflow-wrap: anywhere; }
+.pcb-research-bar, .pcb-research-import { display: flex; flex-wrap: wrap; align-items: end; gap: .45rem; }
+.pcb-research-bar:empty { display: none; }
+.pcb-research-controls, .pcb-research-import { border: 1px solid hsl(var(--border)); border-radius: .65rem; padding: .55rem; background: hsl(var(--muted) / .28); }
+.pcb-research-import { padding: .8rem; }
+.pcb-research-dialog label { display: grid; min-width: 0; gap: .25rem; font-size: .75rem; font-weight: 600; color: hsl(var(--muted-foreground)); }
+.pcb-research-dialog input, .pcb-research-dialog select { width: 11rem; max-width: 100%; min-height: 2.5rem; padding: .35rem .55rem; border: 1px solid hsl(var(--border)); border-radius: .5rem; background: hsl(var(--background)); font-size: .875rem; color: hsl(var(--foreground)); }
+.pcb-research-dialog input[type=number] { width: 6.6rem; }
+.pcb-research-dialog input[type=file] { width: 17rem; }
+.pcb-research-dialog .pcb-research-check { display: flex; align-items: center; min-height: 2.5rem; gap: .35rem; }
+.pcb-research-dialog .pcb-research-check input { width: 1rem; min-height: auto; accent-color: hsl(var(--primary)); }
+.pcb-research-dialog input:focus-visible, .pcb-research-dialog select:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 1px; }
+.pcb-research-setup { flex-basis: 100%; }
+.pcb-research-dialog summary { cursor: pointer; color: hsl(var(--primary)); font-weight: 600; }
+.pcb-research-dialog details, .pcb-research-feedback, .pcb-research-hint { font-size: .84rem; color: hsl(var(--muted-foreground)); }
+.pcb-research-setup p, .pcb-research-warnings ul { margin: .4rem 0 0; overflow-wrap: anywhere; }
+.pcb-research-warnings ul { padding-inline-start: 1.15rem; list-style: disc; }
+.pcb-research-feedback p[role=alert] { color: hsl(var(--destructive)); }
+.pcb-research-feedback p[role=status] { color: hsl(var(--primary)); }
+.pcb-research-boards { display: grid; grid-template-columns: minmax(0, 1fr); gap: .65rem; }
+.pcb-research-boards[data-compare=true] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pcb-research-board { min-width: 0; overflow: hidden; border: 1px solid hsl(var(--border)); border-radius: .7rem; background: #0c1516; }
+.pcb-research-board figcaption { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .3rem 1rem; padding: .55rem .75rem; background: hsl(var(--background)); font-size: .82rem; }
+.pcb-research-board figcaption span { color: hsl(var(--muted-foreground)); }
+.pcb-research-board svg { display: block; width: 100%; height: clamp(300px, 51dvh, 660px); touch-action: none; }
+.pcb-research-boards[data-compare=true] svg { height: clamp(220px, 49dvh, 530px); }
+@media (max-width: 720px) {
+  .pcb-research-dialog { width: calc(100vw - .75rem); max-height: calc(100dvh - .75rem); padding: .7rem; }
+  .pcb-research-dialog input, .pcb-research-dialog select { font-size: 1rem; }
+  .pcb-research-dialog label:has(input[type=file]) { width: 100%; }
+  .pcb-research-dialog .pcb-research-bar button, .pcb-research-import button { min-height: 44px; }
+  .pcb-research-boards[data-compare=true] { grid-template-columns: minmax(0, 1fr); }
+  .pcb-research-board svg { height: 42dvh; min-height: 220px; }
+}
