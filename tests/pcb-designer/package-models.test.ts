@@ -8,12 +8,16 @@ import {
   getLoadedPcbPackageKit,
   getPcbPackageAsset,
   isPcbPackageKit,
+  isPcbPackageModelChoice,
   loadPcbPackageKit,
   resetPcbPackageKitForTests,
   resolvePcbPackageKey,
   type PcbPackageKit,
 } from "../../src/components/pcb-designer/core/packageModels.ts";
 import { getPcbMountY } from "../../src/components/pcb-designer/core/software3d.ts";
+import { parseProjectJson } from "../../src/components/pcb-designer/core/validation.ts";
+import { createWorkspaceState, reduceWorkspaceState } from "../../src/components/pcb-designer/core/workspace.ts";
+import { createBlankProject } from "../../src/components/pcb-designer/defaults.ts";
 import type { PcbPlacedComponent } from "../../src/components/pcb-designer/types.ts";
 
 const kit = JSON.parse(await readFile(new URL("../../public/models/pcb/pcb-package-kit.json", import.meta.url), "utf8")) as PcbPackageKit;
@@ -151,4 +155,30 @@ test("the kit loads once (parallel calls share one request); an invalid kit is n
   for (let i = 0; i < 5; i++) await loadPcbPackageKit("/kit.json", failing);
   assert.equal(failures, 3, "gives up after three failed attempts; the boxes stay");
   resetPcbPackageKitForTests();
+});
+
+test("a 3D 示意外形 name must be a real package; prototype names from an imported file count as automatic", () => {
+  for (const name of ["__proto__", "constructor", "toString", "hasOwnProperty", "QFN", ""]) {
+    assert.equal(isPcbPackageModelChoice(name), false, name);
+    const part = custom(name as PcbPlacedComponent["packageModel"], 5, 5, 1);
+    assert.doesNotThrow(() => resolvePcbPackageKey(part), name);
+    assert.equal(resolvePcbPackageKey(part), null, `${name} falls back to the box`);
+    assert.doesNotThrow(() => getPcbPackageAsset(part, kit), name);
+  }
+  assert.equal(isPcbPackageModelChoice("box"), true);
+  for (const key of PCB_PACKAGE_KEYS) assert.equal(isPcbPackageModelChoice(key), true, key);
+  const project = { ...createBlankProject("匯入"), components: [custom("__proto__" as PcbPlacedComponent["packageModel"], 5, 5, 1)] };
+  const parsed = parseProjectJson(JSON.stringify(project));
+  assert.equal(parsed.ok, true, "one bad field does not reject the whole file");
+  if (parsed.ok) assert.doesNotThrow(() => parsed.value.components.forEach((component) => getPcbPackageAsset(component, kit)));
+});
+
+test("choosing 自動 again clears a library part's 3D 示意外形 (library edits merge fields)", () => {
+  const library = [{ ...BUILT_IN_COMPONENTS[0], id: "mine", source: "custom" as const, packageModel: "qfn" as const }];
+  const project = createBlankProject("板");
+  let state = createWorkspaceState({ projects: [project], templates: [], library, activeProjectId: project.id, updatedAt: project.updatedAt }, true);
+  state = reduceWorkspaceState(state, { type: "library/edit", componentId: "mine", component: { packageModel: undefined } });
+  const edited = state.data.library.find((component) => component.id === "mine")!;
+  assert.equal(edited.packageModel, undefined);
+  assert.equal(resolvePcbPackageKey(placed({ ...edited, type: "Other" })), null);
 });

@@ -666,7 +666,7 @@ export function PcbDesignerWorkspace({
               title={workspace.hasUnsavedChanges ? "有未儲存的修改，按這裡寫進雲端" : "把這塊板寫進雲端"}
             >
               {workspace.persistenceStatus !== "saving" && <Save aria-hidden="true" className="h-4 w-4" />}
-              儲存
+              {workspace.persistenceStatus === "saving" ? "正在同步" : "儲存"}
             </Button>
             <Button
               type="button"

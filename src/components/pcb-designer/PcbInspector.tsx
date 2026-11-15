@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PcbKeepout, PcbMeasurement, PcbModelAssetMetadata, PcbPlacedComponent } from "./types.ts";
 import { PCB_MODEL_FILE_ACCEPT } from "./core/modelAssets.ts";
-import { getLoadedPcbPackageKit, getPcbPackageAsset, PCB_PACKAGE_KEYS, PCB_PACKAGE_LABELS, resolvePcbPackageKey } from "./core/packageModels.ts";
+import { getLoadedPcbPackageKit, getPcbPackageAsset, isPcbPackageModelChoice, PCB_PACKAGE_KEYS, PCB_PACKAGE_LABELS, resolvePcbPackageKey } from "./core/packageModels.ts";
 import type { PcbPackageModelChoice } from "./types.ts";
 import { createBoardGridCuts } from "./core/boardCuts.ts";
 import { parseDxfBoardOutline } from "./core/dxf.ts";
@@ -384,7 +384,7 @@ function PackageModelField({ component, disabled, onChange }: {
     <div className="pcb-inspector-field-grid" data-testid="pcb-package-model-field">
       <label className="pcb-inspector-field" style={{ gridColumn: "1 / -1" }}>
         <span>3D 示意外形</span>
-        <select value={component.packageModel ?? ""} disabled={disabled}
+        <select value={isPcbPackageModelChoice(component.packageModel) ? component.packageModel : ""} disabled={disabled}
           title="3D 用哪個示意封裝表示；自動只套用內建元件與電阻、電容、電感。有 STEP 時一律顯示 STEP"
           onChange={(event) => onChange((event.target.value || undefined) as PcbPackageModelChoice | undefined)}>
           <option value="">自動（依類型）</option>

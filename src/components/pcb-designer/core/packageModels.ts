@@ -32,7 +32,13 @@ export const PCB_PACKAGE_LABELS: Record<PcbPackageKey, string> = {
 
 export const PCB_PACKAGE_KEYS = Object.keys(PCB_PACKAGE_LABELS) as PcbPackageKey[];
 
-const isPackageKey = (value: unknown): value is PcbPackageKey => typeof value === "string" && value in PCB_PACKAGE_LABELS;
+const isPackageKey = (value: unknown): value is PcbPackageKey =>
+  typeof value === "string" && Object.prototype.hasOwnProperty.call(PCB_PACKAGE_LABELS, value);
+
+/** A valid 3D 示意外形 value (a package or "box"); anything else, e.g. from an imported file, counts as automatic. */
+export function isPcbPackageModelChoice(value: unknown): value is PcbPackageModelChoice {
+  return value === "box" || isPackageKey(value);
+}
 
 /** Every piece the assembler uses; a kit without all of them is rejected as a failed load. */
 export const PCB_PACKAGE_KIT_PIECES = [

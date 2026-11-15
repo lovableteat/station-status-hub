@@ -15,8 +15,7 @@ import type { TabularImportError } from "./core/tabular.ts";
 import type { NewProjectInput, TemplateInput } from "./core/workspace.ts";
 import { ProjectSettingsSession, parseProjectSettings, projectSettingsConflict, type ProjectSettings } from "./core/projectSettingsDraft.ts";
 import { boardSurfacePath } from "./core/boardOutline.ts";
-import { PCB_PACKAGE_KEYS, PCB_PACKAGE_LABELS } from "./core/packageModels.ts";
-import type { PcbPackageModelChoice } from "./types.ts";
+import { isPcbPackageModelChoice, PCB_PACKAGE_KEYS, PCB_PACKAGE_LABELS } from "./core/packageModels.ts";
 import { usePcbOwnerDirectory, type PcbOwnerDirectoryLoader } from "./hooks/usePcbOwnerDirectory.ts";
 import type {
   ImportedComponent,
@@ -153,7 +152,7 @@ export function PcbDialogs({
         maxHeight: String(component.maxHeight),
         color: component.color,
         shape: component.shape === "circle" ? "circle" : "rectangle",
-        packageModel: component.packageModel ?? "",
+        packageModel: isPcbPackageModelChoice(component.packageModel) ? component.packageModel : "",
       });
     }
   }, [dialog, draftActorId]); // currentUser is read once when the form opens.
@@ -296,8 +295,8 @@ export function PcbDialogs({
         maxHeight,
         color: values.color || "#39c6e8",
         shape: values.shape === "circle" ? "circle" : "rectangle",
-        ...(values.packageModel && (values.packageModel === "box" || values.packageModel in PCB_PACKAGE_LABELS)
-          ? { packageModel: values.packageModel as PcbPackageModelChoice } : {}),
+        // An explicit undefined clears an earlier choice: library edits merge the fields they receive.
+        packageModel: isPcbPackageModelChoice(values.packageModel) ? values.packageModel : undefined,
       }, dialog.component?.id);
       onClose();
     }
