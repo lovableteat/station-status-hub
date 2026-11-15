@@ -226,11 +226,19 @@ test("compat 3D: only a piece wholly inside the board material is hidden; one cr
   assert.equal(isSoftwarePieceInsideBoardMaterial(acrossCutOut, board), false, "crosses the cut-out edge: kept");
   assert.equal(isSoftwarePieceInsideBoardMaterial([], board), false);
   // A piece spanning the whole 20 x 20 cut-out: every corner is on material, but the cut-out is under it.
-  const corners = [[-50, -50], [50, -50], [50, 50], [-50, 50], [-10, -10], [10, -10], [10, 10], [-10, 10]].map(([x, z]) => ({ x, z }));
+  const outline = [[-50, -50], [50, -50], [50, 50], [-50, 50]].map(([x, z]) => ({ x, z }));
+  const cutOut = [[-10, -10], [10, -10], [10, 10], [-10, 10]].map(([x, z]) => ({ x, z }));
+  const corners = [outline, cutOut];
   const overCutOut = [{ x: -12, y: 0.5, z: -12 }, { x: 12, y: 0.5, z: -12 }, { x: 12, y: 0.5, z: 12 }];
   assert.equal(isSoftwarePieceInsideBoardMaterial(overCutOut, board), true, "without the corners it would be dropped");
   assert.equal(isSoftwarePieceInsideBoardMaterial(overCutOut, board, corners), false, "spans the cut-out: kept");
   assert.equal(isSoftwarePieceInsideBoardMaterial(inside, board, corners), true, "a lead inside the material is still hidden");
+  // A narrow piece crossing the cut-out: no cut-out corner inside it, but the edges cross.
+  const narrowAcross = [{ x: -12, y: 0.5, z: -1 }, { x: 12, y: 0.5, z: -1 }, { x: 12, y: 0.5, z: 1 }, { x: -12, y: 0.5, z: 1 }];
+  assert.equal(isSoftwarePieceInsideBoardMaterial(narrowAcross, board, corners), false, "crosses the cut-out: kept");
+  // A vertical lead face (zero plan area) inside the material, and one touching nothing.
+  const leadFace = [{ x: 30, y: -0.8, z: 5 }, { x: 30.6, y: -0.8, z: 5 }, { x: 30.6, y: 0.8, z: 5 }, { x: 30, y: 0.8, z: 5 }];
+  assert.equal(isSoftwarePieceInsideBoardMaterial(leadFace, board, corners), true, "a lead face inside the material is hidden");
 });
 
 test("compat 3D click areas: a part with very many separate pieces collapses to one area instead of slowing down", () => {

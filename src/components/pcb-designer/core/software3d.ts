@@ -160,16 +160,29 @@ export function splitSoftwarePolygonAtBoardSurface(
   return { near: bottom.below, within: rest.below, beyond: rest.above };
 }
 
+type PlanPoint = { x: number; z: number };
+
+const planCross = (o: PlanPoint, a: PlanPoint, b: PlanPoint) => (a.x - o.x) * (b.z - o.z) - (a.z - o.z) * (b.x - o.x);
+
+/** Whether two plan segments cross or touch. */
+function planSegmentsMeet(a: PlanPoint, b: PlanPoint, c: PlanPoint, d: PlanPoint): boolean {
+  const d1 = planCross(c, d, a), d2 = planCross(c, d, b), d3 = planCross(a, b, c), d4 = planCross(a, b, d);
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
+  const onSegment = (p: PlanPoint, q: PlanPoint, r: PlanPoint) =>
+    Math.min(p.x, q.x) <= r.x && r.x <= Math.max(p.x, q.x) && Math.min(p.z, q.z) <= r.z && r.z <= Math.max(p.z, q.z);
+  return (d1 === 0 && onSegment(c, d, a)) || (d2 === 0 && onSegment(c, d, b)) || (d3 === 0 && onSegment(a, b, c)) || (d4 === 0 && onSegment(a, b, d));
+}
+
 /**
  * A piece inside the board thickness is hidden only when all of it is inside the board material: every
- * point is on material, and no corner of the board outline or of a cut-out lies inside the piece in plan
- * (a piece spanning a whole cut-out or a notch has corners on material but is partly visible). One that
- * crosses the board edge or a cut-out edge is kept, so its visible part never disappears.
+ * point is on material, no corner of the board outline or a cut-out lies inside the piece in plan, and no
+ * outline or cut-out edge crosses a piece edge. (A piece spanning or crossing a cut-out, a notch or the
+ * board edge is partly visible and is kept.) Edges outside the piece's bounding box are skipped.
  */
 export function isSoftwarePieceInsideBoardMaterial(
   points: readonly SoftwarePoint3[],
   isInsideMaterial: (x: number, z: number) => boolean,
-  boundaryCorners: readonly { x: number; z: number }[] = [],
+  boundaryRings: readonly (readonly PlanPoint[])[] = [],
 ): boolean {
   if (!points.length || !points.every((point) => isInsideMaterial(point.x, point.z))) return false;
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -177,14 +190,25 @@ export function isSoftwarePieceInsideBoardMaterial(
     minX = Math.min(minX, point.x); maxX = Math.max(maxX, point.x);
     minZ = Math.min(minZ, point.z); maxZ = Math.max(maxZ, point.z);
   }
-  for (const corner of boundaryCorners) {
-    if (corner.x <= minX || corner.x >= maxX || corner.z <= minZ || corner.z >= maxZ) continue;
-    let inside = false;
-    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-      const a = points[j], b = points[i];
-      if ((a.z > corner.z) !== (b.z > corner.z) && corner.x < (b.x - a.x) * (corner.z - a.z) / (b.z - a.z) + a.x) inside = !inside;
+  for (const ring of boundaryRings) {
+    for (let k = 0; k < ring.length; k += 1) {
+      const a = ring[k];
+      const b = ring[(k + 1) % ring.length];
+      if (Math.max(a.x, b.x) < minX || Math.min(a.x, b.x) > maxX || Math.max(a.z, b.z) < minZ || Math.min(a.z, b.z) > maxZ) continue;
+      // A boundary corner strictly inside the piece.
+      if (a.x > minX && a.x < maxX && a.z > minZ && a.z < maxZ) {
+        let inside = false;
+        for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+          const p = points[j], q = points[i];
+          if ((p.z > a.z) !== (q.z > a.z) && a.x < (q.x - p.x) * (a.z - p.z) / (q.z - p.z) + p.x) inside = !inside;
+        }
+        if (inside) return false;
+      }
+      // A boundary edge crossing a piece edge.
+      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        if (planSegmentsMeet(points[j], points[i], a, b)) return false;
+      }
     }
-    if (inside) return false;
   }
   return true;
 }
