@@ -144,6 +144,65 @@ export function splitSoftwarePolygonAtBoardSurface(
   return { near: near.length >= 3 ? near : [], far: far.length >= 3 ? far : [] };
 }
 
+/** Screen bounds of one or more drawn pieces, used as a click area. */
+export interface SoftwarePieceBounds {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  depth: number;
+  count: number;
+}
+
+const piecesTouch = (a: SoftwarePieceBounds, b: SoftwarePieceBounds, gap = 3) =>
+  a.left <= b.right + gap && b.left <= a.right + gap && a.top <= b.bottom + gap && b.top <= a.bottom + gap;
+
+export function joinSoftwarePieceBounds(a: SoftwarePieceBounds, b: SoftwarePieceBounds): SoftwarePieceBounds {
+  return {
+    left: Math.min(a.left, b.left), top: Math.min(a.top, b.top), right: Math.max(a.right, b.right), bottom: Math.max(a.bottom, b.bottom),
+    depth: (a.depth * a.count + b.depth * b.count) / (a.count + b.count), count: a.count + b.count,
+  };
+}
+
+/**
+ * Adds one drawn piece to the click-area groups of a part: pieces that touch (within 3 px) share a group, so
+ * two leads far apart get two areas and do not cover what lies between them. Bounds are accumulated point
+ * by point, so a big STEP mesh never builds one huge array.
+ */
+export function addSoftwarePieceBounds(groups: SoftwarePieceBounds[], points: Iterable<SoftwareProjectedPoint>): void {
+  let piece: SoftwarePieceBounds | null = null;
+  let depthSum = 0;
+  for (const point of points) {
+    if (!point.visible) continue;
+    depthSum += point.depth;
+    piece = piece
+      ? { ...piece, left: Math.min(piece.left, point.x), top: Math.min(piece.top, point.y), right: Math.max(piece.right, point.x), bottom: Math.max(piece.bottom, point.y), count: piece.count + 1 }
+      : { left: point.x, top: point.y, right: point.x, bottom: point.y, depth: 0, count: 1 };
+  }
+  if (!piece) return;
+  let grown: SoftwarePieceBounds = { ...piece, depth: depthSum / piece.count, count: 1 };
+  for (let index = groups.length - 1; index >= 0; index -= 1) {
+    if (piecesTouch(groups[index], grown)) grown = joinSoftwarePieceBounds(groups.splice(index, 1)[0], grown);
+  }
+  groups.push(grown);
+}
+
+/** Final pass: groups that grew into each other are joined. */
+export function mergeSoftwarePieceBounds(groups: readonly SoftwarePieceBounds[]): SoftwarePieceBounds[] {
+  const merged = [...groups];
+  for (let changed = true; changed;) {
+    changed = false;
+    for (let a = 0; a < merged.length && !changed; a += 1) for (let b = a + 1; b < merged.length && !changed; b += 1) {
+      if (piecesTouch(merged[a], merged[b])) {
+        merged[a] = joinSoftwarePieceBounds(merged[a], merged[b]);
+        merged.splice(b, 1);
+        changed = true;
+      }
+    }
+  }
+  return merged;
+}
+
 export function compareSoftwareRenderDepth(
   left: { depth: number; renderOrder: number },
   right: { depth: number; renderOrder: number },

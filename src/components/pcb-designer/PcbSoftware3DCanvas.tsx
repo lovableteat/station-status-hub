@@ -26,6 +26,7 @@ import {
   DEFAULT_SOFTWARE_VIEW,
 
   SOFTWARE_RENDER_ORDER,
+  addSoftwarePieceBounds,
   compareSoftwareRenderDepth,
   createSoftwareBoxVertices,
   createSoftwareCamera,
@@ -34,10 +35,13 @@ import {
 
   getSoftwareLayerRenderOrder,
   getSoftwareLightLevel,
+  joinSoftwarePieceBounds,
+  mergeSoftwarePieceBounds,
   projectSoftwarePoint,
   splitSoftwarePolygonAtBoardSurface,
 
   transformPcbComponentPoint,
+  type SoftwarePieceBounds,
   type SoftwarePoint3,
   type SoftwareProjectedPoint,
   type SoftwareViewState,
@@ -346,9 +350,16 @@ export function PcbSoftware3DCanvas({
       renderOrder: SOFTWARE_RENDER_ORDER.board + .1,
       fill: faceSign === 1 ? project.board.layerColors.top : project.board.layerColors.bottom,
       stroke: "#7de7e8", alpha: 1, lineWidth: .7 });
+    // Edge and cut-out walls are cut into short pieces and depth-sorted with the far component pieces, so a
+    // part in a cut-out or in front of the board edge is not covered by a wall that is behind it.
     for (const ring of [boardPolygon, ...holes]) ring.forEach((p,i) => {
       const q=ring[(i+1)%ring.length];
-      addPolygon([world(p,.8),world(q,.8),world(q,-.8),world(p,-.8)],project.board.background,"#7de7e8",SOFTWARE_RENDER_ORDER.board,1,.7);
+      const pieces = Math.max(1, Math.ceil(Math.hypot(q.x - p.x, q.y - p.y) / 4));
+      for (let piece = 0; piece < pieces; piece += 1) {
+        const a = { x: p.x + (q.x - p.x) * piece / pieces, y: p.y + (q.y - p.y) * piece / pieces };
+        const b = { x: p.x + (q.x - p.x) * (piece + 1) / pieces, y: p.y + (q.y - p.y) * (piece + 1) / pieces };
+        addPolygon([world(a,.8),world(b,.8),world(b,-.8),world(a,-.8)],project.board.background,project.board.background,SOFTWARE_RENDER_ORDER.farObject,1,.7);
+      }
     });
 
     if (project.board.showGrid && !project.board.outline?.length && !project.board.holes?.length) {
@@ -360,6 +371,7 @@ export function PcbSoftware3DCanvas({
         const gridY = (BOARD_THICKNESS / 2 + 0.015) * (gridLayer === "top" ? 1 : -1);
         const gridColor = shadeColor(project.board.layerColors[gridLayer], 1.45);
         const gridRenderOrder = getSoftwareLayerRenderOrder(gridLayer, camera.eye.y, "surface");
+        if (gridRenderOrder === SOFTWARE_RENDER_ORDER.farSurface) return;
         for (let x = -project.board.width / 2; x <= project.board.width / 2 + 0.001; x += gridStep) {
           const points = [
             projectSoftwarePoint({ x, y: gridY, z: -project.board.height / 2 }, camera),
@@ -434,7 +446,8 @@ export function PcbSoftware3DCanvas({
     // Component faces are split at the board surface facing the camera: the near piece is drawn after the
     // board, the far piece before it, so the opaque board hides what it covers on screen and nothing else.
     // Near pieces of a part on the other side (leads poking through) also become its click area.
-    let nearPiecePoints: SoftwareProjectedPoint[] = [];
+    let nearPieceClusters: SoftwarePieceBounds[] = [];
+    let trackNearPieces = false;
     const addComponentPolygon = (
       worldPoints: SoftwarePoint3[],
       fill: string,
@@ -447,7 +460,7 @@ export function PcbSoftware3DCanvas({
       if (far.length) addPolygon(far, fill, stroke, SOFTWARE_RENDER_ORDER.farObject, alpha, lineWidth);
       if (near.length) {
         addPolygon(near, fill, stroke, SOFTWARE_RENDER_ORDER.nearObject, alpha, lineWidth);
-        near.forEach((point) => nearPiecePoints.push(projectSoftwarePoint(point, camera)));
+        if (trackNearPieces) addSoftwarePieceBounds(nearPieceClusters, near.map((point) => projectSoftwarePoint(point, camera)));
       }
     };
     const addComponentBox = (worldVertices: SoftwarePoint3[], color: string, stroke: string, renderOrder: number, alpha = 1, lineWidth = 0.7) => {
@@ -465,7 +478,8 @@ export function PcbSoftware3DCanvas({
       const localBounds = createSoftwareBoxVertices(component.width, component.maxHeight, component.height);
       const worldBounds = localBounds.map((point) => transformPcbComponentPoint(point, component, project.board, BOARD_THICKNESS));
       const projectedBounds = getProjectedBounds(worldBounds.map((point) => projectSoftwarePoint(point, camera)));
-      nearPiecePoints = [];
+      nearPieceClusters = [];
+      trackNearPieces = !isNearSide;
       if (projectedBounds && isNearSide) {
         hits.push({
           kind: "component",
@@ -545,9 +559,11 @@ export function PcbSoftware3DCanvas({
         });
       }
 
-      // A part on the other side is clickable where its pieces poke through to the camera's side.
-      const pokingBounds = isNearSide ? null : getProjectedBounds(nearPiecePoints);
-      if (pokingBounds) hits.push({ kind: "component", id: component.instanceId, ...pokingBounds, selected, label: component.reference });
+      // A part on the other side is clickable where its pieces poke through to the camera's side, one area per
+      // group of pieces (two leads far apart do not cover what lies between them).
+      nearPieceClusters = mergeSoftwarePieceBounds(nearPieceClusters);
+      nearPieceClusters.forEach(({ left, top, right, bottom, depth }) => hits.push({ kind: "component", id: component.instanceId, left, top, right, bottom, depth, selected, label: component.reference }));
+      const pokingBounds = nearPieceClusters.length ? nearPieceClusters.reduce(joinSoftwarePieceBounds) : null;
       const labelBounds = isNearSide ? projectedBounds : pokingBounds;
       if (selected && labelBounds) {
         labels.push({

@@ -9,6 +9,8 @@ import {
   getPcb3DFloorY,
   getPcbComponentWorldYRange,
   getPcbMountY,
+  addSoftwarePieceBounds,
+  mergeSoftwarePieceBounds,
   splitSoftwarePolygonAtBoardSurface,
   transformPcbComponentPoint,
 } from "../../src/components/pcb-designer/core/software3d.ts";
@@ -128,6 +130,26 @@ test("binding a STEP to a part with a size picks the axis that stretches it leas
   assert.equal(pickPcbStepUpAxisForBox(to220, { width: 10.3, height: 28.5, maxHeight: 4.5 }), "y", "a part sized lying down keeps fitting");
   assert.equal(pickPcbStepUpAxisForBox(to220, { width: 10, height: 10, maxHeight: 10 }), "z", "no clear fit: the file-based suggestion");
   assert.equal(pickPcbStepUpAxisForBox(to220, { width: Number.NaN, height: 4.5, maxHeight: 28.5 }), "z", "an invalid size falls back to the suggestion");
+  // Uniform scaling is not distortion: the same flat model in a part four times its size keeps its proportions with Y.
+  assert.equal(pickPcbStepUpAxisForBox(flatYUp, { width: 40, height: 32, maxHeight: 8 }), "y", "4/4/4 beats 4/16/1");
+});
+
+test("binding never picks an axis that distorts more than the old thinnest-side choice", () => {
+  const thinnest = (b: ImportedStepBounds) => {
+    const spans = [0, 1, 2].map((axis) => b.max[axis] - b.min[axis]);
+    return (["x", "y", "z"] as const)[spans.indexOf(Math.min(...spans))];
+  };
+  const spread = (b: ImportedStepBounds, axis: "x" | "y" | "z", box: { width: number; height: number; maxHeight: number }) => {
+    const d = getPcbStepDimensions(b, axis);
+    const scales = [box.width / d.widthMm, box.height / d.depthMm, box.maxHeight / d.heightMm].map(Math.log);
+    return Math.max(...scales) - Math.min(...scales);
+  };
+  const boxes = [[10, 8, 2], [40, 32, 8], [10, 10, 10], [10.3, 4.5, 28.5], [1.6, 0.8, 0.5], [30, 5, 12]].map(([width, height, maxHeight]) => ({ width, height, maxHeight }));
+  const models = [...Object.values(REAL).map(({ bounds: b }) => b), bounds([0, 0, 0], [10, 2, 8]), bounds([-3, 0, -2.45], [3, 1.75, 2.45])];
+  for (const b of models) for (const box of boxes) {
+    const picked = pickPcbStepUpAxisForBox(b, box);
+    assert.ok(spread(b, picked, box) <= spread(b, thinnest(b), box) + 0.05, `${JSON.stringify(b)} into ${JSON.stringify(box)}: ${picked}`);
+  }
 });
 
 const square = (x0: number, x1: number, y0: number, y1: number) => [
@@ -154,6 +176,27 @@ test("compat 3D: a Bottom part is drawn before the board from above (so it shows
   assert.deepEqual(splitSoftwarePolygonAtBoardSurface(bottomBody, -60, 1.6), { near: bottomBody, far: [] });
   const topLead = splitSoftwarePolygonAtBoardSurface(square(0, 0.6, -8.95, 3), -60, 1.6);
   assert.ok(topLead.near.every((point) => point.y <= -0.8 + 1e-9), "from below only the part under the board is in front");
+});
+
+test("compat 3D click areas: two lead ends far apart get two areas; touching pieces share one", () => {
+  const point = (x: number, y: number) => ({ x, y, depth: 100, visible: true });
+  const groups: Parameters<typeof addSoftwarePieceBounds>[0] = [];
+  addSoftwarePieceBounds(groups, [point(100, 100), point(104, 100), point(104, 110)]);
+  addSoftwarePieceBounds(groups, [point(300, 100), point(304, 100), point(304, 110)]);
+  addSoftwarePieceBounds(groups, [point(105, 102), point(108, 112)]);
+  const merged = mergeSoftwarePieceBounds(groups);
+  assert.equal(merged.length, 2, "the gap between the leads is not clickable");
+  const near = merged.find((group) => group.left === 100)!;
+  assert.deepEqual([near.left, near.right, near.top, near.bottom], [100, 108, 100, 112], "the touching piece joined the first lead");
+  addSoftwarePieceBounds(groups, [point(0, 0), { x: 50, y: 50, depth: 1, visible: false }]);
+  assert.equal(groups.some((group) => group.right === 50), false, "points behind the camera are ignored");
+});
+
+test("compat 3D click areas: a big STEP piece list does not overflow the stack", () => {
+  const groups: Parameters<typeof addSoftwarePieceBounds>[0] = [];
+  const many = Array.from({ length: 200_000 }, (_, index) => ({ x: index % 400, y: Math.floor(index / 400), depth: 50, visible: true }));
+  assert.doesNotThrow(() => addSoftwarePieceBounds(groups, many));
+  assert.deepEqual([groups[0].left, groups[0].top, groups[0].right, groups[0].bottom], [0, 0, 399, 499]);
 });
 
 test("compat 3D: a face lying on the surface stays in front of the board", () => {
