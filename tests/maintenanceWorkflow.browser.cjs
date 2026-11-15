@@ -33,7 +33,23 @@ const evidence=path.resolve(process.env.MAINTENANCE_EVIDENCE_DIR||'../maintenanc
     assert.equal(await report.locator('.mf-pending-file').count(),1);await report.getByRole('button',{name:'重試剩餘附件',exact:true}).click();await report.waitFor({state:'hidden'});await page.locator('.mf-detail h2').getByText('大量貼圖測試').waitFor();
     assert.equal(await page.locator('.mf-detail .mf-attachment-grid').getByRole('button',{name:/^下載 /}).count(),12);checks++;
     await page.locator('.mf-detail-controls>button').first().click();const assign=page.getByRole('dialog');await assign.getByRole('checkbox',{name:/王宇/}).check();await assign.getByRole('checkbox',{name:/林浩/}).check();await assign.getByRole('button',{name:'儲存',exact:true}).click();await assign.waitFor({state:'hidden'});await page.locator('.mf-detail-controls').getByText('王宇、林浩',{exact:true}).waitFor();checks++;
-    const b=await browser.newPage({viewport:{width:390,height:844}});b.on('pageerror',e=>errors.push(e.message));await b.goto(origin+'/?project=p&qaUser=B');await b.getByRole('button',{name:'我負責',exact:true}).click();await b.getByRole('button',{name:'開啟 大量貼圖測試',exact:true}).waitFor();checks++;
+    const b=await browser.newPage({viewport:{width:390,height:844}});b.on('pageerror',e=>errors.push(e.message));await b.goto(origin+'/?project=p&qaUser=B');
+    await b.getByRole('combobox', { name: '篩選負責人' }).selectOption('me');
+    await b.getByRole('combobox', { name: '篩選故障分類' }).selectOption('未分類');
+    for (const width of [320, 390, 430]) {
+      await b.setViewportSize({ width, height: 844 });
+      const strip = b.locator('.mf-filter-strip');
+      const tops = await strip.locator('.mf-select, .mf-chips > button').evaluateAll(controls =>
+        controls.map(control => control.getBoundingClientRect().top));
+      assert.equal(tops.length, 7, 'Status, owner, category, their three chips, and clear all are available');
+      assert.ok(Math.max(...tops) - Math.min(...tops) <= 1, 'Filter controls and active chips share a single row');
+      assert.equal(await b.evaluate(() => document.documentElement.scrollWidth), width);
+    }
+    await b.setViewportSize({width:390,height:844});
+    await b.getByRole('button', {name: /分類：未分類/}).click();
+    assert.equal(new URL(b.url()).searchParams.has('faultCategory'), false);
+    assert.equal(new URL(b.url()).searchParams.get('faultOwner'), 'me');
+    await b.getByRole('button',{name:'開啟 大量貼圖測試',exact:true}).waitFor();checks++;
     await page.getByRole('textbox',{name:'新增處理紀錄'}).fill('已換電源，交接待複測');await page.getByRole('button',{name:'送出',exact:true}).click();await page.getByRole('button',{name:'置頂 已換電源，交接待複測',exact:true}).click();await page.locator('.mf-handover').getByText('已換電源，交接待複測',{exact:true}).waitFor();
     await b.getByRole('button',{name:'開啟 大量貼圖測試',exact:true}).click();await b.locator('.mf-handover').getByText('已換電源，交接待複測',{exact:true}).waitFor();checks++;
     await page.getByRole('button',{name:'解決',exact:true}).click();const close=page.getByRole('dialog');await close.getByLabel('故障分類',{exact:false}).fill('電源');await close.getByRole('button',{name:'確認已解決',exact:true}).click();await close.waitFor({state:'hidden'});await page.getByRole('button',{name:'重新開啟',exact:true}).waitFor();

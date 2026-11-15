@@ -309,15 +309,79 @@
   .maintenance-fault-center .mf-layout > .mf-detail { height: max(360px, calc(100dvh - 220px)); min-height: 0; }
 }
 
+.maintenance-fault-center .mf-filter-name { display: none; }
+
+@media (max-width: 1023px) {
+  .maintenance-fault-center .mf-filter-strip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    white-space: nowrap;
+  }
+
+  .maintenance-fault-center :is(.mf-filter-controls, .mf-chips) {
+    flex: none;
+    flex-wrap: nowrap;
+    gap: 5px;
+    margin: 0;
+  }
+
+  .maintenance-fault-center .mf-filter-controls .mf-select {
+    display: flex;
+    flex: none;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 21px 0 8px;
+    border: 1px solid var(--mf-control-line);
+    border-radius: 6px;
+    background: var(--mf-input);
+  }
+
+  .maintenance-fault-center .mf-filter-controls select {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    height: 100%;
+    cursor: pointer;
+    opacity: 0;
+  }
+
+  .maintenance-fault-center .mf-filter-name { display: inline; font-size: 12px; font-weight: 600; }
+  .maintenance-fault-center .mf-mine { display: none; }
+  .maintenance-fault-center .mf-chips > button { min-height: 44px; }
+  .maintenance-fault-center .mf-chips > button > svg { flex: none; }
+  .maintenance-fault-center .mf-chips > button > span:first-child {
+    max-width: min(200px, 58vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .maintenance-fault-center .mf-filter-controls .mf-select:focus-within,
+  .maintenance-fault-center .mf-chips > button:focus-visible {
+    outline: 2px solid var(--mf-teal);
+    outline-offset: -2px;
+  }
+}
+
 @media (max-width: 600px) {
-  .maintenance-fault-center .mf-page-head { padding: 10px 12px; gap: 8px; }
+  .maintenance-fault-center .mf-page-head {
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 0 2px;
+    border: 0;
+    background: none;
+  }
   .maintenance-fault-center .mf-heading-group { gap: 5px 8px; }
-  .maintenance-fault-center .mf-heading-icon { width: 36px; height: 36px; }
-  .maintenance-fault-center .mf-heading-icon > svg { width: 18px; height: 18px; }
+  .maintenance-fault-center .mf-heading-icon,
+  .maintenance-fault-center .mf-page-head .mf-eyebrow:not([data-archived="true"]) { display: none; }
   .maintenance-fault-center .mf-page-head h1 { font-size: 21px; }
   .maintenance-fault-center .mf-page-head .mf-eyebrow { font-size: 11px; }
   .maintenance-fault-center .mf-fault-unresolved { padding: 2px 6px; font-size: 11px; }
-  .maintenance-fault-center .mf-report-trigger { padding-inline: 10px; font-size: 13px; }
+  .maintenance-fault-center .mf-report-trigger { padding-inline: 10px; font-size: 13px; box-shadow: none; }
   .maintenance-fault-center .mf-row-title { font-size: 15px; }
   .maintenance-fault-center .mf-row-summary { font-size: 12px; }
   .maintenance-fault-center .mf-layout {
@@ -325,11 +389,6 @@
     --mf-list-gutter: 10px;
     --mf-detail-gutter: 12px;
   }
-  .maintenance-fault-center .mf-filter-controls { flex-wrap: wrap; }
-  .maintenance-fault-center .mf-filter-controls .mf-select { min-width: 77px; }
-  .maintenance-fault-center .mf-chips > button { min-height: 36px; }
-  .maintenance-fault-center .mf-filter-controls select { min-height: 44px; padding-inline: 5px 20px; font-size: 12px; }
-  .maintenance-fault-center .mf-mine { height: 44px; padding-inline: 6px; }
   .maintenance-fault-center .mf-search button { width: 44px; height: 42px; }
   .maintenance-fault-center .mf-fault-row { min-height: 88px; }
   .maintenance-fault-center .mf-row-owner,
@@ -347,6 +406,13 @@
     max-height: calc(var(--mf-visible-height) - 16px);
   }
   .mf-action-dialog[data-keyboard="true"] .mf-people { max-height: max(72px, calc(var(--mf-visible-height) - 270px)); }
+}
+
+@media (max-width: 360px) {
+  .maintenance-fault-center .mf-filter-strip,
+  .maintenance-fault-center .mf-filter-controls { gap: 4px; }
+  .maintenance-fault-center .mf-filter-controls .mf-select { padding-right: 17px; }
+  .maintenance-fault-center .mf-filter-controls .mf-select > svg { right: 4px; width: 12px; }
 }
 
 @keyframes maintenance-fault-detail-enter {

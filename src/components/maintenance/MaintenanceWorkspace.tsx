@@ -73,7 +73,7 @@ export function MaintenanceWorkspace() {
         <span className="mf-heading-icon" aria-hidden="true"><Wrench size={22}/></span>
         <div>
           <h1>故障清單</h1>
-          <p className="mf-eyebrow">{activeProject?.name}{activeProject?.is_archived && ' · 已封存，僅供查閱'}</p>
+          <p className="mf-eyebrow" data-archived={activeProject?.is_archived}>{activeProject?.name}{activeProject?.is_archived && ' · 已封存，僅供查閱'}</p>
         </div>
         {!loading && !error && <span className="mf-fault-unresolved" data-open={openCount > 0}>{openCount} 件未解決</span>}
       </div>
@@ -82,12 +82,15 @@ export function MaintenanceWorkspace() {
     <div className="mf-layout" data-selected={!!selected}>
       <section className="mf-list-panel" aria-label="故障清單">
         <div className="mf-filter-bar"><label className="mf-search"><Search size={17}/><input aria-label="搜尋機台或故障" value={filters.query} placeholder="搜尋序號、資產編號或故障" onChange={event => setFilter({ ...filters, query: event.target.value })}/>{filters.query && <button aria-label="清除搜尋" onClick={() => setFilter({ ...filters, query: '' })}><X size={15}/></button>}</label>
-          <div className="mf-filter-controls"><label className="mf-select"><select aria-label="篩選故障狀態" value={filters.status} onChange={event => setFilter({ ...filters, status: event.target.value })}><option value="unresolved">未解決</option><option value="all">全部狀態</option>{FAULT_STATUSES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select><ChevronDown size={14} aria-hidden="true"/></label>
-            <label className="mf-select"><select aria-label="篩選負責人" value={filters.owner} onChange={event => setFilter({ ...filters, owner: event.target.value })}><option value="all">全部負責人</option><option value="me">我負責</option><option value="unassigned">未分派</option>{ownerOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select><ChevronDown size={14} aria-hidden="true"/></label>
-            <label className="mf-select"><select aria-label="篩選故障分類" value={filters.category} onChange={event => setFilter({ ...filters, category: event.target.value })}><option value="">全部分類</option>{[...new Set([...data.categories, '未分類', ...(filters.category ? [filters.category] : [])])].map(value => <option key={value} value={value}>{value}</option>)}</select><ChevronDown size={14} aria-hidden="true"/></label>
-            <button className="mf-mine" type="button" aria-pressed={filters.owner === 'me'} onClick={() => setFilter({ ...filters, owner: filters.owner === 'me' ? 'all' : 'me' })}>我負責</button>
+          <div className="mf-filter-strip">
+            <div className="mf-filter-controls">
+              <label className="mf-select"><span className="mf-filter-name" aria-hidden="true">狀態</span><select aria-label="篩選故障狀態" value={filters.status} onChange={event => setFilter({ ...filters, status: event.target.value })}><option value="unresolved">未解決</option><option value="all">全部狀態</option>{FAULT_STATUSES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select><ChevronDown size={14} aria-hidden="true"/></label>
+              <label className="mf-select"><span className="mf-filter-name" aria-hidden="true">負責人</span><select aria-label="篩選負責人" value={filters.owner} onChange={event => setFilter({ ...filters, owner: event.target.value })}><option value="all">全部負責人</option><option value="me">我負責</option><option value="unassigned">未分派</option>{ownerOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select><ChevronDown size={14} aria-hidden="true"/></label>
+              <label className="mf-select"><span className="mf-filter-name" aria-hidden="true">分類</span><select aria-label="篩選故障分類" value={filters.category} onChange={event => setFilter({ ...filters, category: event.target.value })}><option value="">全部分類</option>{[...new Set([...data.categories, '未分類', ...(filters.category ? [filters.category] : [])])].map(value => <option key={value} value={value}>{value}</option>)}</select><ChevronDown size={14} aria-hidden="true"/></label>
+              <button className="mf-mine" type="button" aria-pressed={filters.owner === 'me'} onClick={() => setFilter({ ...filters, owner: filters.owner === 'me' ? 'all' : 'me' })}>我負責</button>
+            </div>
+            {!!chips.length && <div className="mf-chips" aria-label="目前篩選條件">{chips.map(chip => <button key={chip.key} onClick={() => setFilter({ ...filters, [chip.key]: chip.clear })} title={chip.label} aria-label={`${chip.label} 清除條件`}><span>{chip.label}</span><X size={13} aria-hidden="true"/></button>)}<button className="mf-clear" aria-label="全部清除" onClick={() => setFilter({ query: '', status: 'all', owner: 'all', category: '', machine: '' })}>全部清除</button></div>}
           </div>
-          {!!chips.length && <div className="mf-chips" aria-label="目前篩選條件">{chips.map(chip => <button key={chip.key} onClick={() => setFilter({ ...filters, [chip.key]: chip.clear })}>{chip.label}<X size={13}/><span className="sr-only">清除條件</span></button>)}<button className="mf-clear" onClick={() => setFilter({ query: '', status: 'all', owner: 'all', category: '', machine: '' })}>全部清除</button></div>}
         </div>
         <div className="mf-list-heading"><span>機台／故障 <small>{loading || error ? '—' : `${filtered.length} 件`}</small></span><span>狀態</span><span>負責人</span><span/></div>
         <div className="mf-result-list" data-ready={!loading && !error}>{loading ? <div className="mf-empty"><MaintenanceLoading label="讀取故障清單…" /></div> : error ? <div className="mf-empty mf-error"><span role="alert">{error}</span><Button variant="outline" disabled={retrying} aria-busy={retrying || undefined} onClick={() => void retry()}>{retrying && <MaintenanceSpinner />}{retrying ? '載入中…' : '重新載入'}</Button></div> : !filtered.length ? <p className="mf-empty">目前篩選條件沒有符合的故障</p> : <>{filtered.slice(0, limit).map(issue => {

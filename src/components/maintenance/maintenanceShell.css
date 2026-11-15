@@ -153,15 +153,11 @@
 
 @media (max-width: 639px) {
   .maintenance-shell [data-mobile-maintenance-module] {
-    flex-direction: column;
-    gap: 3px;
-    font-size: 11px;
-    line-height: 1.25;
+    font-size: 12px;
   }
 
-  .maintenance-shell [data-mobile-maintenance-module] svg {
-    width: 16px;
-    height: 16px;
+  .maintenance-shell [data-mobile-maintenance-module] > svg {
+    display: none;
   }
 
   .maintenance-shell [data-maintenance-project-center] {
