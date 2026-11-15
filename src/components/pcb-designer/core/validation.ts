@@ -303,11 +303,25 @@ export function parseProjectJson(input: unknown): ParseResult<PcbProject> {
   if (!value.keepouts.every(validateKeepout) || !uniqueIds(value.keepouts, "id")) return { ok: false, error: "Keepouts are invalid." };
   if (!value.measurements.every(validateMeasurement) || !uniqueIds(value.measurements, "id")) return { ok: false, error: "Measurements are invalid." };
 
+  const { owner: rawOwner, ...rest } = value;
+  const owner = normalizeBoardOwner(rawOwner);
   return {
     ok: true,
     value: structuredClone({
-      ...value,
+      ...rest,
+      ...(owner ? { owner } : {}),
       board: normalizeBoard(value.board as RecordValue),
     }) as unknown as PcbProject,
   };
+}
+
+/**
+ * 負責人 is optional metadata: a malformed value is dropped instead of rejecting the board,
+ * because one bad field must not make a whole stored workspace unreadable.
+ */
+export function normalizeBoardOwner(value: unknown): PcbProject["owner"] {
+  if (!isRecord(value) || !isNonEmptyString(value.displayName)) return undefined;
+  const displayName = value.displayName.trim().slice(0, 60);
+  const userId = isNonEmptyString(value.userId) && value.userId.length <= 120 ? value.userId : undefined;
+  return userId ? { userId, displayName } : { displayName };
 }

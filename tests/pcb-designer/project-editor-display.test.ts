@@ -8,33 +8,31 @@ const read = async (path: string) =>
 const railSource = await read("src/components/pcb-designer/PcbLeftRail.tsx");
 const editorCssSource = await read("src/components/pcb-designer/pcb-designer.css");
 
-test("shows the active board once with its persisted editor state", () => {
+test("shows the open board once, as the highlighted row of its family", () => {
   assert.doesNotMatch(railSource, /useUser\(\)/);
-  assert.match(railSource, /最後編輯者/);
-  assert.match(railSource, /lastEditedBy/);
-  assert.match(railSource, /lastSavedEditor/);
-  assert.match(railSource, /lastSavedProjectId/);
-  assert.match(railSource, /workspace\.hasUnsavedChanges/);
-  assert.match(railSource, /pcb-current-project-card/);
-  assert.match(railSource, /pcb-project-editor-state/);
-  assert.match(railSource, /projects\.filter\(\(project\) => project\.id !== workspace\.activeProject\.id\)/);
+  assert.doesNotMatch(railSource, /pcb-current-project-card/);
+  assert.match(railSource, /aria-current=\{lead\.id === activeId \? "true" : undefined\}/);
+  assert.match(railSource, /aria-current=\{project\.id === activeId \? "true" : undefined\}/);
+  assert.match(editorCssSource, /\.pcb-board-row\.is-current\s*\{/);
+  assert.doesNotMatch(editorCssSource, /\.pcb-current-project-card\s*\{/);
 });
 
-test("stamps the active board with the account that explicitly saved it", () => {
+test("stamps the open board with the account that explicitly saved it", () => {
   assert.match(railSource, /const activeEditorName/);
-  assert.match(railSource, /workspace\.lastSavedProjectId === workspace\.activeProject\.id/);
+  assert.match(railSource, /workspace\.lastSavedProjectId === activeId/);
   assert.match(railSource, /workspace\.lastSavedEditor \?\? workspace\.activeProject\.lastEditedBy/);
-  assert.match(editorCssSource, /\.pcb-current-project-card\s*\{/);
+  assert.match(railSource, /最後編輯者：\$\{editor\}/);
 });
 
-test("keeps secondary boards compact and moves low-frequency actions into one menu", () => {
+test("keeps each board on one compact row and moves low-frequency actions into one menu", () => {
   assert.match(railSource, /projectStatusLabels/);
   assert.match(railSource, /pcb-project-list-heading/);
-  assert.match(railSource, /pcb-project-compact-heading/);
-  assert.match(railSource, /pcb-project-compact-meta/);
+  assert.match(railSource, /pcb-board-row-title/);
+  assert.match(railSource, /pcb-board-row-meta/);
   assert.match(railSource, /DropdownMenu/);
   assert.match(railSource, /MoreHorizontal/);
+  assert.match(railSource, /建立新版/);
+  assert.match(railSource, /複製成新板子/);
   assert.match(editorCssSource, /\.pcb-project-list-heading\s*\{/);
-  assert.match(editorCssSource, /\.pcb-project-compact-item\s*\{/);
-  assert.match(editorCssSource, /\.pcb-current-project-actions\s*\{/);
+  assert.match(editorCssSource, /\.pcb-board-row\s*\{/);
 });

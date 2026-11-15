@@ -532,7 +532,7 @@ export function usePcbWorkspace({
   const captureModelAssignment = useCallback((componentId: string): ModelAssignmentTarget | null => {
     const current = viewStateRef.current;
     const component = current.activeProject.components.find(item => item.instanceId === componentId);
-    if (!mountedRef.current || !editableRef.current || current.transitionBusy || current.documentLocked || !component || component.locked) return null;
+    if (!mountedRef.current || !editableRef.current || current.transitionBusy || current.documentLocked || current.activeProject.status === "approved" || !component || component.locked) return null;
     return { projectId: current.activeProject.id, componentId, generation: current.projectGeneration };
   }, []);
   const modelReceipt = useRef<{ requestToken: string; target: ModelAssignmentTarget; resolve: (applied: boolean) => void } | null>(null);
@@ -587,6 +587,9 @@ export function usePcbWorkspace({
     ...editor,
     canEdit: effectiveCanEdit,
     canMutate: editor.canMutate && effectiveCanEdit && !state.transitionBusy,
+    /** 已核准 boards refuse content edits (防誤改); new boards, versions, library and templates stay available. */
+    boardApproved: state.activeProject.status === "approved",
+    canEditBoard: editor.canMutate && effectiveCanEdit && !state.transitionBusy && state.activeProject.status !== "approved",
     visibleLayer: state.visibleLayer,
     selectedObjects: state.selectedObjects,
     persistenceStatus: persistence.status,

@@ -89,8 +89,8 @@ test('late rejection after account switch never exposes prior actor error or dra
 test('current project drift or deletion displays conflict, retains raw input, and never applies stale project', async () => {
   const s = setup(); await s.mount(); await act(async () => s.edit('名稱', 'pending'));
   await s.update({ currentProjects: [{ ...s.project, description: 'new server value' }] });
-  assert.match(JSON.stringify(s.root.toJSON()), /專案內容已變更/); await act(async () => s.submit()); assert.equal(s.calls.length, 0);
-  await s.update({ currentProjects: [] }); assert.match(JSON.stringify(s.root.toJSON()), /專案已不存在/); assert.equal(s.field('名稱').props.value, 'pending');
+  assert.match(JSON.stringify(s.root.toJSON()), /板子內容已變更/); await act(async () => s.submit()); assert.equal(s.calls.length, 0);
+  await s.update({ currentProjects: [] }); assert.match(JSON.stringify(s.root.toJSON()), /板子已不存在/); assert.equal(s.field('名稱').props.value, 'pending');
   await act(async () => s.submit()); assert.equal(s.calls.length, 0); await s.stop();
 });
 
@@ -139,7 +139,7 @@ test('typing does not recanonicalize a stable current project; new project refer
   for (const value of ['a', 'ab', 'abc', 'abcd']) await act(async () => s.edit('名稱', value));
   assert.equal(s.conflictChecks, initial);
   await s.update({ currentProjects: [{ ...s.project, board: { ...s.project.board, gridSize: 7 } }] });
-  assert.equal(s.conflictChecks, initial + 1); assert.match(JSON.stringify(s.root.toJSON()), /專案內容已變更/);
+  assert.equal(s.conflictChecks, initial + 1); assert.match(JSON.stringify(s.root.toJSON()), /板子內容已變更/);
   await s.stop();
 });
 

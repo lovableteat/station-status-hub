@@ -15,6 +15,7 @@ import type { TabularImportError } from "./core/tabular.ts";
 import type { NewProjectInput, TemplateInput } from "./core/workspace.ts";
 import { ProjectSettingsSession, parseProjectSettings, projectSettingsConflict, type ProjectSettings } from "./core/projectSettingsDraft.ts";
 import { boardSurfacePath } from "./core/boardOutline.ts";
+import { usePcbOwnerDirectory, type PcbOwnerDirectoryLoader } from "./hooks/usePcbOwnerDirectory.ts";
 import type {
   ImportedComponent,
   PcbLibraryComponent,
@@ -59,6 +60,10 @@ interface PcbDialogsProps {
   draftActorId?: string | null;
   projectSettingsReady?: boolean;
   currentProjects?: PcbProject[];
+  /** The signed-in account, offered first as 負責人 and the default owner of a new board. */
+  currentUser?: { userId: string; displayName: string } | null;
+  /** Reads the member directory for the 負責人 picker; omitted in isolated renders. */
+  loadOwnerDirectory?: PcbOwnerDirectoryLoader;
   onUpdateProject: (projectId: string, baselineRevision: string, settings: ProjectSettings) => Promise<boolean>;
   onSaveTemplate: (input: TemplateInput) => void;
   onRenameTemplate: (templateId: string, name: string) => void;
@@ -93,6 +98,8 @@ export function PcbDialogs({
   draftActorId,
   projectSettingsReady = false,
   currentProjects = [],
+  currentUser = null,
+  loadOwnerDirectory,
   onSaveTemplate,
   onRenameTemplate,
   onSaveComponent,
@@ -120,7 +127,8 @@ export function PcbDialogs({
       return;
     }
     if (dialog.kind === "new-project") {
-      setValues({ name: "", description: "", width: "100", height: "80", projectGroup: "", revision: "1" });
+      setValues({ name: "", description: "", width: "100", height: "80", projectGroup: "", revision: "1",
+        ownerId: currentUser?.userId ?? "", ownerName: currentUser?.displayName ?? "" });
     } else if (dialog.kind === "project-settings") {
       const session = new ProjectSettingsSession(draftActorId, dialog.project);
       settingsSession.current = session;
@@ -144,18 +152,43 @@ export function PcbDialogs({
         shape: component.shape === "circle" ? "circle" : "rectangle",
       });
     }
-  }, [dialog, draftActorId]);
+  }, [dialog, draftActorId]); // currentUser is read once when the form opens.
 
   const renderedSession = settingsSession.current;
-  const update = (field: string, value: string) => {
+  const updateMany = (fields: Record<string, string>) => {
     if (dialog?.kind === "project-settings") {
       if (!mounted.current || activeDialog.current !== dialog || settingsSession.current !== renderedSession) return;
       const session = renderedSession;
       if (!projectSettingsReady || !session?.current) return;
-      const next = { ...session.draft.values, [field]: value };
+      const next = { ...session.draft.values, ...fields };
       if (session.write(next)) setValues(next);
-    } else setValues((current) => ({ ...current, [field]: value }));
+    } else setValues((current) => ({ ...current, ...fields }));
   };
+  const update = (field: string, value: string) => updateMany({ [field]: value });
+  const boardForm = dialog?.kind === "new-project" || dialog?.kind === "project-settings";
+  const ownerDirectory = usePcbOwnerDirectory(Boolean(boardForm), loadOwnerDirectory);
+  const groupSuggestions = useMemo(() => [...new Set(currentProjects.map(project => project.projectGroup?.trim()).filter(Boolean) as string[])]
+    .sort((first, second) => first.localeCompare(second, "zh-Hant")), [currentProjects]);
+  /** 負責人 choices: me, the member directory, then names already used on boards; keyed by account id when known. */
+  const ownerChoices = useMemo(() => {
+    const choices = new Map<string, { key: string; userId?: string; displayName: string; self?: boolean }>();
+    const add = (userId: string | undefined, displayName: string | undefined, self = false) => {
+      const name = displayName?.trim();
+      if (!name) return;
+      const key = userId ? `id:${userId}` : `name:${name}`;
+      if (!choices.has(key)) choices.set(key, { key, userId, displayName: name, self });
+    };
+    add(currentUser?.userId, currentUser?.displayName, true);
+    ownerDirectory.members.forEach(member => add(member.userId, member.displayName));
+    const namesWithId = new Set([...choices.values()].map(choice => choice.displayName));
+    currentProjects.forEach(project => {
+      const owner = project.owner;
+      if (owner && (owner.userId || !namesWithId.has(owner.displayName))) add(owner.userId, owner.displayName);
+    });
+    add(values.ownerId || undefined, values.ownerName);
+    return [...choices.values()];
+  }, [currentProjects, currentUser?.displayName, currentUser?.userId, ownerDirectory.members, values.ownerId, values.ownerName]);
+  const ownerKey = values.ownerId ? `id:${values.ownerId}` : values.ownerName ? `name:${values.ownerName}` : "";
   const cancel = () => {
     if (!mounted.current || activeDialog.current !== dialog || confirmRequest.current) return;
     // Explicit close/cancel discards; a permission-gate unmount never calls this.
@@ -171,7 +204,7 @@ export function PcbDialogs({
     const openedDialog = dialog;
     const current = currentProjects.find(project => project.id === session.draft.projectId);
     // Retired size fields in recovered drafts must not resize the board invisibly.
-    const parsed = parseProjectSettings({ ...session.draft.values,
+    const parsed = parseProjectSettings({ ownerId: current?.owner?.userId ?? "", ownerName: current?.owner?.displayName ?? "", ...session.draft.values,
       width: String(current?.board.width ?? ""), height: String(current?.board.height ?? ""),
     });
     const message = projectSettingsConflict(session.draft, current) || (typeof parsed === "string" ? parsed : "");
@@ -217,8 +250,10 @@ export function PcbDialogs({
         setError("板框尺寸必須介於 20 到 1000 mm。");
         return;
       }
+      const ownerName = values.ownerName?.trim().slice(0, 60);
       onCreateProject({
         name,
+        owner: ownerName ? { ...(values.ownerId ? { userId: values.ownerId } : {}), displayName: ownerName } : undefined,
         projectGroup: values.projectGroup?.trim(),
         revision: values.revision?.trim() || "1",
         description: values.description,
@@ -496,7 +531,7 @@ export function PcbDialogs({
                   onClose();
                 }}
               >
-                開啟專案
+                開啟板子
               </Button>
             </DialogFooter>
           </div>
@@ -519,8 +554,8 @@ export function PcbDialogs({
                   <span className="pcb-component-dialog-eyebrow">PCB COMPONENT LIBRARY</span>
                 )}
                 <DialogTitle className={dialog.kind === "project-settings" ? "text-cyan-100" : undefined}>
-                  {dialog.kind === "new-project" && "新增 PCB 專案"}
-                  {dialog.kind === "project-settings" && "專案設定"}
+                  {dialog.kind === "new-project" && "新增板子"}
+                  {dialog.kind === "project-settings" && "板子設定"}
                   {dialog.kind === "save-template" && "儲存為模板"}
                   {dialog.kind === "rename-template" && "重新命名模板"}
                   {dialog.kind === "component" && (dialog.component ? "編輯自訂元件" : "新增自訂元件")}
@@ -528,6 +563,8 @@ export function PcbDialogs({
                 <DialogDescription className="text-slate-300">
                   {dialog.kind === "component"
                     ? "設定元件資料與實體尺寸；尺寸順序固定為長 × 寬 × 高。"
+                    : dialog.kind === "new-project" ? "建立一塊空白板子；板子尺寸與外形在右側「板設定」調整。"
+                    : dialog.kind === "project-settings" ? "修改名稱、大專案、版本號、負責人、狀態與描述。板子尺寸在右側「板設定」調整。"
                     : "請填寫必要欄位後再儲存變更。"}
                 </DialogDescription>
               </div>
@@ -549,9 +586,26 @@ export function PcbDialogs({
               {(dialog.kind === "new-project" || dialog.kind === "project-settings") && (
                 <>
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="text-xs text-slate-300">所屬大專案<Input maxLength={120} value={values.projectGroup ?? ""} placeholder="例如：E2 系統" onChange={e => update("projectGroup", e.target.value)} /></label>
+                    <label className="text-xs text-slate-300">所屬大專案<Input maxLength={120} list="pcb-board-group-suggestions" value={values.projectGroup ?? ""} placeholder="選既有的或輸入新的" title="同一個大專案名稱的板子會分在一組；可選既有名稱，也可輸入新的" onChange={e => update("projectGroup", e.target.value)} /></label>
+                    <datalist id="pcb-board-group-suggestions">{groupSuggestions.map(group => <option key={group} value={group} />)}</datalist>
                     <label className="text-xs text-slate-300">版本號<Input maxLength={40} value={values.revision ?? "1"} placeholder="例如：R1、1.0" onChange={e => update("revision", e.target.value)} /></label>
                   </div>
+                  <label className="block text-xs text-slate-300">
+                    負責人
+                    <select
+                      value={ownerKey}
+                      title="誰負責這塊板；只是標示，不影響誰能編輯"
+                      onChange={(event) => {
+                        const choice = ownerChoices.find(item => item.key === event.target.value);
+                        updateMany({ ownerId: choice?.userId ?? "", ownerName: choice?.displayName ?? "" });
+                      }}
+                      className="mt-1 h-9 w-full rounded-md border border-[#356985] bg-[#10263a] px-3 text-sm"
+                    >
+                      <option value="">未指派</option>
+                      {ownerChoices.map(choice => <option key={choice.key} value={choice.key}>{choice.displayName}{choice.self ? "（我）" : ""}</option>)}
+                    </select>
+                    {ownerDirectory.failed && <span className="mt-1 block text-[11px] text-amber-200">成員名單暫時讀不到，可先選自己或已用過的名字。</span>}
+                  </label>
                   <p className="text-xs text-slate-400">同一大專案名稱可收納多塊板。要保留目前版本，請在板子選單使用「建立新版」。</p>
                   <label data-pcb-field-tone="description" className="block text-xs text-slate-300">
                     描述

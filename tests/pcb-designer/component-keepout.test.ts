@@ -142,5 +142,5 @@ test("right-click exposes settings without the redundant heading and supports fo
   assert.match(canvas, /設定元件禁制區/);
   assert.match(canvas, /data-keepout-side=\{side\}/);
   assert.match(canvas, /resizeComponentKeepoutSide/);
-  assert.match(canvas, /disabled=\{!workspace.canMutate \|\| contextComponentLocked\}/);
+  assert.match(canvas, /disabled=\{!workspace.canEditBoard \|\| contextComponentLocked\}/);
 });

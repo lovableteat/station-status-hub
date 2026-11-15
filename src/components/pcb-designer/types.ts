@@ -168,6 +168,14 @@ export interface PcbProject {
   lastEditedBy?: string;
   /** Stable account id captured with lastEditedBy for audit and future lookup. */
   lastEditedById?: string;
+  /** 負責人: who is responsible for this board. Business metadata only, never the storage owner or RPC actor. */
+  owner?: PcbBoardOwner;
+}
+
+export interface PcbBoardOwner {
+  /** Account id when the owner was picked from the member directory or is the current user. */
+  userId?: string;
+  displayName: string;
 }
 
 export interface PcbDrcIssue {

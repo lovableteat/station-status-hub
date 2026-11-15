@@ -563,9 +563,9 @@ export function PcbCanvas({
     };
     return {
       component,
-      valid: workspace.canMutate && canPlaceComponent(project, component),
+      valid: workspace.canEditBoard && canPlaceComponent(project, component),
     };
-  }, [placementLibraryComponent, placementPoint, placementRotation, project, workspace.activeLayer, workspace.canMutate]);
+  }, [placementLibraryComponent, placementPoint, placementRotation, project, workspace.activeLayer, workspace.canEditBoard]);
   const selectWithKeyboard = (
     event: ReactKeyboardEvent<SVGElement>,
     selection: Parameters<typeof workspace.selectObject>[0],
@@ -594,7 +594,7 @@ export function PcbCanvas({
       return;
     }
     if (event.button !== 0) return;
-    if (placementLibraryComponent && workspace.canMutate && workspace.tool !== "pan") {
+    if (placementLibraryComponent && workspace.canEditBoard && workspace.tool !== "pan") {
       event.preventDefault();
       const rawPoint = pointForEvent(event.currentTarget, event.clientX, event.clientY);
       const point = project.board.snapToGrid
@@ -632,7 +632,7 @@ export function PcbCanvas({
       });
       return;
     }
-    if (!workspace.canMutate) return;
+    if (!workspace.canEditBoard) return;
     const rawStart = pointForEvent(event.currentTarget, event.clientX, event.clientY);
     const start = project.board.snapToGrid
       ? snapPoint(rawStart, gridSize, event.altKey)
@@ -670,7 +670,7 @@ export function PcbCanvas({
       selectObject({ kind: "component", id: component.instanceId });
     }
     const svg = svgRef.current;
-    if (!svg || workspace.tool !== "select" || !workspace.canMutate || component.locked) return;
+    if (!svg || workspace.tool !== "select" || !workspace.canEditBoard || component.locked) return;
     const point = pointForEvent(svg, event.clientX, event.clientY);
     if (dragIds.some((objectId) =>
       project.components.some((item) => item.instanceId === objectId && item.locked))) {
@@ -720,7 +720,7 @@ export function PcbCanvas({
       selectObject({ kind: "keepout", id: keepout.id });
     }
     const svg = svgRef.current;
-    if (!svg || workspace.tool !== "select" || !workspace.canMutate) return;
+    if (!svg || workspace.tool !== "select" || !workspace.canEditBoard) return;
     if (dragIds.some((objectId) =>
       project.components.some((item) => item.instanceId === objectId && item.locked))) {
       toast({ title: "無法移動選取群組", description: "選取群組包含鎖定元件，請先解除鎖定。", variant: "destructive" });
@@ -754,7 +754,7 @@ export function PcbCanvas({
     if (
       event.button !== 0
       || workspace.tool !== "select"
-      || !workspace.canMutate
+      || !workspace.canEditBoard
       || !selectedKeepout
       || !selectedBounds
     ) return;
@@ -781,7 +781,7 @@ export function PcbCanvas({
     side: keyof PcbComponentKeepout,
   ) => {
     event.stopPropagation();
-    if (event.button !== 0 || workspace.tool !== "select" || !workspace.canMutate || component.locked || !component.keepout) return;
+    if (event.button !== 0 || workspace.tool !== "select" || !workspace.canEditBoard || component.locked || !component.keepout) return;
     event.preventDefault();
     svgRef.current?.setPointerCapture(event.pointerId);
     setInteraction({ kind: "component-keepout-resize", pointerId: event.pointerId, id: component.instanceId, side, preview: component.keepout });
@@ -792,7 +792,7 @@ export function PcbCanvas({
     measurement: PcbMeasurement,
     endpoint: MeasurementEndpoint,
   ) => {
-    if (event.button !== 0 || workspace.tool !== "select" || !workspace.canMutate) return;
+    if (event.button !== 0 || workspace.tool !== "select" || !workspace.canEditBoard) return;
     event.preventDefault();
     event.stopPropagation();
     const svg = svgRef.current;
@@ -820,7 +820,7 @@ export function PcbCanvas({
       ArrowUp: { x: 0, y: -1 },
       ArrowDown: { x: 0, y: 1 },
     }[event.key];
-    if (!direction || !workspace.canMutate) return;
+    if (!direction || !workspace.canEditBoard) return;
     event.preventDefault();
     event.stopPropagation();
     const step = project.board.snapToGrid && !event.altKey ? gridSize : 0.1;
@@ -1023,7 +1023,7 @@ export function PcbCanvas({
 
   const handleDrop = (event: DragEvent<SVGSVGElement>) => {
     event.preventDefault();
-    if (!workspace.canMutate) return;
+    if (!workspace.canEditBoard) return;
     const componentId = event.dataTransfer.getData(PCB_LIBRARY_DRAG_TYPE);
     if (!componentId) return;
     const rawPoint = pointForEvent(event.currentTarget, event.clientX, event.clientY);
@@ -1400,7 +1400,7 @@ export function PcbCanvas({
         </g>
 
         <g data-layer="selection-handles" data-export-hidden>
-          {selectedComponentVisual && workspace.tool === "select" && workspace.canMutate && !selectedComponentVisual.component.locked && (() => {
+          {selectedComponentVisual && workspace.tool === "select" && workspace.canEditBoard && !selectedComponentVisual.component.locked && (() => {
             const component = selectedComponentVisual.component;
             const rendered = interaction?.kind === "component-keepout-resize" && interaction.id === component.instanceId
               ? { ...component, keepout: interaction.preview } : component;
@@ -1723,7 +1723,7 @@ export function PcbCanvas({
             </ContextMenuLabel>}
             {contextComponent && <>
               <ContextMenuGroup>
-                <ContextMenuItem disabled={!workspace.canMutate || contextComponentLocked}
+                <ContextMenuItem disabled={!workspace.canEditBoard || contextComponentLocked}
                   onSelect={() => setKeepoutEditorId(contextComponent.instanceId)}>
                   {contextComponent.keepout ? "調整元件禁制區" : "設定元件禁制區"}
                 </ContextMenuItem>
@@ -1738,7 +1738,7 @@ export function PcbCanvas({
                     <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
                   </ContextMenuItem>
                   <ContextMenuItem
-                    disabled={!workspace.canMutate || contextComponentLocked}
+                    disabled={!workspace.canEditBoard || contextComponentLocked}
                     onSelect={() => runContextSelectionAction(
                       workspace.duplicateSelected,
                       "已複製一份",
@@ -1749,7 +1749,7 @@ export function PcbCanvas({
                     <ContextMenuShortcut>Ctrl+D</ContextMenuShortcut>
                   </ContextMenuItem>
                   {contextSelection.kind !== "measurement" && <ContextMenuItem
-                    disabled={!workspace.canMutate || contextComponentLocked}
+                    disabled={!workspace.canEditBoard || contextComponentLocked}
                     onSelect={() => runContextSelectionAction(
                       workspace.rotateSelected,
                       "已旋轉 90°",
@@ -1761,7 +1761,7 @@ export function PcbCanvas({
                   </ContextMenuItem>}
                   {contextComponent ? (
                     <ContextMenuItem
-                      disabled={!workspace.canMutate}
+                      disabled={!workspace.canEditBoard}
                       onSelect={() => runContextSelectionAction(
                         workspace.toggleSelectedLock,
                         contextComponent.locked ? "元件已解鎖" : "元件已鎖定",
@@ -1779,11 +1779,11 @@ export function PcbCanvas({
             ) : null}
             <ContextMenuGroup>
               {contextSelection.kind === "measurement" && <>
-                <ContextMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.rotateSelectedMeasurement("clockwise")}>
+                <ContextMenuItem disabled={!workspace.canEditBoard} onSelect={() => workspace.rotateSelectedMeasurement("clockwise")}>
                   順時針旋轉 90°
                   <ContextMenuShortcut>{measurementShortcutLabel(workspace.measurementShortcuts.clockwise)}</ContextMenuShortcut>
                 </ContextMenuItem>
-                <ContextMenuItem disabled={!workspace.canMutate} onSelect={() => workspace.rotateSelectedMeasurement("counterclockwise")}>
+                <ContextMenuItem disabled={!workspace.canEditBoard} onSelect={() => workspace.rotateSelectedMeasurement("counterclockwise")}>
                   逆時針旋轉 90°
                   <ContextMenuShortcut>{measurementShortcutLabel(workspace.measurementShortcuts.counterclockwise)}</ContextMenuShortcut>
                 </ContextMenuItem>
@@ -1792,7 +1792,7 @@ export function PcbCanvas({
               </>}
               <ContextMenuItem
                 className="text-rose-300 focus:bg-rose-500/15 focus:text-rose-100"
-                disabled={!workspace.canMutate}
+                disabled={!workspace.canEditBoard}
                 onSelect={() => workspace.deleteSelected()}
               >
                 {selectionIds.length > 1 ? `刪除選取的 ${selectionIds.length} 個項目` : "刪除"}
@@ -1804,19 +1804,19 @@ export function PcbCanvas({
           <>
             <ContextMenuLabel>畫布操作 · {workspace.zoom}%</ContextMenuLabel>
             <ContextMenuGroup>
-              <ContextMenuItem disabled={!workspace.canMutate} onSelect={pasteContextSelection}>
+              <ContextMenuItem disabled={!workspace.canEditBoard} onSelect={pasteContextSelection}>
                 貼上
                 <ContextMenuShortcut>Ctrl+V</ContextMenuShortcut>
               </ContextMenuItem>
               <ContextMenuItem
-                disabled={!workspace.canMutate || !workspace.canUndo}
+                disabled={!workspace.canEditBoard || !workspace.canUndo}
                 onSelect={() => workspace.undo()}
               >
                 復原
                 <ContextMenuShortcut>Ctrl+Z</ContextMenuShortcut>
               </ContextMenuItem>
               <ContextMenuItem
-                disabled={!workspace.canMutate || !workspace.canRedo}
+                disabled={!workspace.canEditBoard || !workspace.canRedo}
                 onSelect={() => workspace.redo()}
               >
                 重做

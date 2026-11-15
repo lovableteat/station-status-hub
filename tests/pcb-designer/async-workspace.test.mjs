@@ -13,7 +13,7 @@ async function setup() {
   const target = { projectId: project.id, componentId: 'synthetic-component', generation: 1 };
   const remote = { listModelAssets: async () => { calls.list++; return [asset.metadata]; }, saveModelAsset: async () => true };
   const workspace = { activeProject: project, data: { projects: [project], library: [], templates: [], updatedAt: 'synthetic' },
-    remoteReady: true, remoteAccessStatus: 'ready', canMutate: true, canEdit: true, selectedObjects: [], selection: null,
+    remoteReady: true, remoteAccessStatus: 'ready', canMutate: true, canEditBoard: true, canEdit: true, selectedObjects: [], selection: null,
     projectLock: {}, activeLayer: 'top', tool: 'select', zoom: 100, persistenceStatus: 'synced', dirtyProjectIds: [], drcIssues: [],
     saveNow: async () => { calls.saved++; return true; }, setTool() {}, importLibraryModel() { calls.imported++; },
     captureModelAssignment: () => target,

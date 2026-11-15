@@ -18,7 +18,7 @@ async function setup() {
   function Harness() {
     [state, dispatch] = React.useReducer(reduceWorkspaceState, { ...initial, rightTab: 'objects', visibleLayer: 'top' });
     const editor = usePcbEditorActions(state, dispatch);
-    const workspace = { ...state, ...editor, canMutate: true,
+    const workspace = { ...state, ...editor, canMutate: true, canEditBoard: true,
       selectedObject: state.activeProject.components.find(item => item.instanceId === state.selection?.id),
       setRightTab: tab => dispatch({ type: 'panel/right', tab }),
       selectObjects: objectIds => dispatch({ type: 'selection/set-many', objectIds }),

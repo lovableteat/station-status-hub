@@ -1247,7 +1247,7 @@
   }
 }
 
-/* Platform visual layer: keep the CAD workflow, but share the surrounding UI language. */
+
 .pcb-designer-workspace {
   --pcb-page: #070e1b;
   --pcb-panel: #111b2d;
@@ -1860,8 +1860,193 @@
 
 .pcb-rail-filter.is-project-filter {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.9fr);
-  gap: 7px;
+  gap: 6px;
+}
+
+/* 搜尋 → 狀態 → 負責人, then the secondary sort: never cut the option text (「全部狀」). */
+.pcb-board-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+}
+
+.pcb-board-filters .pcb-status-filter {
+  padding-right: 22px;
+  font-size: 12px;
+}
+
+.pcb-board-sort {
+  width: auto;
+  height: 28px;
+  margin-left: auto;
+  padding: 0 4px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--pcb-muted);
+  font-size: 11px;
+}
+
+.pcb-rail-chips {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 6px var(--pcb-rail-gutter);
+  border-bottom: 1px solid var(--pcb-border);
+}
+
+.pcb-board-group + .pcb-board-group {
+  margin-top: 6px;
+}
+
+.pcb-board-group-heading {
+  position: sticky;
+  top: -6px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 4px;
+  border-bottom: 1px solid var(--pcb-border);
+  background: var(--pcb-panel);
+  padding: 6px 2px 5px;
+  color: hsl(var(--primary));
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pcb-board-group-heading span {
+  color: var(--pcb-muted);
+  font-weight: 500;
+}
+
+.pcb-board-family {
+  margin-bottom: 4px;
+}
+
+.pcb-board-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 3%);
+  padding: 0 2px 0 8px;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.pcb-board-row:hover {
+  border-color: var(--pcb-border-strong);
+  background: rgb(255 255 255 / 6%);
+}
+
+/* The open board: a teal bar, so it is found once in its own family without a separate card. */
+.pcb-board-row.is-current {
+  border-color: hsl(var(--primary) / 55%);
+  background: hsl(var(--primary) / 10%);
+  box-shadow: inset 3px 0 0 hsl(var(--primary));
+}
+
+.pcb-board-row.is-version {
+  margin: 3px 0 0 14px;
+}
+
+.pcb-board-row-main {
+  min-width: 0;
+  flex: 1;
+  padding: 6px 2px;
+  text-align: left;
+}
+
+.pcb-board-row-main:active {
+  transform: scale(0.99);
+}
+
+.pcb-board-row-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.pcb-board-row-title strong {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pcb-board-row-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--pcb-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pcb-board-owner-icon {
+  width: 11px;
+  height: 11px;
+  flex: none;
+}
+
+.pcb-board-versions-toggle {
+  display: inline-flex;
+  height: 26px;
+  flex: none;
+  align-items: center;
+  gap: 1px;
+  border-radius: 6px;
+  padding: 0 4px 0 6px;
+  color: hsl(var(--primary));
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pcb-board-versions-toggle:hover {
+  background: hsl(var(--primary) / 10%);
+}
+
+.pcb-library-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.pcb-approval-bar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgb(105 221 173 / 40%);
+  border-radius: 8px;
+  background: rgb(105 221 173 / 10%);
+  padding: 6px 10px;
+  color: #c6f3df;
+  font-size: 13px;
+}
+
+.pcb-approval-bar > span {
+  min-width: 0;
+  flex: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcb-board-row,
+  .pcb-board-row-main:active {
+    transition: none;
+    transform: none;
+  }
 }
 
 .pcb-search-input,
@@ -1890,80 +2075,18 @@
   flex-basis: 100%;
 }
 
-.pcb-current-project-card {
-  position: relative;
-  flex: none;
-  margin: 9px var(--pcb-rail-gutter) 7px;
-  overflow: hidden;
-  border: 1px solid rgb(101 209 229 / 45%);
-  border-radius: 13px;
-  background:
-    radial-gradient(circle at 100% 0%, rgb(101 209 229 / 16%), transparent 42%),
-    linear-gradient(135deg, rgb(25 67 92 / 90%), rgb(23 43 70 / 94%));
-  padding: 10px;
-  box-shadow: inset 3px 0 0 #75dced, inset 0 1px 0 rgb(255 255 255 / 6%);
-}
 
-.pcb-current-project-eyebrow,
 .pcb-project-list-heading,
-.pcb-project-list-heading > div,
-.pcb-current-project-actions,
-.pcb-project-compact-heading,
-.pcb-project-compact-item {
+.pcb-project-list-heading > div {
   display: flex;
   align-items: center;
 }
 
-.pcb-current-project-eyebrow {
-  justify-content: space-between;
-  gap: 8px;
-  color: #8be3ee;
-  font-size: 9px;
-  font-weight: 850;
-  letter-spacing: 0.08em;
-}
 
-.pcb-current-project-card h3 {
-  margin: 8px 0 0;
-  overflow: hidden;
-  color: #f5fbff;
-  font-size: 13px;
-  font-weight: 850;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.pcb-current-project-card p {
-  margin: 4px 0 0;
-  overflow: hidden;
-  color: #9cb8cc;
-  font-size: 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.pcb-current-project-actions {
-  gap: 5px;
-  margin-top: 9px;
-}
 
-.pcb-current-project-actions > button:not(:last-child) {
-  min-width: 0;
-  height: 29px;
-  flex: 1 1 0;
-  gap: 5px;
-  border-color: rgb(124 210 228 / 28%);
-  background: rgb(8 24 41 / 36%);
-  color: #d8edf6;
-  font-size: 9px;
-}
 
-.pcb-current-project-actions > button:last-child {
-  width: 29px;
-  height: 29px;
-  flex: none;
-  color: #a8c3d6;
-}
 
 .pcb-project-list-heading {
   flex: none;
@@ -2000,53 +2123,11 @@
   font-size: 9px;
 }
 
-.pcb-project-compact-item {
-  position: relative;
-  gap: 4px;
-  margin-bottom: 5px;
-  border: 1px solid rgb(48 76 108 / 64%);
-  border-radius: 10px;
-  background: rgb(22 38 61 / 70%);
-  padding: 3px 4px 3px 9px;
-  transition: border-color 130ms ease, background 130ms ease, transform 130ms ease;
-}
 
-.pcb-project-compact-item:hover {
-  border-color: rgb(102 180 213 / 54%);
-  background: rgb(28 50 77 / 84%);
-  transform: translateX(1px);
-}
 
-.pcb-project-compact-main {
-  min-width: 0;
-  flex: 1;
-  padding: 6px 2px;
-  text-align: left;
-}
 
-.pcb-project-compact-heading {
-  min-width: 0;
-  justify-content: space-between;
-  gap: 6px;
-}
 
-.pcb-project-compact-heading strong {
-  overflow: hidden;
-  color: #e5f0f9;
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.pcb-project-compact-meta {
-  display: block;
-  margin-top: 3px;
-  overflow: hidden;
-  color: #7f98b1;
-  font-size: 8px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .pcb-project-more {
   width: 28px;
@@ -2175,25 +2256,7 @@
   font-size: 11px;
 }
 
-.pcb-project-editor-state {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 3px;
-  border: 1px solid rgb(118 222 180 / 32%);
-  border-radius: 999px;
-  background: rgb(54 142 108 / 20%);
-  padding: 2px 6px;
-  color: #a5ebcc;
-  font-size: 9px;
-  font-weight: 750;
-}
 
-.pcb-project-editor-state.is-editing {
-  border-color: rgb(255 208 105 / 42%);
-  background: rgb(151 101 35 / 22%);
-  color: #ffe096;
-}
 
 .pcb-project-editor-project {
   display: block;
@@ -3127,7 +3190,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  /* Drawer height follows the canvas; scroll the entire rail on short screens. */
+  
   .pcb-left-rail {
     overflow-y: auto;
     overscroll-behavior-y: contain;
@@ -3183,7 +3246,7 @@
 }
 
 @media (max-width: 1023px) and (max-height: 500px) {
-  /* A landscape canvas can be shorter than a single rail action row. */
+  
   .pcb-left-drawer,
   .pcb-drawer-scrim {
     position: fixed;
@@ -3369,9 +3432,7 @@
   height: 150px;
 }
 
-/* --- Board resize anchor -------------------------------------------------
-   Resizing used to always grow away from the origin; this picks which edge or
-   corner stays put, and placed items shift to match. */
+
 .pcb-resize-anchor {
   margin-top: 12px;
   padding: 12px;
@@ -3432,7 +3493,7 @@
   color: #94a3b8;
 }
 
-/* --- DXF board outline import ------------------------------------------- */
+
 .pcb-dxf-import {
   margin-top: 12px;
   padding: 12px;
@@ -3513,7 +3574,7 @@
   color: #fca5a5;
 }
 
-/* --- STEP import result and true top-view footprint -------------------- */
+
 .pcb-step-dialog {
   overflow: hidden;
   border: 1px solid rgb(104 187 226 / 0.46);
@@ -3658,7 +3719,7 @@
   .pcb-step-dialog { max-width: calc(100vw - 24px); }
 }
 
-/* UI chrome only: PCB layer, canvas and model colors retain their domain meaning. */
+
 .pcb-designer-workspace {
   --pcb-page: hsl(var(--background)); --pcb-panel: hsl(var(--card));
   --pcb-panel-raised: hsl(var(--secondary)); --pcb-border: hsl(var(--border));

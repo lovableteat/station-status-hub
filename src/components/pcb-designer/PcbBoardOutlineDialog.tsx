@@ -35,7 +35,7 @@ export function PcbBoardOutlineDialog({ workspace, onClose }: { workspace: PcbWo
   const moveNode = (n: PcbOutlineNode, dx: number, dy: number): PcbOutlineNode => ({ x: n.x + dx, y: n.y + dy,
     ...(n.in && { in: { x: n.in.x + dx, y: n.in.y + dy } }), ...(n.out && { out: { x: n.out.x + dx, y: n.out.y + dy } }) });
   const add = (p: PcbPoint) => {
-    if (draft.closed || !workspace.canMutate) return;
+    if (draft.closed || !workspace.canEditBoard) return;
     if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || p.x < 0 || p.y < 0 || p.x > board.width || p.y > board.height) { setError("頂點必須在板框尺寸內。"); return; }
     if (draft.nodes.length >= 100) { setError("最多 100 個節點。"); return; }
     commit({ ...draft, nodes: [...draft.nodes, p] }); setSelected(draft.nodes.length);
@@ -102,7 +102,7 @@ export function PcbBoardOutlineDialog({ workspace, onClose }: { workspace: PcbWo
       </div>
       <svg viewBox={`${-padding} ${-padding} ${board.width + padding * 2} ${board.height + padding * 2}`} className="w-full h-[min(43vh,460px)] rounded-lg border border-cyan-700 bg-slate-950 touch-none focus:outline focus:outline-2 focus:outline-cyan-300" role="img" aria-label="板框鋼筆畫布" tabIndex={0}
         onPointerDown={e => {
-          if (e.button !== 0 || !workspace.canMutate) return;
+          if (e.button !== 0 || !workspace.canEditBoard) return;
           e.currentTarget.setPointerCapture(e.pointerId);
           const p = pointFor(e.currentTarget, e.clientX, e.clientY, e.altKey), target = (e.target as Element).closest("[data-node]");
           if (tool === "rectangle" || tool === "circle") {
@@ -149,7 +149,7 @@ export function PcbBoardOutlineDialog({ workspace, onClose }: { workspace: PcbWo
       <details><summary className="cursor-pointer text-sm">精確座標／鍵盤編輯</summary><div className="flex flex-wrap items-end gap-2 mt-2">
         <label className="flex-1 min-w-20 text-xs">X (mm)<input aria-label="板框頂點 X" type="number" value={x} onChange={e => setX(e.target.value)} className="pcb-control w-full" /></label>
         <label className="flex-1 min-w-20 text-xs">Y (mm)<input aria-label="板框頂點 Y" type="number" value={y} onChange={e => setY(e.target.value)} className="pcb-control w-full" /></label>
-        <Button variant="outline" disabled={!workspace.canMutate || draft.closed || !x.trim() || !y.trim()} onClick={() => add({ x: Number(x), y: Number(y) })}>加入頂點</Button>
+        <Button variant="outline" disabled={!workspace.canEditBoard || draft.closed || !x.trim() || !y.trim()} onClick={() => add({ x: Number(x), y: Number(y) })}>加入頂點</Button>
         <label className="text-xs">選取節點<select aria-label="選取板框節點" value={selected ?? ""} onChange={e => setSelected(e.target.value === "" ? null : Number(e.target.value))} className="pcb-control"><option value="">未選取</option>{draft.nodes.map((_, i) => <option key={i} value={i}>{i + 1}</option>)}</select></label>
         <Button variant="outline" disabled={selected === null || !x.trim() || !y.trim()} onClick={() => {
           const px = Number(x), py = Number(y); if (selected === null || !Number.isFinite(px) || !Number.isFinite(py)) return;
@@ -158,7 +158,7 @@ export function PcbBoardOutlineDialog({ workspace, onClose }: { workspace: PcbWo
       </div></details>
       <p className="text-sm text-slate-300" aria-live="polite">{draft.nodes.length} 個節點 · {draft.closed ? "已封閉，可調整節點與把手" : "繪製中"} · {board.snapToGrid ? `吸附 ${board.gridSize} mm；Alt 暫停` : "自由定位"}</p>
       {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
-      <DialogFooter className="sticky bottom-0 z-10 bg-slate-900 py-2"><Button variant="outline" onClick={onClose}>取消</Button><Button disabled={!workspace.canMutate} onClick={apply}>套用板形</Button></DialogFooter>
+      <DialogFooter className="sticky bottom-0 z-10 bg-slate-900 py-2"><Button variant="outline" onClick={onClose}>取消</Button><Button disabled={!workspace.canEditBoard} onClick={apply}>套用板形</Button></DialogFooter>
     </DialogContent>
   </Dialog>;
 }

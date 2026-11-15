@@ -162,7 +162,7 @@ test("makes locked PCB components persistently visible and accessible", () => {
 });
 
 test("keeps template mutations visible and explains protected built-ins", () => {
-  assert.match(railSource, /內建模板可直接建立專案/);
+  assert.match(railSource, /內建模板可直接建立板子/);
   assert.match(railSource, /複製後編輯/);
   assert.match(railSource, /onDuplicateTemplate/);
   assert.match(workspaceSource, /const saveCurrentAsTemplate/);
@@ -179,7 +179,7 @@ test("renders PCB layers in the required stable order", () => {
 });
 
 test("makes library cards draggable and routes click and drop through one placement action", () => {
-  assert.match(railSource, /draggable=\{workspace\.canMutate\}/);
+  assert.match(railSource, /draggable=\{workspace\.canEditBoard\}/);
   assert.match(railSource, /dataTransfer\.setData/);
   assert.match(railSource, /onStartPlacement\(component\.id\)/);
   assert.match(canvasSource, /workspace\.placeLibraryComponent/);
@@ -329,7 +329,8 @@ test("shows editors and live viewers across the PCB workspace", () => {
   assert.match(workspaceSource, /usePcbProjectPresence/);
   assert.match(workspaceSource, /<PcbCollaborators/);
   assert.match(workspaceSource, /workspacePeers=\{presence\.workspacePeers\}/);
-  assert.match(railSource, /otherProjects\.map/);
+  assert.match(railSource, /boardGroups\.map/);
+  assert.match(railSource, /aria-current=\{lead\.id === activeId/);
   assert.doesNotMatch(railSource, /onEditProject\(project\)/);
   assert.match(hookSource, /deleteProject[\s\S]{0,500}remoteClient\?\.deleteProject/);
 });
@@ -583,7 +584,7 @@ test("keeps dense toolbar labels readable and stable across active and disabled 
 
 test("disables inspector mutation controls while a component is locked", () => {
   assert.match(inspectorSource, /const componentDisabled = disabled \|\| component\.locked/);
-  assert.match(inspectorSource, /disabled=\{!workspace\.canMutate \|\| hasLocked\}/);
+  assert.match(inspectorSource, /disabled=\{!workspace\.canEditBoard \|\| hasLocked\}/);
   assert.match(editorHookSource, /if \(!source \|\| source\.locked\) return false/);
 });
 

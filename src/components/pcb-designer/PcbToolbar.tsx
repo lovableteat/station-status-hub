@@ -126,7 +126,10 @@ function ToolButton({
 }
 
 export interface PcbToolbarProps {
+  /** Board content can change (edit rights, not locked, not 已核准). */
   canMutate: boolean;
+  /** A new board can be imported (edit rights), even when the open board is 已核准. */
+  canImport?: boolean;
   canSave: boolean;
   documentLocked: boolean;
   tool: PcbTool;
@@ -163,6 +166,7 @@ export interface PcbToolbarProps {
 
 export function PcbToolbar({
   canMutate,
+  canImport = canMutate,
   canSave,
   documentLocked,
   tool,
@@ -233,7 +237,7 @@ export function PcbToolbar({
             showLabel
             tone="import"
             icon={FileJson}
-            disabled={!canMutate}
+            disabled={!canImport}
             onClick={onImportProject}
           />
 

@@ -19,7 +19,7 @@ test('canvas DRC outlines follow visible layers and rotated keepout handles foll
   ];
   const state = createWorkspaceState({ projects: [project], templates: [], library: [], activeProjectId: project.id, updatedAt: project.updatedAt }, true);
   const commits = [];
-  const workspace = { ...state, canMutate: true, selection: { kind: 'keepout', id: 'K1' }, selectedObject: keepout, selectedObjects: ['K1'],
+  const workspace = { ...state, canMutate: true, canEditBoard: true, selection: { kind: 'keepout', id: 'K1' }, selectedObject: keepout, selectedObjects: ['K1'],
     updateKeepout(id, patch) { commits.push({ id, patch }); return true; } };
   const svgNode = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }),
     viewBox: { baseVal: { x: 0, y: 0, width: 100, height: 100 } }, setPointerCapture() {}, hasPointerCapture: () => true, releasePointerCapture() {} };

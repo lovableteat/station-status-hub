@@ -13,7 +13,7 @@ function CoordinateField({ axis, component, workspace }: {
   const [error, setError] = useState("");
   const committed = useRef(value);
   const errorId = useId();
-  const disabled = !workspace.canMutate || component.locked;
+  const disabled = !workspace.canEditBoard || component.locked;
   useEffect(() => {
     committed.current = value;
     setDraft(String(value));
@@ -47,7 +47,7 @@ function CoordinateField({ axis, component, workspace }: {
   return <label className="pcb-inspector-field">
     <span>中心 {axis.toUpperCase()} (mm)</span>
     <input type="number" step="0.0001" value={draft} disabled={disabled}
-      title={component.locked ? "元件已鎖定，先解除鎖定才能移動" : !workspace.canMutate ? "目前沒有編輯權限或文件已鎖定" : "輸入元件中心座標，按 Enter 或離開欄位套用，不套用網格吸附"}
+      title={component.locked ? "元件已鎖定，先解除鎖定才能移動" : !workspace.canEditBoard ? "目前沒有編輯權限或文件已鎖定" : "輸入元件中心座標，按 Enter 或離開欄位套用，不套用網格吸附"}
       aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined}
       onChange={event => { setDraft(event.currentTarget.value); setError(""); }}
       onBlur={commit}

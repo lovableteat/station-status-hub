@@ -16,7 +16,7 @@ async function setup(locked = false) {
   function Harness() {
     [state, dispatch] = React.useReducer(reduceWorkspaceState, createWorkspaceState({ projects: [project], templates: [], library: [], activeProjectId: project.id, updatedAt: project.updatedAt }, true));
     const actions = usePcbEditorActions(state, dispatch);
-    return React.createElement(PcbComponentCoordinates, { component: state.activeProject.components[0], workspace: { ...state, ...actions, canMutate: state.canEdit && !state.documentLocked } });
+    return React.createElement(PcbComponentCoordinates, { component: state.activeProject.components[0], workspace: { ...state, ...actions, canMutate: state.canEdit && !state.documentLocked, canEditBoard: state.canEdit && !state.documentLocked } });
   }
   await act(async () => { root = create(React.createElement(Harness)); });
   return { get state() { return state; }, get root() { return root; },

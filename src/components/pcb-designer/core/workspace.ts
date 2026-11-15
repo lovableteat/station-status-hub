@@ -292,6 +292,21 @@ function isMutation(action: PcbWorkspaceAction): boolean {
   ].includes(action.type);
 }
 
+/** Actions that change the open board's content; an approved board refuses them (防誤改, not an audit trail). */
+const APPROVED_BOARD_LOCKED_ACTIONS = new Set<PcbWorkspaceAction["type"]>([
+  "project/commit", "project/commit-with-bom", "selection/delete", "selection/duplicate",
+  "history/undo", "history/redo", "bom/import", "bom/remove", "model/assign",
+]);
+
+/** True when the open board is 已核准 and the action would change it. Moving it back to 草稿/審核中 is allowed. */
+export function isBlockedByApproval(state: Pick<PcbWorkspaceState, "activeProject">, action: PcbWorkspaceAction): boolean {
+  if (state.activeProject.status !== "approved") return false;
+  if (APPROVED_BOARD_LOCKED_ACTIONS.has(action.type)) return true;
+  if (action.type === "project/rename") return action.projectId === state.activeProject.id;
+  if (action.type === "project/settings") return action.projectId === state.activeProject.id && action.settings.status === "approved";
+  return false;
+}
+
 export function reduceWorkspaceState(
   state: PcbWorkspaceState,
   action: PcbWorkspaceAction,
@@ -319,6 +334,7 @@ export function reduceWorkspaceState(
   }
   if (action.type === "project/settings") {
     const project = state.canEdit && !state.documentLocked && !state.transitionBusy && action.projectId === state.activeProject.id
+      && !isBlockedByApproval(state, action)
       ? applyProjectSettings(state.activeProject, action.baselineRevision, action.settings) : null;
     return {
       ...(project ? replaceProject(state, project) : state),
@@ -329,7 +345,7 @@ export function reduceWorkspaceState(
     const component = state.activeProject.components.find((item) => item.instanceId === action.componentId);
     const accepted = state.canEdit && !state.documentLocked && !state.transitionBusy
       && action.projectId === state.activeProject.id && action.generation === state.projectGeneration
-      && Boolean(component && !component.locked);
+      && Boolean(component && !component.locked) && !isBlockedByApproval(state, action);
     if (!accepted) return { ...state,
       modelAssignmentReceipt: { requestToken: action.requestToken, accepted: false, generation: state.projectGeneration } };
     const updated = replaceProject(state, {
@@ -344,6 +360,7 @@ export function reduceWorkspaceState(
       data: { ...updated.data, modelAssets: { ...updated.data.modelAssets, [action.metadata.id]: clone(action.metadata) } },
     });
   }
+  if (isBlockedByApproval(state, action)) return state;
   if (state.transitionBusy && (isMutation(action) || ["project/open", "persistence/hydrate", "persistence/touch"].includes(action.type))) return state;
   if (isMutation(action) && (!state.canEdit || state.documentLocked)
     && action.type !== "document/toggle-lock") {
@@ -357,6 +374,7 @@ export function reduceWorkspaceState(
       project.projectGroup = action.input.projectGroup?.trim() ?? "";
       project.revision = action.input.revision?.trim() || "1";
       project.boardFamilyId = project.id;
+      if (action.input.owner) project.owner = clone(action.input.owner);
       if (action.input.width !== undefined) project.board.width = action.input.width;
       if (action.input.height !== undefined) project.board.height = action.input.height;
       return materialize({
@@ -435,6 +453,7 @@ export function reduceWorkspaceState(
       } else {
         copy.boardFamilyId = copy.id;
         copy.revision = "1";
+        copy.status = "draft";
       }
       const sourcePending = state.data.pendingPlacementsByProject?.[project.id] ?? [];
       return materialize({
@@ -511,7 +530,8 @@ export function reduceWorkspaceState(
       });
     }
     case "project/import": {
-      const project = withProjectIdentity(action.project);
+      const project = { ...withProjectIdentity(action.project), status: "draft" as const };
+      project.boardFamilyId = project.id;
       return materialize({
         ...state,
         selection: null,
@@ -539,7 +559,8 @@ export function reduceWorkspaceState(
     case "template/apply": {
       const template = state.data.templates.find((item) => item.id === action.templateId);
       if (!template) return state;
-      const project = withProjectIdentity(template.project, `${template.name} 專案`);
+      const project = { ...withProjectIdentity(template.project, `${template.name} 新板子`), status: "draft" as const };
+      project.boardFamilyId = project.id;
       return materialize({
         ...state,
         selection: null,

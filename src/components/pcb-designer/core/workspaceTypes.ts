@@ -19,6 +19,7 @@ import type {
 
 export interface NewProjectInput {
   projectGroup?: string;
+  owner?: PcbProject["owner"];
   revision?: string;
   name: string;
   description?: string;

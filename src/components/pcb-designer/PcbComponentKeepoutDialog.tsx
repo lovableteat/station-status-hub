@@ -21,7 +21,7 @@ export function PcbComponentKeepoutDialog({ component, workspace, onClose }: {
   const valid = isValidComponentKeepout(margins);
   const bounds = getComponentKeepoutBounds({ ...component, keepout: valid ? margins : DEFAULT_COMPONENT_KEEPOUT })!;
   const padding = Math.max(bounds.width, bounds.height) * 0.12;
-  const disabled = !workspace.canMutate || component.locked;
+  const disabled = !workspace.canEditBoard || component.locked;
   const apply = (keepout: PcbComponentKeepout | undefined) => {
     if (disabled) return;
     if (JSON.stringify(component.keepout) === JSON.stringify(keepout)) { onClose(); return; }

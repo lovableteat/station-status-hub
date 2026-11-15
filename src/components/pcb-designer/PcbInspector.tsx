@@ -94,7 +94,7 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
     || workspace.selectedObjects.length > 0;
   const hasLocked = workspace.activeProject.components.some(item => item.locked
     && (workspace.selectedObjects.includes(item.instanceId) || workspace.selection?.id === item.instanceId));
-  const mutationTitle = !workspace.canMutate ? "目前沒有編輯權限或文件已鎖定" : hasLocked ? "選取範圍包含鎖定元件，請先解除鎖定" : "";
+  const mutationTitle = !workspace.canEditBoard ? "目前沒有編輯權限或文件已鎖定" : hasLocked ? "選取範圍包含鎖定元件，請先解除鎖定" : "";
   return (
     <div className="pcb-inspector-actions">
       <span className="pcb-selection-count">
@@ -106,7 +106,7 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
             type="button"
             variant="outline"
             size="sm"
-            disabled={!workspace.canMutate || hasLocked}
+            disabled={!workspace.canEditBoard || hasLocked}
             onClick={workspace.rotateSelected}
             aria-label="旋轉選取物件 90 度"
             title={mutationTitle || "將選取物件各自順時針旋轉 90°"}
@@ -117,10 +117,10 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
             type="button"
             variant="outline"
             size="sm"
-            disabled={!workspace.canMutate}
+            disabled={!workspace.canEditBoard}
             onClick={workspace.toggleSelectedLock}
             aria-label={component.locked ? "解除元件鎖定" : "鎖定元件"}
-            title={!workspace.canMutate ? mutationTitle : component.locked ? "解除元件鎖定以便移動或編輯" : "鎖定元件以防止意外移動或編輯"}
+            title={!workspace.canEditBoard ? mutationTitle : component.locked ? "解除元件鎖定以便移動或編輯" : "鎖定元件以防止意外移動或編輯"}
             aria-pressed={component.locked}
           >
             {component.locked
@@ -134,10 +134,10 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
         type="button"
         variant="outline"
         size="sm"
-        disabled={!workspace.canMutate || !canDuplicate}
+        disabled={!workspace.canEditBoard || !canDuplicate}
         onClick={() => workspace.duplicateSelected()}
         aria-label="複製選取項目"
-        title={!workspace.canMutate ? "目前沒有編輯權限或文件已鎖定" : "在板上建立選取物件的副本，可一次復原"}
+        title={!workspace.canEditBoard ? "目前沒有編輯權限或文件已鎖定" : "在板上建立選取物件的副本，可一次復原"}
       >
         <Copy className="mr-1.5 h-3.5 w-3.5" />複製
       </Button>
@@ -146,7 +146,7 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
         variant="outline"
         size="sm"
         className="pcb-danger-action"
-        disabled={!workspace.canMutate || hasLocked}
+        disabled={!workspace.canEditBoard || hasLocked}
         onClick={workspace.deleteSelected}
         aria-label="刪除選取物件"
         title={mutationTitle || "刪除所有選取物件，可使用復原還原"}
@@ -159,7 +159,7 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
 
 function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
   const board = workspace.activeProject.board;
-  const disabled = !workspace.canMutate;
+  const disabled = !workspace.canEditBoard;
   const [drawing, setDrawing] = useState(false);
   const [columns, setColumns] = useState("1");
   const [rows, setRows] = useState("1");
@@ -372,7 +372,7 @@ function ComponentInspector({
   onImportModel?: (file: File, componentId: string) => Promise<PcbModelAssetMetadata>;
   onViewModel?: (assetId: string) => void;
 }) {
-  const disabled = !workspace.canMutate;
+  const disabled = !workspace.canEditBoard;
   const componentDisabled = disabled || component.locked;
   const [modelImportState, setModelImportState] = useState<{
     status: "idle" | "loading" | "success" | "error";
@@ -492,7 +492,7 @@ function KeepoutInspector({
   workspace: PcbWorkspaceApi;
   keepout: PcbKeepout;
 }) {
-  const disabled = !workspace.canMutate;
+  const disabled = !workspace.canEditBoard;
   return (
     <div className="pcb-inspector-form" data-selection-kind="keepout">
       <h2>禁制區 · {keepout.name}</h2>
@@ -601,7 +601,7 @@ function MeasurementInspector({
   workspace: PcbWorkspaceApi;
   measurement: PcbMeasurement;
 }) {
-  const disabled = !workspace.canMutate;
+  const disabled = !workspace.canEditBoard;
   const length = Math.hypot(
     measurement.x2 - measurement.x1,
     measurement.y2 - measurement.y1,

@@ -12,7 +12,7 @@ export interface ProjectSettingsDraft {
   values: Record<string, string>;
   error: string;
 }
-export type ProjectSettings = Pick<PcbProject, 'name' | 'description' | 'projectGroup' | 'revision' | 'status'> & { width: number; height: number };
+export type ProjectSettings = Pick<PcbProject, 'name' | 'description' | 'projectGroup' | 'revision' | 'status' | 'owner'> & { width: number; height: number };
 // Exact content revision also detects same-timestamp changes; no project snapshot is applied back.
 export function projectSettingsRevision(project: PcbProject): string {
   const stable = (value: unknown): unknown => Array.isArray(value) ? value.map(stable)
@@ -23,20 +23,23 @@ export function initialProjectSettings(project: PcbProject): ProjectSettingsDraf
   return { kind: 'project-settings', projectId: project.id, baselineRevision: projectSettingsRevision(project), error: '', values: {
     name: project.name, description: project.description, projectGroup: project.projectGroup ?? '',
     revision: project.revision ?? '1', width: String(project.board.width), height: String(project.board.height), status: project.status,
+    ownerId: project.owner?.userId ?? '', ownerName: project.owner?.displayName ?? '',
   } };
 }
 export function projectSettingsConflict(draft: Pick<ProjectSettingsDraft, 'projectId' | 'baselineRevision'>, project: PcbProject | undefined): string {
-  if (!project || project.id !== draft.projectId) return '專案已不存在；未套用輸入仍保留，請先確認專案。';
-  return draft.baselineRevision === projectSettingsRevision(project) ? '' : '專案內容已變更；未套用輸入仍保留。請先複製需要的內容，再取消並重新開啟設定。';
+  if (!project || project.id !== draft.projectId) return '板子已不存在；未套用輸入仍保留，請先確認板子。';
+  return draft.baselineRevision === projectSettingsRevision(project) ? '' : '板子內容已變更；未套用輸入仍保留。請先複製需要的內容，再取消並重新開啟設定。';
 }
 export function parseProjectSettings(values: Record<string, string>): ProjectSettings | string {
   const name = values.name?.trim();
   if (!name) return '名稱為必填欄位。';
   const width = Number(values.width), height = Number(values.height);
   if (!Number.isFinite(width) || !Number.isFinite(height) || width < 20 || width > 1000 || height < 20 || height > 1000) return '板框尺寸必須介於 20 到 1000 mm。';
-  if (!['draft', 'review', 'approved'].includes(values.status)) return '請選擇有效的專案狀態。';
+  if (!['draft', 'review', 'approved'].includes(values.status)) return '請選擇有效的狀態。';
+  const ownerName = values.ownerName?.trim().slice(0, 60);
+  const owner = ownerName ? { ...(values.ownerId?.trim() ? { userId: values.ownerId.trim() } : {}), displayName: ownerName } : undefined;
   return { name, description: values.description ?? '', projectGroup: values.projectGroup?.trim(), revision: values.revision?.trim() || '1',
-    status: values.status as PcbProject['status'], width, height };
+    status: values.status as PcbProject['status'], owner, width, height };
 }
 export function applyProjectSettings(project: PcbProject, baselineRevision: string, settings: ProjectSettings): PcbProject | null {
   if (projectSettingsRevision(project) !== baselineRevision) return null;

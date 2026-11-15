@@ -38,6 +38,7 @@ import {
   toStepLibraryComponent,
 } from "./core/modelAssets.ts";
 import { PcbDialogs, type PcbDialogState } from "./PcbDialogs.tsx";
+import { createPcbOwnerDirectoryLoader } from "./hooks/usePcbOwnerDirectory.ts";
 import { PcbProjectTransitionNotice } from "./PcbProjectTransitionNotice.tsx";
 import { PcbLeftRail, type PcbLeftTab } from "./PcbLeftRail.tsx";
 import { PcbToolbar } from "./PcbToolbar.tsx";
@@ -97,9 +98,9 @@ type ProjectImportPreviewInput = {
 
 function statusLabel(status: PcbProject["status"]): string {
   return {
-    draft: "專案草稿",
-    review: "專案審核中",
-    approved: "專案已核准",
+    draft: "草稿",
+    review: "審核中",
+    approved: "已核准",
   }[status];
 }
 
@@ -115,6 +116,7 @@ export function PcbDesignerWorkspace({
 }: PcbDesignerWorkspaceProps) {
   const { canEditModule } = usePermissions();
   const { user } = useUser();
+  const loadOwnerDirectory = useMemo(() => createPcbOwnerDirectoryLoader(supabase), []);
   const clientIdRef = useRef(`pcb-client-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
   const remoteClient = useMemo(
     () => createPcbAccountRemoteClient(
@@ -304,8 +306,8 @@ export function PcbDesignerWorkspace({
     if (!await workspace.applyTemplate(templateId)) return;
     setLeftRailTab("projects");
     toast({
-      title: `已從「${template.name}」建立新專案`,
-      description: "目前專案草稿未被覆蓋，新的專案已切換到專案清單。",
+      title: `已從「${template.name}」建立新板子`,
+      description: "原本的板子沒有被覆蓋，新板子已加入板子清單並開啟。",
     });
   }, [workspace.applyTemplate, workspace.data.templates]);
 
@@ -350,9 +352,9 @@ export function PcbDesignerWorkspace({
     if (!file) return;
     if (!file.name.toLocaleLowerCase().endsWith(".json")) {
       previewProjectImport({
-        title: "匯入專案預覽",
+        title: "匯入板子預覽",
         validCount: 0,
-        errors: [{ row: 1, message: "專案檔案必須是 JSON。" }],
+        errors: [{ row: 1, message: "板子檔案必須是 JSON。" }],
         onCommit: () => undefined,
       });
       return;
@@ -361,7 +363,7 @@ export function PcbDesignerWorkspace({
       const parsed = parseProjectJson(await file.text());
       if (parsed.ok === false) {
         previewProjectImport({
-          title: "匯入專案預覽",
+          title: "匯入板子預覽",
           validCount: 0,
           errors: [{ row: 1, message: parsed.error }],
           onCommit: () => undefined,
@@ -369,23 +371,23 @@ export function PcbDesignerWorkspace({
         return;
       }
       previewProjectImport({
-        title: "匯入專案預覽",
+        title: "匯入板子預覽",
         validCount: 1,
         errors: [],
         onCommit: () => {
           setDialog(null);
           void workspace.importProject(parsed.value).then(applied => {
-            if (applied) toast({ title: "專案已匯入", description: `${parsed.value.name} 已建立為新專案。` });
+            if (applied) toast({ title: "板子已匯入", description: `「${parsed.value.name}」已建立為新板子（草稿）。` });
           });
         },
       });
     } catch (error) {
       previewProjectImport({
-        title: "匯入專案預覽",
+        title: "匯入板子預覽",
         validCount: 0,
         errors: [{
           row: 1,
-          message: error instanceof Error ? error.message : "無法讀取專案檔案。",
+          message: error instanceof Error ? error.message : "無法讀取板子檔案。",
         }],
         onCommit: () => undefined,
       });
@@ -510,8 +512,9 @@ export function PcbDesignerWorkspace({
 
   const requestDeleteProject = (project: PcbProject) => setDialog({
     kind: "confirm",
-    title: "刪除專案",
-    description: `確定要刪除「${project.name}」嗎？此操作只會在確認後執行。`,
+    title: "刪除板子",
+    description: `刪除「${project.name}」版本 ${project.revision || "1"}？其他使用者也將無法開啟這塊板；網站沒有復原功能。`,
+    confirmLabel: "刪除板子",
     onConfirm: () => workspace.deleteProject(project.id),
   });
   const saveCurrentAsTemplate = (input: TemplateInput) => {
@@ -577,8 +580,8 @@ export function PcbDesignerWorkspace({
             size="icon"
             className="pcb-panel-toggle h-8 w-8 rounded-lg"
             onClick={() => setOpenDrawer((current) => current === "left" ? null : "left")}
-            aria-label="開啟專案與資源面板"
-            title="專案與資源"
+            aria-label="開啟板子與資源面板"
+            title="打開板子清單、元件庫與模板"
           >
             <PanelLeft className="h-4 w-4" />
           </Button>
@@ -593,7 +596,7 @@ export function PcbDesignerWorkspace({
             className="pcb-project-select"
             value={workspace.activeProject.id}
             onChange={(event) => workspace.openProject(event.target.value)}
-            aria-label="目前 PCB 專案"
+            aria-label="目前的板子"
           >
             {workspace.data.projects.map((project) => (
               <option key={project.id} value={project.id}>{project.projectGroup ? `${project.projectGroup} / ` : ""}{project.name} · {project.revision || "1"}</option>
@@ -645,14 +648,14 @@ export function PcbDesignerWorkspace({
                   variant="ghost"
                   size="icon"
                   className="pcb-panel-toggle h-10 w-10 rounded-lg"
-                  aria-label="開啟 PCB 專案操作"
-                  title="專案操作"
+                  aria-label="開啟板子操作"
+                  title="模板、研發試排與板子設定"
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="pcb-dropdown-menu w-64">
-                <DropdownMenuLabel>專案操作</DropdownMenuLabel>
+                <DropdownMenuLabel>板子操作</DropdownMenuLabel>
                 <DropdownMenuItem
                   onSelect={openTemplateCenter}
                 >
@@ -668,7 +671,7 @@ export function PcbDesignerWorkspace({
                   disabled={!workspace.canMutate}
                   onSelect={() => setDialog({ kind: "project-settings", project: workspace.activeProject })}
                 >
-                  <Settings2 className="mr-2 h-4 w-4" />專案設定
+                  <Settings2 className="mr-2 h-4 w-4" />板子設定
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -713,7 +716,7 @@ export function PcbDesignerWorkspace({
             className="pcb-template-center-action"
             onClick={openTemplateCenter}
             aria-label="開啟模板中心"
-            title="模板只用來建立新專案，不會覆蓋目前草稿"
+            title="模板只用來建立新板子，不會覆蓋目前的板子"
           >
             <LayoutTemplate className="h-4 w-4" />
             <span>模板中心</span>
@@ -725,11 +728,11 @@ export function PcbDesignerWorkspace({
             className="pcb-header-icon-button pcb-settings-action"
             disabled={!workspace.canMutate}
             onClick={() => setDialog({ kind: "project-settings", project: workspace.activeProject })}
-            aria-label="專案設定"
-            title="專案設定"
+            aria-label="板子設定"
+            title="修改板子名稱、大專案、版本號、負責人、狀態與描述"
           >
             <Settings2 className="h-4 w-4" />
-            <span>專案設定</span>
+            <span>板子設定</span>
           </Button>
           <input
             ref={projectInputRef}
@@ -759,7 +762,8 @@ export function PcbDesignerWorkspace({
         </div>
       )}
       <PcbToolbar
-        canMutate={workspace.canMutate}
+        canMutate={workspace.canEditBoard}
+        canImport={workspace.canMutate}
         canSave={workspace.canEdit}
         documentLocked={workspace.documentLocked}
         tool={workspace.tool}
@@ -815,6 +819,25 @@ export function PcbDesignerWorkspace({
         onZoomChange={workspace.setZoom}
         onResetView={workspace.resetView}
       />
+      {workspace.boardApproved && (
+        <div className="pcb-approval-bar" role="status" data-testid="pcb-approval-bar">
+          <span>這塊板已核准，修改前請先建立新版或改回草稿。</span>
+          {workspace.canMutate && (
+            <>
+              <Button type="button" size="sm" className="pcb-approval-primary"
+                title="建立同一塊板的下一版（草稿），原本已核准的版本保留不動"
+                onClick={() => void workspace.duplicateProject(workspace.activeProject.id, true)}>
+                建立新版
+              </Button>
+              <Button type="button" size="sm" variant="outline"
+                title="打開板子設定，把狀態改回草稿或審核中後就能修改這個版本"
+                onClick={() => setDialog({ kind: "project-settings", project: workspace.activeProject })}>
+                改回草稿
+              </Button>
+            </>
+          )}
+        </div>
+      )}
       <div className="pcb-editor-grid">
         {openDrawer && (
           <button
@@ -832,10 +855,6 @@ export function PcbDesignerWorkspace({
             placementComponentId={placementComponentId}
             onStartPlacement={startPlacement}
             onNewProject={() => setDialog({ kind: "new-project" })}
-            onEditProject={(project) => {
-              workspace.openProject(project.id);
-              setDialog({ kind: "project-settings", project });
-            }}
             onPreviewProject={(project) => setDialog({
               kind: "project-preview",
               project,
@@ -906,6 +925,8 @@ export function PcbDesignerWorkspace({
         draftActorId={user?.userId}
         projectSettingsReady={workspace.canMutate && !workspace.ownerChanged}
         currentProjects={workspace.data.projects}
+        loadOwnerDirectory={loadOwnerDirectory}
+        currentUser={user ? { userId: user.userId, displayName: user.displayName?.trim() || user.username } : null}
         onUpdateProject={workspace.updateProjectSettings}
         onSaveTemplate={saveCurrentAsTemplate}
         onRenameTemplate={renameTemplate}
