@@ -15,6 +15,22 @@
   color: #f1f5f9;
 }
 
+.pcb-transition-notice {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-height: 120px;
+  overflow: auto;
+  padding: 8px 12px;
+  border: 1px solid var(--pcb-border);
+  border-radius: 8px;
+  background: var(--pcb-panel);
+  color: #fde68a;
+  font-size: 13px;
+}
+
 .pcb-project-bar {
   display: flex;
   min-height: 44px;
@@ -1864,6 +1880,14 @@
 
 .pcb-rail-actions:empty {
   display: none;
+}
+
+.pcb-library-actions {
+  flex-wrap: wrap;
+}
+
+.pcb-library-actions .pcb-primary-action {
+  flex-basis: 100%;
 }
 
 .pcb-current-project-card {

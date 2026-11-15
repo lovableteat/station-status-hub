@@ -7,7 +7,7 @@ import type {
   PcbVisibleLayer,
 } from "../types.ts";
 import { placeLibraryComponent } from "./editor.ts";
-import { getRotatedRectangleCorners, overlapsKeepout } from "./geometry.ts";
+import { getRotatedRectangleCorners, overlapsKeepout, roundPosition } from "./geometry.ts";
 
 interface Bounds {
   left: number;
@@ -54,10 +54,10 @@ function appendMeasurementCopies(
     const copy: PcbMeasurement = {
       ...line,
       id: createId("measurement"),
-      x1: line.x1 + offset.x,
-      y1: line.y1 + offset.y,
-      x2: line.x2 + offset.x,
-      y2: line.y2 + offset.y,
+      x1: roundPosition(line.x1 + offset.x),
+      y1: roundPosition(line.y1 + offset.y),
+      x2: roundPosition(line.x2 + offset.x),
+      y2: roundPosition(line.y2 + offset.y),
     };
     target.measurements.push(copy);
     idMap.set(line.id, copy.id);
@@ -192,8 +192,8 @@ function duplicateAtOffset(
     ...structuredClone(keepout),
     id: createId("keepout"),
     name: `${keepout.name} 副本`,
-    x: keepout.x + offset.x,
-    y: keepout.y + offset.y,
+    x: roundPosition(keepout.x + offset.x),
+    y: roundPosition(keepout.y + offset.y),
   }));
   const keepoutsFit = copiedKeepouts.every((keepout) => (
     keepout.x >= 0
@@ -282,8 +282,8 @@ function duplicateWithOverlapFallback(
         ...structuredClone(component),
         instanceId: createId("instance"),
         reference: nextCopyReference(next, component.reference),
-        x: component.x + offset.x,
-        y: component.y + offset.y,
+        x: roundPosition(component.x + offset.x),
+        y: roundPosition(component.y + offset.y),
         locked: false,
       };
       next.components.push(copy);
@@ -296,8 +296,8 @@ function duplicateWithOverlapFallback(
       ...structuredClone(keepout),
       id: createId("keepout"),
       name: `${keepout.name} 副本`,
-      x: keepout.x + offset.x,
-      y: keepout.y + offset.y,
+      x: roundPosition(keepout.x + offset.x),
+      y: roundPosition(keepout.y + offset.y),
     };
     next.keepouts.push(copy);
     idMap.set(keepout.id, copy.id);

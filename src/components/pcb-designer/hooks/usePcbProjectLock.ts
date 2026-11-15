@@ -15,6 +15,14 @@ const EMPTY_RESULT: PcbProjectLockResult = {
   lock: null,
 };
 
+// A late release must finish before the same client's next acquire, including remounts.
+const lockQueues = new WeakMap<PcbRemoteClient, Promise<void>>();
+function enqueueLockOperation(client: PcbRemoteClient, operation: () => Promise<void>) {
+  const queued = (lockQueues.get(client) ?? Promise.resolve()).then(operation, operation);
+  lockQueues.set(client, queued.catch(() => undefined));
+  return queued;
+}
+
 export function usePcbProjectLock({
   client,
   clientId,
@@ -32,7 +40,9 @@ export function usePcbProjectLock({
 }) {
   const access = usePcbRemoteAccess(client);
   const accessBlocked = access.status === "denied" || access.status === "session-required";
-  const scopeRef = useRef<{ client: PcbRemoteClient | null; projectId: string; clientId: string } | null>(null);
+  const scopeRef = useRef<{ client: PcbRemoteClient | null; projectId: string; clientId: string; accessGeneration: number } | null>(null);
+  const projectNameRef = useRef(projectName);
+  projectNameRef.current = projectName;
   const [result, setResult] = useState<PcbProjectLockResult>(EMPTY_RESULT);
   const [status, setStatus] = useState<PcbProjectLockStatus>(client ? "acquiring" : "local");
   const generationRef = useRef(0);
@@ -44,7 +54,7 @@ export function usePcbProjectLock({
     let disposed = false;
     let running = false;
     let acquiredThisProject = false;
-    scopeRef.current = { client, projectId, clientId };
+    scopeRef.current = { client, projectId, clientId, accessGeneration: access.generation };
 
     if (!enabled) {
       setResult(EMPTY_RESULT);
@@ -72,24 +82,26 @@ export function usePcbProjectLock({
     const refresh = async () => {
       if (disposed || running) return;
       running = true;
-      try {
-        const next = permissionCanEdit && client.acquireProjectLock
-          ? await client.acquireProjectLock({ projectId, projectName })
-          : client.loadProjectLock
-            ? await client.loadProjectLock(projectId)
-            : { available: false, acquired: permissionCanEdit, lock: null };
-        if (disposed || generation !== generationRef.current) return;
-        acquiredThisProject = next.acquired;
-        setResult(next);
-        setStatus(next.acquired ? "editing" : "viewing");
-      } catch {
-        if (disposed || generation !== generationRef.current) return;
-        acquiredThisProject = false;
-        setResult(EMPTY_RESULT);
-        setStatus("error");
-      } finally {
-        running = false;
-      }
+      await enqueueLockOperation(client, async () => {
+        try {
+          if (disposed) return;
+          const next = permissionCanEdit && client.acquireProjectLock
+            ? await client.acquireProjectLock({ projectId, projectName: projectNameRef.current })
+            : client.loadProjectLock
+              ? await client.loadProjectLock(projectId)
+              : { available: false, acquired: permissionCanEdit, lock: null };
+          acquiredThisProject = next.acquired;
+          if (disposed || generation !== generationRef.current) return;
+          setResult(next);
+          setStatus(next.acquired ? "editing" : "viewing");
+        } catch {
+          if (disposed || generation !== generationRef.current) return;
+          setResult(EMPTY_RESULT);
+          setStatus("error");
+        } finally {
+          running = false;
+        }
+      });
     };
 
     // A project switch must revoke the previous lease locally before the new
@@ -102,7 +114,13 @@ export function usePcbProjectLock({
 
     const release = () => {
       if (!client.releaseProjectLock) return;
-      void client.releaseProjectLock(projectId).catch(() => undefined);
+      void enqueueLockOperation(client, async () => {
+        // Session revalidation must not release a lease owned by its replacement session.
+        if (!acquiredThisProject || (client.getAccessSnapshot
+          && client.getAccessSnapshot().generation !== access.generation)) return;
+        await client.releaseProjectLock!(projectId);
+        acquiredThisProject = false;
+      }).catch(() => undefined);
     };
     window.addEventListener("beforeunload", release);
 
@@ -112,16 +130,14 @@ export function usePcbProjectLock({
       window.clearInterval(heartbeat);
       window.removeEventListener("beforeunload", release);
       refreshRef.current = async () => undefined;
-      // Session revalidation keeps the same client's lease. Releasing here can
-      // race its replacement heartbeat and revoke a freshly renewed lease.
-      if (acquiredThisProject && (!client.getAccessSnapshot
-        || client.getAccessSnapshot().generation === access.generation)) release();
+      release();
     };
-  }, [client, clientId, permissionCanEdit, projectId, projectName, access.generation, accessBlocked, enabled]);
+  }, [client, clientId, permissionCanEdit, projectId, access.generation, accessBlocked, enabled]);
 
   const refresh = useCallback(() => refreshRef.current(), []);
   const sameProject = scopeRef.current?.client === client
-    && scopeRef.current?.projectId === projectId && scopeRef.current?.clientId === clientId;
+    && scopeRef.current?.projectId === projectId && scopeRef.current?.clientId === clientId
+    && scopeRef.current?.accessGeneration === access.generation;
   const canEdit = enabled && permissionCanEdit && access.status === "ready"
     && (!client || (sameProject && (!result.available || result.acquired)));
   const lock: PcbProjectLock | null = result.lock;

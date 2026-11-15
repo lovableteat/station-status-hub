@@ -426,7 +426,7 @@ test("promotes PCB projects to a shared, conflict-safe team catalog", () => {
   assert.match(remoteSyncSource, /server tombstones always remove stale local project copies/i);
 });
 
-test("lists shared STEP metadata for automatic orphan recovery without exposing mesh payloads", () => {
+test("lists shared STEP metadata without exposing mesh payloads", () => {
   assert.match(modelAssetRecoveryMigrationSource, /list_pcb_designer_model_assets/);
   assert.match(modelAssetRecoveryMigrationSource, /pcb_designer_can_view\(p_user_id\)/);
   assert.match(modelAssetRecoveryMigrationSource, /jsonb_agg\(asset\.metadata ORDER BY asset\.updated_at DESC\)/);

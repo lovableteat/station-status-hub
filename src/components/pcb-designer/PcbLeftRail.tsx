@@ -2,6 +2,7 @@ import { useMemo, useState, type ChangeEvent } from "react";
 import {
   CheckCircle2,
   Copy,
+  CloudDownload,
   Eye,
   Filter,
   MoreHorizontal,
@@ -55,6 +56,8 @@ interface PcbLeftRailProps {
   onDeleteComponent: (component: PcbLibraryComponent) => void;
   libraryImportState: "idle" | "loading";
   onLibraryFile: (file: File) => void;
+  onRecoverCloudModels: () => void;
+  canRecoverCloudModels: boolean;
 }
 
 const tabLabels: Record<PcbLeftTab, string> = {
@@ -120,6 +123,8 @@ export function PcbLeftRail({
   onDeleteComponent,
   libraryImportState,
   onLibraryFile,
+  onRecoverCloudModels,
+  canRecoverCloudModels,
 }: PcbLeftRailProps) {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -209,7 +214,7 @@ export function PcbLeftRail({
         ))}
       </div>
 
-      <div className="pcb-rail-actions">
+      <div className={cn("pcb-rail-actions", activeTab === "library" && "pcb-library-actions")}>
         {activeTab === "templates" && (
           <Button type="button" size="sm" className="pcb-primary-action" disabled={!workspace.canMutate} onClick={onSaveTemplate}>
             <Plus className="mr-1.5 h-3.5 w-3.5" />另存為模板
@@ -239,6 +244,12 @@ export function PcbLeftRail({
                 onChange={(event) => chooseFile(event, onLibraryFile)}
               />
             </label>
+            <Button type="button" variant="outline" size="sm" className="pcb-upload-action"
+              disabled={!workspace.canMutate || !canRecoverCloudModels}
+              title="列出元件庫與所有板子都未使用的雲端 STEP，勾選後才重新加入並同步"
+              onClick={onRecoverCloudModels}>
+              <CloudDownload className="mr-1 h-3.5 w-3.5" />找回雲端 STEP
+            </Button>
           </>
         )}
       </div>

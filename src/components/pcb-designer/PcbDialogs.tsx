@@ -41,7 +41,7 @@ export type PcbDialogState =
     title: string;
     description: string;
     confirmLabel?: string;
-    onConfirm: () => void;
+    onConfirm: () => void | boolean | Promise<void | boolean>;
   }
   | {
     kind: "import-preview";
@@ -100,6 +100,7 @@ export function PcbDialogs({
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [applying, setApplying] = useState(false);
+  const confirmRequest = useRef<object | null>(null);
   const settingsSession = useRef<ProjectSettingsSession | null>(null);
   useSyncExternalStore(subscribeDocumentDraft, () => settingsSession.current?.current ?? false, () => false);
   const activeDialog = useRef(dialog);
@@ -110,6 +111,7 @@ export function PcbDialogs({
   useLayoutEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
   useLayoutEffect(() => {
+    confirmRequest.current = null;
     settingsSession.current = null;
     setApplying(false);
     setError("");
@@ -155,6 +157,7 @@ export function PcbDialogs({
     } else setValues((current) => ({ ...current, [field]: value }));
   };
   const cancel = () => {
+    if (!mounted.current || activeDialog.current !== dialog || confirmRequest.current) return;
     // Explicit close/cancel discards; a permission-gate unmount never calls this.
     if (dialog?.kind === "project-settings") {
       if (!mounted.current || activeDialog.current !== dialog || settingsSession.current !== renderedSession) return;
@@ -255,12 +258,24 @@ export function PcbDialogs({
     }
   };
 
-  const confirm = () => {
-    if (!dialog || (dialog.kind !== "confirm" && dialog.kind !== "import-preview" && dialog.kind !== "project-import-preview")) return;
-    if (dialog.kind === "confirm") dialog.onConfirm();
-    else if (dialog.kind === "project-import-preview") dialog.onCommit();
-    else dialog.onCommit();
-    onClose();
+  const confirm = async () => {
+    if (!mounted.current || activeDialog.current !== dialog || !dialog || confirmRequest.current || (dialog.kind !== "confirm" && dialog.kind !== "import-preview" && dialog.kind !== "project-import-preview")) return;
+    const openedDialog = dialog;
+    const request = {};
+    confirmRequest.current = request;
+    setApplying(true);
+    setError("");
+    const current = () => mounted.current && activeDialog.current === openedDialog && confirmRequest.current === request;
+    try {
+      const applied = await (dialog.kind === "confirm" ? dialog.onConfirm() : dialog.onCommit());
+      if (!current()) return;
+      if (applied === false) setError("操作未完成，請確認網路與編輯權後重試。");
+      else onClose();
+    } catch {
+      if (current()) setError("操作未完成，請確認網路與編輯權後重試。");
+    } finally {
+      if (current()) { confirmRequest.current = null; setApplying(false); }
+    }
   };
 
   const isForm = dialog && [
@@ -305,10 +320,11 @@ export function PcbDialogs({
                 {dialog.description}
               </DialogDescription>
             </DialogHeader>
+            {error && <p role="alert" className="text-sm text-rose-200">{error}</p>}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={cancel}>取消</Button>
-              <Button type="button" variant="destructive" onClick={confirm}>
-                {dialog.confirmLabel ?? "刪除"}
+              <Button type="button" variant="outline" disabled={applying} onClick={cancel}>取消</Button>
+              <Button type="button" variant="destructive" disabled={applying} onClick={confirm}>
+                {applying ? "處理中…" : dialog.confirmLabel ?? "刪除"}
               </Button>
             </DialogFooter>
           </>

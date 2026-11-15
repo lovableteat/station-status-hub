@@ -175,7 +175,7 @@ async function reconcileTable(
 
 export async function syncPcbRemote(client: PcbRemoteClient, state: PcbSaveState): Promise<boolean> {
   try {
-    if (client.save) return client.save(state);
+    if (client.save) return await client.save(state);
     const results = await Promise.all([
       reconcileTable(client, "pcb_designer_projects", state.projects.map((project) => ({ id: project.id, payload: project })), state.remoteDeletions?.projects ?? []),
       reconcileTable(client, "pcb_designer_templates", state.templates.map((template) => ({ id: template.id, payload: template })), state.remoteDeletions?.templates ?? []),

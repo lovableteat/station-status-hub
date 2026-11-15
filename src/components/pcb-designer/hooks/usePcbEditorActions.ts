@@ -40,6 +40,7 @@ import { libraryIdentity } from "../core/workspaceRecords.ts";
 import { isValidBoard } from "../core/validation.ts";
 import { isValidComponentKeepout } from "../core/componentKeepout.ts";
 import { deletePcbSelection } from "../core/selection.ts";
+import { roundPosition } from "../core/geometry.ts";
 import { DEFAULT_MEASUREMENT_SHORTCUTS, MEASUREMENT_SHORTCUTS_KEY, measurementShortcutDirection, validMeasurementShortcuts, type MeasurementRotationDirection, type MeasurementShortcuts } from "../core/measurementShortcuts.ts";
 
 export const MAX_AUTO_PLACE_ITEMS = 50;
@@ -399,6 +400,8 @@ export function usePcbEditorActions(
         ...(patch.rotation === undefined ? {} : { rotation: normalizeRotation(patch.rotation) }),
       };
       if (![candidate.width, candidate.height, candidate.maxHeight, candidate.x, candidate.y, candidate.rotation].every(Number.isFinite)) return false;
+      if (patch.x !== undefined) candidate.x = roundPosition(candidate.x);
+      if (patch.y !== undefined) candidate.y = roundPosition(candidate.y);
       if (candidate.width <= 0 || candidate.height <= 0 || candidate.maxHeight <= 0) return false;
       if (candidate.insertionDepth !== undefined && (!Number.isFinite(candidate.insertionDepth) || candidate.insertionDepth < 0 || candidate.insertionDepth > 1000)) return false;
       if (candidate.keepout !== undefined && !isValidComponentKeepout(candidate.keepout)) return false;
@@ -422,6 +425,8 @@ export function usePcbEditorActions(
       if (!source) return false;
       const keepout = { ...source, ...patch };
       if (![keepout.x, keepout.y, keepout.width, keepout.height, keepout.rotation ?? 0].every(Number.isFinite)) return false;
+      if (patch.x !== undefined) keepout.x = roundPosition(keepout.x);
+      if (patch.y !== undefined) keepout.y = roundPosition(keepout.y);
       if (keepout.width <= 0 || keepout.height <= 0) return false;
       keepout.rotation = normalizeRotation(keepout.rotation ?? 0);
       if (
@@ -449,6 +454,9 @@ export function usePcbEditorActions(
       if (!source) return false;
       const measurement = { ...source, ...patch };
       if (![measurement.x1, measurement.y1, measurement.x2, measurement.y2].every(Number.isFinite)) return false;
+      for (const coordinate of ["x1", "y1", "x2", "y2"] as const) {
+        if (patch[coordinate] !== undefined) measurement[coordinate] = roundPosition(measurement[coordinate]);
+      }
       if (
         measurement.x1 < 0
         || measurement.y1 < 0

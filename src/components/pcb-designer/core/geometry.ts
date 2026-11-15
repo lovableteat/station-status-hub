@@ -26,6 +26,10 @@ interface ViewBoxRectangle {
 const EPSILON = 1e-9;
 export const MAX_PLACEMENT_CHECKS = 10_000;
 
+export function roundPosition(value: number): number {
+  return Math.round(value * 10000) / 10000;
+}
+
 export interface PlacementSearchOptions {
   maxChecks?: number;
 }

@@ -1,4 +1,5 @@
 import { applyProjectSettings } from "./projectSettingsDraft.ts";
+import { objectRevision, projectRevision } from "./workspaceRevision.ts";
 import { createBlankProject, createId } from "../defaults.ts";
 import type {
   PcbProject,
@@ -39,8 +40,10 @@ export type {
   TemplateInput,
 } from "./workspaceTypes.ts";
 
+const EMPTY_PENDING: PcbWorkspaceState["pendingPlacements"] = [];
+
 function materialize(
-  state: Omit<PcbWorkspaceState, "activeProject" | "drcIssues" | "canUndo" | "canRedo">,
+  state: Omit<PcbWorkspaceState, "activeProject" | "drcIssues" | "canUndo" | "canRedo"> & { activeProject?: PcbProject; drcIssues?: PcbWorkspaceState["drcIssues"] },
 ): PcbWorkspaceState {
   let data = state.data;
   let activeProject = data.projects.find(
@@ -56,7 +59,7 @@ function materialize(
   }
   const history = state.historyByProject[activeProject.id]
     ?? createHistoryState(activeProject);
-  const pendingPlacements = data.pendingPlacementsByProject?.[activeProject.id] ?? [];
+  const pendingPlacements = data.pendingPlacementsByProject?.[activeProject.id] ?? EMPTY_PENDING;
   const pendingHistory = state.pendingHistoryByProject[activeProject.id]
     ?? createHistoryState(pendingPlacements);
   const selectionHistory = state.selectionHistoryByProject[activeProject.id]
@@ -70,8 +73,13 @@ function materialize(
     : [];
   return {
     ...state,
+    // Async model imports belong to the document and placement queue they started with.
+    projectGeneration: state.projectGeneration + Number(Boolean(state.activeProject && (
+      state.activeProject.id !== activeProject.id || state.activeProject.updatedAt !== activeProject.updatedAt
+      || (state.pendingPlacements !== pendingPlacements && objectRevision(state.pendingPlacements) !== objectRevision(pendingPlacements))
+    ))),
     data,
-    activeProject: clone(activeProject),
+    activeProject,
     historyByProject: {
       ...state.historyByProject,
       [activeProject.id]: history,
@@ -84,8 +92,8 @@ function materialize(
       ...state.selectionHistoryByProject,
       [activeProject.id]: selectionHistory,
     },
-    drcIssues: runDrc(activeProject),
-    pendingPlacements: clone(pendingPlacements),
+    drcIssues: state.activeProject === activeProject && state.drcIssues ? state.drcIssues : runDrc(activeProject),
+    pendingPlacements,
     visibleLayer,
     selectedObjects: clone(selectedObjects),
     selection: selectionHistory.current.selection
@@ -159,7 +167,7 @@ export function createWorkspaceState(
   data: PcbSaveState,
   canEdit: boolean,
 ): PcbWorkspaceState {
-  const safeData = normalizePcbSaveState(clone(data));
+  const safeData = normalizePcbSaveState(data);
   const project = safeData.projects.find(
     (item) => item.id === safeData.activeProjectId,
   ) ?? newestProject(safeData.projects) ?? createBlankProject();
@@ -179,7 +187,9 @@ export function createWorkspaceState(
       [project.id]: createHistoryState(emptySelectionSnapshot()),
     },
     pendingPlacements: [],
+    projectGeneration: 0,
     canEdit,
+    transitionBusy: false,
     documentLocked: false,
     tool: "select",
     activeLayer: "top",
@@ -224,6 +234,7 @@ function replaceProject(
   const selectionHistory = push
     ? pushHistory(previousSelectionHistory, selectionSnapshot)
     : createHistoryState(selectionSnapshot);
+  const nextPendingPlacements = pendingPlacements === state.pendingPlacements ? pendingPlacements : clone(pendingPlacements);
   return materialize({
     ...state,
     selection: selectionSnapshot.selection ? clone(selectionSnapshot.selection) : null,
@@ -231,11 +242,11 @@ function replaceProject(
     data: {
       ...state.data,
       projects: state.data.projects.map((item) =>
-        item.id === update.id ? update : clone(item),
+        item.id === update.id ? update : item,
       ),
       pendingPlacementsByProject: {
         ...(state.data.pendingPlacementsByProject ?? {}),
-        [update.id]: clone(pendingPlacements),
+        [update.id]: nextPendingPlacements,
       },
       updatedAt: update.updatedAt,
     },
@@ -279,14 +290,55 @@ export function reduceWorkspaceState(
   state: PcbWorkspaceState,
   action: PcbWorkspaceAction,
 ): PcbWorkspaceState {
+  if (action.type === "transition/set-busy") return { ...state, transitionBusy: action.busy,
+    projectGeneration: state.projectGeneration + Number(action.busy && !state.transitionBusy) };
+  if (action.type === "project/discard") {
+    if (!action.project) {
+      if (action.projectId !== state.activeProject.id || state.data.projects.length < 2) return state;
+      const projects = state.data.projects.filter(project => project.id !== action.projectId);
+      const pendingPlacementsByProject = { ...state.data.pendingPlacementsByProject };
+      const historyByProject = { ...state.historyByProject };
+      const pendingHistoryByProject = { ...state.pendingHistoryByProject };
+      const selectionHistoryByProject = { ...state.selectionHistoryByProject };
+      delete pendingPlacementsByProject[action.projectId];
+      delete historyByProject[action.projectId];
+      delete pendingHistoryByProject[action.projectId];
+      delete selectionHistoryByProject[action.projectId];
+      return materialize({ ...state, historyByProject, pendingHistoryByProject, selectionHistoryByProject,
+        selection: null, selectedObjects: [], tool: "select",
+        data: { ...state.data, projects, activeProjectId: projects[0].id, pendingPlacementsByProject, updatedAt: timestamp() } });
+    }
+    if (action.project.id !== state.activeProject.id) return state;
+    return replaceProject({ ...state, tool: "select" }, action.project, false, action.pendingPlacements, emptySelectionSnapshot());
+  }
   if (action.type === "project/settings") {
-    const project = state.canEdit && !state.documentLocked && action.projectId === state.activeProject.id
+    const project = state.canEdit && !state.documentLocked && !state.transitionBusy && action.projectId === state.activeProject.id
       ? applyProjectSettings(state.activeProject, action.baselineRevision, action.settings) : null;
     return {
       ...(project ? replaceProject(state, project) : state),
       projectSettingsReceipt: { requestToken: action.requestToken, accepted: Boolean(project) },
     };
   }
+  if (action.type === "model/assign") {
+    const component = state.activeProject.components.find((item) => item.instanceId === action.componentId);
+    const accepted = state.canEdit && !state.documentLocked && !state.transitionBusy
+      && action.projectId === state.activeProject.id && action.generation === state.projectGeneration
+      && Boolean(component && !component.locked);
+    if (!accepted) return { ...state,
+      modelAssignmentReceipt: { requestToken: action.requestToken, accepted: false, generation: state.projectGeneration } };
+    const updated = replaceProject(state, {
+      ...state.activeProject,
+      components: state.activeProject.components.map((item) =>
+        item.instanceId === action.componentId ? { ...item, modelAssetId: action.metadata.id } : item,
+      ),
+    });
+    return materialize({
+      ...updated,
+      modelAssignmentReceipt: { requestToken: action.requestToken, accepted: true, generation: updated.projectGeneration },
+      data: { ...updated.data, modelAssets: { ...updated.data.modelAssets, [action.metadata.id]: clone(action.metadata) } },
+    });
+  }
+  if (state.transitionBusy && (isMutation(action) || ["project/open", "persistence/hydrate", "persistence/touch"].includes(action.type))) return state;
   if (isMutation(action) && (!state.canEdit || state.documentLocked)
     && action.type !== "document/toggle-lock") {
     return state;
@@ -309,7 +361,7 @@ export function reduceWorkspaceState(
         viewCenter: { x: project.board.width / 2, y: project.board.height / 2 },
         data: {
           ...state.data,
-          projects: [...state.data.projects.map(clone), project],
+          projects: [...state.data.projects, project],
           activeProjectId: project.id,
           updatedAt: timestamp(),
         },
@@ -354,7 +406,7 @@ export function reduceWorkspaceState(
           projects: state.data.projects.map((item) =>
             item.id === project.id
               ? { ...clone(item), name, updatedAt }
-              : clone(item),
+              : item,
           ),
           updatedAt,
         },
@@ -387,7 +439,7 @@ export function reduceWorkspaceState(
         viewCenter: { x: copy.board.width / 2, y: copy.board.height / 2 },
         data: {
           ...state.data,
-          projects: [...state.data.projects.map(clone), copy],
+          projects: [...state.data.projects, copy],
           activeProjectId: copy.id,
           pendingPlacementsByProject: {
             ...(state.data.pendingPlacementsByProject ?? {}),
@@ -404,7 +456,7 @@ export function reduceWorkspaceState(
     case "project/delete": {
       let projects = state.data.projects.filter(
         (project) => project.id !== action.projectId,
-      ).map(clone);
+      );
       if (projects.length === state.data.projects.length) return state;
       if (!projects.length) projects = [createBlankProject()];
       const activeProjectId = state.data.activeProjectId === action.projectId
@@ -462,7 +514,7 @@ export function reduceWorkspaceState(
         viewCenter: { x: project.board.width / 2, y: project.board.height / 2 },
         data: {
           ...state.data,
-          projects: [...state.data.projects.map(clone), project],
+          projects: [...state.data.projects, project],
           activeProjectId: project.id,
           updatedAt: project.updatedAt,
         },
@@ -475,28 +527,6 @@ export function reduceWorkspaceState(
     case "project/commit":
       if (action.update.id !== state.activeProject.id) return state;
       return replaceProject(state, action.update);
-    case "model/assign": {
-      const component = state.activeProject.components.find((item) => item.instanceId === action.componentId);
-      if (!component || component.locked) return state;
-      const updated = replaceProject(state, {
-        ...state.activeProject,
-        components: state.activeProject.components.map((item) =>
-          item.instanceId === action.componentId
-            ? { ...item, modelAssetId: action.metadata.id }
-            : item,
-        ),
-      });
-      return materialize({
-        ...updated,
-        data: {
-          ...updated.data,
-          modelAssets: {
-            ...(updated.data.modelAssets ?? {}),
-            [action.metadata.id]: clone(action.metadata),
-          },
-        },
-      });
-    }
     case "project/commit-with-bom":
       if (action.update.id !== state.activeProject.id) return state;
       return replaceProject(state, action.update, true, action.pendingPlacements);
@@ -512,7 +542,7 @@ export function reduceWorkspaceState(
         viewCenter: { x: project.board.width / 2, y: project.board.height / 2 },
         data: {
           ...state.data,
-          projects: [...state.data.projects.map(clone), project],
+          projects: [...state.data.projects, project],
           activeProjectId: project.id,
           updatedAt: project.updatedAt,
         },
@@ -823,7 +853,7 @@ export function reduceWorkspaceState(
         data: {
           ...state.data,
           projects: state.data.projects.map((item) =>
-            item.id === project.id ? project : clone(item),
+            item.id === project.id ? project : item,
           ),
           pendingPlacementsByProject: {
             ...(state.data.pendingPlacementsByProject ?? {}),
@@ -846,7 +876,7 @@ export function reduceWorkspaceState(
       });
     }
     case "document/toggle-lock":
-      return state.canEdit ? { ...state, documentLocked: !state.documentLocked } : state;
+      return state.canEdit ? { ...state, documentLocked: !state.documentLocked, projectGeneration: state.projectGeneration + 1 } : state;
     case "tool/set":
       return { ...state, tool: action.tool };
     case "layer/set":
@@ -956,14 +986,38 @@ export function reduceWorkspaceState(
     case "panel/right":
       return { ...state, rightTab: action.tab };
     case "permission/set":
-      return { ...state, canEdit: action.canEdit };
+      return { ...state, canEdit: action.canEdit, projectGeneration: state.projectGeneration + Number(state.canEdit !== action.canEdit) };
     case "persistence/hydrate": {
       // A queued hydration can supersede an accepted local settings action before
       // its receipt is observed. Resolve that token conservatively, retaining the raw draft.
       const hydrated = { ...createWorkspaceState(action.data, state.canEdit),
+        modelAssignmentReceipt: state.modelAssignmentReceipt,
         projectSettingsReceipt: state.projectSettingsReceipt ? { ...state.projectSettingsReceipt, accepted: false } : undefined };
+      const unchangedProjects = new Set<string>();
+      for (const [index, project] of hydrated.data.projects.entries()) {
+        const previous = state.data.projects.find((item) => item.id === project.id);
+        const pending = hydrated.data.pendingPlacementsByProject?.[project.id] ?? EMPTY_PENDING;
+        const previousPending = state.data.pendingPlacementsByProject?.[project.id] ?? EMPTY_PENDING;
+        const unchanged = previous && (previous === project || projectRevision(previous, true) === projectRevision(project, true))
+          && (previousPending === pending || objectRevision(previousPending) === objectRevision(pending));
+        if (unchanged) unchangedProjects.add(project.id);
+        if (unchanged && previous.updatedAt === project.updatedAt && previous.lastEditedBy === project.lastEditedBy
+          && previous.lastEditedById === project.lastEditedById) hydrated.data.projects[index] = previous;
+        if (unchanged && hydrated.data.pendingPlacementsByProject?.[project.id]) hydrated.data.pendingPlacementsByProject[project.id] = previousPending;
+        hydrated.historyByProject[project.id] = unchanged && state.historyByProject[project.id]
+          ? { ...state.historyByProject[project.id], current: clone(project) }
+          : createHistoryState(project);
+        hydrated.pendingHistoryByProject[project.id] = unchanged && state.pendingHistoryByProject[project.id]
+          ? state.pendingHistoryByProject[project.id] : createHistoryState(pending);
+        hydrated.selectionHistoryByProject[project.id] = unchanged && state.selectionHistoryByProject[project.id]
+          ? state.selectionHistoryByProject[project.id] : createHistoryState(emptySelectionSnapshot());
+      }
+      hydrated.activeProject = hydrated.data.projects.find(project => project.id === hydrated.activeProject.id)!;
+      if (hydrated.activeProject === state.activeProject) hydrated.drcIssues = state.drcIssues;
       const preserve = action.preserveView;
-      if (!preserve) return hydrated;
+      if (!preserve) return materialize({ ...hydrated,
+        projectGeneration: state.projectGeneration + Number(hydrated.activeProject.id !== state.activeProject.id || !unchangedProjects.has(hydrated.activeProject.id)),
+        documentLocked: hydrated.activeProject.id === state.activeProject.id && state.documentLocked });
       const requestedProject = preserve.activeProjectId
         ? hydrated.data.projects.find((project) => project.id === preserve.activeProjectId)
         : undefined;
@@ -985,6 +1039,11 @@ export function reduceWorkspaceState(
         ?? createHistoryState(emptySelectionSnapshot());
       return materialize({
         ...hydrated,
+        activeProject,
+        drcIssues: activeProject === state.activeProject ? state.drcIssues : runDrc(activeProject),
+        pendingPlacements: hydrated.data.pendingPlacementsByProject?.[activeProject.id] ?? [],
+        projectGeneration: state.projectGeneration + Number(activeProject.id !== state.activeProject.id || !unchangedProjects.has(activeProject.id)),
+        documentLocked: activeProject.id === state.activeProject.id && state.documentLocked,
         data: { ...hydrated.data, activeProjectId: activeProject.id },
         activeLayer: preserve.activeLayer,
         visibleLayer: preserve.visibleLayer,

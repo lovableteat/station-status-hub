@@ -20,7 +20,7 @@ export function pcbOwnerStorageKey(ownerId: string): string {
   return `${PCB_STORAGE_KEY}:owner:${encodeURIComponent(ownerId)}`;
 }
 
-type RecoveryCheckpoint = { state: PcbSaveState; savedRevision: string };
+type RecoveryCheckpoint = { state: PcbSaveState; savedRevision: string; confirmedState?: PcbSaveState };
 // Memory belongs only to this document/storage object. It is not durable across reloads.
 const recoveryCheckpoints = new WeakMap<StorageLike, Map<string, RecoveryCheckpoint | null>>();
 // One document-level warning survives permission-guard unmounts. Tokens contain no
@@ -225,23 +225,39 @@ export class PcbLocalRepository {
       const raw = this.storage.getItem(`${PCB_STORAGE_KEY}:draft:${ownerId}${clientId ? `:${clientId}` : ""}`);
       const draft = raw ? JSON.parse(raw) : null;
       if (draft?.version === PAYLOAD_VERSION && typeof draft.savedRevision === "string" && isPcbSaveState(draft.state)) {
-        return { state: normalizePcbSaveState(draft.state), savedRevision: draft.savedRevision };
+        return { state: normalizePcbSaveState(draft.state), savedRevision: draft.savedRevision,
+          ...(isPcbSaveState(draft.confirmedState) ? { confirmedState: normalizePcbSaveState(draft.confirmedState) } : {}) };
       }
     } catch { /* A corrupt recovery copy must not block the editor. */ }
     return null;
   }
 
-  saveRecovery(ownerId: string, state: PcbSaveState, savedRevision: string, clientId?: string): boolean {
+  saveRecovery(ownerId: string, state: PcbSaveState, savedRevision: string, clientId?: string, confirmedState?: PcbSaveState, dirty = state.updatedAt !== savedRevision): boolean {
+    this.checkpoints().set(JSON.stringify([ownerId, clientId ?? null]), {
+      state: clone(state), savedRevision, ...(confirmedState ? { confirmedState: clone(confirmedState) } : {}),
+    });
+    return this.flushRecovery(ownerId, clientId, dirty);
+  }
+
+  // React's immutable snapshots keep the latest draft in memory without serializing every key press.
+  stageRecovery(ownerId: string, state: PcbSaveState, savedRevision: string, clientId?: string, confirmedState?: PcbSaveState, dirty = true): void {
     const checkpointKey = JSON.stringify([ownerId, clientId ?? null]);
-    this.checkpoints().set(checkpointKey, { state: clone(state), savedRevision });
+    this.checkpoints().set(checkpointKey, { state, savedRevision, ...(confirmedState ? { confirmedState } : {}) });
+    setMemoryOnlyRecovery(this.storage, checkpointKey, dirty);
+  }
+
+  flushRecovery(ownerId: string, clientId?: string, dirty = true): boolean {
+    const checkpointKey = JSON.stringify([ownerId, clientId ?? null]);
+    const checkpoint = this.checkpoints().get(checkpointKey);
+    if (!checkpoint) return true;
     try {
       this.storage.setItem(`${PCB_STORAGE_KEY}:draft:${ownerId}${clientId ? `:${clientId}` : ""}`, JSON.stringify({
-        version: PAYLOAD_VERSION, state, savedRevision,
+        version: PAYLOAD_VERSION, ...checkpoint,
       }));
       setMemoryOnlyRecovery(this.storage, checkpointKey, false);
       return true;
     } catch {
-      setMemoryOnlyRecovery(this.storage, checkpointKey, state.updatedAt !== savedRevision);
+      setMemoryOnlyRecovery(this.storage, checkpointKey, dirty);
       return false;
     }
   }

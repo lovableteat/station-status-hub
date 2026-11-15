@@ -289,7 +289,7 @@ for (const failure of ["server-500", "transport"] as const) test(`persistent ${f
     assert.deepEqual(local.repository.loadRecovery(owner, recoveryClientId), recovery);
     await act(async () => { remote.failAll(null); await hook.value.retryRemote(); });
     await hook.flush();
-    assert.equal(remote.calls.length, 6);
+    assert.equal(remote.calls.length, 7); // Retry read + lease, then verify the board after acquiring it.
     assert.equal(hook.value.remoteReady, true);
     assert.equal(hook.value.canEdit, true);
     assert.equal(hook.value.hasUnsavedChanges, true);
@@ -384,11 +384,12 @@ for (const storageFailure of ["quota", "unavailable"] as const) test(`actual Per
     await act(async () => api!.renameProject(api!.activeProject.id, "Owner A unsaved memory-only draft"));
     assert.equal(api!.hasUnsavedChanges, true);
     const checkpoint = structuredClone(api!.data);
-    assert.ok(failedWrites > 0);
+    assert.equal(failedWrites, 0); // The latest immutable draft is staged before the debounce writes disk.
     assert.ok(repository.loadRecovery(owner, recoveryId));
     const durableDraftKey = `${PCB_STORAGE_KEY}:draft:${owner}:${recoveryId}`;
     assert.equal(values.get(durableDraftKey) ?? "", ""); // No false claim of durable storage.
     profileDenied = true; await refreshProfile(); assert.equal(mounted, false);
+    assert.ok(failedWrites > 0); // Unmount synchronously flushes even when the timer has not fired.
     const leaveWhileGuarded = new dom.window.Event("beforeunload", { cancelable: true });
     dom.window.dispatchEvent(leaveWhileGuarded);
     assert.equal(leaveWhileGuarded.defaultPrevented, true); // Survives the hook's true unmount.

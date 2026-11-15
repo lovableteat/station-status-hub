@@ -13,6 +13,7 @@ import {
   canPlaceComponent,
   getRotatedRectangleCorners,
   MAX_PLACEMENT_CHECKS,
+  roundPosition,
   searchPlacement,
   snapValue,
   type PlacementSearchOptions,
@@ -133,7 +134,7 @@ export function placeLibraryComponent(
         y: snapValue(preferred.y, project.board.gridSize),
       }
       : preferred;
-    const exactCandidate = { ...candidate, ...point };
+    const exactCandidate = { ...candidate, x: roundPosition(point.x), y: roundPosition(point.y) };
     if (!canPlaceComponent(base, exactCandidate)) {
       return { ok: false, reason: "此位置超出板框，或與現有元件及禁制區重疊。" };
     }
@@ -203,12 +204,12 @@ export function moveComponent(
   if (source.locked) return { ok: false, reason: "元件已鎖定，無法移動。" };
   const candidate = {
     ...source,
-    x: project.board.snapToGrid && !bypassSnap
+    x: roundPosition(project.board.snapToGrid && !bypassSnap
       ? snapValue(point.x, project.board.gridSize)
-      : point.x,
-    y: project.board.snapToGrid && !bypassSnap
+      : point.x),
+    y: roundPosition(project.board.snapToGrid && !bypassSnap
       ? snapValue(point.y, project.board.gridSize)
-      : point.y,
+      : point.y),
   };
   if (candidate.x === source.x && candidate.y === source.y) {
     return { ok: true, project, component: source, changed: false };
@@ -254,8 +255,8 @@ export function moveComponents(
   for (const source of movableSources) {
     candidates.set(source.instanceId, {
       ...source,
-      x: source.x + appliedDelta.x,
-      y: source.y + appliedDelta.y,
+      x: roundPosition(source.x + appliedDelta.x),
+      y: roundPosition(source.y + appliedDelta.y),
     });
   }
 
@@ -312,13 +313,13 @@ export function moveObjects(
 
   const movedComponents = components.map((component) => ({
     ...component,
-    x: component.x + appliedDelta.x,
-    y: component.y + appliedDelta.y,
+    x: roundPosition(component.x + appliedDelta.x),
+    y: roundPosition(component.y + appliedDelta.y),
   }));
   const movedKeepouts = keepouts.map((keepout) => ({
     ...keepout,
-    x: keepout.x + appliedDelta.x,
-    y: keepout.y + appliedDelta.y,
+    x: roundPosition(keepout.x + appliedDelta.x),
+    y: roundPosition(keepout.y + appliedDelta.y),
   }));
   const obstacleProject: PcbProject = {
     ...project,
@@ -481,6 +482,10 @@ export function arrangeComponents(
     }
   }
 
+  for (const position of nextPositions.values()) {
+    position.x = roundPosition(position.x);
+    position.y = roundPosition(position.y);
+  }
   const changed = selected.some((component) => {
     const position = nextPositions.get(component.instanceId)!;
     return Math.abs(position.x - component.x) > 1e-9
@@ -521,8 +526,8 @@ export function moveKeepout(
     : point.y;
   const keepout = {
     ...source,
-    x: clamp(snappedX, 0, Math.max(0, project.board.width - source.width)),
-    y: clamp(snappedY, 0, Math.max(0, project.board.height - source.height)),
+    x: clamp(roundPosition(snappedX), 0, Math.max(0, Math.floor((project.board.width - source.width) * 10000) / 10000)),
+    y: clamp(roundPosition(snappedY), 0, Math.max(0, Math.floor((project.board.height - source.height) * 10000) / 10000)),
   };
   if (keepout.x === source.x && keepout.y === source.y) {
     return { ok: true, project, keepout: source, changed: false };
@@ -550,12 +555,12 @@ export function duplicateKeepout(
     : { ...offset };
   const minimumX = 0;
   const minimumY = 0;
-  const maximumX = Math.max(0, project.board.width - source.width);
-  const maximumY = Math.max(0, project.board.height - source.height);
+  const maximumX = Math.max(0, Math.floor((project.board.width - source.width) * 10000) / 10000);
+  const maximumY = Math.max(0, Math.floor((project.board.height - source.height) * 10000) / 10000);
   const unclampedX = source.x + snappedOffset.x;
   const unclampedY = source.y + snappedOffset.y;
-  const x = clamp(unclampedX, minimumX, maximumX);
-  const y = clamp(unclampedY, minimumY, maximumY);
+  const x = clamp(roundPosition(unclampedX), minimumX, maximumX);
+  const y = clamp(roundPosition(unclampedY), minimumY, maximumY);
   if ((snappedOffset.x !== 0 || snappedOffset.y !== 0) && x === source.x && y === source.y) {
     return { ok: false, reason: "找不到合法的禁佈區複製位置。" };
   }
@@ -630,10 +635,10 @@ export function editSelectedObject(
   } else if (action.type === "nudge") {
     const measurement = next.measurements.find((item) => item.id === selection.id);
     if (measurement) {
-      measurement.x1 += action.dx;
-      measurement.y1 += action.dy;
-      measurement.x2 += action.dx;
-      measurement.y2 += action.dy;
+      measurement.x1 = roundPosition(measurement.x1 + action.dx);
+      measurement.y1 = roundPosition(measurement.y1 + action.dy);
+      measurement.x2 = roundPosition(measurement.x2 + action.dx);
+      measurement.y2 = roundPosition(measurement.y2 + action.dy);
     }
   }
   return next;

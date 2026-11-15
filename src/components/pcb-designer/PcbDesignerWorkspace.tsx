@@ -38,16 +38,19 @@ import {
   toStepLibraryComponent,
 } from "./core/modelAssets.ts";
 import { PcbDialogs, type PcbDialogState } from "./PcbDialogs.tsx";
+import { PcbProjectTransitionNotice } from "./PcbProjectTransitionNotice.tsx";
 import { PcbLeftRail, type PcbLeftTab } from "./PcbLeftRail.tsx";
 import { PcbToolbar } from "./PcbToolbar.tsx";
 import { PcbCanvas } from "./PcbCanvas.tsx";
 import { PcbCollaborators } from "./PcbCollaborators.tsx";
 import { PcbInspector } from "./PcbInspector.tsx";
 import { PcbStepModelDialog } from "./PcbStepModelDialog.tsx";
+import { PcbStepRecoveryDialog } from "./PcbStepRecoveryDialog.tsx";
+import { findRecoverableStepModels } from "./core/stepRecovery.ts";
 import { PcbResearchDialog } from "./PcbResearchDialog.tsx";
 import { exportPcbSvgAsPng } from "./core/pngExport.ts";
 import type { TemplateInput } from "./core/workspace.ts";
-import type { PcbModelAsset } from "./types.ts";
+import type { PcbModelAsset, PcbModelAssetMetadata } from "./types.ts";
 import {
   createPcbAccountRemoteClient,
   isDatabaseUserId,
@@ -135,11 +138,6 @@ export function PcbDesignerWorkspace({
       : null,
   });
   const { saveNow, setTool } = workspace;
-  const importLibraryModel = workspace.importLibraryModel;
-  const remoteReady = workspace.remoteReady;
-  const canMutate = workspace.canMutate;
-  const sharedLibrary = workspace.data.library;
-  const sharedProjects = workspace.data.projects;
   const selectedObjectCount = new Set([
     ...workspace.selectedObjects,
     ...(workspace.selection ? [workspace.selection.id] : []),
@@ -164,12 +162,15 @@ export function PcbDesignerWorkspace({
   const [libraryImportState, setLibraryImportState] = useState<"idle" | "loading">("idle");
   const [stepPreview, setStepPreview] = useState<{ asset: PcbModelAsset; mode: "library" | "view" } | null>(null);
   const [stepPreviewSaving, setStepPreviewSaving] = useState(false);
+  const [stepRecoveryOpen, setStepRecoveryOpen] = useState(false);
+  const [recoveryAttempt, setRecoveryAttempt] = useState(0);
+  const recoveryRequest = useRef<{ ids: string[]; started: boolean; resolve: (saved: boolean) => void } | null>(null);
+  const cloudModelsRef = useRef<PcbModelAssetMetadata[]>([]);
+  const currentWorkspaceRef = useRef({ workspace, remoteClient });
+  currentWorkspaceRef.current = { workspace, remoteClient };
   const projectInputRef = useRef<HTMLInputElement>(null);
   const modelAssetStoreRef = useRef(getDefaultPcbModelAssetStore());
   const pendingLibrarySyncRef = useRef(false);
-  const modelAssetRecoveryStartedRef = useRef(false);
-  const sharedCatalogRef = useRef({ library: sharedLibrary, projects: sharedProjects });
-  sharedCatalogRef.current = { library: sharedLibrary, projects: sharedProjects };
   const presence = usePcbProjectPresence({
     accessMode: workspace.canEdit ? "editor" : "viewer",
     clientId: clientIdRef.current,
@@ -200,66 +201,52 @@ export function PcbDesignerWorkspace({
     });
   }, [saveNow, workspace.data.library]);
 
-  useEffect(() => {
-    if (
-      modelAssetRecoveryStartedRef.current
-      || !remoteReady
-      || !canMutate
-      || !remoteClient?.listModelAssets
-    ) return;
+  const loadRecoverableCloudModels = useCallback(async () => {
+    if (!currentWorkspaceRef.current.workspace.canMutate || !remoteClient?.listModelAssets) throw new Error("目前無法讀取雲端模型。");
+    const assets = await remoteClient.listModelAssets();
+    const current = currentWorkspaceRef.current;
+    if (current.remoteClient !== remoteClient || !current.workspace.canMutate || current.workspace.ownerChanged) throw new Error("編輯權已變更。");
+    cloudModelsRef.current = assets;
+    return findRecoverableStepModels(assets, current.workspace.data.library, current.workspace.data.projects);
+  }, [remoteClient]);
 
-    modelAssetRecoveryStartedRef.current = true;
-    let active = true;
-    void remoteClient.listModelAssets().then((metadataList) => {
-      if (!active || metadataList.length === 0) return;
-      const { library, projects } = sharedCatalogRef.current;
-      const referencedAssetIds = new Set([
-        ...library.map((component) => component.modelAssetId).filter(Boolean),
-        ...projects.flatMap((project) =>
-          project.components.map((component) => component.modelAssetId).filter(Boolean)),
-      ]);
-      const fingerprintFor = (metadata: typeof metadataList[number]) => {
-        const dimensions = metadata.calibratedDimensions;
-        return [
-          metadata.fileName.trim().toLocaleLowerCase(),
-          dimensions.widthMm.toFixed(4),
-          dimensions.depthMm.toFixed(4),
-          dimensions.heightMm.toFixed(4),
-        ].join("|");
-      };
-      const recoveredFingerprints = new Set(
-        metadataList
-          .filter((metadata) => referencedAssetIds.has(metadata.id))
-          .map(fingerprintFor),
-      );
-      const recoverable = metadataList.filter((metadata) => {
-        if (referencedAssetIds.has(metadata.id)) return false;
-        const fingerprint = fingerprintFor(metadata);
-        if (recoveredFingerprints.has(fingerprint)) return false;
-        recoveredFingerprints.add(fingerprint);
-        return true;
-      });
-      if (recoverable.length === 0) return;
-
-      pendingLibrarySyncRef.current = true;
-      recoverable.forEach((metadata) => {
-        importLibraryModel(toStepLibraryComponent(metadata), metadata);
-      });
-      toast({
-        title: "已找回遺失的 STEP 元件",
-        description: recoverable.length === 1
-          ? `${toStepLibraryComponent(recoverable[0]).name} 已重新加入共用元件庫。`
-          : `已重新加入 ${recoverable.length} 筆雲端 STEP 元件，並排除重複上傳。`,
-      });
-    }).catch(() => {
-      modelAssetRecoveryStartedRef.current = false;
+  const recoverCloudModels = useCallback((assets: PcbModelAssetMetadata[]): Promise<boolean> => {
+    const current = currentWorkspaceRef.current.workspace;
+    if (!current.canMutate || current.ownerChanged || recoveryRequest.current || assets.length === 0) return Promise.resolve(false);
+    const selected = [...new Map(assets.map(asset => [asset.id, asset])).values()];
+    const existing = new Set(current.data.library.map(component => component.modelAssetId));
+    const candidates = new Set(findRecoverableStepModels(cloudModelsRef.current, current.data.library, current.data.projects).map(asset => asset.id));
+    if (selected.some(asset => !existing.has(asset.id) && !candidates.has(asset.id))) return Promise.resolve(false);
+    return new Promise(resolve => {
+      recoveryRequest.current = { ids: selected.map(asset => asset.id), started: false, resolve };
+      selected.filter(asset => !existing.has(asset.id)).forEach(asset => current.importLibraryModel(toStepLibraryComponent(asset), asset));
+      setRecoveryAttempt(attempt => attempt + 1);
     });
+  }, []);
 
-    return () => {
-      active = false;
-      modelAssetRecoveryStartedRef.current = false;
-    };
-  }, [canMutate, importLibraryModel, remoteClient, remoteReady]);
+  useEffect(() => {
+    const request = recoveryRequest.current;
+    if (!request || request.started) return;
+    request.started = true;
+    const current = currentWorkspaceRef.current;
+    if (!current.workspace.canMutate || !request.ids.every(id => current.workspace.data.library.some(component => component.modelAssetId === id))) {
+      recoveryRequest.current = null; request.resolve(false); return;
+    }
+    // Wait for reducer adoption before saving so rejected edits cannot report recovery success.
+    void current.workspace.saveNow().then(saved => {
+      if (recoveryRequest.current !== request) return;
+      recoveryRequest.current = null;
+      const latest = currentWorkspaceRef.current;
+      const accepted = saved && latest.remoteClient === current.remoteClient && latest.workspace.canMutate
+        && request.ids.every(id => latest.workspace.data.library.some(component => component.modelAssetId === id));
+      if (accepted) toast({ title: "已找回雲端 STEP", description: `已加入並同步 ${request.ids.length} 個選取的元件。` });
+      request.resolve(accepted);
+    }, () => {
+      if (recoveryRequest.current !== request) return;
+      recoveryRequest.current = null; request.resolve(false);
+    });
+  }, [recoveryAttempt, workspace.data.library, workspace.canMutate]);
+  useEffect(() => () => { recoveryRequest.current?.resolve(false); recoveryRequest.current = null; }, []);
 
   const handleSave = useCallback(async () => {
     if (!workspace.canEdit) {
@@ -311,10 +298,10 @@ export function PcbDesignerWorkspace({
     setOpenDrawer("left");
   }, []);
 
-  const createProjectFromTemplate = useCallback((templateId: string) => {
+  const createProjectFromTemplate = useCallback(async (templateId: string) => {
     const template = workspace.data.templates.find((item) => item.id === templateId);
     if (!template) return;
-    workspace.applyTemplate(templateId);
+    if (!await workspace.applyTemplate(templateId)) return;
     setLeftRailTab("projects");
     toast({
       title: `已從「${template.name}」建立新專案`,
@@ -386,8 +373,10 @@ export function PcbDesignerWorkspace({
         validCount: 1,
         errors: [],
         onCommit: () => {
-          workspace.importProject(parsed.value);
-          toast({ title: "專案已匯入", description: `${parsed.value.name} 已建立為新專案。` });
+          setDialog(null);
+          void workspace.importProject(parsed.value).then(applied => {
+            if (applied) toast({ title: "專案已匯入", description: `${parsed.value.name} 已建立為新專案。` });
+          });
         },
       });
     } catch (error) {
@@ -461,8 +450,8 @@ export function PcbDesignerWorkspace({
     if (file.size > MAX_PCB_MODEL_FILE_BYTES) {
       throw new Error(`STEP 模型檔案不可超過 ${Math.round(MAX_PCB_MODEL_FILE_BYTES / 1024 / 1024)} MB。`);
     }
-    const component = workspace.activeProject.components.find((item) => item.instanceId === componentId);
-    if (!component || component.locked || !workspace.canMutate) {
+    const target = workspace.captureModelAssignment(componentId);
+    if (!target) {
       throw new Error("請先選取可編輯的元件。");
     }
     const model = await importStepModel(file);
@@ -472,10 +461,10 @@ export function PcbDesignerWorkspace({
       await modelAssetStoreRef.current.delete(asset.metadata.id);
       throw new Error("STEP 模型無法寫入雲端，尚未套用到元件。請確認網路後重試。");
     }
-    const assigned = workspace.assignModelAsset(componentId, asset.metadata);
+    const assigned = await workspace.assignModelAsset(target, asset.metadata);
     if (!assigned) {
       await modelAssetStoreRef.current.delete(asset.metadata.id);
-      throw new Error("元件在匯入期間已被鎖定或不可編輯，模型未套用。 ");
+      throw new Error("匯入期間板子已切換或內容已變更，或元件已刪除、鎖定或失去編輯權；模型未套用，請重新匯入。");
     }
     setStepPreview({ asset, mode: "view" });
     return asset.metadata;
@@ -523,7 +512,7 @@ export function PcbDesignerWorkspace({
     kind: "confirm",
     title: "刪除專案",
     description: `確定要刪除「${project.name}」嗎？此操作只會在確認後執行。`,
-    onConfirm: () => void workspace.deleteProject(project.id),
+    onConfirm: () => workspace.deleteProject(project.id),
   });
   const saveCurrentAsTemplate = (input: TemplateInput) => {
     workspace.saveTemplate(input);
@@ -575,6 +564,7 @@ export function PcbDesignerWorkspace({
       data-testid="pcb-designer-workspace"
       aria-labelledby="pcb-designer-title"
     >
+      <PcbProjectTransitionNotice workspace={workspace} />
       <header
         className="pcb-project-bar"
         data-testid="pcb-project-bar"
@@ -861,6 +851,8 @@ export function PcbDesignerWorkspace({
             onDeleteComponent={requestDeleteComponent}
             libraryImportState={libraryImportState}
             onLibraryFile={(file) => void handleLibraryFile(file)}
+            canRecoverCloudModels={Boolean(remoteClient?.listModelAssets) && workspace.remoteReady}
+            onRecoverCloudModels={() => setStepRecoveryOpen(true)}
           />
         </div>
 
@@ -922,6 +914,12 @@ export function PcbDesignerWorkspace({
         onClose={() => !stepPreviewSaving && setStepPreview(null)}
         onConfirm={stepPreview?.mode === "library" ? confirmStepLibraryImport : undefined}
       />
+      {stepRecoveryOpen && <PcbStepRecoveryDialog
+        canEdit={workspace.canMutate && !workspace.ownerChanged}
+        loadAssets={loadRecoverableCloudModels}
+        onRecover={recoverCloudModels}
+        onClose={() => setStepRecoveryOpen(false)}
+      />}
       {canEditModule("pcb-designer") && (
         <PcbResearchDialog key={user?.userId ?? "local"} owner={user?.userId ?? "local"} open={researchOpen} onClose={() => setResearchOpen(false)} />
       )}

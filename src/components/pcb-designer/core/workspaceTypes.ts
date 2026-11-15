@@ -41,6 +41,8 @@ export interface PcbWorkspaceState {
   data: PcbSaveState;
   /** Ephemeral reducer receipt; never part of PcbSaveState or persisted history. */
   projectSettingsReceipt?: { requestToken: string; accepted: boolean };
+  modelAssignmentReceipt?: { requestToken: string; accepted: boolean; generation: number };
+  projectGeneration: number;
   activeProject: PcbProject;
   historyByProject: Record<string, HistoryState<PcbProject>>;
   pendingHistoryByProject: Record<string, HistoryState<PendingPlacement[]>>;
@@ -48,6 +50,7 @@ export interface PcbWorkspaceState {
   drcIssues: PcbDrcIssue[];
   pendingPlacements: PendingPlacement[];
   canEdit: boolean;
+  transitionBusy: boolean;
   documentLocked: boolean;
   tool: PcbTool;
   activeLayer: "top" | "bottom";
@@ -64,13 +67,14 @@ export interface PcbWorkspaceState {
 export type PcbWorkspaceAction =
   | { type: "project/create"; input: NewProjectInput }
   | { type: "project/open"; projectId: string }
+  | { type: "project/discard"; project: PcbProject | null; projectId?: string; pendingPlacements: PendingPlacement[] }
   | { type: "project/rename"; projectId: string; name: string }
   | { type: "project/duplicate"; projectId: string; newRevision?: boolean }
   | { type: "project/delete"; projectId: string }
   | { type: "project/import"; project: PcbProject }
   | { type: "project/commit"; update: PcbProject }
   | { type: "project/settings"; requestToken: string; projectId: string; baselineRevision: string; settings: ProjectSettings }
-  | { type: "model/assign"; componentId: string; metadata: PcbModelAssetMetadata }
+  | { type: "model/assign"; projectId: string; generation: number; requestToken: string; componentId: string; metadata: PcbModelAssetMetadata }
   | { type: "project/commit-with-bom"; update: PcbProject; pendingPlacements: PendingPlacement[] }
   | { type: "template/apply"; templateId: string }
   | { type: "template/save"; input: TemplateInput }
@@ -102,6 +106,7 @@ export type PcbWorkspaceAction =
   | { type: "selection/clear-group" }
   | { type: "panel/right"; tab: PcbWorkspaceState["rightTab"] }
   | { type: "permission/set"; canEdit: boolean }
+  | { type: "transition/set-busy"; busy: boolean }
   | {
     type: "persistence/hydrate";
     data: PcbSaveState;

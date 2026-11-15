@@ -31,6 +31,10 @@ import { usePcbProjectLock } from "./usePcbProjectLock.ts";
 import { PcbRemoteAccessError, type PcbRemoteAccessStatus } from "../core/remoteAccess.ts";
 import { usePcbRemoteAccess } from "./usePcbRemoteAccess.ts";
 import { pcbRecoveryClient } from "../core/recoveryClient.ts";
+import type { PcbWorkspaceAction } from "../core/workspaceTypes.ts";
+
+type ProjectTransition = { projectId: string; projectName: string; status: "saving" | "failed"; error?: string };
+type ModelAssignmentTarget = { projectId: string; componentId: string; generation: number };
 
 export interface UsePcbWorkspaceOptions {
   canEdit: boolean;
@@ -67,12 +71,20 @@ export function usePcbWorkspace({
   const stateRef = useRef(state.data);
   const viewStateRef = useRef(state);
   const [remoteReady, setRemoteReady] = useState(!remoteClient);
+  const [checkedLeaseProjectId, setCheckedLeaseProjectId] = useState<string | null>(null);
+  const leaseReadGenerationRef = useRef(0);
   const [legacyRecovery, setLegacyRecovery] = useState<"own" | "shared-only" | null>(null);
   const modernLoadedRef = useRef(false);
   const [remoteLoadStatus, setRemoteLoadStatus] = useState<PcbRemoteAccessStatus>(remoteClient ? "checking" : "ready");
   const hydratedCleanRevisionRef = useRef<string | null>(null);
+  const hydratedProjectRef = useRef<string | null>(null);
   const hasUnsavedChangesRef = useRef(false);
-  const refreshRemoteRef = useRef<() => Promise<void>>(async () => undefined);
+  const [projectTransition, setProjectTransition] = useState<ProjectTransition | null>(null);
+  const transitionRef = useRef<{ action: PcbWorkspaceAction; sourceId: string; discarding?: boolean; saving?: boolean; start?: (saved: boolean) => void } | null>(null);
+  const mountedRef = useRef(true);
+  const discardedNewProjectRef = useRef<string | null>(null);
+  const deletingProjectRef = useRef(false);
+  const refreshRemoteRef = useRef<(afterAcquire?: boolean) => Promise<void>>(async () => undefined);
   stateRef.current = state.data;
   viewStateRef.current = state;
 
@@ -85,7 +97,8 @@ export function usePcbWorkspace({
     projectName: state.activeProject.name,
   });
   const cloudReady = !ownerChanged && !legacyRecovery && (!remoteClient || (remoteReady && remoteAccess.status === "ready" && remoteLoadStatus === "ready"));
-  const effectiveCanEdit = canEdit && projectLock.canEdit && cloudReady;
+  const effectiveCanEdit = canEdit && projectLock.canEdit && cloudReady
+    && (!remoteClient || checkedLeaseProjectId === state.activeProject.id);
 
   const persistence = usePcbPersistence({
     state: state.data,
@@ -94,15 +107,21 @@ export function usePcbWorkspace({
     allowRemoteSync: effectiveCanEdit && Boolean(remoteClient) && remoteReady,
     editor: draftOwnerRef.current,
     initialSavedRevision: recovery?.savedRevision,
+    initialConfirmedState: recovery?.confirmedState,
     recoveryClientId,
   });
-  const { markClean, markDirty, saveNow: savePersistedNow } = persistence;
+  const { markClean, markDirty, acceptRecoveryBaseline, saveNow: savePersistedNow } = persistence;
+  const persistenceRef = useRef(persistence);
+  persistenceRef.current = persistence;
+  const editableRef = useRef(effectiveCanEdit);
+  editableRef.current = effectiveCanEdit;
   const { refresh: refreshProjectLock } = projectLock;
   hasUnsavedChangesRef.current = persistence.hasUnsavedChanges;
 
   useEffect(() => {
     let active = true;
     let loading = false;
+    let pendingLoad: Promise<PcbRemoteLoadResult> | null = null;
     if (ownerChanged) {
       setRemoteReady(false);
       setRemoteLoadStatus("denied");
@@ -119,34 +138,55 @@ export function usePcbWorkspace({
     setRemoteReady(false);
     setRemoteLoadStatus("checking");
     let initialized = false;
-    const refreshRemote = async (initial: boolean) => {
-      if (!active || loading || (!initial && initialized && hasUnsavedChangesRef.current)) return;
+    const refreshRemote = async (initial: boolean, afterAcquire = false) => {
+      const leaseReadGeneration = leaseReadGenerationRef.current;
+      if (!active || (!afterAcquire && (loading || (!initial && initialized && hasUnsavedChangesRef.current)))) return;
+      if (afterAcquire && pendingLoad) { try { await pendingLoad; } catch { return; } }
+      if (!active || (afterAcquire && leaseReadGeneration !== leaseReadGenerationRef.current)) return;
+      const requestedProjectId = stateRef.current.activeProjectId;
       loading = true;
       let loaded: PcbRemoteLoadResult;
       try {
-        loaded = await loadPcbRemoteResult(remoteClient);
+        pendingLoad = loadPcbRemoteResult(remoteClient);
+        loaded = await pendingLoad;
       } catch (error) {
-        if (active) {
+        if (active && (!afterAcquire || leaseReadGeneration === leaseReadGenerationRef.current)) {
           setRemoteReady(false);
           setRemoteLoadStatus(error instanceof PcbRemoteAccessError ? error.status : "error");
         }
         return;
       } finally {
         loading = false;
+        pendingLoad = null;
       }
-      if (!active) return;
+      if (!active || (afterAcquire && leaseReadGeneration !== leaseReadGenerationRef.current)) return;
       initialized = true;
       const remoteState = loaded.state;
       const recoveringLegacy = loaded.source === "legacy";
       setLegacyRecovery(loaded.source === "legacy" ? loaded.ownSnapshotPresent ? "own" : "shared-only" : null);
       setRemoteLoadStatus("ready");
       setRemoteReady(!recoveringLegacy);
+      if (afterAcquire && !recoveringLegacy && requestedProjectId === stateRef.current.activeProjectId) setCheckedLeaseProjectId(requestedProjectId);
       if (!recoveringLegacy) modernLoadedRef.current = true;
       // Recheck after await: a user can edit while background refresh is pending.
       // A restored dirty recovery draft must also survive initial hydration.
       if (hasUnsavedChangesRef.current) {
+        if (remoteState && !recoveringLegacy) acceptRecoveryBaseline(remoteState);
+        // Refresh a newly leased clean board without replacing other recovered drafts or the shared catalog.
+        if (afterAcquire && remoteState && !viewStateRef.current.transitionBusy && requestedProjectId === stateRef.current.activeProjectId
+          && !persistenceRef.current.isProjectDirty(requestedProjectId!)) {
+          const project = remoteState.projects.find(p => p.id === requestedProjectId);
+          if (project) {
+            hydratedProjectRef.current = project.id;
+            dispatch({ type: "persistence/hydrate", data: { ...stateRef.current,
+              projects: stateRef.current.projects.map(p => p.id === project.id ? project : p),
+              pendingPlacementsByProject: { ...stateRef.current.pendingPlacementsByProject, [project.id]: remoteState.pendingPlacementsByProject?.[project.id] ?? [] },
+            }, preserveView: viewStateRef.current });
+          }
+        }
         return;
       }
+      if (viewStateRef.current.transitionBusy) return;
       const localState = stateRef.current;
       const localView = viewStateRef.current;
       if (recoveringLegacy) {
@@ -157,6 +197,14 @@ export function usePcbWorkspace({
       }
       if (remoteState) {
         const mergedState = mergePcbRemoteState(localState, remoteState);
+        const leasedProject = afterAcquire && requestedProjectId === localState.activeProjectId
+          ? remoteState.projects.find(project => project.id === requestedProjectId) : null;
+        if (leasedProject) {
+          // A confirmed-clean board must follow the server even after a clock-ahead local discard.
+          mergedState.projects = mergedState.projects.map(project => project.id === leasedProject.id ? leasedProject : project);
+          mergedState.pendingPlacementsByProject = { ...mergedState.pendingPlacementsByProject,
+            [leasedProject.id]: remoteState.pendingPlacementsByProject?.[leasedProject.id] ?? [] };
+        }
         if (JSON.stringify(mergedState) !== JSON.stringify(localState)) {
           repository.save(mergedState, draftOwnerRef.current?.userId ?? "local");
           if (!recoveringLegacy) hydratedCleanRevisionRef.current = mergedState.updatedAt;
@@ -182,7 +230,7 @@ export function usePcbWorkspace({
       // Keep its revision/recovery intact until an explicit successful save.
     };
     const refreshOnFocus = () => void refreshRemote(false);
-    refreshRemoteRef.current = () => refreshRemote(false);
+    refreshRemoteRef.current = afterAcquire => refreshRemote(false, afterAcquire);
     void refreshRemote(true);
     const refreshTimer = window.setInterval(() => void refreshRemote(false), 8_000);
     window.addEventListener("focus", refreshOnFocus);
@@ -193,13 +241,25 @@ export function usePcbWorkspace({
       window.clearInterval(refreshTimer);
       window.removeEventListener("focus", refreshOnFocus);
     };
-  }, [markClean, markDirty, remoteClient, remoteAccess.generation, repository, ownerChanged]);
+  }, [markClean, markDirty, acceptRecoveryBaseline, remoteClient, remoteAccess.generation, repository, ownerChanged]);
 
   useEffect(() => {
+    if (hydratedProjectRef.current) {
+      persistenceRef.current.confirmDiscard(hydratedProjectRef.current);
+      hydratedProjectRef.current = null;
+      return;
+    }
     if (hydratedCleanRevisionRef.current !== state.data.updatedAt) return;
     markClean(state.data.updatedAt);
     hydratedCleanRevisionRef.current = null;
-  }, [markClean, state.data.updatedAt]);
+  }, [markClean, state.data]);
+
+  useEffect(() => {
+    leaseReadGenerationRef.current += 1;
+    if (!remoteClient) return;
+    setCheckedLeaseProjectId(null);
+    if (projectLock.canEdit && !ownerChanged) void refreshRemoteRef.current(true);
+  }, [remoteClient, projectLock.canEdit, state.activeProject.id, ownerChanged]);
 
   const editor = usePcbEditorActions(state, dispatch);
   const refreshRemoteNow = useCallback(() => refreshRemoteRef.current(), []);
@@ -215,15 +275,112 @@ export function usePcbWorkspace({
     dispatch({ type: "permission/set", canEdit: effectiveCanEdit });
   }, [effectiveCanEdit]);
 
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; transitionRef.current = null; }; }, []);
+
+  const finishProjectTransition = useCallback(() => {
+    const pending = transitionRef.current;
+    if (!pending || !mountedRef.current || viewStateRef.current.activeProject.id !== pending.sourceId) return false;
+    if (pending.action.type !== "project/open" && (!editableRef.current || viewStateRef.current.documentLocked)) {
+      setProjectTransition({ projectId: pending.sourceId, projectName: viewStateRef.current.activeProject.name,
+        status: "failed", error: "目前沒有建立或複製板子的編輯權。內容仍保留在此瀏覽器，請恢復編輯權後重試或取消。" });
+      return false;
+    }
+    transitionRef.current = null;
+    dispatch({ type: "transition/set-busy", busy: false });
+    dispatch(pending.action);
+    setProjectTransition(null);
+    return true;
+  }, []);
+
+  const retryProjectTransition = useCallback(async () => {
+    const pending = transitionRef.current;
+    if (!pending || pending.discarding || pending.saving) return false;
+    pending.saving = true;
+    persistenceRef.current.flushRecovery();
+    const source = viewStateRef.current.activeProject;
+    setProjectTransition({ projectId: source.id, projectName: source.name, status: "saving" });
+    if (!persistenceRef.current.isProjectDirty(source.id)) {
+      pending.saving = false;
+      return finishProjectTransition();
+    }
+    const saved = await persistenceRef.current.saveNow();
+    pending.saving = false;
+    if (!mountedRef.current || transitionRef.current !== pending) return false;
+    if (saved && editableRef.current && !persistenceRef.current.isProjectDirty(pending.sourceId)) return finishProjectTransition();
+    setProjectTransition({ projectId: source.id, projectName: source.name, status: "failed",
+      error: persistenceRef.current.saveError ?? "雲端儲存未完成，請確認網路與編輯權。修改仍保留在此瀏覽器；請勿關閉或重新整理。" });
+    return false;
+  }, [finishProjectTransition]);
+
+  const requestProjectTransition = useCallback((action: PcbWorkspaceAction): Promise<boolean> => {
+    if (transitionRef.current || deletingProjectRef.current || ownerChanged) return Promise.resolve(false);
+    if (action.type !== "project/open" && (!editableRef.current || viewStateRef.current.documentLocked)) return Promise.resolve(false);
+    const source = viewStateRef.current.activeProject;
+    if (action.type === "project/open" && (action.projectId === source.id || !stateRef.current.projects.some(p => p.id === action.projectId))) return Promise.resolve(false);
+    persistenceRef.current.flushRecovery();
+    if (!remoteClient) {
+      dispatch(action);
+      return Promise.resolve(true);
+    }
+    transitionRef.current = { action, sourceId: source.id };
+    dispatch({ type: "transition/set-busy", busy: true });
+    return new Promise(resolve => { transitionRef.current!.start = resolve; });
+  }, [ownerChanged, remoteClient]);
+
+  useEffect(() => {
+    const pending = transitionRef.current;
+    if (!state.transitionBusy || !pending?.start) return;
+    const resolve = pending.start;
+    delete pending.start;
+    void retryProjectTransition().then(resolve);
+  }, [state.transitionBusy, retryProjectTransition]);
+
+  const cancelProjectTransition = useCallback(() => {
+    if (!transitionRef.current || projectTransition?.status === "saving") return;
+    transitionRef.current = null;
+    dispatch({ type: "transition/set-busy", busy: false });
+    setProjectTransition(null);
+  }, [projectTransition?.status]);
+
+  const discardProjectTransition = useCallback(() => {
+    const pending = transitionRef.current;
+    const baseline = persistenceRef.current.confirmedState;
+    const project = baseline?.projects.find(p => p.id === pending?.sourceId);
+    if (!pending || !baseline || projectTransition?.status !== "failed") return false;
+    if (pending.action.type !== "project/open" && !editableRef.current) return false;
+    persistenceRef.current.flushRecovery();
+    if (!project) {
+      if (pending.action.type === "project/duplicate" && pending.action.projectId === pending.sourceId) return false;
+      discardedNewProjectRef.current = pending.sourceId;
+      dispatch({ type: "project/discard", project: null, projectId: pending.sourceId, pendingPlacements: [] });
+      return finishProjectTransition();
+    }
+    pending.discarding = true;
+    dispatch({ type: "project/discard", project,
+      pendingPlacements: baseline.pendingPlacementsByProject?.[project.id] ?? [] });
+    return true;
+  }, [projectTransition?.status, finishProjectTransition]);
+
+  useEffect(() => {
+    if (discardedNewProjectRef.current) {
+      persistenceRef.current.confirmDiscard(discardedNewProjectRef.current);
+      discardedNewProjectRef.current = null;
+    }
+    const pending = transitionRef.current;
+    if (!pending?.discarding) return;
+    persistenceRef.current.confirmDiscard(pending.sourceId);
+    finishProjectTransition();
+  }, [state.data, finishProjectTransition]);
+
   const createProject = useCallback(
-    (input: NewProjectInput) => dispatch({ type: "project/create", input }),
-    [],
+    (input: NewProjectInput) => requestProjectTransition({ type: "project/create", input }),
+    [requestProjectTransition],
   );
   const openProject = useCallback(
     (projectId: string) => {
-      dispatch({ type: "project/open", projectId });
+      return requestProjectTransition({ type: "project/open", projectId });
     },
-    [],
+    [requestProjectTransition],
   );
   const renameProject = useCallback(
     (projectId: string, name: string) =>
@@ -231,21 +388,32 @@ export function usePcbWorkspace({
     [],
   );
   const duplicateProject = useCallback(
-    (projectId: string, newRevision = false) => dispatch({ type: "project/duplicate", projectId, newRevision }),
-    [],
+    (projectId: string, newRevision = false) => requestProjectTransition({ type: "project/duplicate", projectId, newRevision }),
+    [requestProjectTransition],
   );
   const deleteProject = useCallback(
     async (projectId: string) => {
-      if (!effectiveCanEdit || projectId !== stateRef.current.activeProjectId) return false;
-      if (remoteClient?.deleteProject && !await remoteClient.deleteProject(projectId)) return false;
-      dispatch({ type: "project/delete", projectId });
-      return true;
+      if (!editableRef.current || viewStateRef.current.documentLocked || transitionRef.current || deletingProjectRef.current
+        || projectId !== stateRef.current.activeProjectId) return false;
+      deletingProjectRef.current = true;
+      persistenceRef.current.flushRecovery();
+      dispatch({ type: "transition/set-busy", busy: true });
+      try {
+        if (remoteClient?.deleteProject && !await remoteClient.deleteProject(projectId)) return false;
+        if (!mountedRef.current || !editableRef.current || projectId !== stateRef.current.activeProjectId) return false;
+        dispatch({ type: "transition/set-busy", busy: false });
+        dispatch({ type: "project/delete", projectId });
+        return true;
+      } finally {
+        deletingProjectRef.current = false;
+        if (mountedRef.current) dispatch({ type: "transition/set-busy", busy: false });
+      }
     },
-    [effectiveCanEdit, remoteClient],
+    [remoteClient],
   );
   const importProject = useCallback(
-    (project: PcbProject) => dispatch({ type: "project/import", project }),
-    [],
+    (project: PcbProject) => requestProjectTransition({ type: "project/import", project }),
+    [requestProjectTransition],
   );
   const commitProject = useCallback(
     (update: PcbProject | ((project: PcbProject) => PcbProject)) => {
@@ -258,7 +426,7 @@ export function usePcbWorkspace({
   );
   const settingsReceipt = useRef<{ requestToken: string; resolve: (applied: boolean) => void } | null>(null);
   const settingsEditable = useRef(false);
-  settingsEditable.current = effectiveCanEdit && state.canEdit && !state.documentLocked;
+  settingsEditable.current = effectiveCanEdit && state.canEdit && !state.documentLocked && !state.transitionBusy;
   const updateProjectSettings = useCallback(
     (projectId: string, baselineRevision: string, settings: ProjectSettings): Promise<boolean> => {
       const previous = viewStateRef.current;
@@ -284,8 +452,8 @@ export function usePcbWorkspace({
   }, []);
 
   const applyTemplate = useCallback(
-    (templateId: string) => dispatch({ type: "template/apply", templateId }),
-    [],
+    (templateId: string) => requestProjectTransition({ type: "template/apply", templateId }),
+    [requestProjectTransition],
   );
   const saveTemplate = useCallback(
     (input: TemplateInput) => dispatch({ type: "template/save", input }),
@@ -361,15 +529,30 @@ export function usePcbWorkspace({
     (layer: PcbVisibleLayer) => dispatch({ type: "view/layer", layer }),
     [],
   );
-  const assignModelAsset = useCallback(
-    (componentId: string, metadata: PcbModelAssetMetadata) => {
-      const component = state.activeProject.components.find((item) => item.instanceId === componentId);
-      if (!effectiveCanEdit || state.documentLocked || !component || component.locked) return false;
-      dispatch({ type: "model/assign", componentId, metadata });
-      return true;
-    },
-    [effectiveCanEdit, state.activeProject.components, state.documentLocked],
-  );
+  const captureModelAssignment = useCallback((componentId: string): ModelAssignmentTarget | null => {
+    const current = viewStateRef.current;
+    const component = current.activeProject.components.find(item => item.instanceId === componentId);
+    if (!mountedRef.current || !editableRef.current || current.transitionBusy || current.documentLocked || !component || component.locked) return null;
+    return { projectId: current.activeProject.id, componentId, generation: current.projectGeneration };
+  }, []);
+  const modelReceipt = useRef<{ requestToken: string; target: ModelAssignmentTarget; resolve: (applied: boolean) => void } | null>(null);
+  const assignModelAsset = useCallback((target: ModelAssignmentTarget, metadata: PcbModelAssetMetadata): Promise<boolean> => {
+    const current = captureModelAssignment(target.componentId);
+    if (!current || current.projectId !== target.projectId || current.generation !== target.generation || modelReceipt.current) return Promise.resolve(false);
+    const requestToken = crypto.randomUUID();
+    return new Promise(resolve => {
+      modelReceipt.current = { requestToken, target, resolve };
+      dispatch({ type: "model/assign", ...target, requestToken, metadata });
+    });
+  }, [captureModelAssignment]);
+  useEffect(() => {
+    const receipt = modelReceipt.current;
+    if (!receipt || state.modelAssignmentReceipt?.requestToken !== receipt.requestToken) return;
+    modelReceipt.current = null;
+    receipt.resolve(state.modelAssignmentReceipt.accepted && editableRef.current
+      && state.activeProject.id === receipt.target.projectId && state.modelAssignmentReceipt.generation === state.projectGeneration);
+  }, [state]);
+  useEffect(() => () => { modelReceipt.current?.resolve(false); modelReceipt.current = null; }, []);
   const setZoom = useCallback(
     (zoom: number) => dispatch({ type: "zoom/set", zoom }),
     [],
@@ -403,11 +586,19 @@ export function usePcbWorkspace({
     ...state,
     ...editor,
     canEdit: effectiveCanEdit,
-    canMutate: editor.canMutate && effectiveCanEdit,
+    canMutate: editor.canMutate && effectiveCanEdit && !state.transitionBusy,
     visibleLayer: state.visibleLayer,
     selectedObjects: state.selectedObjects,
     persistenceStatus: persistence.status,
     saveError: persistence.saveError,
+    projectTransition,
+    retryProjectTransition,
+    cancelProjectTransition,
+    discardProjectTransition,
+    canDiscardProjectTransition: Boolean(persistence.confirmedState)
+      && (transitionRef.current?.action.type === "project/open" || effectiveCanEdit)
+      && (transitionRef.current?.action.type !== "project/duplicate" || persistence.confirmedState?.projects.some(p => p.id === projectTransition?.projectId)),
+    dirtyProjectIds: persistence.dirtyProjectIds,
     remoteReady: cloudReady,
     remoteAccessStatus: ownerChanged ? "denied" : remoteAccess.status !== "ready" ? remoteAccess.status : remoteLoadStatus,
     ownerChanged,
@@ -447,6 +638,7 @@ export function usePcbWorkspace({
     setActiveLayer,
     setVisibleLayer,
     assignModelAsset,
+    captureModelAssignment,
     loadModelAsset,
     setZoom,
     setRightTab,
