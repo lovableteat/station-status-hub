@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/security/applied-anonymous-table-cutovers-20261112.md`；程式參考基準：`d44c34c3d0122921ff38ce1fa1fe46aa5df55697`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/security/applied-anonymous-table-cutovers-20261112.md`；程式參考基準：`6f5d24856c0e65551249287092ede47dc3fc78a6`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Applied anonymous table containment and six-ledger baseline
 
@@ -30,7 +30,7 @@ that retain them still need reviewed transport preparation.
 
 ## Current verification and recovery entry points
 
-Use [verify-applied-six-ledger-baseline.sql](https://github.com/lovableteat/station-status-hub/blob/d44c34c3d0122921ff38ce1fa1fe46aa5df55697/docs/security-proposals/verify-applied-six-ledger-baseline.sql)
+Use [verify-applied-six-ledger-baseline.sql](https://github.com/lovableteat/station-status-hub/blob/6f5d24856c0e65551249287092ede47dc3fc78a6/docs/security-proposals/verify-applied-six-ledger-baseline.sql)
 as the current standalone read-only check, not a migration. It verifies all six
 version/name/single-statement byte-length/MD5 records, the exact two protected-read
 APIs, and effective retained authorization boundaries:
@@ -49,7 +49,7 @@ material, not the current runbook entry point. The original four applied ledger
 copies and three frozen PCB/legacy candidates remain unchanged.
 
 The recovery baseline now contains all six applied entries. The
-[rollback entry point](https://github.com/lovableteat/station-status-hub/blob/d44c34c3d0122921ff38ce1fa1fe46aa5df55697/docs/security-proposals/anonymous-table-rollback-RETIRED.sql)
+[rollback entry point](https://github.com/lovableteat/station-status-hub/blob/6f5d24856c0e65551249287092ede47dc3fc78a6/docs/security-proposals/anonymous-table-rollback-RETIRED.sql)
 is an unconditional failure before mutation. Historical private scripts that
 restore anonymous grants are not included and must not run automatically. Repair
 compatibility while retaining the applied boundaries; never restore old data over
@@ -63,7 +63,7 @@ then follow **twelve-RPC PCB candidate → separately reviewed raw-column enforc
 The published raw-enforcement file still refuses unchanged. All prior frontend,
 Realtime, private/dynamic read-path, backup/restore and Storage gates remain.
 
-The [stage01 successor](https://github.com/lovableteat/station-status-hub/blob/d44c34c3d0122921ff38ce1fa1fe46aa5df55697/docs/security-proposals/01-close-anonymous-access-after-six-ledgers.sql)
+The [stage01 successor](https://github.com/lovableteat/station-status-hub/blob/6f5d24856c0e65551249287092ede47dc3fc78a6/docs/security-proposals/01-close-anonymous-access-after-six-ledgers.sql)
 is an explicit new proposal. The original stage01 remains unchanged for historical
 tests and must not be promoted for this new baseline. V2 uses the original body
 except for excluding all three already-closed audit/tasks tables from anonymous

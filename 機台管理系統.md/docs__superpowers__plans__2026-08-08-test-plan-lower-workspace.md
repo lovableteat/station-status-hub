@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-08-08-test-plan-lower-workspace.md`；程式參考基準：`d44c34c3d0122921ff38ce1fa1fe46aa5df55697`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-08-08-test-plan-lower-workspace.md`；程式參考基準：`6f5d24856c0e65551249287092ede47dc3fc78a6`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Test Plan Lower Workspace Implementation Plan
 
