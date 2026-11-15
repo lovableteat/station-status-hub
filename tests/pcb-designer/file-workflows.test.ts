@@ -219,7 +219,7 @@ test("shows parsed dimensions and STEP top-view details before adding a library 
   assert.match(workspace, /confirmStepLibraryImport/);
   assert.match(workspace, /pendingLibrarySyncRef/);
   assert.match(workspace, /共用元件庫已同步/);
-  assert.match(workspace, /setStepPreview\(\{ asset, mode: "library" \}\)/);
+  assert.match(workspace, /setStepPreview\(\{ asset: toPcbModelAsset\(model\), mode: "library", model, suggestedUpAxis \}\)/);
   assert.match(canvas, /getPcbModelTopViewImage/);
   assert.match(canvas, /data-model-projection/);
   assert.match(preview, /STEP 元件尺寸與 2D 俯視預覽/);

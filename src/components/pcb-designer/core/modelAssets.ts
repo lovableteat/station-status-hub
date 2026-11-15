@@ -63,7 +63,7 @@ function toPlainNumberArray(values: ArrayLike<number>): number[] {
   return Array.from(values);
 }
 
-const rotationMinimumCache = new WeakMap<PcbModelAsset, { key: string; minY: number }>();
+const rotationRangeCache = new WeakMap<PcbModelAsset, { key: string; minY: number; maxY: number }>();
 
 export function rotateModelPoint(point: [number, number, number], rotation: { x: number; y: number; z: number }): [number, number, number] {
   let [x, y, z] = point;
@@ -74,11 +74,10 @@ export function rotateModelPoint(point: [number, number, number], rotation: { x:
   return [x, y, z];
 }
 
-export function mapPcbModelPartToComponentSpace(
-  part: PcbModelAssetPart,
-  asset: PcbModelAsset,
-  component: Pick<PcbPlacedComponent, "width" | "height" | "maxHeight" | "modelRotation">,
-): number[] {
+type ModelSizing = Pick<PcbPlacedComponent, "width" | "height" | "maxHeight" | "modelRotation">;
+
+/** Scales a model vertex into the component's 長×高×寬 box (its own axes, by upAxis), then applies 模型朝向. */
+function createModelPointMapper(asset: PcbModelAsset, component: ModelSizing) {
   const { min, max } = asset.metadata.bounds;
   const spans = [
     Math.max(max[0] - min[0], 0.001),
@@ -93,28 +92,59 @@ export function mapPcbModelPartToComponentSpace(
   const widthAxis = asset.metadata.upAxis === "x" ? 1 : 0;
   const heightAxis = asset.metadata.upAxis === "x" ? 0 : asset.metadata.upAxis === "y" ? 1 : 2;
   const boardDepthAxis = asset.metadata.upAxis === "z" ? 1 : 2;
-  const positions: number[] = [];
   const rotation = component.modelRotation ?? { x: 0, y: 0, z: 0 };
-  const mapPoint = (p: number[], offset: number): [number, number, number] => rotateModelPoint([
+  return (p: ArrayLike<number>, offset: number): [number, number, number] => rotateModelPoint([
     (p[offset + widthAxis] - center[widthAxis]) / spans[widthAxis] * component.width,
     (p[offset + heightAxis] - center[heightAxis]) / spans[heightAxis] * component.maxHeight,
     (p[offset + boardDepthAxis] - center[boardDepthAxis]) / spans[boardDepthAxis] * component.height,
   ], rotation);
-  const key = JSON.stringify([component.width, component.height, component.maxHeight, rotation]);
-  let cached = rotationMinimumCache.get(asset);
-  if (!cached || cached.key !== key) {
-    let minY = Infinity;
-    for (const mesh of asset.parts) for (let i = 0; i < mesh.position.length; i += 3) minY = Math.min(minY, mapPoint(mesh.position, i)[1]);
-    cached = { key, minY: Number.isFinite(minY) ? minY : -component.maxHeight / 2 };
-    rotationMinimumCache.set(asset, cached);
-  }
+}
 
+/** Lowest and highest Y of the whole rotated model before it is lifted; cached per asset and size. */
+function getRotatedYRange(asset: PcbModelAsset, component: ModelSizing): { minY: number; maxY: number } {
+  const rotation = component.modelRotation ?? { x: 0, y: 0, z: 0 };
+  const key = JSON.stringify([component.width, component.height, component.maxHeight, rotation]);
+  let cached = rotationRangeCache.get(asset);
+  if (!cached || cached.key !== key) {
+    const mapPoint = createModelPointMapper(asset, component);
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const mesh of asset.parts) for (let i = 0; i < mesh.position.length; i += 3) {
+      const y = mapPoint(mesh.position, i)[1];
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+    cached = Number.isFinite(minY) && Number.isFinite(maxY)
+      ? { key, minY, maxY }
+      : { key, minY: -component.maxHeight / 2, maxY: component.maxHeight / 2 };
+    rotationRangeCache.set(asset, cached);
+  }
+  return cached;
+}
+
+export function mapPcbModelPartToComponentSpace(
+  part: PcbModelAssetPart,
+  asset: PcbModelAsset,
+  component: ModelSizing,
+): number[] {
+  const mapPoint = createModelPointMapper(asset, component);
+  const { minY } = getRotatedYRange(asset, component);
+  const positions: number[] = [];
   for (let offset = 0; offset < part.position.length; offset += 3) {
     const [x, y, z] = mapPoint(part.position, offset);
-    positions.push(x, y - cached.minY - component.maxHeight / 2, z);
+    positions.push(x, y - minY - component.maxHeight / 2, z);
   }
-
   return positions;
+}
+
+/**
+ * Lowest and highest local Y of a mapped model (component space, before mounting), exactly as
+ * mapPcbModelPartToComponentSpace places it: the lowest point is always -maxHeight / 2, and after a
+ * 模型朝向 rotation the top can be higher than +maxHeight / 2.
+ */
+export function getPcbModelLocalYRange(asset: PcbModelAsset, component: ModelSizing): [number, number] {
+  const { minY, maxY } = getRotatedYRange(asset, component);
+  return [-component.maxHeight / 2, maxY - minY - component.maxHeight / 2];
 }
 
 function invalidModel(message: string): Error {

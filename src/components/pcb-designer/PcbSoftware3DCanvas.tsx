@@ -1,4 +1,4 @@
-import { getBoardPolygon, getBoardHoles } from "./core/boardOutline.ts";
+import { getBoardPolygon, getBoardHoles, pointInBoardPolygon } from "./core/boardOutline.ts";
 import { getPcbModelRenderIndices } from "./core/modelProjection.ts";
 import { getRenderedKeepouts } from "./core/componentKeepout.ts";
 import {
@@ -26,6 +26,7 @@ import {
   DEFAULT_SOFTWARE_VIEW,
 
   SOFTWARE_RENDER_ORDER,
+  clipSoftwarePolygonToBoardSide,
   compareSoftwareRenderDepth,
   createSoftwareBoxVertices,
   createSoftwareCamera,
@@ -430,6 +431,31 @@ export function PcbSoftware3DCanvas({
       }))
       .filter(({ viewState }) => viewState.visible);
 
+    // Component faces go through the board-side clip: the board hides what is inside or behind it.
+    const isOverBoard = (x: number, z: number) => {
+      const point = { x: x + project.board.width / 2, y: z + project.board.height / 2 };
+      return pointInBoardPolygon(point, boardPolygon) && !holes.some((ring) => pointInBoardPolygon(point, ring));
+    };
+    const addComponentPolygon = (
+      worldPoints: SoftwarePoint3[],
+      fill: string,
+      stroke: string,
+      renderOrder: number,
+      alpha = 1,
+      lineWidth = 0.7,
+    ) => {
+      const visible = clipSoftwarePolygonToBoardSide(worldPoints, camera.eye.y, BOARD_THICKNESS, isOverBoard);
+      if (!visible.points.length) return;
+      addPolygon(visible.points, fill, stroke, visible.nearSide ? SOFTWARE_RENDER_ORDER.nearObject : renderOrder, alpha, lineWidth);
+    };
+    const addComponentBox = (worldVertices: SoftwarePoint3[], color: string, stroke: string, renderOrder: number, alpha = 1, lineWidth = 0.7) => {
+      BOX_FACES.forEach((face) => {
+        const worldPoints = face.map((index) => worldVertices[index]);
+        const normal = getSoftwareFaceNormal(worldPoints[0], worldPoints[1], worldPoints[2]);
+        addComponentPolygon(worldPoints, shadeColor(color, getSoftwareLightLevel(normal)), stroke, renderOrder, alpha, lineWidth);
+      });
+    };
+
     visibleComponents.forEach(({ component, viewState }) => {
       const selected = viewState.selected;
       const renderOrder = getSoftwareLayerRenderOrder(component.layer, camera.eye.y);
@@ -469,14 +495,14 @@ export function PcbSoftware3DCanvas({
               z: Math.sin(angle) * radius,
             }, component, project.board, BOARD_THICKNESS);
           });
-          addPolygon(top, component.color, selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
-          addPolygon([...bottom].reverse(), shadeColor(component.color, 0.72), selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
+          addComponentPolygon(top, component.color, selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
+          addComponentPolygon([...bottom].reverse(), shadeColor(component.color, 0.72), selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
           for (let index = 0; index < segments; index += 1) {
             const next = (index + 1) % segments;
-            addPolygon([top[index], top[next], bottom[next], bottom[index]], component.color, selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
+            addComponentPolygon([top[index], top[next], bottom[next], bottom[index]], component.color, selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
           }
         } else {
-          addBox(worldBounds, component.color, selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
+          addComponentBox(worldBounds, component.color, selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
         }
       } else {
         // The Blender package meshes are closed and consistently wound, so their back faces can be skipped
@@ -504,7 +530,7 @@ export function PcbSoftware3DCanvas({
               };
               if ((normal.x * toEye.x + normal.y * toEye.y + normal.z * toEye.z) * facing < 0) continue;
             }
-            addPolygon(
+            addComponentPolygon(
               worldPoints,
               shadeColor(color, getSoftwareLightLevel(normal)),
               shadeColor(color, selected ? 0.82 : 0.58),

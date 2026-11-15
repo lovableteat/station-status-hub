@@ -4,7 +4,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ContactShadows, Edges, Html, OrbitControls } from "@react-three/drei";
 import { Box3, BufferGeometry, Color, DoubleSide, ExtrudeGeometry, Shape, Path, Group, Vector2, Float32BufferAttribute, Uint32BufferAttribute, Vector3 } from "three";
 import { getBoardPolygon, getBoardHoles } from "./core/boardOutline.ts";
-import { getPcbMountY } from "./core/software3d.ts";
+import { getPcb3DFloorY, getPcbComponentWorldYRange, getPcbMountY } from "./core/software3d.ts";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Focus, LoaderCircle, MousePointer2 } from "lucide-react";
 import { getRenderedKeepouts } from "./core/componentKeepout.ts";
@@ -14,6 +14,7 @@ import { PcbSoftware3DCanvas } from "./PcbSoftware3DCanvas.tsx";
 import { detectWebglSupport } from "./core/webgl.ts";
 import {
   getDefaultPcbModelAssetStore,
+  getPcbModelLocalYRange,
   getPcbModelPartColor,
   isPcbModelAsset,
   mapPcbModelPartToComponentSpace,
@@ -394,6 +395,14 @@ function Scene({
     [selectionIds],
   );
   const boardThickness = 1.6;
+  // Floor under everything that is shown, so a Bottom part or a lead through the board is never behind the grid.
+  const floorY = useMemo(() => getPcb3DFloorY(componentViewStates
+    .filter(({ viewState }) => viewState.visible)
+    .map(({ component }) => {
+      const asset = component.modelAssetId ? modelAssets[component.modelAssetId] : getPcbPackageAsset(component, packageKit);
+      const local: [number, number] = asset ? getPcbModelLocalYRange(asset, component) : [-component.maxHeight / 2, component.maxHeight / 2];
+      return getPcbComponentWorldYRange(component, local, boardThickness);
+    }), boardThickness), [componentViewStates, modelAssets, packageKit]);
   const outlineGeometry = useMemo(() => {
     if (!project.board.outline?.length && !project.board.holes?.length) return null;
     const shape = new Shape(getBoardPolygon(project.board).map(p => new Vector2(p.x - project.board.width / 2, p.y - project.board.height / 2)));
@@ -464,7 +473,7 @@ function Scene({
             "#76988d",
             "#b5c8c1",
           ]}
-          position={[0, -1.45, 0]}
+          position={[0, floorY, 0]}
         />
       )}
 
@@ -490,11 +499,11 @@ function Scene({
 
       <TopSideOnly><ContactShadows
         key={Object.keys(modelAssets).filter(id => modelAssets[id]).join("|")}
-        position={[0, -boardThickness / 2 - 0.8, 0]}
+        position={[0, floorY - 0.15, 0]}
         opacity={0.34}
         scale={Math.max(project.board.width, project.board.height) * 1.9}
         blur={2.2}
-        far={Math.max(25, sceneBounds.max.y * 2)}
+        far={Math.max(25, sceneBounds.max.y * 2 - floorY)}
         frames={1}
         color="#273d35"
       /></TopSideOnly>

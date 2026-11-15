@@ -11,7 +11,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getPcbModelTopViewImage } from "./core/modelProjection.ts";
+import { PCB_STEP_UP_AXES } from "./core/stepOrientation.ts";
 import type { PcbModelAsset } from "./types.ts";
+
+type UpAxis = PcbModelAsset["metadata"]["upAxis"];
 
 export function PcbStepModelDialog({
   asset,
@@ -19,12 +22,18 @@ export function PcbStepModelDialog({
   confirmLabel,
   onClose,
   onConfirm,
+  suggestedUpAxis,
+  onUpAxisChange,
 }: {
   asset: PcbModelAsset | null;
   busy?: boolean;
   confirmLabel?: string;
   onClose: () => void;
   onConfirm?: () => void | Promise<void>;
+  /** The axis the importer picked; marked 建議 in the choice. */
+  suggestedUpAxis?: UpAxis;
+  /** Given only before the part is saved: lets the user say which side of the model points away from the board. */
+  onUpAxisChange?: (upAxis: UpAxis) => void;
 }) {
   const preview = useMemo(() => asset ? getPcbModelTopViewImage(asset) : "", [asset]);
   const dimensions = asset?.metadata.calibratedDimensions;
@@ -82,6 +91,27 @@ export function PcbStepModelDialog({
                   <small>{hint}</small>
                 </div>
               ))}
+              {onUpAxisChange && (
+                <div className="pcb-step-axis-choice" role="group" aria-label="模型朝上方向">
+                  <span>朝上方向{suggestedUpAxis && <small>建議 {suggestedUpAxis.toUpperCase()} 軸</small>}</span>
+                  <div>
+                    {PCB_STEP_UP_AXES.map((axis) => (
+                      <button
+                        key={axis}
+                        type="button"
+                        aria-pressed={asset.metadata.upAxis === axis}
+                        data-suggested={axis === suggestedUpAxis || undefined}
+                        disabled={busy}
+                        title={`把模型的 ${axis.toUpperCase()} 軸當成離板方向${axis === suggestedUpAxis ? "（依檔案判斷的建議）" : ""}；長、寬、高與俯視圖會跟著更新`}
+                        onClick={() => onUpAxisChange(axis)}
+                      >
+                        {axis.toUpperCase()} 軸朝上
+                      </button>
+                    ))}
+                  </div>
+                  <small>高元件（TO-220、電解電容、排針）若顯示成躺平，改選另一軸再加入。</small>
+                </div>
+              )}
               <div className="pcb-step-axis-note">
                 2D 與 3D 使用同一份模型，按實際長寬比例顯示。STEP 不含電氣焊盤與腳位編號；需要原始 PCB 封裝資料才能顯示這些資訊。
               </div>

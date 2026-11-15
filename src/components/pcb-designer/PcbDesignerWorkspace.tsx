@@ -29,6 +29,8 @@ import {
 } from "./core/tabular.ts";
 import { parseProjectJson } from "./core/validation.ts";
 import { importStepModel } from "../data-center/stepImport.ts";
+import type { ImportedStepModel, ModelUpAxis } from "../data-center/dataCenterTypes.ts";
+import { inferPcbStepUpAxis, orientImportedStepModel } from "./core/stepOrientation.ts";
 import {
   PCB_MODEL_FILE_ACCEPT,
   MAX_PCB_MODEL_FILE_BYTES,
@@ -163,7 +165,13 @@ export function PcbDesignerWorkspace({
   const [viewMode, setViewMode] = useState<PcbViewMode>("2d");
   const [placementComponentId, setPlacementComponentId] = useState<string | null>(null);
   const [libraryImportState, setLibraryImportState] = useState<"idle" | "loading">("idle");
-  const [stepPreview, setStepPreview] = useState<{ asset: PcbModelAsset; mode: "library" | "view" } | null>(null);
+  /** A library import keeps the parsed model so the preview can switch which axis points up before saving. */
+  const [stepPreview, setStepPreview] = useState<{
+    asset: PcbModelAsset;
+    mode: "library" | "view";
+    model?: ImportedStepModel;
+    suggestedUpAxis?: ModelUpAxis;
+  } | null>(null);
   const [stepPreviewSaving, setStepPreviewSaving] = useState(false);
   const [stepRecoveryOpen, setStepRecoveryOpen] = useState(false);
   const [recoveryAttempt, setRecoveryAttempt] = useState(0);
@@ -412,9 +420,10 @@ export function PcbDesignerWorkspace({
       }
       setLibraryImportState("loading");
       try {
-        const model = await importStepModel(file);
-        const asset = toPcbModelAsset(model);
-        setStepPreview({ asset, mode: "library" });
+        const parsed = await importStepModel(file);
+        const suggestedUpAxis = inferPcbStepUpAxis(parsed.bounds);
+        const model = orientImportedStepModel(parsed, suggestedUpAxis);
+        setStepPreview({ asset: toPcbModelAsset(model), mode: "library", model, suggestedUpAxis });
       } catch (error) {
         notifyError("無法匯入 STEP 元件", error);
       } finally {
@@ -459,8 +468,8 @@ export function PcbDesignerWorkspace({
     if (!target) {
       throw new Error("請先選取可編輯的元件。");
     }
-    const model = await importStepModel(file);
-    const asset = toPcbModelAsset(model);
+    const parsed = await importStepModel(file);
+    const asset = toPcbModelAsset(orientImportedStepModel(parsed, inferPcbStepUpAxis(parsed.bounds)));
     await modelAssetStoreRef.current.put(asset);
     if (remoteClient?.saveModelAsset && !(await remoteClient.saveModelAsset(asset))) {
       await modelAssetStoreRef.current.delete(asset.metadata.id);
@@ -954,6 +963,12 @@ export function PcbDesignerWorkspace({
         confirmLabel={stepPreview?.mode === "library" ? "加入元件庫" : undefined}
         onClose={() => !stepPreviewSaving && setStepPreview(null)}
         onConfirm={stepPreview?.mode === "library" ? confirmStepLibraryImport : undefined}
+        suggestedUpAxis={stepPreview?.mode === "library" ? stepPreview.suggestedUpAxis : undefined}
+        onUpAxisChange={stepPreview?.mode === "library" && stepPreview.model && !stepPreviewSaving ? (upAxis) => setStepPreview((current) => {
+          if (!current?.model || current.mode !== "library") return current;
+          const model = orientImportedStepModel(current.model, upAxis);
+          return { ...current, model, asset: toPcbModelAsset(model) };
+        }) : undefined}
       />
       {stepRecoveryOpen && <PcbStepRecoveryDialog
         canEdit={workspace.canMutate && !workspace.ownerChanged}

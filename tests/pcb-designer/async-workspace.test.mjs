@@ -47,7 +47,7 @@ test('STEP application carries its captured board generation and waits for a suc
   const s = await setup(); let result, settled = false;
   try {
     await act(async () => { result = s.root.root.findByType('inspector').props.onImportModel({ name: 'synthetic.step', size: 1 }, 'synthetic-component'); result.then(() => { settled = true; }); });
-    await act(async () => s.parse.resolve({}));
+    await act(async () => s.parse.resolve({ bounds: { min: [0, 0, 0], max: [10, 10, 2] } }));
     assert.equal(settled, false);
     assert.equal(s.calls.targets[0][0], s.target);
     assert.equal(s.root.root.findByType('step-preview').props.asset, null);
@@ -62,7 +62,7 @@ test('rejected STEP receipt after a board switch reports failure and never opens
     await act(async () => { result = s.root.root.findByType('inspector').props.onImportModel({ name: 'synthetic.step', size: 1 }, 'synthetic-component'); });
     s.workspace.activeProject = { ...s.workspace.activeProject, id: 'synthetic-b' };
     await s.rerender();
-    await act(async () => s.parse.resolve({}));
+    await act(async () => s.parse.resolve({ bounds: { min: [0, 0, 0], max: [10, 10, 2] } }));
     await act(async () => { s.assignment.resolve(false); await assert.rejects(result, /未套用/); });
     assert.equal(s.root.root.findByType('step-preview').props.asset, null);
     assert.deepEqual(s.calls.deleted, ['synthetic-asset']);

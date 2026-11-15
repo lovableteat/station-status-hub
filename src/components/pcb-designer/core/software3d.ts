@@ -104,6 +104,45 @@ export function getSoftwareLayerRenderOrder(
   return isNearSide ? SOFTWARE_RENDER_ORDER.nearObject : SOFTWARE_RENDER_ORDER.farObject;
 }
 
+/**
+ * The compat 3D paints faces in order and has no depth buffer, so the board cannot hide what is inside it.
+ * Seen from above, the part of a face below the top surface and over the board (leads in the board, a
+ * Bottom part) is hidden; seen from below, the part above the bottom surface is. Returns the visible piece
+ * (empty when all of it is hidden) and nearSide = true when that piece is on the camera's side of the board,
+ * so it is drawn after the board (leads through the board then show from the other side). Edge-on views and
+ * faces outside the outline or over a cut-out are left as they are.
+ */
+export function clipSoftwarePolygonToBoardSide(
+  points: readonly SoftwarePoint3[],
+  eyeY: number,
+  boardThickness: number,
+  isOverBoard: (x: number, z: number) => boolean,
+): { points: SoftwarePoint3[]; nearSide: boolean } {
+  const surface = boardThickness / 2;
+  const side = eyeY > surface ? 1 : eyeY < -surface ? -1 : 0;
+  if (!side || points.length < 3) return { points: [...points], nearSide: false };
+  const centroidX = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+  const centroidZ = points.reduce((sum, point) => sum + point.z, 0) / points.length;
+  if (!isOverBoard(centroidX, centroidZ)) return { points: [...points], nearSide: false };
+  const distance = (point: SoftwarePoint3) => side * (point.y - side * surface);
+  const kept: SoftwarePoint3[] = [];
+  points.forEach((current, index) => {
+    const next = points[(index + 1) % points.length];
+    const currentDistance = distance(current);
+    const nextDistance = distance(next);
+    if (currentDistance >= 0) kept.push(current);
+    if ((currentDistance >= 0) !== (nextDistance >= 0)) {
+      const t = currentDistance / (currentDistance - nextDistance);
+      kept.push({
+        x: current.x + (next.x - current.x) * t,
+        y: current.y + (next.y - current.y) * t,
+        z: current.z + (next.z - current.z) * t,
+      });
+    }
+  });
+  return { points: kept.length >= 3 ? kept : [], nearSide: true };
+}
+
 export function compareSoftwareRenderDepth(
   left: { depth: number; renderOrder: number },
   right: { depth: number; renderOrder: number },
@@ -241,6 +280,29 @@ export function createSoftwareBoxVertices(
 
 export function getPcbMountY(component: Pick<PcbPlacedComponent, "maxHeight" | "layer" | "insertionDepth">, boardThickness = 1.6): number {
   return (component.layer === "top" ? 1 : -1) * (boardThickness / 2 + component.maxHeight / 2 - (component.insertionDepth ?? 0));
+}
+
+/** World Y range of a mounted part, from its local Y range (Top faces up, Bottom is mirrored under the board). */
+export function getPcbComponentWorldYRange(
+  component: Pick<PcbPlacedComponent, "maxHeight" | "layer" | "insertionDepth">,
+  localRange: readonly [number, number],
+  boardThickness = 1.6,
+): [number, number] {
+  const mount = getPcbMountY(component, boardThickness);
+  return component.layer === "top"
+    ? [mount + localRange[0], mount + localRange[1]]
+    : [mount - localRange[1], mount - localRange[0]];
+}
+
+/**
+ * Height of the 3D floor (grid and contact shadow). It sits just under the board, or under the lowest
+ * mounted point when a Bottom part or a lead through the board reaches lower, so it never covers them.
+ */
+export function getPcb3DFloorY(worldRanges: Iterable<readonly [number, number]>, boardThickness = 1.6): number {
+  let lowest = Infinity;
+  for (const [low] of worldRanges) lowest = Math.min(lowest, low);
+  const underBoard = -boardThickness / 2 - 0.65;
+  return Number.isFinite(lowest) ? Math.min(underBoard, lowest - 0.6) : underBoard;
 }
 
 export function transformPcbComponentPoint(
