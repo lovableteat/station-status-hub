@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PcbKeepout, PcbMeasurement, PcbModelAssetMetadata, PcbPlacedComponent } from "./types.ts";
 import { PCB_MODEL_FILE_ACCEPT } from "./core/modelAssets.ts";
-import { PCB_PACKAGE_LABELS, resolvePcbPackageKey } from "./core/packageModels.ts";
+import { getLoadedPcbPackageKit, getPcbPackageAsset, PCB_PACKAGE_KEYS, PCB_PACKAGE_LABELS, resolvePcbPackageKey } from "./core/packageModels.ts";
+import type { PcbPackageModelChoice } from "./types.ts";
 import { createBoardGridCuts } from "./core/boardCuts.ts";
 import { parseDxfBoardOutline } from "./core/dxf.ts";
 import { PcbBoardOutlineDialog } from "./PcbBoardOutlineDialog.tsx";
@@ -362,6 +363,40 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
   );
 }
 
+/** 「3D 示意外形」: what the 3D view shows for a component without STEP, and the honest state of it. */
+function PackageModelField({ component, disabled, onChange }: {
+  component: PcbPlacedComponent;
+  disabled: boolean;
+  onChange: (packageModel: PcbPackageModelChoice | undefined) => void;
+}) {
+  // Read only what a 3D view already loaded: the 2D inspector never downloads the kit itself.
+  const kit = getLoadedPcbPackageKit();
+  const packageKey = resolvePcbPackageKey(component);
+  const shown = packageKey && kit ? getPcbPackageAsset(component, kit) : null;
+  const note = !packageKey
+    ? "3D 以方塊表示。要示意封裝請在上方選擇；要精確外形請匯入 STEP。"
+    : !kit
+      ? `3D 會以示意封裝「${PCB_PACKAGE_LABELS[packageKey]}」表示（打開 3D 時載入；不代表實際封裝）。要精確外形請匯入 STEP。`
+      : shown
+        ? `3D 顯示示意封裝：${PCB_PACKAGE_LABELS[packageKey]}（依長寬高組成，不代表實際封裝）。要精確外形請匯入 STEP。`
+        : `這個尺寸不在「${PCB_PACKAGE_LABELS[packageKey]}」示意封裝的支援範圍，3D 以方塊表示。`;
+  return (
+    <div className="pcb-inspector-field-grid" data-testid="pcb-package-model-field">
+      <label className="pcb-inspector-field" style={{ gridColumn: "1 / -1" }}>
+        <span>3D 示意外形</span>
+        <select value={component.packageModel ?? ""} disabled={disabled}
+          title="3D 用哪個示意封裝表示；自動只套用內建元件與電阻、電容、電感。有 STEP 時一律顯示 STEP"
+          onChange={(event) => onChange((event.target.value || undefined) as PcbPackageModelChoice | undefined)}>
+          <option value="">自動（依類型）</option>
+          <option value="box">方塊</option>
+          {PCB_PACKAGE_KEYS.map((key) => <option key={key} value={key}>{PCB_PACKAGE_LABELS[key]}</option>)}
+        </select>
+      </label>
+      <p className="pcb-inspector-note" data-testid="pcb-package-model-note" style={{ gridColumn: "1 / -1" }}>{note}</p>
+    </div>
+  );
+}
+
 function ComponentInspector({
   workspace,
   component,
@@ -447,14 +482,8 @@ function ComponentInspector({
           <span>3D 模型</span>
           {component.modelAssetId && <small>已綁定模型</small>}
         </div>
-        {!component.modelAssetId && (() => {
-          const packageKey = resolvePcbPackageKey(component);
-          return <p className="pcb-inspector-note" data-testid="pcb-package-model-note">
-            {packageKey
-              ? `3D 顯示示意封裝：${PCB_PACKAGE_LABELS[packageKey]}（依長寬高組成，不代表實際封裝）。要精確外形請匯入 STEP。`
-              : "3D 以方塊表示；類型設為電阻、電容、電感、IC、記憶體或連接器時會改用示意封裝。要精確外形請匯入 STEP。"}
-          </p>;
-        })()}
+        {!component.modelAssetId && <PackageModelField component={component} disabled={componentDisabled}
+          onChange={(packageModel) => workspace.updateComponent(component.instanceId, { packageModel })} />}
         <label className={cn("pcb-upload-action", componentDisabled && "pointer-events-none opacity-50")}>
           <FileUp className="mr-1.5 h-3.5 w-3.5" />
           匯入 STP/STEP

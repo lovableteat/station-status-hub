@@ -1,5 +1,7 @@
-// Converts the Blender package kit (GLB, metres-as-millimetres, +Y up) into the JSON mesh kit the
-// PCB Designer assembles at runtime. Node transforms are baked; colours go back to display RGB.
+// Converts the Blender package kit into the JSON mesh kit the PCB Designer assembles at runtime.
+// Only for this kit: build_pcb_package_kit.py models in millimetres and exports the numbers unchanged, so a
+// value of 8.94 in the GLB means 8.94 mm (not the glTF metre convention). Do not feed it other GLB files.
+// Node transforms are baked, colours go back to display RGB, and one material per piece is required.
 // usage: node scripts/pcb-package-models/convert-kit.mjs <kit.glb> <out.json>
 import { readFile, writeFile } from "node:fs/promises";
 import { NodeIO } from "@gltf-transform/core";
@@ -32,7 +34,11 @@ for (const node of root.listNodes()) {
   const positions = [];
   const indices = [];
   let color = [0.7, 0.72, 0.75];
+  if (new Set(mesh.listPrimitives().map((primitive) => primitive.getMaterial())).size > 1) {
+    throw new Error(`${name}: one material per piece (the kit keeps one colour per piece)`);
+  }
   for (const primitive of mesh.listPrimitives()) {
+    if (primitive.getMode() !== 4) throw new Error(`${name}: only triangle primitives are supported`);
     const position = primitive.getAttribute("POSITION");
     if (!position) continue;
     const base = positions.length / 3;

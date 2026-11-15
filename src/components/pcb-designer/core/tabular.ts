@@ -10,6 +10,7 @@ export interface ImportedComponent {
   maxHeight: number;
   color: string;
   shape?: "rectangle" | "circle";
+  packageModel?: import("../types.ts").PcbPackageModelChoice;
 }
 
 export interface ImportedBomItem extends ImportedComponent {

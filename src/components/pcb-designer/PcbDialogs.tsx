@@ -15,6 +15,8 @@ import type { TabularImportError } from "./core/tabular.ts";
 import type { NewProjectInput, TemplateInput } from "./core/workspace.ts";
 import { ProjectSettingsSession, parseProjectSettings, projectSettingsConflict, type ProjectSettings } from "./core/projectSettingsDraft.ts";
 import { boardSurfacePath } from "./core/boardOutline.ts";
+import { PCB_PACKAGE_KEYS, PCB_PACKAGE_LABELS } from "./core/packageModels.ts";
+import type { PcbPackageModelChoice } from "./types.ts";
 import { usePcbOwnerDirectory, type PcbOwnerDirectoryLoader } from "./hooks/usePcbOwnerDirectory.ts";
 import type {
   ImportedComponent,
@@ -151,6 +153,7 @@ export function PcbDialogs({
         maxHeight: String(component.maxHeight),
         color: component.color,
         shape: component.shape === "circle" ? "circle" : "rectangle",
+        packageModel: component.packageModel ?? "",
       });
     }
   }, [dialog, draftActorId]); // currentUser is read once when the form opens.
@@ -293,6 +296,8 @@ export function PcbDialogs({
         maxHeight,
         color: values.color || "#39c6e8",
         shape: values.shape === "circle" ? "circle" : "rectangle",
+        ...(values.packageModel && (values.packageModel === "box" || values.packageModel in PCB_PACKAGE_LABELS)
+          ? { packageModel: values.packageModel as PcbPackageModelChoice } : {}),
       }, dialog.component?.id);
       onClose();
     }
@@ -688,6 +693,18 @@ export function PcbDialogs({
                         >
                           <option value="rectangle">矩形</option>
                           <option value="circle">圓形（Screw Hole）</option>
+                        </select>
+                      </label>
+                      <label className="block text-xs text-slate-300">
+                        3D 示意外形
+                        <select
+                          value={values.packageModel ?? ""}
+                          title="3D 用哪個示意封裝表示；自動只套用電阻、電容、電感。有 STEP 時一律顯示 STEP"
+                          onChange={(event) => update("packageModel", event.target.value)}
+                        >
+                          <option value="">自動（依類型）</option>
+                          <option value="box">方塊</option>
+                          {PCB_PACKAGE_KEYS.map((key) => <option key={key} value={key}>{PCB_PACKAGE_LABELS[key]}</option>)}
                         </select>
                       </label>
                     </div>

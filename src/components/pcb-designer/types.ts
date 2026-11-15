@@ -54,9 +54,17 @@ export interface PcbLibraryComponent {
   shape?: PcbComponentShape;
   /** Reusable STEP geometry copied to every board instance placed from this library record. */
   modelAssetId?: string;
+  /**
+   * 3D 示意外形 chosen by the user: a Blender-built schematic package, or "box". Unset means automatic
+   * (built-in parts and the unambiguous types only). A STEP model always wins over it.
+   */
+  packageModel?: PcbPackageModelChoice;
   source: "built-in" | "custom" | "bom";
   createdAt: string;
 }
+
+export type PcbPackageModelChoice =
+  | "box" | "chip-resistor" | "chip-capacitor" | "qfp" | "qfn" | "bga" | "inductor" | "usb-c" | "header" | "electrolytic";
 
 export type PcbVisibleLayer = "all" | "top" | "bottom";
 
