@@ -5824,7 +5824,6 @@ export function MaterialRequestPage() {
 
   const selectedMobileFilter = columnFilters[mobileFilterColumn];
   const mobileFilterValueLabel = selectedMobileFilter === null ? "全部" : selectedMobileFilter.length === 1 ? selectedMobileFilter[0] : selectedMobileFilter.length ? `已選 ${selectedMobileFilter.length} 項` : "全不選";
-  const mobileStatusLabel = columnFilters.trackingStatus === null ? "全部" : columnFilters.trackingStatus.length === 1 ? columnFilters.trackingStatus[0] : `已選 ${columnFilters.trackingStatus.length} 項`;
   const searchColumnControl = (
     <Select value={searchColumn} onValueChange={value => { setSearchColumn(value as ColumnFilterKey | "all"); setPage(1); setExpandedKey(null); }}>
       <SelectTrigger aria-label="搜尋篩選工具" className="h-11 w-40 shrink-0 text-sm [&>span]:truncate lg:h-9 lg:text-xs"><SelectValue>{searchColumn === "all" ? "搜尋篩選工具" : COLUMN_FILTER_LABELS[searchColumn]}</SelectValue></SelectTrigger>
@@ -5839,7 +5838,7 @@ export function MaterialRequestPage() {
   );
   const activeFilterControls = activeFilterChips.length > 0 && (
     <div data-testid="material-active-filters" className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-      {activeFilterChips.map(chip => <button key={chip.key} type="button" onClick={() => removeFilterChip(chip.key)} aria-label={`移除篩選：${chip.label}`} className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 text-foreground lg:min-h-8"><span className="max-w-[20rem] truncate">{chip.label}</span><X className="h-3 w-3 shrink-0" /></button>)}
+      {activeFilterChips.map(chip => <button key={chip.key} type="button" onClick={() => removeFilterChip(chip.key)} aria-label={`移除篩選：${chip.label}`} title={chip.label} className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 text-foreground lg:min-h-8"><span className="max-w-[20rem] truncate">{isCompactLayout && chip.key === "availability" && availability === "required" ? "狀態：料號待補" : chip.label}</span><X className="h-3 w-3 shrink-0" /></button>)}
       {locatedBomCandidate && <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)}>返回 NV 比對</Button>}
       <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="min-h-11 text-muted-foreground hover:text-foreground lg:min-h-8">全部清除</Button>
     </div>
@@ -6122,17 +6121,16 @@ export function MaterialRequestPage() {
           </div>
 
           <div data-testid="material-mobile-column-filters" role="group" aria-label="料件欄位篩選" className="material-mobile-column-filters">
-            <ExcelFilterPopover filterKey="trackingStatus" getOptions={getColumnFilterOptions} label={COLUMN_FILTER_LABELS.trackingStatus} triggerLabel={`進度：${mobileStatusLabel}`} optionRowHeight={44} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters(current => ({ ...current, trackingStatus: values }))} activeSort={columnSort} onSortChange={setColumnSort} />
+            <ExcelFilterPopover filterKey="trackingStatus" getOptions={getColumnFilterOptions} label={COLUMN_FILTER_LABELS.trackingStatus} triggerLabel="進度" optionRowHeight={44} selectedValues={columnFilters.trackingStatus} onSelectedValuesChange={(values) => setColumnFilters(current => ({ ...current, trackingStatus: values }))} activeSort={columnSort} onSortChange={setColumnSort} />
             <div className="material-mobile-field-filter" role="group" aria-label="欄位與篩選值">
-            <Select value={mobileFilterColumn} onValueChange={value => setMobileFilterColumn(value as ColumnFilterKey)}>
-              <SelectTrigger aria-label="篩選欄位" className="h-11 min-w-0 text-xs [&>span]:truncate"><SelectValue>{mobileFilterColumn === "manufacturer" ? "廠商" : COLUMN_FILTER_LABELS[mobileFilterColumn]}</SelectValue></SelectTrigger>
-              <SelectContent>{FILTER_KEYS.filter(key => key !== "trackingStatus").map(key => <SelectItem key={key} value={key}>{COLUMN_FILTER_LABELS[key]}</SelectItem>)}</SelectContent>
-            </Select>
-            <ExcelFilterPopover filterKey={mobileFilterColumn} getOptions={getColumnFilterOptions} label={COLUMN_FILTER_LABELS[mobileFilterColumn]} triggerLabel={mobileFilterValueLabel} optionRowHeight={44} selectedValues={selectedMobileFilter} onSelectedValuesChange={(values) => setColumnFilters(current => ({ ...current, [mobileFilterColumn]: values }))} activeSort={columnSort} onSortChange={setColumnSort} />
+              <Select value={mobileFilterColumn} onValueChange={value => setMobileFilterColumn(value as ColumnFilterKey)}>
+                <SelectTrigger aria-label="篩選欄位" className="h-11 min-w-0 text-xs [&>span]:truncate"><SelectValue>{mobileFilterColumn === "manufacturer" ? "廠商" : COLUMN_FILTER_LABELS[mobileFilterColumn]}</SelectValue></SelectTrigger>
+                <SelectContent>{FILTER_KEYS.filter(key => key !== "trackingStatus").map(key => <SelectItem key={key} value={key}>{COLUMN_FILTER_LABELS[key]}</SelectItem>)}</SelectContent>
+              </Select>
+              <ExcelFilterPopover filterKey={mobileFilterColumn} getOptions={getColumnFilterOptions} label={COLUMN_FILTER_LABELS[mobileFilterColumn]} triggerLabel={mobileFilterValueLabel} optionRowHeight={44} selectedValues={selectedMobileFilter} onSelectedValuesChange={(values) => setColumnFilters(current => ({ ...current, [mobileFilterColumn]: values }))} activeSort={columnSort} onSortChange={setColumnSort} />
             </div>
-            {tableSettingsControl}
+            {activeFilterControls}
           </div>
-          {activeFilterControls}
         </div>
       </section>}
 

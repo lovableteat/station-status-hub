@@ -87,6 +87,11 @@ async function run(browser, width) {
 
     await filter(page,'篩選狀態追蹤');
     const chips=page.getByTestId('material-active-filters').filter({visible:true});await chips.waitFor();
+    const filterRow=page.getByTestId('material-mobile-column-filters');
+    assert.equal(await filterRow.getByTestId('material-active-filters').count(),1,'filter chips must be inside the same row as the controls');
+    const chipY=await chips.getByRole('button',{name:/移除篩選/}).first().evaluate(element=>element.getBoundingClientRect().y);
+    const filterY=await filterRow.getByRole('button',{name:'篩選狀態追蹤',exact:true}).evaluate(element=>element.getBoundingClientRect().y);
+    assert.ok(Math.abs(chipY-filterY)<=1,'active chips and filter buttons must align on one row');
     const chipBoxes=await chips.locator('button').evaluateAll(elements=>elements.map(element=>({w:element.getBoundingClientRect().width,h:element.getBoundingClientRect().height})));
     assert.ok(chipBoxes.every(box=>box.w>=44&&box.h>=44),JSON.stringify(chipBoxes));
     await page.screenshot({path:path.join(evidence,`active-filter-${width}.png`)});
@@ -99,12 +104,20 @@ async function run(browser, width) {
     await chips.getByRole('button',{name:'全部清除',exact:true}).tap();await chips.waitFor({state:'hidden'});assert.deepEqual(await rowIds(page),originalIds);
     result.checks.push('status and manufacturer filters apply; active chips clear individually/all; detail shows full manufacturer');
 
-    const columns=page.getByTestId('material-column-visibility').filter({visible:true}).first(), settings=page.getByTestId('material-table-settings');
-    await columns.tap();await settings.getByRole('checkbox',{name:'Manufacturer',exact:true}).uncheck();
+    const settings=page.getByTestId('material-table-settings');
+    assert.equal(await filterRow.getByTestId('material-column-visibility').count(),0);
+    const openColumns=async()=>{
+      await page.getByRole('button',{name:'排序與工具',exact:true}).tap();
+      const sheet=page.getByTestId('material-mobile-tools');
+      await sheet.getByTestId('material-column-visibility').tap();
+      await settings.waitFor();
+      await sheet.waitFor({state:'hidden'});
+    };
+    await openColumns();await settings.getByRole('checkbox',{name:'Manufacturer',exact:true}).uncheck();
     await settings.getByRole('button',{name:'取消',exact:true}).tap();await settings.waitFor({state:'hidden'});assert.equal(await page.locator('.material-mobile-list-manufacturer').count(),originalIds.length);
-    await columns.tap();await settings.getByRole('checkbox',{name:'Manufacturer',exact:true}).uncheck();
+    await openColumns();await settings.getByRole('checkbox',{name:'Manufacturer',exact:true}).uncheck();
     await settings.getByRole('button',{name:'套用設定',exact:true}).tap();await settings.waitFor({state:'hidden'});assert.equal(await page.locator('.material-mobile-list-manufacturer').count(),0);
-    await columns.tap();await settings.getByRole('checkbox',{name:'Manufacturer',exact:true}).check();
+    await openColumns();await settings.getByRole('checkbox',{name:'Manufacturer',exact:true}).check();
     await settings.getByRole('button',{name:'套用設定',exact:true}).tap();await settings.waitFor({state:'hidden'});assert.equal(await page.locator('.material-mobile-list-manufacturer').count(),originalIds.length);
     assert.ok((await measure(page)).rows.every(row=>row.h===68));result.checks.push('manufacturer column cancel/apply/hide/show uses existing column settings without changing row height');
 
@@ -124,5 +137,5 @@ async function run(browser, width) {
 }
 
 (async()=>{fs.mkdirSync(evidence,{recursive:true});const browser=await chromium.launch({channel:'chrome'}),report=[];
-try{for(const width of[700,629,390])report.push(await run(browser,width));console.log('Mobile controls passed: 700/629/390, real button flows, filter clear/apply, columns and keyboard-height emulation');}
+try{for(const width of[700,629,480,390])report.push(await run(browser,width));console.log('Mobile controls passed: 700/629/480/390, real button flows, filter clear/apply, columns and keyboard-height emulation');}
 finally{fs.writeFileSync(path.join(evidence,'controls-report.json'),JSON.stringify(report,null,2));await browser.close();}})().catch(error=>{console.error(error);process.exitCode=1;});

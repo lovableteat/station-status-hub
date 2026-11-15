@@ -2283,11 +2283,6 @@ body {
   .material-mobile-scope > button, .material-mobile-view-switch > button { display: flex; min-width: 0; min-height: 44px; align-items: center; justify-content: center; gap: 5px; padding: 4px; border-radius: 8px; color: hsl(var(--muted-foreground)); font-size: .8125rem; font-weight: 500; }
   .material-mobile-scope > button[aria-pressed="true"], .material-mobile-view-switch > button[aria-pressed="true"] { background: hsl(var(--secondary)); color: hsl(var(--foreground)); box-shadow: 0 1px 3px hsl(0 0% 0% / .16); }
   .material-mobile-scope > button > span { font-size: .6875rem; font-variant-numeric: tabular-nums; }
-  .material-mobile-column-filters { display: grid; grid-template-columns: 100px minmax(0, 1fr) minmax(64px, .6fr); gap: 6px; }
-  .material-mobile-column-filters > button { height: 44px; border-color: hsl(var(--border)); border-radius: 9px; background: transparent; font-weight: 500; }
-  .material-mobile-command-center [data-testid="material-active-filters"] { margin-top: 8px; gap: 4px; }
-  .material-mobile-command-center [data-testid="material-active-filters"] > button { font-size: .75rem; }
-  .material-mobile-command-center [data-testid="material-active-filters"] > button:last-child { color: hsl(var(--muted-foreground)); }
   .material-mobile-tools-sheet { max-height: min(88dvh, 44rem); margin-top: 0; padding: 0; border-radius: 24px 24px 0 0; background: hsl(var(--card) / .98); backdrop-filter: blur(16px); }
   .material-mobile-tools-heading { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px 16px; text-align: left; }
   .material-mobile-tools-heading > div { min-width: 0; }
