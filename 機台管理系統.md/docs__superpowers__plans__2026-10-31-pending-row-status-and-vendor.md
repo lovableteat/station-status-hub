@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-31-pending-row-status-and-vendor.md`；程式參考基準：`73c35ddc80233d8f975fa713e722edb558203d30`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-31-pending-row-status-and-vendor.md`；程式參考基準：`b646e773ec63909292fae68f696429f2b650bd80`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 待處理料狀態與廠商呈現
 

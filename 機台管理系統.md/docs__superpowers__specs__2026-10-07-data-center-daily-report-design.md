@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/specs/2026-10-07-data-center-daily-report-design.md`；程式參考基準：`73c35ddc80233d8f975fa713e722edb558203d30`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/specs/2026-10-07-data-center-daily-report-design.md`；程式參考基準：`b646e773ec63909292fae68f696429f2b650bd80`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Data Center 每日回報與操作介面
 
