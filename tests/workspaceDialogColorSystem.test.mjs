@@ -49,11 +49,12 @@ test("PCB settings and admin collaboration panels use semantic accents instead o
   assert.match(pcbDialogs, /dialog\?\.kind === "project-settings"[\s\S]*"project-settings"/);
   assert.match(pcbDialogs, /data-pcb-dialog-form=\{dialog\.kind\}/);
   assert.match(pcbDialogs, /data-pcb-field-tone="identity"/);
-  assert.match(pcbDialogs, /data-pcb-field-tone="dimensions"/);
+  assert.match(pcbDialogs, /data-pcb-field-tone="description"/);
   assert.match(pcbDialogs, /data-pcb-field-tone=\{values\.status \|\| "draft"\}/);
   assert.match(pcbDialogs, /data-pcb-project-footer/);
   assert.match(pcbDialogs, /workspace-dialog-section--violet/);
   assert.match(pcbStyles, /\[data-pcb-dialog-form="project-settings"\]/);
+  assert.match(pcbStyles, /\[data-pcb-field-tone="description"\]/);
   assert.match(pcbStyles, /\[data-pcb-field-tone="draft"\]/);
   assert.match(pcbStyles, /\[data-pcb-project-footer\]/);
   assert.match(adminCollaboration, /surface-accent--teal/);
