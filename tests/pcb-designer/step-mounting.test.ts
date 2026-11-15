@@ -11,6 +11,7 @@ import {
   getPcbMountY,
   MAX_SOFTWARE_PIECE_GROUPS,
   addSoftwarePieceBounds,
+  isSoftwarePieceInsideBoardMaterial,
   mergeSoftwarePieceBounds,
   splitSoftwarePolygonAtBoardSurface,
   transformPcbComponentPoint,
@@ -208,15 +209,30 @@ test("compat 3D click areas: a big STEP piece list does not overflow the stack",
   assert.deepEqual([groups[0].left, groups[0].top, groups[0].right, groups[0].bottom], [0, 0, 399, 499]);
 });
 
-test("compat 3D: a face lying on the surface stays in front of the board", () => {
-  const onSurface = square(0, 6, 0.8, 0.8);
-  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(onSurface, 60, 1.6), { near: onSurface, within: [], beyond: [] });
+test("compat 3D: a face lying on the surface facing the camera stays in front of the board, Top and Bottom", () => {
+  const onTop = square(0, 6, 0.8, 0.8);
+  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(onTop, 60, 1.6), { near: onTop, within: [], beyond: [] });
+  const onBottom = square(-5, 5, -0.8, -0.8);
+  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(onBottom, -60, 1.6), { near: onBottom, within: [], beyond: [] }, "seen from below");
+});
+
+test("compat 3D: only a piece wholly inside the board material is hidden; one crossing the edge or a cut-out edge is kept", () => {
+  const board = (x: number, z: number) => Math.abs(x) <= 50 && Math.abs(z) <= 50 && !(Math.abs(x) < 10 && Math.abs(z) < 10);
+  const inside = splitSoftwarePolygonAtBoardSurface(square(49.8, 49.9, 0.4, 0.6), 60, 1.6).within;
+  assert.equal(isSoftwarePieceInsideBoardMaterial(inside, board), true, "next to the edge, inside: hidden");
+  const acrossEdge = splitSoftwarePolygonAtBoardSurface(square(46, 52, 0.4, 6), 60, 1.6).within;
+  assert.equal(isSoftwarePieceInsideBoardMaterial(acrossEdge, board), false, "crosses the board edge: kept");
+  const acrossCutOut = splitSoftwarePolygonAtBoardSurface(square(-12, -9, 0.4, 6), 60, 1.6).within;
+  assert.equal(isSoftwarePieceInsideBoardMaterial(acrossCutOut, board), false, "crosses the cut-out edge: kept");
+  assert.equal(isSoftwarePieceInsideBoardMaterial([], board), false);
 });
 
 test("compat 3D click areas: a part with very many separate pieces collapses to one area instead of slowing down", () => {
   const groups: Parameters<typeof addSoftwarePieceBounds>[0] = [];
-  for (let index = 0; index < 500; index += 1) addSoftwarePieceBounds(groups, [{ x: index * 10, y: 0, depth: 1, visible: true }]);
+  for (let index = 0; index < 65; index += 1) addSoftwarePieceBounds(groups, [{ x: index * 10, y: 0, depth: 1, visible: true }]);
+  assert.equal(groups.length, 65, "a 65-pin connector keeps one area per pin");
+  for (let index = 65; index < 600; index += 1) addSoftwarePieceBounds(groups, [{ x: index * 10, y: 0, depth: 1, visible: true }]);
   assert.ok(groups.length <= MAX_SOFTWARE_PIECE_GROUPS);
   const all = groups.reduce((a, b) => ({ ...a, left: Math.min(a.left, b.left), right: Math.max(a.right, b.right) }));
-  assert.deepEqual([all.left, all.right], [0, 4990], "every piece is still clickable");
+  assert.deepEqual([all.left, all.right], [0, 5990], "every piece is still clickable");
 });

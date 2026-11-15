@@ -104,9 +104,13 @@ export function getSoftwareLayerRenderOrder(
   return isNearSide ? SOFTWARE_RENDER_ORDER.nearObject : SOFTWARE_RENDER_ORDER.farObject;
 }
 
-/** Splits a polygon at the plane y = planeY into the part with y >= planeY and the part with y <= planeY. */
-function splitPolygonAtY(points: readonly SoftwarePoint3[], planeY: number): { above: SoftwarePoint3[]; below: SoftwarePoint3[] } {
+/**
+ * Splits a polygon at the plane y = planeY into the part with y >= planeY and the part with y <= planeY.
+ * A polygon lying on the plane goes below when tieGoesBelow is set, otherwise above.
+ */
+function splitPolygonAtY(points: readonly SoftwarePoint3[], planeY: number, tieGoesBelow = false): { above: SoftwarePoint3[]; below: SoftwarePoint3[] } {
   const distances = points.map((point) => point.y - planeY);
+  if (tieGoesBelow && distances.every((distance) => distance <= 0)) return { above: [], below: [...points] };
   if (distances.every((distance) => distance >= 0)) return { above: [...points], below: [] };
   if (distances.every((distance) => distance <= 0)) return { above: [], below: [...points] };
   const above: SoftwarePoint3[] = [];
@@ -145,19 +149,26 @@ export function splitSoftwarePolygonAtBoardSurface(
   boardThickness: number,
 ): { near: SoftwarePoint3[]; within: SoftwarePoint3[]; beyond: SoftwarePoint3[] } {
   const surface = boardThickness / 2;
-  const top = splitPolygonAtY(points, surface);
-  const bottom = top.below.length ? splitPolygonAtY(top.below, -surface) : { above: [], below: [] };
-  return eyeY >= 0
-    ? { near: top.above, within: bottom.above, beyond: bottom.below }
-    : { near: bottom.below, within: bottom.above, beyond: top.above };
+  // The surface facing the camera is cut first, so a face lying on it (y exactly at the surface) stays near.
+  if (eyeY >= 0) {
+    const top = splitPolygonAtY(points, surface);
+    const rest = top.below.length ? splitPolygonAtY(top.below, -surface) : { above: [], below: [] };
+    return { near: top.above, within: rest.above, beyond: rest.below };
+  }
+  const bottom = splitPolygonAtY(points, -surface, true);
+  const rest = bottom.above.length ? splitPolygonAtY(bottom.above, surface, true) : { above: [], below: [] };
+  return { near: bottom.below, within: rest.below, beyond: rest.above };
 }
 
-/** The centre of a polygon, in plan (x, z). */
-export function getSoftwarePolygonPlanCentre(points: readonly SoftwarePoint3[]): { x: number; z: number } {
-  let x = 0;
-  let z = 0;
-  for (const point of points) { x += point.x; z += point.z; }
-  return { x: x / points.length, z: z / points.length };
+/**
+ * A piece inside the board thickness is hidden only when all of it is inside the board material; one that
+ * crosses the board edge or a cut-out edge is kept (its visible part must not disappear).
+ */
+export function isSoftwarePieceInsideBoardMaterial(
+  points: readonly SoftwarePoint3[],
+  isInsideMaterial: (x: number, z: number) => boolean,
+): boolean {
+  return points.length > 0 && points.every((point) => isInsideMaterial(point.x, point.z));
 }
 
 /** Screen bounds of one or more drawn pieces, used as a click area. */
@@ -205,7 +216,7 @@ export function addSoftwarePieceBounds(groups: SoftwarePieceBounds[], points: It
 }
 
 /** More separate click groups than this for one part collapse into one area (keeps the merge cheap). */
-export const MAX_SOFTWARE_PIECE_GROUPS = 64;
+export const MAX_SOFTWARE_PIECE_GROUPS = 512;
 
 /** Final pass: groups that grew into each other are joined. */
 export function mergeSoftwarePieceBounds(groups: readonly SoftwarePieceBounds[]): SoftwarePieceBounds[] {

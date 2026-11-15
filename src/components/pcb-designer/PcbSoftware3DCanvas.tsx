@@ -35,7 +35,7 @@ import {
 
   getSoftwareLayerRenderOrder,
   getSoftwareLightLevel,
-  getSoftwarePolygonPlanCentre,
+  isSoftwarePieceInsideBoardMaterial,
   joinSoftwarePieceBounds,
   mergeSoftwarePieceBounds,
   projectSoftwarePoint,
@@ -97,6 +97,8 @@ interface HitTarget {
   depth: number;
   selected: boolean;
   label?: string;
+  /** A part on the other side, clickable where its pieces poke through; parts on the camera side win. */
+  poking?: boolean;
 }
 
 interface PointerDragState {
@@ -448,11 +450,10 @@ export function PcbSoftware3DCanvas({
     // Component faces are split at the board surface facing the camera: the near piece is drawn after the
     // board, the far piece before it, so the opaque board hides what it covers on screen and nothing else.
     // Near pieces of a part on the other side (leads poking through) also become its click area.
-    const isInsideBoardMaterial = (points: readonly SoftwarePoint3[]) => {
-      const centre = getSoftwarePolygonPlanCentre(points);
-      const planPoint = { x: centre.x + project.board.width / 2, y: centre.z + project.board.height / 2 };
+    const isInsideBoardMaterial = (points: readonly SoftwarePoint3[]) => isSoftwarePieceInsideBoardMaterial(points, (x, z) => {
+      const planPoint = { x: x + project.board.width / 2, y: z + project.board.height / 2 };
       return pointInBoardPolygon(planPoint, boardPolygon) && !holes.some((ring) => pointInBoardPolygon(planPoint, ring));
-    };
+    });
     let nearPieceClusters: SoftwarePieceBounds[] = [];
     let trackNearPieces = false;
     const addComponentPolygon = (
@@ -571,7 +572,7 @@ export function PcbSoftware3DCanvas({
       // A part on the other side is clickable where its pieces poke through to the camera's side, one area per
       // group of pieces (two leads far apart do not cover what lies between them).
       nearPieceClusters = mergeSoftwarePieceBounds(nearPieceClusters);
-      nearPieceClusters.forEach(({ left, top, right, bottom, depth }) => hits.push({ kind: "component", id: component.instanceId, left, top, right, bottom, depth, selected, label: component.reference }));
+      nearPieceClusters.forEach(({ left, top, right, bottom, depth }) => hits.push({ kind: "component", id: component.instanceId, left, top, right, bottom, depth, selected, label: component.reference, poking: true }));
       const pokingBounds = nearPieceClusters.length ? nearPieceClusters.reduce(joinSoftwarePieceBounds) : null;
       const labelBounds = isNearSide ? projectedBounds : pokingBounds;
       if (selected && labelBounds) {
@@ -656,9 +657,10 @@ export function PcbSoftware3DCanvas({
   useEffect(() => { resetView(); }, [resetView]);
 
   const selectAt = useCallback((x: number, y: number, additive: boolean) => {
-    const target = hitTargetsRef.current.find((candidate) =>
-      x >= candidate.left - 5 && x <= candidate.right + 5
-      && y >= candidate.top - 5 && y <= candidate.bottom + 5);
+    const under = (candidate: HitTarget) => x >= candidate.left - 5 && x <= candidate.right + 5
+      && y >= candidate.top - 5 && y <= candidate.bottom + 5;
+    const target = hitTargetsRef.current.find((candidate) => !candidate.poking && under(candidate))
+      ?? hitTargetsRef.current.find((candidate) => candidate.poking && under(candidate));
     if (!target) {
       workspace.selectObject(null);
       workspace.clearObjectSelection();
