@@ -90,6 +90,9 @@ interface SceneLine {
 
 type SceneShape = ScenePolygon | SceneLine;
 
+/** Shared empty piece for faces that are not cut (never written to). */
+const NO_PIECE: SoftwarePoint3[] = [];
+
 /** A mesh face cut at the board surfaces for one camera side, with the place of its board-thickness piece. */
 interface CutFace {
   near: SoftwarePoint3[];
@@ -645,27 +648,29 @@ export function PcbSoftware3DCanvas({
           const stroke = shadeColor(color, selected ? 0.82 : 0.58);
           // Skipping triangles opens holes in a STEP model; draw every source face.
           for (let offset = 0; offset < part.index.length; offset += 3, faceNumber += 1) {
-            const raised = [0, 1, 2].map((corner) => {
-              const vertexIndex = part.index[offset + corner] * 3;
-              return raise(positions[vertexIndex], positions[vertexIndex + 1], positions[vertexIndex + 2]);
-            });
-            const worldPoints = raised.map(place);
-            const normal = getSoftwareFaceNormal(worldPoints[0], worldPoints[1], worldPoints[2]);
+            const a = part.index[offset] * 3, b = part.index[offset + 1] * 3, c = part.index[offset + 2] * 3;
+            const raised = [
+              raise(positions[a], positions[a + 1], positions[a + 2]),
+              raise(positions[b], positions[b + 1], positions[b + 2]),
+              raise(positions[c], positions[c + 1], positions[c + 2]),
+            ];
+            // Normal and culling from the mounted points: placing on the board only turns them about the vertical.
+            const mountedNormal = getSoftwareFaceNormal(raised[0], raised[1], raised[2]);
+            const normal = { x: mountedNormal.x * cos + mountedNormal.z * sin, y: mountedNormal.y, z: -mountedNormal.x * sin + mountedNormal.z * cos };
             if (cullBackFaces) {
-              const toEye = {
-                x: camera.eye.x - (worldPoints[0].x + worldPoints[1].x + worldPoints[2].x) / 3,
-                y: camera.eye.y - (worldPoints[0].y + worldPoints[1].y + worldPoints[2].y) / 3,
-                z: camera.eye.z - (worldPoints[0].z + worldPoints[1].z + worldPoints[2].z) / 3,
-              };
-              if ((normal.x * toEye.x + normal.y * toEye.y + normal.z * toEye.z) * facing < 0) continue;
+              const centreX = (raised[0].x + raised[1].x + raised[2].x) / 3, centreZ = (raised[0].z + raised[1].z + raised[2].z) / 3;
+              const toEyeX = camera.eye.x - (originX + centreX * cos + centreZ * sin);
+              const toEyeY = camera.eye.y - (raised[0].y + raised[1].y + raised[2].y) / 3;
+              const toEyeZ = camera.eye.z - (originZ - centreX * sin + centreZ * cos);
+              if ((normal.x * toEyeX + normal.y * toEyeY + normal.z * toEyeZ) * facing < 0) continue;
             }
             const fill = shadeColor(color, getSoftwareLightLevel(normal));
-            const lowest = Math.min(worldPoints[0].y, worldPoints[1].y, worldPoints[2].y);
-            const highest = Math.max(worldPoints[0].y, worldPoints[1].y, worldPoints[2].y);
+            const lowest = Math.min(raised[0].y, raised[1].y, raised[2].y);
+            const highest = Math.max(raised[0].y, raised[1].y, raised[2].y);
             const nearSide = cameraSide === "top" ? lowest >= surface : highest <= -surface;
             const farSide = cameraSide === "top" ? highest < -surface : lowest > surface;
-            if (nearSide) { drawBands({ near: worldPoints, within: [], withinPlace: null, beyond: [] }, fill, stroke, 1, 0); continue; }
-            if (farSide) { drawBands({ near: [], within: [], withinPlace: null, beyond: worldPoints }, fill, stroke, 1, 0); continue; }
+            if (nearSide) { drawBands({ near: raised.map(place), within: NO_PIECE, withinPlace: null, beyond: NO_PIECE }, fill, stroke, 1, 0); continue; }
+            if (farSide) { drawBands({ near: NO_PIECE, within: NO_PIECE, withinPlace: null, beyond: raised.map(place) }, fill, stroke, 1, 0); continue; }
             let cut = cuts.get(faceNumber);
             if (!cut) {
               const { near, within, beyond } = splitSoftwarePolygonAtBoardSurface(raised, camera.eye.y, BOARD_THICKNESS);

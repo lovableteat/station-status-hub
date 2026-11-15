@@ -105,42 +105,6 @@ export function getSoftwareLayerRenderOrder(
 }
 
 /**
- * Splits a polygon at the plane y = planeY into the part with y >= planeY and the part with y <= planeY.
- * A polygon lying on the plane goes below when tieGoesBelow is set, otherwise above.
- */
-function splitPolygonAtY(points: readonly SoftwarePoint3[], planeY: number, tieGoesBelow = false): { above: SoftwarePoint3[]; below: SoftwarePoint3[] } {
-  let lowest = Infinity;
-  let highest = -Infinity;
-  for (const point of points) { lowest = Math.min(lowest, point.y); highest = Math.max(highest, point.y); }
-  const whole = points as SoftwarePoint3[];
-  if (tieGoesBelow && highest <= planeY) return { above: [], below: whole };
-  if (lowest >= planeY) return { above: whole, below: [] };
-  if (highest <= planeY) return { above: [], below: whole };
-  const distances = points.map((point) => point.y - planeY);
-  const above: SoftwarePoint3[] = [];
-  const below: SoftwarePoint3[] = [];
-  points.forEach((current, index) => {
-    const nextIndex = (index + 1) % points.length;
-    const next = points[nextIndex];
-    const currentDistance = distances[index];
-    const nextDistance = distances[nextIndex];
-    if (currentDistance >= 0) above.push(current);
-    if (currentDistance <= 0) below.push(current);
-    if ((currentDistance > 0 && nextDistance < 0) || (currentDistance < 0 && nextDistance > 0)) {
-      const t = currentDistance / (currentDistance - nextDistance);
-      const crossing = {
-        x: current.x + (next.x - current.x) * t,
-        y: current.y + (next.y - current.y) * t,
-        z: current.z + (next.z - current.z) * t,
-      };
-      above.push(crossing);
-      below.push({ ...crossing });
-    }
-  });
-  return { above: above.length >= 3 ? above : [], below: below.length >= 3 ? below : [] };
-}
-
-/**
  * The compat 3D paints faces in order and has no depth buffer, so each component face is cut into three
  * bands by the two board surfaces: near (the camera's side, drawn after the board), within (inside the
  * board thickness) and beyond (the far side, drawn before the board, which hides it where it covers it on
@@ -153,15 +117,56 @@ export function splitSoftwarePolygonAtBoardSurface(
   boardThickness: number,
 ): { near: SoftwarePoint3[]; within: SoftwarePoint3[]; beyond: SoftwarePoint3[] } {
   const surface = boardThickness / 2;
-  // The surface facing the camera is cut first, so a face lying on it (y exactly at the surface) stays near.
+  let lowest = Infinity;
+  let highest = -Infinity;
+  for (const point of points) { if (point.y < lowest) lowest = point.y; if (point.y > highest) highest = point.y; }
+  const whole = points as SoftwarePoint3[];
+  // A face lying on the surface facing the camera stays near; one lying on the far surface counts as inside the
+  // board thickness (the same tie rules as cutting the camera's surface first).
   if (eyeY >= 0) {
-    const top = splitPolygonAtY(points, surface);
-    const rest = top.below.length ? splitPolygonAtY(top.below, -surface) : { above: [], below: [] };
-    return { near: top.above, within: rest.above, beyond: rest.below };
+    if (lowest >= surface) return { near: whole, within: NO_POINTS, beyond: NO_POINTS };
+    if (lowest >= -surface && highest <= surface) return { near: NO_POINTS, within: whole, beyond: NO_POINTS };
+    if (highest <= -surface) return { near: NO_POINTS, within: NO_POINTS, beyond: whole };
+    const below = highest > surface ? clipToY(points, surface, false) : whole;
+    return {
+      near: highest > surface ? clipToY(points, surface, true) : NO_POINTS,
+      within: clipToY(below, -surface, true),
+      beyond: clipToY(below, -surface, false),
+    };
   }
-  const bottom = splitPolygonAtY(points, -surface, true);
-  const rest = bottom.above.length ? splitPolygonAtY(bottom.above, surface, true) : { above: [], below: [] };
-  return { near: bottom.below, within: rest.below, beyond: rest.above };
+  if (highest <= -surface) return { near: whole, within: NO_POINTS, beyond: NO_POINTS };
+  if (lowest >= -surface && highest <= surface) return { near: NO_POINTS, within: whole, beyond: NO_POINTS };
+  if (lowest >= surface) return { near: NO_POINTS, within: NO_POINTS, beyond: whole };
+  const above = lowest < -surface ? clipToY(points, -surface, true) : whole;
+  return {
+    near: lowest < -surface ? clipToY(points, -surface, false) : NO_POINTS,
+    within: clipToY(above, surface, false),
+    beyond: clipToY(above, surface, true),
+  };
+}
+
+/** Shared empty piece (never written to). */
+const NO_POINTS: SoftwarePoint3[] = [];
+
+/**
+ * One Sutherland-Hodgman pass: the part of a polygon with y >= planeY (keepAbove) or y <= planeY. Crossing
+ * points are placed exactly on the plane. Returns the shared empty piece when less than a triangle is left.
+ */
+function clipToY(points: readonly SoftwarePoint3[], planeY: number, keepAbove: boolean): SoftwarePoint3[] {
+  const kept: SoftwarePoint3[] = [];
+  let previous = points[points.length - 1];
+  let previousSide = keepAbove ? previous.y - planeY : planeY - previous.y;
+  for (const current of points) {
+    const side = keepAbove ? current.y - planeY : planeY - current.y;
+    if ((previousSide > 0 && side < 0) || (previousSide < 0 && side > 0)) {
+      const t = previousSide / (previousSide - side);
+      kept.push({ x: previous.x + (current.x - previous.x) * t, y: planeY, z: previous.z + (current.z - previous.z) * t });
+    }
+    if (side >= 0) kept.push(current);
+    previous = current;
+    previousSide = side;
+  }
+  return kept.length >= 3 ? kept : NO_POINTS;
 }
 
 type PlanPoint = { x: number; z: number };
@@ -312,21 +317,23 @@ export function createSoftwareBoardClassifier(
       pMinZ = Math.min(pMinZ, point.z); pMaxZ = Math.max(pMaxZ, point.z);
     }
     if (pMaxX < minX || pMinX > maxX || pMaxZ < minZ || pMinZ > maxZ) return "outside";
+    const i0 = column(pMinX), i1 = column(pMaxX), j0 = row(pMinZ), j1 = row(pMaxZ);
+    let anyEdge = false;
+    for (let j = j0; j <= j1 && !anyEdge; j += 1) for (let i = i0; i <= i1; i += 1) if (buckets[j * cells + i].length) { anyEdge = true; break; }
+    if (!anyEdge) {
+      const cell = j0 * cells + i0;
+      if (!cellInside[cell]) cellInside[cell] = insideMaterialFast(minX + (i0 + 0.5) * cellWidth, minZ + (j0 + 0.5) * cellDepth) ? 1 : 2;
+      return cellInside[cell] === 1 ? "inside" : "outside";
+    }
     stamp += 1;
     if (stamp === 0xffffffff) { seen.fill(0); stamp = 1; }
     const nearby: PlanEdge[] = [];
-    const i0 = column(pMinX), i1 = column(pMaxX), j0 = row(pMinZ), j1 = row(pMaxZ);
     for (let j = j0; j <= j1; j += 1) for (let i = i0; i <= i1; i += 1) {
       for (const index of buckets[j * cells + i]) {
         if (seen[index] === stamp) continue;
         seen[index] = stamp;
         nearby.push(edges[index]);
       }
-    }
-    if (!nearby.length) {
-      const cell = j0 * cells + i0;
-      if (!cellInside[cell]) cellInside[cell] = insideMaterialFast(minX + (i0 + 0.5) * cellWidth, minZ + (j0 + 0.5) * cellDepth) ? 1 : 2;
-      return cellInside[cell] === 1 ? "inside" : "outside";
     }
     return classifyAgainstEdges(points, insideMaterialFast, nearby);
   };
@@ -356,9 +363,6 @@ export function isSoftwarePieceBehindBoard(
     if (!(t > 0 && t < 1)) return false;
     projected.push({ x: eye.x + (point.x - eye.x) * t, y: plane, z: eye.z + (point.z - eye.z) * t });
   }
-  // One corner off the material already shows the piece (a cheap per-cell answer in low views, where the
-  // projection is long); only a piece that may really be hidden gets the whole-outline test.
-  for (const corner of projected) if (classify([corner]) !== "inside") return false;
   return classify(projected) === "inside";
 }
 
@@ -643,7 +647,9 @@ export function getSoftwareFaceNormal(
   return normalize(cross(subtract(b, a), subtract(c, a)));
 }
 
+/** Fixed light direction of the compat 3D (normalised once). */
+const SOFTWARE_LIGHT = normalize({ x: -0.35, y: 0.85, z: 0.4 });
+
 export function getSoftwareLightLevel(normal: SoftwarePoint3): number {
-  const light = normalize({ x: -0.35, y: 0.85, z: 0.4 });
-  return 0.46 + Math.abs(dot(normal, light)) * 0.54;
+  return 0.46 + Math.abs(dot(normal, SOFTWARE_LIGHT)) * 0.54;
 }
