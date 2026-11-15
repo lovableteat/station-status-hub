@@ -199,21 +199,28 @@ export function PcbSoftware3DCanvas({
    * view, so turning the camera reuses them; rebuilt when the part moves or the board changes. Faces wholly on
    * one side need no cut and are not stored, so memory does not grow with big models.
    */
-  const faceCacheRef = useRef(new WeakMap<object, { signature: string; board: unknown; sides: Partial<Record<"top" | "bottom", Map<number, CutFace>>> }>());
+  const faceCacheRef = useRef(new WeakMap<object, { signature: string; board: string; sides: Partial<Record<"top" | "bottom", Map<number, CutFace>>> }>());
   const pointerDragRef = useRef<PointerDragState | null>(null);
   const [view, setView] = useState<SoftwareViewState>(DEFAULT_SOFTWARE_VIEW);
   const [viewport, setViewport] = useState(() => getSoftwareCanvasResolution(1, 1));
   const project = workspace.activeProject;
+  /**
+   * The board's shape as text. Every edit copies the whole project, so the board object changes even when only
+   * a part moved; the caches below follow this key instead, and rebuild only when the outline or cut-outs change.
+   */
+  const boardShapeKey = useMemo(
+    () => JSON.stringify([project.board.width, project.board.height, getBoardPolygon(project.board), getBoardHoles(project.board)]),
+    [project.board],
+  );
   /** Where a piece inside the board thickness sits against the board; built once per board shape. */
   const classifyWithinPiece = useMemo(() => {
-    const outline = getBoardPolygon(project.board);
-    const cutOuts = getBoardHoles(project.board);
-    const toPlan = (point: { x: number; y: number }) => ({ x: point.x - project.board.width / 2, z: point.y - project.board.height / 2 });
+    const [width, height, outline, cutOuts] = JSON.parse(boardShapeKey) as [number, number, Array<{ x: number; y: number }>, Array<Array<{ x: number; y: number }>>];
+    const toPlan = (point: { x: number; y: number }) => ({ x: point.x - width / 2, z: point.y - height / 2 });
     return createSoftwareBoardClassifier([outline, ...cutOuts].map((ring) => ring.map(toPlan)), (x, z) => {
-      const planPoint = { x: x + project.board.width / 2, y: z + project.board.height / 2 };
+      const planPoint = { x: x + width / 2, y: z + height / 2 };
       return pointInBoardPolygon(planPoint, outline) && !cutOuts.some((ring) => pointInBoardPolygon(planPoint, ring));
     });
-  }, [project.board]);
+  }, [boardShapeKey]);
   const loadModelAsset = workspace.loadModelAsset;
   const modelAssetIds = useMemo(
     () => [...new Set(project.components.map((component) => component.modelAssetId).filter(Boolean))] as string[],
@@ -248,23 +255,26 @@ export function PcbSoftware3DCanvas({
     };
   }, [loadModelAsset, modelAssetKey]);
 
-  // Mapped meshes are reused per component object (an edit replaces only the edited one), so moving one part
-  // re-maps that part alone and the face cache of the others stays valid.
-  const mappingCacheRef = useRef(new WeakMap<object, { asset: unknown; parts: CachedModelPart[] }>());
+  // A mapped mesh depends only on the model, the size and 模型朝向, not on where the part sits. It is reused by
+  // part id while those stay the same, so moving a part re-maps nothing and the cached cuts of the other parts
+  // stay valid. The cache holds only the open board's parts, so switching boards cannot pile meshes up.
+  const mappingCacheRef = useRef(new Map<string, { asset: unknown; size: string; parts: CachedModelPart[] }>());
   const mappedModelParts = useMemo(() => {
     const mapped: Record<string, CachedModelPart[]> = {};
+    const kept = new Map<string, { asset: unknown; size: string; parts: CachedModelPart[] }>();
     project.components.forEach((component) => {
       const asset = component.modelAssetId ? modelAssets[component.modelAssetId] : getPcbPackageAsset(component, packageKit);
       if (!asset) return;
-      const reused = mappingCacheRef.current.get(component);
-      if (reused && reused.asset === asset) { mapped[component.instanceId] = reused.parts; return; }
-      const parts = asset.parts.map((part) => ({
+      const size = JSON.stringify([component.width, component.height, component.maxHeight, component.modelRotation ?? null]);
+      const reused = mappingCacheRef.current.get(component.instanceId);
+      const parts = reused && reused.asset === asset && reused.size === size ? reused.parts : asset.parts.map((part) => ({
         part: { ...part, index: getPcbModelRenderIndices(part.index, asset.metadata.upAxis) },
         positions: mapPcbModelPartToComponentSpace(part, asset, component),
       }));
-      mappingCacheRef.current.set(component, { asset, parts });
+      kept.set(component.instanceId, { asset, size, parts });
       mapped[component.instanceId] = parts;
     });
+    mappingCacheRef.current = kept;
     return mapped;
   }, [modelAssets, packageKit, project.components]);
 
@@ -588,8 +598,8 @@ export function PcbSoftware3DCanvas({
         const facing = component.layer === "bottom" ? -1 : 1;
         const signature = [component.x, component.y, component.rotation, component.layer, component.insertionDepth ?? 0].join(",");
         let entry = faceCacheRef.current.get(cachedParts);
-        if (!entry || entry.signature !== signature || entry.board !== project.board) {
-          entry = { signature, board: project.board, sides: {} };
+        if (!entry || entry.signature !== signature || entry.board !== boardShapeKey) {
+          entry = { signature, board: boardShapeKey, sides: {} };
           faceCacheRef.current.set(cachedParts, entry);
         }
         const cutFaces = entry.sides[cameraSide] ?? (entry.sides[cameraSide] = new Map<number, CutFace>());
@@ -712,7 +722,7 @@ export function PcbSoftware3DCanvas({
     });
 
     hitTargetsRef.current = hits.sort((left, right) => left.depth - right.depth);
-  }, [classifyWithinPiece, mappedModelParts, modelAssets, project, selectedIds, selectionIds, view, viewport, visibleLayer]);
+  }, [boardShapeKey, classifyWithinPiece, mappedModelParts, modelAssets, packageKit, project, selectedIds, selectionIds, view, viewport, visibleLayer]);
 
   const face = visibleLayer === "all" ? workspace.activeLayer : visibleLayer;
   const resetView = useCallback(() => setView({ ...DEFAULT_SOFTWARE_VIEW, pitch: Math.abs(DEFAULT_SOFTWARE_VIEW.pitch) * (face === "bottom" ? -1 : 1) }), [face]);
