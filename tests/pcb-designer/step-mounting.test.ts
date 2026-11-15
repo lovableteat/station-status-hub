@@ -225,6 +225,12 @@ test("compat 3D: only a piece wholly inside the board material is hidden; one cr
   const acrossCutOut = splitSoftwarePolygonAtBoardSurface(square(-12, -9, 0.4, 6), 60, 1.6).within;
   assert.equal(isSoftwarePieceInsideBoardMaterial(acrossCutOut, board), false, "crosses the cut-out edge: kept");
   assert.equal(isSoftwarePieceInsideBoardMaterial([], board), false);
+  // A piece spanning the whole 20 x 20 cut-out: every corner is on material, but the cut-out is under it.
+  const corners = [[-50, -50], [50, -50], [50, 50], [-50, 50], [-10, -10], [10, -10], [10, 10], [-10, 10]].map(([x, z]) => ({ x, z }));
+  const overCutOut = [{ x: -12, y: 0.5, z: -12 }, { x: 12, y: 0.5, z: -12 }, { x: 12, y: 0.5, z: 12 }];
+  assert.equal(isSoftwarePieceInsideBoardMaterial(overCutOut, board), true, "without the corners it would be dropped");
+  assert.equal(isSoftwarePieceInsideBoardMaterial(overCutOut, board, corners), false, "spans the cut-out: kept");
+  assert.equal(isSoftwarePieceInsideBoardMaterial(inside, board, corners), true, "a lead inside the material is still hidden");
 });
 
 test("compat 3D click areas: a part with very many separate pieces collapses to one area instead of slowing down", () => {

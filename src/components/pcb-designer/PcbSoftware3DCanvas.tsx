@@ -450,10 +450,11 @@ export function PcbSoftware3DCanvas({
     // Component faces are split at the board surface facing the camera: the near piece is drawn after the
     // board, the far piece before it, so the opaque board hides what it covers on screen and nothing else.
     // Near pieces of a part on the other side (leads poking through) also become its click area.
+    const boundaryCorners = [boardPolygon, ...holes].flat().map((point) => ({ x: point.x - project.board.width / 2, z: point.y - project.board.height / 2 }));
     const isInsideBoardMaterial = (points: readonly SoftwarePoint3[]) => isSoftwarePieceInsideBoardMaterial(points, (x, z) => {
       const planPoint = { x: x + project.board.width / 2, y: z + project.board.height / 2 };
       return pointInBoardPolygon(planPoint, boardPolygon) && !holes.some((ring) => pointInBoardPolygon(planPoint, ring));
-    });
+    }, boundaryCorners);
     let nearPieceClusters: SoftwarePieceBounds[] = [];
     let trackNearPieces = false;
     const addComponentPolygon = (

@@ -161,14 +161,32 @@ export function splitSoftwarePolygonAtBoardSurface(
 }
 
 /**
- * A piece inside the board thickness is hidden only when all of it is inside the board material; one that
- * crosses the board edge or a cut-out edge is kept (its visible part must not disappear).
+ * A piece inside the board thickness is hidden only when all of it is inside the board material: every
+ * point is on material, and no corner of the board outline or of a cut-out lies inside the piece in plan
+ * (a piece spanning a whole cut-out or a notch has corners on material but is partly visible). One that
+ * crosses the board edge or a cut-out edge is kept, so its visible part never disappears.
  */
 export function isSoftwarePieceInsideBoardMaterial(
   points: readonly SoftwarePoint3[],
   isInsideMaterial: (x: number, z: number) => boolean,
+  boundaryCorners: readonly { x: number; z: number }[] = [],
 ): boolean {
-  return points.length > 0 && points.every((point) => isInsideMaterial(point.x, point.z));
+  if (!points.length || !points.every((point) => isInsideMaterial(point.x, point.z))) return false;
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const point of points) {
+    minX = Math.min(minX, point.x); maxX = Math.max(maxX, point.x);
+    minZ = Math.min(minZ, point.z); maxZ = Math.max(maxZ, point.z);
+  }
+  for (const corner of boundaryCorners) {
+    if (corner.x <= minX || corner.x >= maxX || corner.z <= minZ || corner.z >= maxZ) continue;
+    let inside = false;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const a = points[j], b = points[i];
+      if ((a.z > corner.z) !== (b.z > corner.z) && corner.x < (b.x - a.x) * (corner.z - a.z) / (b.z - a.z) + a.x) inside = !inside;
+    }
+    if (inside) return false;
+  }
+  return true;
 }
 
 /** Screen bounds of one or more drawn pieces, used as a click area. */
