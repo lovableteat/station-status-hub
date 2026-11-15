@@ -127,46 +127,46 @@ export function splitSoftwarePolygonAtBoardSurface(
     if (lowest >= surface) return { near: whole, within: NO_POINTS, beyond: NO_POINTS };
     if (lowest >= -surface && highest <= surface) return { near: NO_POINTS, within: whole, beyond: NO_POINTS };
     if (highest <= -surface) return { near: NO_POINTS, within: NO_POINTS, beyond: whole };
-    const below = highest > surface ? clipToY(points, surface, false) : whole;
-    return {
-      near: highest > surface ? clipToY(points, surface, true) : NO_POINTS,
-      within: clipToY(below, -surface, true),
-      beyond: clipToY(below, -surface, false),
-    };
+    const [near, below] = highest > surface ? splitAtY(points, surface) : [NO_POINTS, whole];
+    const [within, beyond] = splitAtY(below, -surface);
+    return { near, within, beyond };
   }
   if (highest <= -surface) return { near: whole, within: NO_POINTS, beyond: NO_POINTS };
   if (lowest >= -surface && highest <= surface) return { near: NO_POINTS, within: whole, beyond: NO_POINTS };
   if (lowest >= surface) return { near: NO_POINTS, within: NO_POINTS, beyond: whole };
-  const above = lowest < -surface ? clipToY(points, -surface, true) : whole;
-  return {
-    near: lowest < -surface ? clipToY(points, -surface, false) : NO_POINTS,
-    within: clipToY(above, surface, false),
-    beyond: clipToY(above, surface, true),
-  };
+  const [above, near] = lowest < -surface ? splitAtY(points, -surface) : [whole, NO_POINTS];
+  const [beyond, within] = splitAtY(above, surface);
+  return { near, within, beyond };
 }
 
 /** Shared empty piece (never written to). */
 const NO_POINTS: SoftwarePoint3[] = [];
 
 /**
- * One Sutherland-Hodgman pass: the part of a polygon with y >= planeY (keepAbove) or y <= planeY. Crossing
- * points are placed exactly on the plane. Returns the shared empty piece when less than a triangle is left.
+ * One Sutherland-Hodgman pass for both sides of the plane y = planeY: [the part with y >= planeY, the part with
+ * y <= planeY]. Crossing points lie exactly on the plane and are made once, shared by both sides (never written
+ * to). A side with less than a triangle left is the shared empty piece.
  */
-function clipToY(points: readonly SoftwarePoint3[], planeY: number, keepAbove: boolean): SoftwarePoint3[] {
-  const kept: SoftwarePoint3[] = [];
+function splitAtY(points: readonly SoftwarePoint3[], planeY: number): [SoftwarePoint3[], SoftwarePoint3[]] {
+  if (!points.length) return [NO_POINTS, NO_POINTS];
+  const above: SoftwarePoint3[] = [];
+  const below: SoftwarePoint3[] = [];
   let previous = points[points.length - 1];
-  let previousSide = keepAbove ? previous.y - planeY : planeY - previous.y;
+  let previousSide = previous.y - planeY;
   for (const current of points) {
-    const side = keepAbove ? current.y - planeY : planeY - current.y;
+    const side = current.y - planeY;
     if ((previousSide > 0 && side < 0) || (previousSide < 0 && side > 0)) {
       const t = previousSide / (previousSide - side);
-      kept.push({ x: previous.x + (current.x - previous.x) * t, y: planeY, z: previous.z + (current.z - previous.z) * t });
+      const crossing = { x: previous.x + (current.x - previous.x) * t, y: planeY, z: previous.z + (current.z - previous.z) * t };
+      above.push(crossing);
+      below.push(crossing);
     }
-    if (side >= 0) kept.push(current);
+    if (side >= 0) above.push(current);
+    if (side <= 0) below.push(current);
     previous = current;
     previousSide = side;
   }
-  return kept.length >= 3 ? kept : NO_POINTS;
+  return [above.length >= 3 ? above : NO_POINTS, below.length >= 3 ? below : NO_POINTS];
 }
 
 type PlanPoint = { x: number; z: number };
@@ -247,96 +247,262 @@ function classifyAgainstEdges(
 export function createSoftwareBoardClassifier(
   boundaryRings: readonly (readonly PlanPoint[])[],
   isInsideMaterial: (x: number, z: number) => boolean,
-): (points: readonly SoftwarePoint3[]) => "inside" | "outside" | "crossing" {
+): SoftwareBoardClassifier {
   const edges = ringsToEdges(boundaryRings);
-  if (!edges.length) return (points) => classifyAgainstEdges(points, isInsideMaterial, []);
-  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (const [a, b] of edges) {
-    minX = Math.min(minX, a.x, b.x); maxX = Math.max(maxX, a.x, b.x);
-    minZ = Math.min(minZ, a.z, b.z); maxZ = Math.max(maxZ, a.z, b.z);
-  }
-  const cells = Math.max(8, Math.min(128, Math.ceil(Math.sqrt(edges.length) * 2)));
-  const cellWidth = (maxX - minX) / cells || 1;
-  const cellDepth = (maxZ - minZ) / cells || 1;
-  const column = (x: number) => Math.max(0, Math.min(cells - 1, Math.floor((x - minX) / cellWidth)));
-  const row = (z: number) => Math.max(0, Math.min(cells - 1, Math.floor((z - minZ) / cellDepth)));
-  const buckets: number[][] = Array.from({ length: cells * cells }, () => []);
-  // An edge goes only into the cells it passes through: it is walked in pieces no longer than half a cell,
-  // and each piece's (at most 2 x 2) cells are marked. A long diagonal fills a line of cells, not its box.
-  const step = Math.min(cellWidth, cellDepth) / 2;
-  edges.forEach(([a, b], index) => {
-    const pieces = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step));
-    for (let piece = 0; piece < pieces; piece += 1) {
-      const fromX = a.x + (b.x - a.x) * piece / pieces, toX = a.x + (b.x - a.x) * (piece + 1) / pieces;
-      const fromZ = a.z + (b.z - a.z) * piece / pieces, toZ = a.z + (b.z - a.z) * (piece + 1) / pieces;
-      for (let i = column(Math.min(fromX, toX)); i <= column(Math.max(fromX, toX)); i += 1) {
-        for (let j = row(Math.min(fromZ, toZ)); j <= row(Math.max(fromZ, toZ)); j += 1) {
-          const bucket = buckets[j * cells + i];
-          // Edges are added one at a time, so "already here" means it is the last one in the bucket.
-          if (bucket[bucket.length - 1] !== index) bucket.push(index);
+  if (!edges.length) return Object.assign((points: readonly SoftwarePoint3[]) => classifyAgainstEdges(points, isInsideMaterial, []), { grid: null });
+  layoutKeeper ??= buildBoardClassifier(ringsToEdges([[{ x: 0.5, z: 0.25 }, { x: 1.75, z: 2.5 }]]), () => false);
+  return buildBoardClassifier(edges, isInsideMaterial);
+}
+
+function buildBoardClassifier(edges: readonly PlanEdge[], isInsideMaterial: (x: number, z: number) => boolean): SoftwareBoardClassifier {
+  const grid = new SoftwareBoardGrid(edges, isInsideMaterial);
+  return Object.assign((points: readonly SoftwarePoint3[]) => grid.classify(points), { grid });
+}
+
+/**
+ * A tiny classifier kept for the life of the page, made before the first real one. While one exists the engine
+ * keeps the object layout of grids and classifiers, so code optimised for one board still fits the next board's.
+ * Without it, once the last board's grid was collected (3D closed, board switched) that code was thrown away and
+ * the next first frame started unoptimised. Its corners are decimals so its number fields match real boards'.
+ */
+let layoutKeeper: SoftwareBoardClassifier | null = null;
+
+/** A board-shape classifier (see createSoftwareBoardClassifier). */
+export type SoftwareBoardClassifier = ((points: readonly SoftwarePoint3[]) => "inside" | "outside" | "crossing") & {
+  /** The edge grid behind it (null for a board without edges); its box() answers from plan bounds alone. */
+  readonly grid: SoftwareBoardGrid | null;
+};
+
+/**
+ * The grid of one board shape. Hot callers use its methods directly (box() needs no point list), and the hot
+ * loops read only numbers and packed typed arrays (edge corners, edges per cell), not the outline's point objects.
+ */
+export class SoftwareBoardGrid {
+  private readonly cells: number;
+  private readonly minX: number;
+  private readonly maxX: number;
+  private readonly minZ: number;
+  private readonly maxZ: number;
+  private readonly cellWidth: number;
+  private readonly cellDepth: number;
+  /** Edges per cell, packed: the edges of cell c are bucketEdges[bucketStart[c] .. bucketStart[c + 1]). */
+  private readonly bucketStart: Int32Array;
+  private readonly bucketEdges: Int32Array;
+  /** Edge k runs from (edgeCoords[4k], edgeCoords[4k + 1]) to (edgeCoords[4k + 2], edgeCoords[4k + 3]) in plan x / z. */
+  private readonly edgeCoords: Float64Array;
+  /** Per cell: 0 unknown, 1 inside material, 2 outside. */
+  private readonly cellInside: Int8Array;
+  private readonly seen: Uint32Array;
+  private readonly rayStamp: Uint32Array;
+  private stamp = 0;
+  private rayRun = 0;
+  private readonly materialTest: (x: number, z: number) => boolean;
+  private readonly edges: readonly PlanEdge[];
+  private readonly isInsideMaterial: (x: number, z: number) => boolean;
+
+  constructor(edges: readonly PlanEdge[], isInsideMaterial: (x: number, z: number) => boolean) {
+    this.edges = edges;
+    this.isInsideMaterial = isInsideMaterial;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const [a, b] of edges) {
+      minX = Math.min(minX, a.x, b.x); maxX = Math.max(maxX, a.x, b.x);
+      minZ = Math.min(minZ, a.z, b.z); maxZ = Math.max(maxZ, a.z, b.z);
+    }
+    const cells = Math.max(8, Math.min(128, Math.ceil(Math.sqrt(edges.length) * 2)));
+    this.cells = cells;
+    this.minX = minX; this.maxX = maxX; this.minZ = minZ; this.maxZ = maxZ;
+    this.cellWidth = (maxX - minX) / cells || 1;
+    this.cellDepth = (maxZ - minZ) / cells || 1;
+    const lists: number[][] = Array.from({ length: cells * cells }, () => []);
+    // An edge goes only into the cells it passes through: it is walked in pieces no longer than half a cell,
+    // and each piece's (at most 2 x 2) cells are marked. A long diagonal fills a line of cells, not its box.
+    const step = Math.min(this.cellWidth, this.cellDepth) / 2;
+    const edgeCoords = new Float64Array(edges.length * 4);
+    edges.forEach(([a, b], index) => {
+      edgeCoords[index * 4] = a.x; edgeCoords[index * 4 + 1] = a.z; edgeCoords[index * 4 + 2] = b.x; edgeCoords[index * 4 + 3] = b.z;
+      const pieces = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step));
+      for (let piece = 0; piece < pieces; piece += 1) {
+        const fromX = a.x + (b.x - a.x) * piece / pieces, toX = a.x + (b.x - a.x) * (piece + 1) / pieces;
+        const fromZ = a.z + (b.z - a.z) * piece / pieces, toZ = a.z + (b.z - a.z) * (piece + 1) / pieces;
+        for (let i = this.column(Math.min(fromX, toX)); i <= this.column(Math.max(fromX, toX)); i += 1) {
+          for (let j = this.row(Math.min(fromZ, toZ)); j <= this.row(Math.max(fromZ, toZ)); j += 1) {
+            const list = lists[j * cells + i];
+            // Edges are added one at a time, so "already here" means it is the last one in the list.
+            if (list[list.length - 1] !== index) list.push(index);
+          }
         }
       }
-    }
-  });
-  const cellInside = new Int8Array(cells * cells); // 0 unknown, 1 inside material, 2 outside
-  const seen = new Uint32Array(edges.length);
-  let stamp = 0;
-  const rayStamp = new Uint32Array(edges.length);
-  let rayRun = 0;
+    });
+    const bucketStart = new Int32Array(cells * cells + 1);
+    let total = 0;
+    lists.forEach((list, cell) => { bucketStart[cell] = total; total += list.length; });
+    bucketStart[cells * cells] = total;
+    const bucketEdges = new Int32Array(total);
+    lists.forEach((list, cell) => bucketEdges.set(list, bucketStart[cell]));
+    this.bucketStart = bucketStart;
+    this.bucketEdges = bucketEdges;
+    this.edgeCoords = edgeCoords;
+    this.cellInside = new Int8Array(cells * cells);
+    this.seen = new Uint32Array(edges.length);
+    this.rayStamp = new Uint32Array(edges.length);
+    this.materialTest = (x, z) => this.insideMaterialFast(x, z);
+  }
+
+  private column(x: number): number {
+    return Math.max(0, Math.min(this.cells - 1, Math.floor((x - this.minX) / this.cellWidth)));
+  }
+
+  private row(z: number): number {
+    return Math.max(0, Math.min(this.cells - 1, Math.floor((z - this.minZ) / this.cellDepth)));
+  }
+
   /**
    * Material test through the grid: a ray towards +x crosses only edges registered in this row of cells, so
    * the parity over those edges (outline and cut-outs alike) says inside material or not. A point on an edge
    * goes to the caller's exact test, which decides boundary points.
    */
-  const insideMaterialFast = (x: number, z: number): boolean => {
-    if (x < minX || x > maxX || z < minZ || z > maxZ) return false;
-    const j = row(z);
-    const i0 = column(x);
-    rayRun += 1;
-    if (rayRun === 0xffffffff) { rayStamp.fill(0); rayRun = 1; }
+  insideMaterialFast(x: number, z: number): boolean {
+    if (x < this.minX || x > this.maxX || z < this.minZ || z > this.maxZ) return false;
+    const { cells, bucketStart, bucketEdges, edgeCoords, rayStamp } = this;
+    const j = this.row(z);
+    const i0 = this.column(x);
+    this.rayRun += 1;
+    if (this.rayRun === 0xffffffff) { rayStamp.fill(0); this.rayRun = 1; }
+    const run = this.rayRun;
     let inside = false;
     for (let i = i0; i < cells; i += 1) {
-      for (const index of buckets[j * cells + i]) {
-        if (rayStamp[index] === rayRun) continue;
-        rayStamp[index] = rayRun;
-        const [a, b] = edges[index];
-        const cross = (b.x - a.x) * (z - a.z) - (b.z - a.z) * (x - a.x);
-        if (cross === 0 && Math.min(a.x, b.x) <= x && x <= Math.max(a.x, b.x) && Math.min(a.z, b.z) <= z && z <= Math.max(a.z, b.z)) {
-          return isInsideMaterial(x, z);
+      const cell = j * cells + i;
+      for (let k = bucketStart[cell], end = bucketStart[cell + 1]; k < end; k += 1) {
+        const index = bucketEdges[k];
+        if (rayStamp[index] === run) continue;
+        rayStamp[index] = run;
+        const o = index * 4;
+        const ax = edgeCoords[o], az = edgeCoords[o + 1], bx = edgeCoords[o + 2], bz = edgeCoords[o + 3];
+        const cross = (bx - ax) * (z - az) - (bz - az) * (x - ax);
+        if (cross === 0 && Math.min(ax, bx) <= x && x <= Math.max(ax, bx) && Math.min(az, bz) <= z && z <= Math.max(az, bz)) {
+          return this.isInsideMaterial(x, z);
         }
-        if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) inside = !inside;
+        if ((az > z) !== (bz > z) && x < (bx - ax) * (z - az) / (bz - az) + ax) inside = !inside;
       }
     }
     return inside;
-  };
-  return (points) => {
+  }
+
+  /** The grid answer for plan bounds: "outside" out of range, the cell's answer when no edge is near, else null. */
+  box(pMinX: number, pMaxX: number, pMinZ: number, pMaxZ: number): "inside" | "outside" | null {
+    if (pMaxX < this.minX || pMinX > this.maxX || pMaxZ < this.minZ || pMinZ > this.maxZ) return "outside";
+    const { cells, bucketStart, cellInside } = this;
+    const i0 = this.column(pMinX), i1 = this.column(pMaxX), j0 = this.row(pMinZ), j1 = this.row(pMaxZ);
+    for (let j = j0; j <= j1; j += 1) for (let i = i0; i <= i1; i += 1) if (bucketStart[j * cells + i + 1] > bucketStart[j * cells + i]) return null;
+    const cell = j0 * cells + i0;
+    if (!cellInside[cell]) cellInside[cell] = this.insideMaterialFast(this.minX + (i0 + 0.5) * this.cellWidth, this.minZ + (j0 + 0.5) * this.cellDepth) ? 1 : 2;
+    return cellInside[cell] === 1 ? "inside" : "outside";
+  }
+
+  classify(points: readonly SoftwarePoint3[]): "inside" | "outside" | "crossing" {
     if (!points.length) return "outside";
     let pMinX = Infinity, pMaxX = -Infinity, pMinZ = Infinity, pMaxZ = -Infinity;
     for (const point of points) {
       pMinX = Math.min(pMinX, point.x); pMaxX = Math.max(pMaxX, point.x);
       pMinZ = Math.min(pMinZ, point.z); pMaxZ = Math.max(pMaxZ, point.z);
     }
-    if (pMaxX < minX || pMinX > maxX || pMaxZ < minZ || pMinZ > maxZ) return "outside";
-    const i0 = column(pMinX), i1 = column(pMaxX), j0 = row(pMinZ), j1 = row(pMaxZ);
-    let anyEdge = false;
-    for (let j = j0; j <= j1 && !anyEdge; j += 1) for (let i = i0; i <= i1; i += 1) if (buckets[j * cells + i].length) { anyEdge = true; break; }
-    if (!anyEdge) {
-      const cell = j0 * cells + i0;
-      if (!cellInside[cell]) cellInside[cell] = insideMaterialFast(minX + (i0 + 0.5) * cellWidth, minZ + (j0 + 0.5) * cellDepth) ? 1 : 2;
-      return cellInside[cell] === 1 ? "inside" : "outside";
-    }
-    stamp += 1;
-    if (stamp === 0xffffffff) { seen.fill(0); stamp = 1; }
+    const quick = this.box(pMinX, pMaxX, pMinZ, pMaxZ);
+    if (quick) return quick;
+    const { cells, bucketStart, bucketEdges, edges, seen } = this;
+    const i0 = this.column(pMinX), i1 = this.column(pMaxX), j0 = this.row(pMinZ), j1 = this.row(pMaxZ);
+    this.stamp += 1;
+    if (this.stamp === 0xffffffff) { seen.fill(0); this.stamp = 1; }
+    const stamp = this.stamp;
     const nearby: PlanEdge[] = [];
     for (let j = j0; j <= j1; j += 1) for (let i = i0; i <= i1; i += 1) {
-      for (const index of buckets[j * cells + i]) {
+      const cell = j * cells + i;
+      for (let k = bucketStart[cell], end = bucketStart[cell + 1]; k < end; k += 1) {
+        const index = bucketEdges[k];
         if (seen[index] === stamp) continue;
         seen[index] = stamp;
         nearby.push(edges[index]);
       }
     }
-    return classifyAgainstEdges(points, insideMaterialFast, nearby);
-  };
+    return classifyAgainstEdges(points, this.materialTest, nearby);
+  }
+}
+
+/** The classifier's answer for one piece, through its grid's shared methods when it has one. */
+function classifyWith(
+  classify: SoftwareBoardClassifier | ((points: readonly SoftwarePoint3[]) => "inside" | "outside" | "crossing"),
+  points: readonly SoftwarePoint3[],
+): "inside" | "outside" | "crossing" {
+  const grid = "grid" in classify ? classify.grid : null;
+  return grid ? grid.classify(points) : classify(points);
+}
+
+/** How a part's mounted points are placed on the board: turned about the vertical, then moved (plan only). */
+export interface SoftwarePlanPlacement {
+  originX: number;
+  originZ: number;
+  cos: number;
+  sin: number;
+}
+
+/** A mounted point placed on the board (the same sums the compat 3D uses for every part). */
+export function placeSoftwarePoint(point: SoftwarePoint3, placement: SoftwarePlanPlacement): SoftwarePoint3 {
+  const { originX, originZ, cos, sin } = placement;
+  return { x: originX + point.x * cos + point.z * sin, y: point.y, z: originZ - point.x * sin + point.z * cos };
+}
+
+/**
+ * The classifier's answer for a piece in mounted part space once placed on the board. The grid usually decides
+ * from the placed bounds, so no placed copy is built; next to an edge the placed piece gets the full test.
+ */
+export function classifySoftwarePlacedPiece(
+  points: readonly SoftwarePoint3[],
+  placement: SoftwarePlanPlacement,
+  classify: SoftwareBoardClassifier,
+): "inside" | "outside" | "crossing" {
+  if (!points.length) return "outside";
+  const { originX, originZ, cos, sin } = placement;
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const point of points) {
+    const x = originX + point.x * cos + point.z * sin, z = originZ - point.x * sin + point.z * cos;
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+    minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+  }
+  const grid = classify.grid;
+  return (grid ? grid.box(minX, maxX, minZ, maxZ) : null) ?? classifyWith(classify, points.map((point) => placeSoftwarePoint(point, placement)));
+}
+
+/**
+ * isSoftwarePieceBehindBoard for a piece in mounted part space placed on the board (or already placed when
+ * placement is null). The projected bounds go to the grid first; only next to an edge are the projected points
+ * built for the full test. The answer is the same as projecting the placed piece.
+ */
+export function isSoftwarePlacedPieceBehindBoard(
+  points: readonly SoftwarePoint3[],
+  placement: SoftwarePlanPlacement | null,
+  eye: SoftwarePoint3,
+  boardThickness: number,
+  classify: SoftwareBoardClassifier,
+): boolean {
+  const surface = boardThickness / 2;
+  if (Math.abs(eye.y) <= surface || !points.length) return false;
+  const plane = eye.y > 0 ? surface : -surface;
+  const { originX, originZ, cos, sin } = placement ?? { originX: 0, originZ: 0, cos: 1, sin: 0 };
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const point of points) {
+    const rise = point.y - eye.y;
+    if (rise === 0) return false;
+    const t = (plane - eye.y) / rise;
+    if (!(t > 0 && t < 1)) return false;
+    const x = placement ? originX + point.x * cos + point.z * sin : point.x;
+    const z = placement ? originZ - point.x * sin + point.z * cos : point.z;
+    const projectedX = eye.x + (x - eye.x) * t, projectedZ = eye.z + (z - eye.z) * t;
+    minX = Math.min(minX, projectedX); maxX = Math.max(maxX, projectedX);
+    minZ = Math.min(minZ, projectedZ); maxZ = Math.max(maxZ, projectedZ);
+  }
+  const grid = classify.grid;
+  const quick = grid ? grid.box(minX, maxX, minZ, maxZ) : null;
+  if (quick) return quick === "inside";
+  return isSoftwarePieceBehindBoard(placement ? points.map((point) => placeSoftwarePoint(point, placement)) : points, eye, boardThickness, classify);
 }
 
 /**
@@ -350,7 +516,7 @@ export function isSoftwarePieceBehindBoard(
   points: readonly SoftwarePoint3[],
   eye: SoftwarePoint3,
   boardThickness: number,
-  classify: (points: readonly SoftwarePoint3[]) => "inside" | "outside" | "crossing",
+  classify: SoftwareBoardClassifier | ((points: readonly SoftwarePoint3[]) => "inside" | "outside" | "crossing"),
 ): boolean {
   const surface = boardThickness / 2;
   if (Math.abs(eye.y) <= surface || !points.length) return false;
@@ -363,7 +529,7 @@ export function isSoftwarePieceBehindBoard(
     if (!(t > 0 && t < 1)) return false;
     projected.push({ x: eye.x + (point.x - eye.x) * t, y: plane, z: eye.z + (point.z - eye.z) * t });
   }
-  return classify(projected) === "inside";
+  return classifyWith(classify, projected) === "inside";
 }
 
 /** Whether a piece inside the board thickness is wholly in the board material (and so never visible). */
@@ -539,15 +705,17 @@ export function projectSoftwarePoint(
   point: SoftwarePoint3,
   camera: SoftwareCamera,
 ): SoftwareProjectedPoint {
-  const relative = subtract(point, camera.eye);
-  const depth = dot(relative, camera.forward);
+  // The same sums as subtract + dot, without building the relative vector (called for every drawn corner).
+  const { eye, forward, right, up } = camera;
+  const x = point.x - eye.x, y = point.y - eye.y, z = point.z - eye.z;
+  const depth = x * forward.x + y * forward.y + z * forward.z;
   if (depth <= camera.near) {
     return { x: camera.centerX, y: camera.centerY, depth, visible: false };
   }
   const scale = camera.focalLength / depth;
   return {
-    x: camera.centerX + dot(relative, camera.right) * scale,
-    y: camera.centerY - dot(relative, camera.up) * scale,
+    x: camera.centerX + (x * right.x + y * right.y + z * right.z) * scale,
+    y: camera.centerY - (x * up.x + y * up.y + z * up.z) * scale,
     depth,
     visible: true,
   };
@@ -651,5 +819,10 @@ export function getSoftwareFaceNormal(
 const SOFTWARE_LIGHT = normalize({ x: -0.35, y: 0.85, z: 0.4 });
 
 export function getSoftwareLightLevel(normal: SoftwarePoint3): number {
-  return 0.46 + Math.abs(dot(normal, SOFTWARE_LIGHT)) * 0.54;
+  return getSoftwareLightLevelOf(normal.x, normal.y, normal.z);
+}
+
+/** getSoftwareLightLevel for a unit normal given as numbers. */
+export function getSoftwareLightLevelOf(x: number, y: number, z: number): number {
+  return 0.46 + Math.abs(x * SOFTWARE_LIGHT.x + y * SOFTWARE_LIGHT.y + z * SOFTWARE_LIGHT.z) * 0.54;
 }

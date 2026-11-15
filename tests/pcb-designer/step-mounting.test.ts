@@ -12,10 +12,18 @@ import {
   MAX_SOFTWARE_PIECE_GROUPS,
   addSoftwarePieceBounds,
   classifySoftwarePieceAgainstBoard,
+  classifySoftwarePlacedPiece,
   createSoftwareBoardClassifier,
+  createSoftwareCamera,
+  getSoftwareFaceNormal,
+  getSoftwareLightLevel,
+  getSoftwareLightLevelOf,
   isSoftwarePieceBehindBoard,
   isSoftwarePieceInsideBoardMaterial,
+  isSoftwarePlacedPieceBehindBoard,
   mergeSoftwarePieceBounds,
+  placeSoftwarePoint,
+  projectSoftwarePoint,
   splitSoftwarePolygonAtBoardSurface,
   transformPcbComponentPoint,
 } from "../../src/components/pcb-designer/core/software3d.ts";
@@ -331,4 +339,116 @@ test("compat 3D click areas: a part with very many separate pieces collapses to 
   assert.ok(groups.length <= MAX_SOFTWARE_PIECE_GROUPS);
   const all = groups.reduce((a, b) => ({ ...a, left: Math.min(a.left, b.left), right: Math.max(a.right, b.right) }));
   assert.deepEqual([all.left, all.right], [0, 5990], "every piece is still clickable");
+});
+
+test("compat 3D: the no-copy shortcuts give exactly the answers of placing and projecting each piece first", () => {
+  // A board with a cut-out and a long cut diagonal edge, so pieces land in plain cells and next to edges.
+  const outline: Array<{ x: number; z: number }> = [];
+  for (let i = 0; i <= 120; i += 1) outline.push({ x: -60 + 120 * i / 120, z: -50 });
+  outline.push({ x: 60, z: 50 });
+  const hole = [[-10, -10], [10, -10], [10, 10], [-10, 10]].map(([x, z]) => ({ x, z }));
+  const inRing = (ring: Array<{ x: number; z: number }>, x: number, z: number) => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const a = ring[j], b = ring[i];
+      if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) inside = !inside;
+    }
+    return inside;
+  };
+  const classify = createSoftwareBoardClassifier([outline, hole], (x, z) => inRing(outline, x, z) && !inRing(hole, x, z));
+  let seed = 23;
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const eyes = [{ x: 0, y: 160, z: 0 }, { x: 120, y: 90, z: -80 }, { x: -200, y: 12, z: 60 }, { x: 30, y: -150, z: 40 }, { x: 0, y: 0.3, z: 200 }];
+  const seen = { inside: 0, outside: 0, crossing: 0, hidden: 0, shown: 0, grid: 0, full: 0 };
+  for (let n = 0; n < 4000; n += 1) {
+    const angle = random() * Math.PI * 2;
+    const placement = { originX: -40 + random() * 80, originZ: -35 + random() * 70, cos: Math.cos(angle), sin: Math.sin(angle) };
+    const x = -8 + random() * 16, z = -8 + random() * 16, y = -6 + random() * 12;
+    const piece = [{ x, y, z }, { x: x + random() * 3, y: y + random() * 2, z }, { x: x + random() * 3, y: y - random() * 2, z: z + random() * 3 }];
+    const placed = piece.map((point) => placeSoftwarePoint(point, placement));
+    const place = classify(placed);
+    assert.equal(classifySoftwarePlacedPiece(piece, placement, classify), place, JSON.stringify([piece, placement]));
+    seen[place] += 1;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const point of placed) { minX = Math.min(minX, point.x); maxX = Math.max(maxX, point.x); minZ = Math.min(minZ, point.z); maxZ = Math.max(maxZ, point.z); }
+    const quick = classify.grid!.box(minX, maxX, minZ, maxZ);
+    if (quick) { assert.equal(quick, place); seen.grid += 1; } else seen.full += 1;
+    for (const eye of eyes) {
+      const hidden = isSoftwarePieceBehindBoard(placed, eye, 1.6, classify);
+      assert.equal(isSoftwarePlacedPieceBehindBoard(piece, placement, eye, 1.6, classify), hidden, JSON.stringify([piece, placement, eye]));
+      assert.equal(isSoftwarePlacedPieceBehindBoard(placed, null, eye, 1.6, classify), hidden);
+      seen[hidden ? "hidden" : "shown"] += 1;
+    }
+  }
+  for (const count of Object.values(seen)) assert.ok(count > 0, `every path is exercised: ${JSON.stringify(seen)}`);
+  // Placing keeps the sums the compat 3D has always used for a part's points.
+  assert.deepEqual(placeSoftwarePoint({ x: 2, y: 3, z: -1 }, { originX: 10, originZ: 5, cos: 0.6, sin: 0.8 }), { x: 10 + 2 * 0.6 + -1 * 0.8, y: 3, z: 5 - 2 * 0.8 + -1 * 0.6 });
+});
+
+test("compat 3D: projecting and lighting without temporary vectors gives the same numbers as before", () => {
+  const camera = createSoftwareCamera({ width: 140, height: 100 }, { width: 1000, height: 700 }, { yaw: 0.6, pitch: 0.7, zoom: 1.3, panX: 12, panY: -7 });
+  const sub = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+  const dot = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => a.x * b.x + a.y * b.y + a.z * b.z;
+  let seed = 5;
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let n = 0; n < 500; n += 1) {
+    const point = { x: -80 + random() * 160, y: -10 + random() * 20, z: -60 + random() * 120 };
+    const relative = sub(point, camera.eye);
+    const depth = dot(relative, camera.forward);
+    const scale = camera.focalLength / depth;
+    assert.deepEqual(projectSoftwarePoint(point, camera), depth <= camera.near
+      ? { x: camera.centerX, y: camera.centerY, depth, visible: false }
+      : { x: camera.centerX + dot(relative, camera.right) * scale, y: camera.centerY - dot(relative, camera.up) * scale, depth, visible: true });
+    const normal = getSoftwareFaceNormal(point, { x: point.x + random(), y: point.y, z: point.z + random() }, { x: point.x, y: point.y + random(), z: point.z - random() });
+    assert.equal(getSoftwareLightLevelOf(normal.x, normal.y, normal.z), getSoftwareLightLevel(normal));
+  }
+});
+
+test("compat 3D: the one-pass cut at the board surfaces gives exactly the pieces of clipping each side separately", () => {
+  type P = { x: number; y: number; z: number };
+  // The previous cut: one clip per side and plane, as the renderer did before.
+  const clip = (points: P[], plane: number, keepAbove: boolean): P[] => {
+    if (!points.length) return [];
+    const kept: P[] = [];
+    let previous = points[points.length - 1];
+    let previousSide = keepAbove ? previous.y - plane : plane - previous.y;
+    for (const current of points) {
+      const side = keepAbove ? current.y - plane : plane - current.y;
+      if ((previousSide > 0 && side < 0) || (previousSide < 0 && side > 0)) {
+        const t = previousSide / (previousSide - side);
+        kept.push({ x: previous.x + (current.x - previous.x) * t, y: plane, z: previous.z + (current.z - previous.z) * t });
+      }
+      if (side >= 0) kept.push(current);
+      previous = current;
+      previousSide = side;
+    }
+    return kept.length >= 3 ? kept : [];
+  };
+  const reference = (points: P[], eyeY: number, s: number) => {
+    const low = Math.min(...points.map((p) => p.y)), high = Math.max(...points.map((p) => p.y));
+    if (eyeY >= 0) {
+      if (low >= s) return { near: points, within: [], beyond: [] };
+      if (low >= -s && high <= s) return { near: [], within: points, beyond: [] };
+      if (high <= -s) return { near: [], within: [], beyond: points };
+      const below = high > s ? clip(points, s, false) : points;
+      return { near: high > s ? clip(points, s, true) : [], within: clip(below, -s, true), beyond: clip(below, -s, false) };
+    }
+    if (high <= -s) return { near: points, within: [], beyond: [] };
+    if (low >= -s && high <= s) return { near: [], within: points, beyond: [] };
+    if (low >= s) return { near: [], within: [], beyond: points };
+    const above = low < -s ? clip(points, -s, true) : points;
+    return { near: low < -s ? clip(points, -s, false) : [], within: clip(above, s, false), beyond: clip(above, s, true) };
+  };
+  let seed = 31;
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const levels = [-0.8, 0.8, 0, -3, 3];
+  for (let n = 0; n < 20000; n += 1) {
+    const corners = 3 + (n % 2);
+    // Every fifth corner sits exactly on a surface or the mid-plane, so ties are covered.
+    const points = Array.from({ length: corners }, () => ({ x: random() * 10, y: random() < 0.2 ? levels[Math.floor(random() * levels.length)] : -4 + random() * 8, z: random() * 10 }));
+    for (const eyeY of [120, -120]) {
+      const actual = splitSoftwarePolygonAtBoardSurface(points, eyeY, 1.6);
+      assert.deepEqual(actual, reference(points, eyeY, 0.8), JSON.stringify([points, eyeY]));
+    }
+  }
 });

@@ -37,7 +37,10 @@ import {
   getSoftwareLayerRenderOrder,
   getSoftwareLightLevel,
   createSoftwareBoardClassifier,
-  isSoftwarePieceBehindBoard,
+  isSoftwarePlacedPieceBehindBoard,
+  classifySoftwarePlacedPiece,
+  getSoftwareLightLevelOf,
+  type SoftwarePlanPlacement,
   joinSoftwarePieceBounds,
   mergeSoftwarePieceBounds,
   projectSoftwarePoint,
@@ -90,14 +93,10 @@ interface SceneLine {
 
 type SceneShape = ScenePolygon | SceneLine;
 
-/** Shared empty piece for faces that are not cut (never written to). */
-const NO_PIECE: SoftwarePoint3[] = [];
-
-/** A mesh face cut at the board surfaces for one camera side, with the place of its board-thickness piece. */
-interface CutFace {
+/** A mesh face cut at the board surfaces for one camera side, in mounted part space (before placing). */
+interface CutPieces {
   near: SoftwarePoint3[];
   within: SoftwarePoint3[];
-  withinPlace: "inside" | "outside" | "crossing" | null;
   beyond: SoftwarePoint3[];
 }
 
@@ -106,7 +105,8 @@ type CameraSide = "top" | "bottom";
 interface FaceCacheEntry {
   /** Layer, insertion depth and 高: what the cut depends on. */
   height: string;
-  cuts: Partial<Record<CameraSide, Map<number, { near: SoftwarePoint3[]; within: SoftwarePoint3[]; beyond: SoftwarePoint3[] }>>>;
+  /** Per face number; faces wholly on one side are never cut and stay empty. */
+  cuts: Partial<Record<CameraSide, Array<CutPieces | undefined>>>;
   /** Position and rotation on the board, and the board shape (compared by reference). */
   placement: string;
   board: string;
@@ -160,7 +160,23 @@ function parseHexColor(value: string, fallback = "#6bc7d9"): [number, number, nu
 
 function shadeColor(value: string, level: number): string {
   const [red, green, blue] = parseHexColor(value);
-  return `rgb(${Math.round(clamp(red * level, 0, 255))} ${Math.round(clamp(green * level, 0, 255))} ${Math.round(clamp(blue * level, 0, 255))})`;
+  return shadeRgb(red, green, blue, level);
+}
+
+/** Shaded colours as text, by their final red/green/blue (a mesh repeats the same few thousand at most). */
+const shadeTextCache = new Map<number, string>();
+
+function shadeRgb(red: number, green: number, blue: number, level: number): string {
+  const r = Math.round(clamp(red * level, 0, 255));
+  const g = Math.round(clamp(green * level, 0, 255));
+  const b = Math.round(clamp(blue * level, 0, 255));
+  const key = (r << 16) | (g << 8) | b;
+  let text = shadeTextCache.get(key);
+  if (text === undefined) {
+    text = `rgb(${r} ${g} ${b})`;
+    if (shadeTextCache.size < 65_536) shadeTextCache.set(key, text);
+  }
+  return text;
 }
 
 function projectedArea(points: readonly SoftwareProjectedPoint[]): number {
@@ -375,8 +391,16 @@ export function PcbSoftware3DCanvas({
       alpha = 1,
       lineWidth = 0.7,
       minimumArea = 0.08,
+    ) => addProjectedPolygon(worldPoints.map((point) => projectSoftwarePoint(point, camera)), fill, stroke, renderOrder, alpha, lineWidth, minimumArea);
+    const addProjectedPolygon = (
+      points: SoftwareProjectedPoint[],
+      fill: string,
+      stroke: string,
+      renderOrder: number,
+      alpha = 1,
+      lineWidth = 0.7,
+      minimumArea = 0.08,
     ) => {
-      const points = worldPoints.map((point) => projectSoftwarePoint(point, camera));
       if (points.some((point) => !point.visible) || projectedArea(points) < minimumArea) return;
       shapes.push({
         kind: "polygon",
@@ -527,7 +551,7 @@ export function PcbSoftware3DCanvas({
       const { near, within, withinPlace, beyond } = bands;
       // Far side: skipped when the board hides it from the camera (tested only when looking down more than about
       // 20°, where many pieces are hidden; in low views it costs more than it saves), otherwise drawn before the board.
-      if (beyond.length && !(cullHiddenPieces && isSoftwarePieceBehindBoard(beyond, camera.eye, BOARD_THICKNESS, classifyWithinPiece))) {
+      if (beyond.length && !(cullHiddenPieces && isSoftwarePlacedPieceBehindBoard(beyond, null, camera.eye, BOARD_THICKNESS, classifyWithinPiece))) {
         addPolygon(beyond, fill, stroke, SOFTWARE_RENDER_ORDER.farObject, alpha, lineWidth);
       }
       // Inside the board thickness: hidden by the material; in a cut-out or past the edge it is sorted with the
@@ -622,74 +646,101 @@ export function PcbSoftware3DCanvas({
         const cos = Math.cos(placementTransform.rotation[1]);
         const sin = Math.sin(placementTransform.rotation[1]);
         const [originX, , originZ] = placementTransform.position;
+        const placement: SoftwarePlanPlacement = { originX, originZ, cos, sin };
         const layerSign = component.layer === "top" ? 1 : -1;
         const mountY = getPcbMountY(component, BOARD_THICKNESS);
-        const raise = (x: number, y: number, z: number): SoftwarePoint3 => ({ x, y: layerSign * y + mountY, z });
-        const place = (point: SoftwarePoint3): SoftwarePoint3 => ({ x: originX + point.x * cos + point.z * sin, y: point.y, z: originZ - point.x * sin + point.z * cos });
-        const placeAll = (points: SoftwarePoint3[]) => points.map(place);
+        // Mounted point -> board -> screen. The placed point is only needed for the projection, so one scratch
+        // point is reused instead of building a copy of every piece (most of the first frame went to garbage).
+        const scratch: SoftwarePoint3 = { x: 0, y: 0, z: 0 };
+        const projectPlaced = (x: number, y: number, z: number) => {
+          scratch.x = originX + x * cos + z * sin;
+          scratch.y = y;
+          scratch.z = originZ - x * sin + z * cos;
+          return projectSoftwarePoint(scratch, camera);
+        };
+        const projectPiece = (points: readonly SoftwarePoint3[]) => {
+          const projected = new Array<SoftwareProjectedPoint>(points.length);
+          for (let k = 0; k < points.length; k += 1) projected[k] = projectPlaced(points[k].x, points[k].y, points[k].z);
+          return projected;
+        };
+        const drawNear = (projected: SoftwareProjectedPoint[], fill: string, stroke: string) => {
+          addProjectedPolygon(projected, fill, stroke, SOFTWARE_RENDER_ORDER.nearObject, 1, 0);
+          if (trackNearPieces) addSoftwarePieceBounds(nearPieceClusters, projected);
+        };
         const height = [component.layer, component.insertionDepth ?? 0, component.maxHeight].join(",");
-        const placement = [component.x, component.y, component.rotation].join(",");
+        const placementKey = [component.x, component.y, component.rotation].join(",");
         let entry = faceCacheRef.current.get(cachedParts);
         if (!entry || entry.height !== height) {
-          entry = { height, cuts: {}, placement, board: boardShapeKey, places: {} };
+          entry = { height, cuts: {}, placement: placementKey, board: boardShapeKey, places: {} };
           faceCacheRef.current.set(cachedParts, entry);
-        } else if (entry.placement !== placement || entry.board !== boardShapeKey) {
-          entry.placement = placement;
+        } else if (entry.placement !== placementKey || entry.board !== boardShapeKey) {
+          entry.placement = placementKey;
           entry.board = boardShapeKey;
           entry.places = {};
         }
-        const cuts = entry.cuts[cameraSide] ?? (entry.cuts[cameraSide] = new Map());
         const faceCount = cachedParts.reduce((total, { part }) => total + Math.floor(part.index.length / 3), 0);
+        const cuts = entry.cuts[cameraSide] ?? (entry.cuts[cameraSide] = new Array<CutPieces | undefined>(faceCount));
         const places = entry.places[cameraSide] ?? (entry.places[cameraSide] = new Uint8Array(faceCount));
         const surface = BOARD_THICKNESS / 2;
         let faceNumber = 0;
         cachedParts.forEach(({ part, positions }) => {
           const color = getPcbModelPartColor(asset, part.id, "#b7bec7");
+          const [red, green, blue] = parseHexColor(color);
           const stroke = shadeColor(color, selected ? 0.82 : 0.58);
           // Skipping triangles opens holes in a STEP model; draw every source face.
           for (let offset = 0; offset < part.index.length; offset += 3, faceNumber += 1) {
             const a = part.index[offset] * 3, b = part.index[offset + 1] * 3, c = part.index[offset + 2] * 3;
-            const raised = [
-              raise(positions[a], positions[a + 1], positions[a + 2]),
-              raise(positions[b], positions[b + 1], positions[b + 2]),
-              raise(positions[c], positions[c + 1], positions[c + 2]),
-            ];
-            // Normal and culling from the mounted points: placing on the board only turns them about the vertical.
-            const mountedNormal = getSoftwareFaceNormal(raised[0], raised[1], raised[2]);
-            const normal = { x: mountedNormal.x * cos + mountedNormal.z * sin, y: mountedNormal.y, z: -mountedNormal.x * sin + mountedNormal.z * cos };
+            // Mounted corners (on the part's layer, before placing), kept as numbers.
+            const ax = positions[a], ay = layerSign * positions[a + 1] + mountY, az = positions[a + 2];
+            const bx = positions[b], by = layerSign * positions[b + 1] + mountY, bz = positions[b + 2];
+            const cx = positions[c], cy = layerSign * positions[c + 1] + mountY, cz = positions[c + 2];
+            // Normal (the sums of getSoftwareFaceNormal) and culling from the mounted corners: placing on the board
+            // only turns them about the vertical.
+            const ux = bx - ax, uy = by - ay, uz = bz - az, vx = cx - ax, vy = cy - ay, vz = cz - az;
+            const crossX = uy * vz - uz * vy, crossY = uz * vx - ux * vz, crossZ = ux * vy - uy * vx;
+            const length = Math.hypot(crossX, crossY, crossZ) || 1;
+            const mountedX = crossX / length, normalY = crossY / length, mountedZ = crossZ / length;
+            const normalX = mountedX * cos + mountedZ * sin, normalZ = -mountedX * sin + mountedZ * cos;
             if (cullBackFaces) {
-              const centreX = (raised[0].x + raised[1].x + raised[2].x) / 3, centreZ = (raised[0].z + raised[1].z + raised[2].z) / 3;
+              const centreX = (ax + bx + cx) / 3, centreZ = (az + bz + cz) / 3;
               const toEyeX = camera.eye.x - (originX + centreX * cos + centreZ * sin);
-              const toEyeY = camera.eye.y - (raised[0].y + raised[1].y + raised[2].y) / 3;
+              const toEyeY = camera.eye.y - (ay + by + cy) / 3;
               const toEyeZ = camera.eye.z - (originZ - centreX * sin + centreZ * cos);
-              if ((normal.x * toEyeX + normal.y * toEyeY + normal.z * toEyeZ) * facing < 0) continue;
+              if ((normalX * toEyeX + normalY * toEyeY + normalZ * toEyeZ) * facing < 0) continue;
             }
-            const fill = shadeColor(color, getSoftwareLightLevel(normal));
-            const lowest = Math.min(raised[0].y, raised[1].y, raised[2].y);
-            const highest = Math.max(raised[0].y, raised[1].y, raised[2].y);
+            const fill = shadeRgb(red, green, blue, getSoftwareLightLevelOf(normalX, normalY, normalZ));
+            const lowest = Math.min(ay, by, cy);
+            const highest = Math.max(ay, by, cy);
             const nearSide = cameraSide === "top" ? lowest >= surface : highest <= -surface;
             const farSide = cameraSide === "top" ? highest < -surface : lowest > surface;
-            if (nearSide) { drawBands({ near: raised.map(place), within: NO_PIECE, withinPlace: null, beyond: NO_PIECE }, fill, stroke, 1, 0); continue; }
-            if (farSide) { drawBands({ near: NO_PIECE, within: NO_PIECE, withinPlace: null, beyond: raised.map(place) }, fill, stroke, 1, 0); continue; }
-            let cut = cuts.get(faceNumber);
-            if (!cut) {
-              const { near, within, beyond } = splitSoftwarePolygonAtBoardSurface(raised, camera.eye.y, BOARD_THICKNESS);
-              cut = { near, within, beyond };
-              cuts.set(faceNumber, cut);
+            if (nearSide) {
+              drawNear([projectPlaced(ax, ay, az), projectPlaced(bx, by, bz), projectPlaced(cx, cy, cz)], fill, stroke);
+              continue;
             }
-            let within: SoftwarePoint3[] = [];
-            let withinPlace: CutFace["withinPlace"] = null;
-            if (cut.within.length) {
-              const code = places[faceNumber];
-              if (code === 1) {
-                withinPlace = "inside";
-              } else {
-                within = placeAll(cut.within);
-                withinPlace = code ? PLACE_CODES[code] : classifyWithinPiece(within);
-                if (!code) places[faceNumber] = PLACE_CODES.indexOf(withinPlace);
+            if (farSide) {
+              const corners = [{ x: ax, y: ay, z: az }, { x: bx, y: by, z: bz }, { x: cx, y: cy, z: cz }];
+              if (!(cullHiddenPieces && isSoftwarePlacedPieceBehindBoard(corners, placement, camera.eye, BOARD_THICKNESS, classifyWithinPiece))) {
+                addProjectedPolygon(projectPiece(corners), fill, stroke, SOFTWARE_RENDER_ORDER.farObject, 1, 0);
               }
+              continue;
             }
-            drawBands({ near: placeAll(cut.near), within, withinPlace, beyond: placeAll(cut.beyond) }, fill, stroke, 1, 0);
+            let cut = cuts[faceNumber];
+            if (!cut) {
+              cut = splitSoftwarePolygonAtBoardSurface([{ x: ax, y: ay, z: az }, { x: bx, y: by, z: bz }, { x: cx, y: cy, z: cz }], camera.eye.y, BOARD_THICKNESS);
+              cuts[faceNumber] = cut;
+            }
+            // Queued like drawBands: the far piece (unless the board hides it), the board-thickness piece by its
+            // place (inside the material it is never drawn), then the near piece.
+            if (cut.beyond.length && !(cullHiddenPieces && isSoftwarePlacedPieceBehindBoard(cut.beyond, placement, camera.eye, BOARD_THICKNESS, classifyWithinPiece))) {
+              addProjectedPolygon(projectPiece(cut.beyond), fill, stroke, SOFTWARE_RENDER_ORDER.farObject, 1, 0);
+            }
+            if (cut.within.length) {
+              let code = places[faceNumber];
+              if (!code) code = places[faceNumber] = PLACE_CODES.indexOf(classifySoftwarePlacedPiece(cut.within, placement, classifyWithinPiece));
+              if (code === 2) addProjectedPolygon(projectPiece(cut.within), fill, stroke, SOFTWARE_RENDER_ORDER.farObject, 1, 0);
+              else if (code === 3) addProjectedPolygon(projectPiece(cut.within), fill, stroke, SOFTWARE_RENDER_ORDER.nearObject, 1, 0);
+            }
+            if (cut.near.length) drawNear(projectPiece(cut.near), fill, stroke);
           }
         });
       }
