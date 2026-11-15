@@ -33,6 +33,7 @@ import {
   getSoftwareFaceNormal,
   getSoftwareCanvasResolution,
 
+  getPcbMountY,
   getSoftwareLayerRenderOrder,
   getSoftwareLightLevel,
   createSoftwareBoardClassifier,
@@ -51,6 +52,7 @@ import {
 import {
   getPcbComponentViewState,
   getPcbSelectionIds,
+  getPcb3DComponentTransform,
 } from "./core/viewSync.ts";
 import type { PcbModelAsset, PcbSelection, PcbVisibleLayer } from "./types.ts";
 
@@ -94,6 +96,18 @@ interface CutFace {
   within: SoftwarePoint3[];
   withinPlace: "inside" | "outside" | "crossing" | null;
   beyond: SoftwarePoint3[];
+}
+
+type CameraSide = "top" | "bottom";
+
+interface FaceCacheEntry {
+  /** Layer, insertion depth and 高: what the cut depends on. */
+  height: string;
+  cuts: Partial<Record<CameraSide, Map<number, { near: SoftwarePoint3[]; within: SoftwarePoint3[]; beyond: SoftwarePoint3[] }>>>;
+  /** Position and rotation on the board, and the board shape (compared by reference). */
+  placement: string;
+  board: string;
+  placed: Partial<Record<CameraSide, Map<number, CutFace>>>;
 }
 
 interface HitTarget {
@@ -194,12 +208,13 @@ export function PcbSoftware3DCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hitTargetsRef = useRef<HitTarget[]>([]);
   /**
-   * Per mapped mesh, only for faces that cross a board surface (leads through the board): their cut at the
-   * board surfaces for the camera's side and the place of their board-thickness piece. Neither depends on the
-   * view, so turning the camera reuses them; rebuilt when the part moves or the board changes. Faces wholly on
-   * one side need no cut and are not stored, so memory does not grow with big models.
+   * Per mapped mesh, only for faces that cross a board surface (leads through the board). Level 1: the cut at
+   * the board surfaces in mounted part space, which depends on height only (layer, insertion depth, 高), not on
+   * where the part sits. Level 2: those pieces placed on the board with the place of their board-thickness
+   * piece, redone when the part moves or the board shape changes. Turning the camera reuses both. Faces wholly
+   * on one side need no cut and are not stored, so memory does not grow with big models.
    */
-  const faceCacheRef = useRef(new WeakMap<object, { signature: string; board: string; sides: Partial<Record<"top" | "bottom", Map<number, CutFace>>> }>());
+  const faceCacheRef = useRef(new WeakMap<object, FaceCacheEntry>());
   const pointerDragRef = useRef<PointerDragState | null>(null);
   const [view, setView] = useState<SoftwareViewState>(DEFAULT_SOFTWARE_VIEW);
   const [viewport, setViewport] = useState(() => getSoftwareCanvasResolution(1, 1));
@@ -596,13 +611,29 @@ export function PcbSoftware3DCanvas({
         // (painter sorting otherwise lets hidden walls show through). STEP meshes keep every face.
         const cullBackFaces = asset.metadata.id.startsWith("package:");
         const facing = component.layer === "bottom" ? -1 : 1;
-        const signature = [component.x, component.y, component.rotation, component.layer, component.insertionDepth ?? 0].join(",");
+        // Placement on the board, computed once per part (the same maths as transformPcbComponentPoint).
+        const placementTransform = getPcb3DComponentTransform(component, project.board);
+        const cos = Math.cos(placementTransform.rotation[1]);
+        const sin = Math.sin(placementTransform.rotation[1]);
+        const [originX, , originZ] = placementTransform.position;
+        const layerSign = component.layer === "top" ? 1 : -1;
+        const mountY = getPcbMountY(component, BOARD_THICKNESS);
+        const raise = (x: number, y: number, z: number): SoftwarePoint3 => ({ x, y: layerSign * y + mountY, z });
+        const place = (point: SoftwarePoint3): SoftwarePoint3 => ({ x: originX + point.x * cos + point.z * sin, y: point.y, z: originZ - point.x * sin + point.z * cos });
+        const placeAll = (points: SoftwarePoint3[]) => points.map(place);
+        const height = [component.layer, component.insertionDepth ?? 0, component.maxHeight].join(",");
+        const placement = [component.x, component.y, component.rotation].join(",");
         let entry = faceCacheRef.current.get(cachedParts);
-        if (!entry || entry.signature !== signature || entry.board !== boardShapeKey) {
-          entry = { signature, board: boardShapeKey, sides: {} };
+        if (!entry || entry.height !== height) {
+          entry = { height, cuts: {}, placement, board: boardShapeKey, placed: {} };
           faceCacheRef.current.set(cachedParts, entry);
+        } else if (entry.placement !== placement || entry.board !== boardShapeKey) {
+          entry.placement = placement;
+          entry.board = boardShapeKey;
+          entry.placed = {};
         }
-        const cutFaces = entry.sides[cameraSide] ?? (entry.sides[cameraSide] = new Map<number, CutFace>());
+        const cuts = entry.cuts[cameraSide] ?? (entry.cuts[cameraSide] = new Map());
+        const placedFaces = entry.placed[cameraSide] ?? (entry.placed[cameraSide] = new Map<number, CutFace>());
         const surface = BOARD_THICKNESS / 2;
         let faceNumber = 0;
         cachedParts.forEach(({ part, positions }) => {
@@ -610,14 +641,11 @@ export function PcbSoftware3DCanvas({
           const stroke = shadeColor(color, selected ? 0.82 : 0.58);
           // Skipping triangles opens holes in a STEP model; draw every source face.
           for (let offset = 0; offset < part.index.length; offset += 3, faceNumber += 1) {
-            const worldPoints = [0, 1, 2].map((corner) => {
+            const raised = [0, 1, 2].map((corner) => {
               const vertexIndex = part.index[offset + corner] * 3;
-              return transformPcbComponentPoint({
-                x: positions[vertexIndex],
-                y: positions[vertexIndex + 1],
-                z: positions[vertexIndex + 2],
-              }, component, project.board, BOARD_THICKNESS);
+              return raise(positions[vertexIndex], positions[vertexIndex + 1], positions[vertexIndex + 2]);
             });
+            const worldPoints = raised.map(place);
             const normal = getSoftwareFaceNormal(worldPoints[0], worldPoints[1], worldPoints[2]);
             if (cullBackFaces) {
               const toEye = {
@@ -634,9 +662,19 @@ export function PcbSoftware3DCanvas({
             const farSide = cameraSide === "top" ? highest < -surface : lowest > surface;
             if (nearSide) { drawBands({ near: worldPoints, within: [], withinPlace: null, beyond: [] }, fill, stroke, 1, 0); continue; }
             if (farSide) { drawBands({ near: [], within: [], withinPlace: null, beyond: worldPoints }, fill, stroke, 1, 0); continue; }
-            let cut = cutFaces.get(faceNumber);
-            if (!cut) { cut = cutAtBoard(worldPoints); cutFaces.set(faceNumber, cut); }
-            drawBands(cut, fill, stroke, 1, 0);
+            let placedFace = placedFaces.get(faceNumber);
+            if (!placedFace) {
+              let cut = cuts.get(faceNumber);
+              if (!cut) {
+                const { near, within, beyond } = splitSoftwarePolygonAtBoardSurface(raised, camera.eye.y, BOARD_THICKNESS);
+                cut = { near, within, beyond };
+                cuts.set(faceNumber, cut);
+              }
+              const within = placeAll(cut.within);
+              placedFace = { near: placeAll(cut.near), within, beyond: placeAll(cut.beyond), withinPlace: within.length ? classifyWithinPiece(within) : null };
+              placedFaces.set(faceNumber, placedFace);
+            }
+            drawBands(placedFace, fill, stroke, 1, 0);
           }
         });
       }
