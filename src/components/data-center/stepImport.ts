@@ -148,6 +148,9 @@ export async function importStepModel(file: File): Promise<ImportedStepModel> {
     bounds.max[1] - bounds.min[1],
     bounds.max[2] - bounds.min[2],
   ];
+  // A default only: "thinnest side is up" lays tall through-hole parts (TO-220, radial capacitors, pin headers)
+  // on their side. PCB Designer re-orients with pcb-designer/core/stepOrientation.ts; the CE SPEC summary
+  // (summarizeSpecFillStep) reports the raw bounds in the file's own axes and does not use upAxis or dimensions.
   const upAxis = inferPcbUpAxis(spans);
   const dimensions = getCanonicalDimensions(bounds, upAxis);
 

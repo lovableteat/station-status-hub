@@ -26,3 +26,14 @@ test('STEP summary uses geometric XYZ spans and explicit limits rather than gues
   assert.match(text,/不是.*公差|不代表.*公差/);
   assert.match(text,/電氣/);
 });
+test('STEP summary keeps the file\'s own axes for tall parts and ignores the importer\'s up-axis guess',()=>{
+  // Bounds of the real KiCad TO-220-3_Vertical model (Z-up, seating plane at Z = 0). The shared importer guesses
+  // "thinnest side is up" and would call it 4.5 mm tall lying flat; the SPEC evidence must not follow that guess.
+  const model={bounds:{min:[-2.59,-1.29,-9.75],max:[7.66,3.165,18.775]},parts:[{name:'TO-220-3_Vertical'}],
+    upAxis:'y',dimensions:{widthMm:10.3,depthMm:28.5,heightMm:4.5},calibratedDimensions:{widthMm:10.3,depthMm:28.5,heightMm:4.5}};
+  const text=engineering().summarizeSpecFillStep('TO-220-3_Vertical.step',model,"ISO-10303-21;\nFILE_NAME('TO-220-3_Vertical');");
+  assert.match(text,/原始 X\/Y\/Z 軸/);
+  assert.match(text,/X=10\.25 mm；Y=4\.455 mm；Z=28\.525 mm/);
+  assert.doesNotMatch(text,/28\.5 mm|高度|heightMm/,'no guessed 長／寬／高 in the evidence');
+  assert.match(text,/可能包含接腳/);
+});
