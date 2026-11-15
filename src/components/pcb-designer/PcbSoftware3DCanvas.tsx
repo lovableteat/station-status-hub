@@ -35,7 +35,7 @@ import {
 
   getSoftwareLayerRenderOrder,
   getSoftwareLightLevel,
-  classifySoftwarePieceAgainstBoard,
+  createSoftwareBoardClassifier,
   joinSoftwarePieceBounds,
   mergeSoftwarePieceBounds,
   projectSoftwarePoint,
@@ -184,12 +184,20 @@ export function PcbSoftware3DCanvas({
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hitTargetsRef = useRef<HitTarget[]>([]);
-  /** Board-thickness piece classification, per board shape; it does not change while the view turns. */
-  const pieceClassCacheRef = useRef<{ board: unknown; classes: Map<string, "inside" | "outside" | "crossing"> }>({ board: null, classes: new Map() });
   const pointerDragRef = useRef<PointerDragState | null>(null);
   const [view, setView] = useState<SoftwareViewState>(DEFAULT_SOFTWARE_VIEW);
   const [viewport, setViewport] = useState(() => getSoftwareCanvasResolution(1, 1));
   const project = workspace.activeProject;
+  /** Where a piece inside the board thickness sits against the board; built once per board shape. */
+  const classifyWithinPiece = useMemo(() => {
+    const outline = getBoardPolygon(project.board);
+    const cutOuts = getBoardHoles(project.board);
+    const toPlan = (point: { x: number; y: number }) => ({ x: point.x - project.board.width / 2, z: point.y - project.board.height / 2 });
+    return createSoftwareBoardClassifier([outline, ...cutOuts].map((ring) => ring.map(toPlan)), (x, z) => {
+      const planPoint = { x: x + project.board.width / 2, y: z + project.board.height / 2 };
+      return pointInBoardPolygon(planPoint, outline) && !cutOuts.some((ring) => pointInBoardPolygon(planPoint, ring));
+    });
+  }, [project.board]);
   const loadModelAsset = workspace.loadModelAsset;
   const modelAssetIds = useMemo(
     () => [...new Set(project.components.map((component) => component.modelAssetId).filter(Boolean))] as string[],
@@ -452,22 +460,6 @@ export function PcbSoftware3DCanvas({
     // Component faces are split at the board surface facing the camera: the near piece is drawn after the
     // board, the far piece before it, so the opaque board hides what it covers on screen and nothing else.
     // Near pieces of a part on the other side (leads poking through) also become its click area.
-    const boundaryRings = [boardPolygon, ...holes].map((ring) => ring.map((point) => ({ x: point.x - project.board.width / 2, z: point.y - project.board.height / 2 })));
-    if (pieceClassCacheRef.current.board !== project.board) pieceClassCacheRef.current = { board: project.board, classes: new Map() };
-    const pieceClasses = pieceClassCacheRef.current.classes;
-    const classifyWithinPiece = (points: readonly SoftwarePoint3[]) => {
-      const key = points.map((point) => `${point.x.toFixed(3)},${point.y.toFixed(3)},${point.z.toFixed(3)}`).join(";");
-      let result = pieceClasses.get(key);
-      if (!result) {
-        result = classifySoftwarePieceAgainstBoard(points, (x, z) => {
-          const planPoint = { x: x + project.board.width / 2, y: z + project.board.height / 2 };
-          return pointInBoardPolygon(planPoint, boardPolygon) && !holes.some((ring) => pointInBoardPolygon(planPoint, ring));
-        }, boundaryRings);
-        if (pieceClasses.size > 200_000) pieceClasses.clear();
-        pieceClasses.set(key, result);
-      }
-      return result;
-    };
     let nearPieceClusters: SoftwarePieceBounds[] = [];
     let trackNearPieces = false;
     const addComponentPolygon = (
@@ -669,7 +661,7 @@ export function PcbSoftware3DCanvas({
     });
 
     hitTargetsRef.current = hits.sort((left, right) => left.depth - right.depth);
-  }, [mappedModelParts, modelAssets, project, selectedIds, selectionIds, view, viewport, visibleLayer]);
+  }, [classifyWithinPiece, mappedModelParts, modelAssets, project, selectedIds, selectionIds, view, viewport, visibleLayer]);
 
   const face = visibleLayer === "all" ? workspace.activeLayer : visibleLayer;
   const resetView = useCallback(() => setView({ ...DEFAULT_SOFTWARE_VIEW, pitch: Math.abs(DEFAULT_SOFTWARE_VIEW.pitch) * (face === "bottom" ? -1 : 1) }), [face]);

@@ -12,6 +12,7 @@ import {
   MAX_SOFTWARE_PIECE_GROUPS,
   addSoftwarePieceBounds,
   classifySoftwarePieceAgainstBoard,
+  createSoftwareBoardClassifier,
   isSoftwarePieceInsideBoardMaterial,
   mergeSoftwarePieceBounds,
   splitSoftwarePolygonAtBoardSurface,
@@ -187,6 +188,35 @@ test("compat 3D: a face inside the board thickness is its own band, so the board
   const insideNearEdge = square(49.8, 49.9, 0.4, 0.6);
   assert.deepEqual(splitSoftwarePolygonAtBoardSurface(insideNearEdge, 60, 1.6), { near: [], within: insideNearEdge, beyond: [] });
   assert.deepEqual(splitSoftwarePolygonAtBoardSurface(insideNearEdge, -60, 1.6), { near: [], within: insideNearEdge, beyond: [] });
+});
+
+test("compat 3D: the per-board grid classifier gives the exact test's answer, and never confuses two nearby pieces", () => {
+  const W = 120, H = 100;
+  const board = (x: number, z: number) => Math.abs(x) <= W / 2 && Math.abs(z) <= H / 2 && !(Math.abs(x) < 10 && Math.abs(z) < 10);
+  const rings = [
+    [[-W / 2, -H / 2], [W / 2, -H / 2], [W / 2, H / 2], [-W / 2, H / 2]].map(([x, z]) => ({ x, z })),
+    [[-10, -10], [10, -10], [10, 10], [-10, 10]].map(([x, z]) => ({ x, z })),
+  ];
+  const classify = createSoftwareBoardClassifier(rings, board);
+  const quad = (x0: number, x1: number, z0: number, z1: number) => [{ x: x0, y: 0.5, z: z0 }, { x: x1, y: 0.5, z: z0 }, { x: x1, y: 0.5, z: z1 }, { x: x0, y: 0.5, z: z1 }];
+  const cases = [
+    quad(30, 30.6, 5, 5.6), quad(59.9, 60.4, -1, 1), quad(-12, 12, -1, 1), quad(-2, 2, -2, 2), quad(61, 63, 0, 1),
+    quad(-12, 12, -12, 12), quad(55, 59, 45, 49), quad(-59, -58, -49.5, -48.5), quad(9, 11, 9, 11),
+  ];
+  for (const points of cases) assert.equal(classify(points), classifySoftwarePieceAgainstBoard(points, board, rings), JSON.stringify(points[0]));
+  // Two faces 0.0002 mm apart, one inside the board, one just past its edge: answered separately.
+  const justInside = [{ x: 59.9999, y: -0.7, z: -10 }, { x: 59.9999, y: 0.7, z: -10 }, { x: 59.9999, y: 0.7, z: 10 }];
+  const justOutside = justInside.map((point) => ({ ...point, x: 60.0001 }));
+  assert.equal(classify(justInside), "inside");
+  assert.equal(classify(justOutside), "outside");
+  // Many random pieces agree with the exact test.
+  let seed = 7;
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let n = 0; n < 2000; n += 1) {
+    const x = -70 + random() * 140, z = -60 + random() * 120, w = random() * 6, d = random() * 6;
+    const points = quad(x, x + w, z, z + d);
+    assert.equal(classify(points), classifySoftwarePieceAgainstBoard(points, board, rings), JSON.stringify([x, z, w, d]));
+  }
 });
 
 test("compat 3D click areas: two lead ends far apart get two areas; touching pieces share one", () => {

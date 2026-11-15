@@ -109,10 +109,14 @@ export function getSoftwareLayerRenderOrder(
  * A polygon lying on the plane goes below when tieGoesBelow is set, otherwise above.
  */
 function splitPolygonAtY(points: readonly SoftwarePoint3[], planeY: number, tieGoesBelow = false): { above: SoftwarePoint3[]; below: SoftwarePoint3[] } {
+  let lowest = Infinity;
+  let highest = -Infinity;
+  for (const point of points) { lowest = Math.min(lowest, point.y); highest = Math.max(highest, point.y); }
+  const whole = points as SoftwarePoint3[];
+  if (tieGoesBelow && highest <= planeY) return { above: [], below: whole };
+  if (lowest >= planeY) return { above: whole, below: [] };
+  if (highest <= planeY) return { above: [], below: whole };
   const distances = points.map((point) => point.y - planeY);
-  if (tieGoesBelow && distances.every((distance) => distance <= 0)) return { above: [], below: [...points] };
-  if (distances.every((distance) => distance >= 0)) return { above: [...points], below: [] };
-  if (distances.every((distance) => distance <= 0)) return { above: [], below: [...points] };
   const above: SoftwarePoint3[] = [];
   const below: SoftwarePoint3[] = [];
   points.forEach((current, index) => {
@@ -187,6 +191,22 @@ export function classifySoftwarePieceAgainstBoard(
   isInsideMaterial: (x: number, z: number) => boolean,
   boundaryRings: readonly (readonly PlanPoint[])[] = [],
 ): "inside" | "outside" | "crossing" {
+  return classifyAgainstEdges(points, isInsideMaterial, ringsToEdges(boundaryRings));
+}
+
+type PlanEdge = readonly [PlanPoint, PlanPoint];
+
+function ringsToEdges(rings: readonly (readonly PlanPoint[])[]): PlanEdge[] {
+  const edges: PlanEdge[] = [];
+  for (const ring of rings) for (let k = 0; k < ring.length; k += 1) edges.push([ring[k], ring[(k + 1) % ring.length]]);
+  return edges;
+}
+
+function classifyAgainstEdges(
+  points: readonly SoftwarePoint3[],
+  isInsideMaterial: (x: number, z: number) => boolean,
+  edges: Iterable<PlanEdge>,
+): "inside" | "outside" | "crossing" {
   if (!points.length) return "outside";
   let onMaterial = 0;
   for (const point of points) if (isInsideMaterial(point.x, point.z)) onMaterial += 1;
@@ -196,25 +216,80 @@ export function classifySoftwarePieceAgainstBoard(
     minX = Math.min(minX, point.x); maxX = Math.max(maxX, point.x);
     minZ = Math.min(minZ, point.z); maxZ = Math.max(maxZ, point.z);
   }
-  for (const ring of boundaryRings) {
-    for (let k = 0; k < ring.length; k += 1) {
-      const a = ring[k];
-      const b = ring[(k + 1) % ring.length];
-      if (Math.max(a.x, b.x) < minX || Math.min(a.x, b.x) > maxX || Math.max(a.z, b.z) < minZ || Math.min(a.z, b.z) > maxZ) continue;
-      if (a.x > minX && a.x < maxX && a.z > minZ && a.z < maxZ) {
-        let inside = false;
-        for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-          const p = points[j], q = points[i];
-          if ((p.z > a.z) !== (q.z > a.z) && a.x < (q.x - p.x) * (a.z - p.z) / (q.z - p.z) + p.x) inside = !inside;
-        }
-        if (inside) return "crossing";
-      }
+  for (const [a, b] of edges) {
+    if (Math.max(a.x, b.x) < minX || Math.min(a.x, b.x) > maxX || Math.max(a.z, b.z) < minZ || Math.min(a.z, b.z) > maxZ) continue;
+    if (a.x > minX && a.x < maxX && a.z > minZ && a.z < maxZ) {
+      let inside = false;
       for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-        if (planSegmentsMeet(points[j], points[i], a, b)) return "crossing";
+        const p = points[j], q = points[i];
+        if ((p.z > a.z) !== (q.z > a.z) && a.x < (q.x - p.x) * (a.z - p.z) / (q.z - p.z) + p.x) inside = !inside;
       }
+      if (inside) return "crossing";
+    }
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      if (planSegmentsMeet(points[j], points[i], a, b)) return "crossing";
     }
   }
   return onMaterial ? "inside" : "outside";
+}
+
+/**
+ * A reusable classifier for one board shape. Outline and cut-out edges go into a grid; a piece whose cells
+ * hold no edge lies in one region with no boundary through it, so it is wholly inside or wholly outside
+ * (one cached test per cell). Only pieces at an edge get the exact test, against the edges near them. No
+ * rounding and no cache keyed by coordinates, so two different pieces never share an answer.
+ */
+export function createSoftwareBoardClassifier(
+  boundaryRings: readonly (readonly PlanPoint[])[],
+  isInsideMaterial: (x: number, z: number) => boolean,
+): (points: readonly SoftwarePoint3[]) => "inside" | "outside" | "crossing" {
+  const edges = ringsToEdges(boundaryRings);
+  if (!edges.length) return (points) => classifyAgainstEdges(points, isInsideMaterial, []);
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const [a, b] of edges) {
+    minX = Math.min(minX, a.x, b.x); maxX = Math.max(maxX, a.x, b.x);
+    minZ = Math.min(minZ, a.z, b.z); maxZ = Math.max(maxZ, a.z, b.z);
+  }
+  const cells = Math.max(8, Math.min(128, Math.ceil(Math.sqrt(edges.length) * 2)));
+  const cellWidth = (maxX - minX) / cells || 1;
+  const cellDepth = (maxZ - minZ) / cells || 1;
+  const column = (x: number) => Math.max(0, Math.min(cells - 1, Math.floor((x - minX) / cellWidth)));
+  const row = (z: number) => Math.max(0, Math.min(cells - 1, Math.floor((z - minZ) / cellDepth)));
+  const buckets: number[][] = Array.from({ length: cells * cells }, () => []);
+  edges.forEach(([a, b], index) => {
+    for (let i = column(Math.min(a.x, b.x)); i <= column(Math.max(a.x, b.x)); i += 1) {
+      for (let j = row(Math.min(a.z, b.z)); j <= row(Math.max(a.z, b.z)); j += 1) buckets[j * cells + i].push(index);
+    }
+  });
+  const cellInside = new Int8Array(cells * cells); // 0 unknown, 1 inside material, 2 outside
+  const seen = new Uint32Array(edges.length);
+  let stamp = 0;
+  return (points) => {
+    if (!points.length) return "outside";
+    let pMinX = Infinity, pMaxX = -Infinity, pMinZ = Infinity, pMaxZ = -Infinity;
+    for (const point of points) {
+      pMinX = Math.min(pMinX, point.x); pMaxX = Math.max(pMaxX, point.x);
+      pMinZ = Math.min(pMinZ, point.z); pMaxZ = Math.max(pMaxZ, point.z);
+    }
+    if (pMaxX < minX || pMinX > maxX || pMaxZ < minZ || pMinZ > maxZ) return "outside";
+    stamp += 1;
+    if (stamp === 0xffffffff) { seen.fill(0); stamp = 1; }
+    const nearby: PlanEdge[] = [];
+    const i0 = column(pMinX), i1 = column(pMaxX), j0 = row(pMinZ), j1 = row(pMaxZ);
+    for (let j = j0; j <= j1; j += 1) for (let i = i0; i <= i1; i += 1) {
+      for (const index of buckets[j * cells + i]) {
+        if (seen[index] === stamp) continue;
+        seen[index] = stamp;
+        nearby.push(edges[index]);
+      }
+    }
+    if (!nearby.length) {
+      const cell = j0 * cells + i0;
+      if (!cellInside[cell]) cellInside[cell] = isInsideMaterial(minX + (i0 + 0.5) * cellWidth, minZ + (j0 + 0.5) * cellDepth) ? 1 : 2;
+      return cellInside[cell] === 1 ? "inside" : "outside";
+    }
+    return classifyAgainstEdges(points, isInsideMaterial, nearby);
+  };
 }
 
 /** Whether a piece inside the board thickness is wholly in the board material (and so never visible). */
