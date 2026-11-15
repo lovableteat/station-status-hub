@@ -1896,6 +1896,26 @@
   border-bottom: 1px solid var(--pcb-border);
 }
 
+.pcb-board-list-columns {
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--pcb-border);
+  padding: 4px calc(var(--pcb-rail-gutter) + 8px) 4px calc(var(--pcb-rail-gutter) + 10px);
+  color: var(--pcb-muted);
+  font-size: 11px;
+}
+
+.pcb-board-row.is-empty {
+  justify-content: center;
+  min-height: 44px;
+  border-style: dashed;
+  border-color: var(--pcb-border);
+  color: var(--pcb-muted);
+  font-size: 12px;
+}
+
 .pcb-board-group + .pcb-board-group {
   margin-top: 6px;
 }

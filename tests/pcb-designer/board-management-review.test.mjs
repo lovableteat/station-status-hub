@@ -102,3 +102,11 @@ test('an old settings draft without owner fields shows the board\'s owner, and c
   assert.equal(calls.at(-1)[2].owner, undefined, 'choosing 未指派 clears the owner');
   await act(async () => root.unmount());
 });
+
+test('the board list keeps its column header and a row-shaped placeholder when filters leave nothing', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const rail = await readFile(new URL('../../src/components/pcb-designer/PcbLeftRail.tsx', import.meta.url), 'utf8');
+  assert.match(rail, /pcb-board-list-columns[\s\S]{0,120}板子／版本[\s\S]{0,80}狀態 · 負責人 · 更新/);
+  assert.match(rail, /目前篩選條件沒有符合的板子/);
+  assert.match(rail, /pcb-board-row is-empty/);
+});

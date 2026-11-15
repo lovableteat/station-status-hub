@@ -507,6 +507,13 @@ export function PcbLeftRail({
         <Button type="button" variant="ghost" size="sm" title="清除這個分頁的全部篩選條件" onClick={() => activeFilters.forEach(([, clear]) => clear())}>全部清除</Button>
       </div>}
 
+      {activeTab === "projects" && (
+        // The list's column header stays on screen, also when the filters leave no board (filter-list contract §5).
+        <div className="pcb-board-list-columns" aria-hidden="true">
+          <span>板子／版本</span>
+          <span>狀態 · 負責人 · 更新</span>
+        </div>
+      )}
       <div className="pcb-rail-list">
         {activeTab === "projects" && boardGroups.map((group) => (
           <section key={group.name} className="pcb-board-group" aria-label={`大專案 ${group.name}`}>
