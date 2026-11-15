@@ -20,6 +20,8 @@ import {
   isPcbModelAsset,
   mapPcbModelPartToComponentSpace,
 } from "./core/modelAssets.ts";
+import { getPcbPackageAsset } from "./core/packageModels.ts";
+import { usePcbPackageKit } from "./hooks/usePcbPackageKit.ts";
 import {
   DEFAULT_SOFTWARE_VIEW,
 
@@ -185,6 +187,8 @@ export function PcbSoftware3DCanvas({
   );
   const modelAssetKey = modelAssetIds.join("|");
   const [modelAssets, setModelAssets] = useState<Record<string, PcbModelAsset | null>>({});
+  // Components without STEP show the Blender-built schematic package, like the WebGL view.
+  const packageKit = usePcbPackageKit();
 
   useEffect(() => {
     let active = true;
@@ -213,7 +217,7 @@ export function PcbSoftware3DCanvas({
   const mappedModelParts = useMemo(() => {
     const mapped: Record<string, CachedModelPart[]> = {};
     project.components.forEach((component) => {
-      const asset = component.modelAssetId ? modelAssets[component.modelAssetId] : null;
+      const asset = component.modelAssetId ? modelAssets[component.modelAssetId] : getPcbPackageAsset(component, packageKit);
       if (!asset) return;
       mapped[component.instanceId] = asset.parts.map((part) => ({
         part: { ...part, index: getPcbModelRenderIndices(part.index, asset.metadata.upAxis) },
@@ -221,7 +225,7 @@ export function PcbSoftware3DCanvas({
       }));
     });
     return mapped;
-  }, [modelAssets, project.components]);
+  }, [modelAssets, packageKit, project.components]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -443,7 +447,7 @@ export function PcbSoftware3DCanvas({
         });
       }
 
-      const asset = component.modelAssetId ? modelAssets[component.modelAssetId] : null;
+      const asset = component.modelAssetId ? modelAssets[component.modelAssetId] : getPcbPackageAsset(component, packageKit);
       const cachedParts = mappedModelParts[component.instanceId];
       if (!asset || !cachedParts) {
         if (component.shape === "circle") {
@@ -475,9 +479,13 @@ export function PcbSoftware3DCanvas({
           addBox(worldBounds, component.color, selected ? "#f8fafc" : "#214b60", renderOrder, 1, selected ? 1.5 : 0.7);
         }
       } else {
+        // The Blender package meshes are closed and consistently wound, so their back faces can be skipped
+        // (painter sorting otherwise lets hidden walls show through). STEP meshes keep every face.
+        const cullBackFaces = asset.metadata.id.startsWith("package:");
+        const facing = component.layer === "bottom" ? -1 : 1;
         cachedParts.forEach(({ part, positions }) => {
           const color = getPcbModelPartColor(asset, part.id, "#b7bec7");
-          // Skipping triangles opens holes in the model; draw every source face.
+          // Skipping triangles opens holes in a STEP model; draw every source face.
           for (let offset = 0; offset < part.index.length; offset += 3) {
             const worldPoints = [0, 1, 2].map((corner) => {
               const vertexIndex = part.index[offset + corner] * 3;
@@ -488,6 +496,14 @@ export function PcbSoftware3DCanvas({
               }, component, project.board, BOARD_THICKNESS);
             });
             const normal = getSoftwareFaceNormal(worldPoints[0], worldPoints[1], worldPoints[2]);
+            if (cullBackFaces) {
+              const toEye = {
+                x: camera.eye.x - (worldPoints[0].x + worldPoints[1].x + worldPoints[2].x) / 3,
+                y: camera.eye.y - (worldPoints[0].y + worldPoints[1].y + worldPoints[2].y) / 3,
+                z: camera.eye.z - (worldPoints[0].z + worldPoints[1].z + worldPoints[2].z) / 3,
+              };
+              if ((normal.x * toEye.x + normal.y * toEye.y + normal.z * toEye.z) * facing < 0) continue;
+            }
             addPolygon(
               worldPoints,
               shadeColor(color, getSoftwareLightLevel(normal)),

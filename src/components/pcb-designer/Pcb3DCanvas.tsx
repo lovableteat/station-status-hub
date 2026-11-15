@@ -18,6 +18,8 @@ import {
   isPcbModelAsset,
   mapPcbModelPartToComponentSpace,
 } from "./core/modelAssets.ts";
+import { getPcbPackageAsset } from "./core/packageModels.ts";
+import { usePcbPackageKit } from "./hooks/usePcbPackageKit.ts";
 import {
   getPcbComponentViewState,
   getPcb3DComponentTransform,
@@ -338,6 +340,8 @@ function Scene({
 }) {
   const project = workspace.activeProject;
   const loadModelAsset = workspace.loadModelAsset;
+  // Components without STEP show the Blender-built schematic package (same mount pipeline as STEP).
+  const packageKit = usePcbPackageKit();
   const modelAssetIds = useMemo(
     () => [...new Set(project.components.map((component) => component.modelAssetId).filter(Boolean))] as string[],
     [project.components],
@@ -541,7 +545,9 @@ function Scene({
         const selected = viewState.selected;
         const transform = getPcb3DComponentTransform(component, project.board);
         const yOffset = getPcbMountY(component, boardThickness);
-        const modelAsset = component.modelAssetId ? modelAssets[component.modelAssetId] : null;
+        const modelAsset = component.modelAssetId
+          ? modelAssets[component.modelAssetId]
+          : getPcbPackageAsset(component, packageKit);
         const useProceduralFallback = !modelAsset;
         const proceduralFallback = useProceduralFallback;
         return (

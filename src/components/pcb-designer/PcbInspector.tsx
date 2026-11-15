@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PcbKeepout, PcbMeasurement, PcbModelAssetMetadata, PcbPlacedComponent } from "./types.ts";
 import { PCB_MODEL_FILE_ACCEPT } from "./core/modelAssets.ts";
+import { PCB_PACKAGE_LABELS, resolvePcbPackageKey } from "./core/packageModels.ts";
 import { createBoardGridCuts } from "./core/boardCuts.ts";
 import { parseDxfBoardOutline } from "./core/dxf.ts";
 import { PcbBoardOutlineDialog } from "./PcbBoardOutlineDialog.tsx";
@@ -446,6 +447,14 @@ function ComponentInspector({
           <span>3D 模型</span>
           {component.modelAssetId && <small>已綁定模型</small>}
         </div>
+        {!component.modelAssetId && (() => {
+          const packageKey = resolvePcbPackageKey(component);
+          return <p className="pcb-inspector-note" data-testid="pcb-package-model-note">
+            {packageKey
+              ? `3D 顯示示意封裝：${PCB_PACKAGE_LABELS[packageKey]}（依長寬高組成，不代表實際封裝）。要精確外形請匯入 STEP。`
+              : "3D 以方塊表示；類型設為電阻、電容、電感、IC、記憶體或連接器時會改用示意封裝。要精確外形請匯入 STEP。"}
+          </p>;
+        })()}
         <label className={cn("pcb-upload-action", componentDisabled && "pointer-events-none opacity-50")}>
           <FileUp className="mr-1.5 h-3.5 w-3.5" />
           匯入 STP/STEP
