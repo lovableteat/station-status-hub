@@ -451,7 +451,7 @@ export function PcbCanvas({
     }
     toast({
       title: "操作未執行",
-      description: "請確認物件未鎖定，且專案允許編輯。",
+      description: "請確認物件未鎖定，且這塊板允許編輯（未鎖定、未核准）。",
       variant: "destructive",
     });
   };

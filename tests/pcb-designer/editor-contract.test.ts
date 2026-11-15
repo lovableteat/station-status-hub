@@ -202,13 +202,14 @@ test("aligns project search and status filter text", () => {
 });
 
 test("placement actions reject document-locked mutations before reporting success", () => {
+  assert.match(combinedHookSource, /boardEditableRef\.current = state\.canEdit && !state\.documentLocked && state\.activeProject\.status !== "approved"/);
   assert.match(
     combinedHookSource,
-    /placeLibraryComponent[\s\S]{0,450}!state\.canEdit \|\| state\.documentLocked/,
+    /placeLibraryComponent[\s\S]{0,450}!boardEditableRef\.current/,
   );
   assert.match(
     combinedHookSource,
-    /autoPlacePending[\s\S]{0,300}!state\.canEdit \|\| state\.documentLocked/,
+    /autoPlacePending[\s\S]{0,300}!boardEditableRef\.current/,
   );
 });
 

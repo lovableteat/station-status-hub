@@ -36,6 +36,7 @@ import {
   boardOwnerOptions,
   buildBoardList,
   fullTimeLabel,
+  isBoardFamilyOpen,
   relativeTimeLabel,
   type BoardFamily,
   type BoardSort,
@@ -152,8 +153,8 @@ export function PcbLeftRail({
   const [sort, setSort] = useState<BoardSort>("updated");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [templateSourceFilter, setTemplateSourceFilter] = useState("all");
-  /** Families whose version list the user flipped from its default (open when it holds the open board). */
-  const [toggledFamilies, setToggledFamilies] = useState<ReadonlySet<string>>(() => new Set());
+  /** Families whose version list the user opened or closed explicitly; the choice survives switching boards. */
+  const [familyChoices, setFamilyChoices] = useState<ReadonlyMap<string, boolean>>(() => new Map());
   const normalized = query.trim().toLocaleLowerCase();
   const activeId = workspace.activeProject.id;
   const activeEditorName = workspace.lastSavedProjectId === activeId
@@ -206,9 +207,9 @@ export function PcbLeftRail({
   const openBoard = (project: PcbProject) => {
     if (project.id !== activeId) void workspace.openProject(project.id);
   };
-  const toggleFamily = (id: string) => setToggledFamilies((current) => {
-    const next = new Set(current);
-    if (next.has(id)) next.delete(id); else next.add(id);
+  const toggleFamily = (family: BoardFamily) => setFamilyChoices((current) => {
+    const next = new Map(current);
+    next.set(family.id, !isBoardFamilyOpen(family, activeId, current));
     return next;
   });
 
@@ -259,7 +260,7 @@ export function PcbLeftRail({
 
   const familyRow = (family: BoardFamily) => {
     const lead = family.lead;
-    const versionsOpen = (family.containsActive && lead.id !== activeId) !== toggledFamilies.has(family.id);
+    const versionsOpen = isBoardFamilyOpen(family, activeId, familyChoices);
     const otherVersions = family.matching.filter((project) => project.id !== lead.id);
     const filtered = family.matching.length < family.versions.length;
     return (
@@ -277,7 +278,7 @@ export function PcbLeftRail({
           {family.versions.length > 1 && (
             <button type="button" className="pcb-board-versions-toggle" aria-expanded={versionsOpen}
               aria-label={`${versionsOpen ? "收起" : "展開"}「${lead.name}」的 ${family.versions.length} 個版本${filtered ? `（符合 ${family.matching.length} 個）` : ""}`}
-              title={versionsOpen ? "收起這塊板的其他版本" : "展開這塊板的其他版本"} onClick={() => toggleFamily(family.id)}>
+              title={versionsOpen ? "收起這塊板的其他版本" : "展開這塊板的其他版本"} onClick={() => toggleFamily(family)}>
               {filtered ? `${family.matching.length}/${family.versions.length}` : family.versions.length} 版
               {versionsOpen ? <ChevronDown className="h-3 w-3" aria-hidden="true" /> : <ChevronRight className="h-3 w-3" aria-hidden="true" />}
             </button>
@@ -597,7 +598,7 @@ export function PcbLeftRail({
           </div>
         ))}
 
-        {isEmpty && <div className="pcb-empty-state">{emptyText}</div>}
+        {isEmpty && <div className={cn("pcb-empty-state", activeTab === "projects" && "pcb-board-row is-empty")} role="status">{emptyText}</div>}
       </div>
     </aside>
   );

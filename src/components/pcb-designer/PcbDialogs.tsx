@@ -132,7 +132,8 @@ export function PcbDialogs({
     } else if (dialog.kind === "project-settings") {
       const session = new ProjectSettingsSession(draftActorId, dialog.project);
       settingsSession.current = session;
-      setValues(session.current ? session.draft.values : {});
+      // Drafts saved before 負責人 existed have no owner fields: show the board's owner, which is also what applies.
+      setValues(session.current ? { ownerId: dialog.project.owner?.userId ?? "", ownerName: dialog.project.owner?.displayName ?? "", ...session.draft.values } : {});
       setError(session.current ? session.draft.error : "");
     } else if (dialog.kind === "save-template") {
       setValues({ name: "", category: "", description: "" });
@@ -160,7 +161,8 @@ export function PcbDialogs({
       if (!mounted.current || activeDialog.current !== dialog || settingsSession.current !== renderedSession) return;
       const session = renderedSession;
       if (!projectSettingsReady || !session?.current) return;
-      const next = { ...session.draft.values, ...fields };
+      const current = currentProjects.find(project => project.id === session.draft.projectId);
+      const next = { ownerId: current?.owner?.userId ?? "", ownerName: current?.owner?.displayName ?? "", ...session.draft.values, ...fields };
       if (session.write(next)) setValues(next);
     } else setValues((current) => ({ ...current, ...fields }));
   };
@@ -220,7 +222,7 @@ export function PcbDialogs({
       if (applied) {
         if (generation === null || session.clear(generation)) onClose();
       } else {
-        const message = "未套用設定；輸入仍保留，請確認編輯權限與專案版本。";
+        const message = "未套用設定；輸入仍保留，請確認編輯權限與板子版本。";
         session.write(session.draft.values, message); setError(message);
       }
     } catch {
@@ -398,7 +400,7 @@ export function PcbDialogs({
             <DialogFooter className="mt-4">
               <Button type="button" variant="outline" onClick={cancel}>取消</Button>
               <Button type="button" disabled={dialog.validCount === 0} onClick={confirm}>
-                匯入專案
+                匯入板子
               </Button>
             </DialogFooter>
           </div>
@@ -453,7 +455,7 @@ export function PcbDialogs({
             <DialogHeader>
               <DialogTitle>{dialog.project.name}</DialogTitle>
               <DialogDescription className="text-slate-300">
-                {dialog.project.description || "尚未填寫專案說明。"}
+                {dialog.project.description || "尚未填寫板子說明。"}
               </DialogDescription>
             </DialogHeader>
             <div className="mt-4 grid grid-cols-3 gap-3">

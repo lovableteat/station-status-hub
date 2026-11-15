@@ -17,9 +17,9 @@ export interface BoardListFilters {
 export interface BoardFamily {
   /** boardFamilyId, or the board id when the board has no family. */
   id: string;
-  /** Newest matching version: the row the list shows. */
+  /** Newest matching version (latest created): the row the list shows. */
   lead: PcbProject;
-  /** Every version of the family, newest first. */
+  /** Every version of the family, newest (latest created) first. */
   versions: PcbProject[];
   /** Versions that match the filters, newest first. */
   matching: PcbProject[];
@@ -31,8 +31,13 @@ export interface BoardGroup {
   families: BoardFamily[];
 }
 
+const ownerText = (project: Pick<PcbProject, "owner">) => {
+  const name = project.owner?.displayName;
+  return typeof name === "string" ? name.trim() : "";
+};
+
 export function boardOwnerName(project: Pick<PcbProject, "owner">): string {
-  return project.owner?.displayName?.trim() || UNASSIGNED_OWNER;
+  return ownerText(project) || UNASSIGNED_OWNER;
 }
 
 export function boardFamilyId(project: Pick<PcbProject, "id" | "boardFamilyId">): string {
@@ -40,6 +45,9 @@ export function boardFamilyId(project: Pick<PcbProject, "id" | "boardFamilyId">)
 }
 
 const byUpdated = (first: PcbProject, second: PcbProject) => second.updatedAt.localeCompare(first.updatedAt);
+/** Newest version first: the version created last (建立新版 stamps createdAt), then the latest edit. */
+const byVersion = (first: PcbProject, second: PcbProject) => second.createdAt.localeCompare(first.createdAt) || byUpdated(first, second);
+const latestEdit = (family: BoardFamily) => family.matching.reduce((latest, project) => project.updatedAt > latest ? project.updatedAt : latest, "");
 
 function matches(project: PcbProject, filters: BoardListFilters, needle: string): boolean {
   if (filters.status !== "all" && project.status !== filters.status) return false;
@@ -47,8 +55,8 @@ function matches(project: PcbProject, filters: BoardListFilters, needle: string)
   if (!needle) return true;
   return [
     project.name, project.description, project.projectGroup, project.revision ?? "1",
-    project.owner?.displayName, project.lastEditedBy,
-  ].some((value) => value?.toLocaleLowerCase().includes(needle));
+    ownerText(project), project.lastEditedBy,
+  ].some((value) => typeof value === "string" && value.toLocaleLowerCase().includes(needle));
 }
 
 /**
@@ -65,7 +73,7 @@ export function buildBoardList(projects: readonly PcbProject[], filters: BoardLi
   }
   const groups = new Map<string, BoardFamily[]>();
   for (const [id, members] of families) {
-    const versions = [...members].sort(byUpdated);
+    const versions = [...members].sort(byVersion);
     const matching = versions.filter((project) => matches(project, filters, needle));
     if (!matching.length) continue;
     const family: BoardFamily = {
@@ -78,19 +86,24 @@ export function buildBoardList(projects: readonly PcbProject[], filters: BoardLi
     if (list) list.push(family); else groups.set(group, [family]);
   }
   const compareFamilies = filters.sort === "name"
-    ? (first: BoardFamily, second: BoardFamily) => first.lead.name.localeCompare(second.lead.name, "zh-Hant") || byUpdated(first.lead, second.lead)
-    : (first: BoardFamily, second: BoardFamily) => byUpdated(first.lead, second.lead);
+    ? (first: BoardFamily, second: BoardFamily) => first.lead.name.localeCompare(second.lead.name, "zh-Hant") || latestEdit(second).localeCompare(latestEdit(first))
+    : (first: BoardFamily, second: BoardFamily) => latestEdit(second).localeCompare(latestEdit(first));
   return [...groups.entries()]
     .sort(([first], [second]) => first === UNGROUPED_BOARD_GROUP ? 1 : second === UNGROUPED_BOARD_GROUP ? -1 : first.localeCompare(second, "zh-Hant"))
     .map(([name, list]) => ({ name, families: list.sort(compareFamilies) }));
 }
 
 /** Owner names for the filter: names used on boards, then 未指派 when any board has no owner. */
+/** Whether a family's version list is open: the user's explicit choice, else open when it holds the open board. */
+export function isBoardFamilyOpen(family: Pick<BoardFamily, "id" | "containsActive" | "lead">, activeProjectId: string | null, choices: ReadonlyMap<string, boolean>): boolean {
+  return choices.get(family.id) ?? (family.containsActive && family.lead.id !== activeProjectId);
+}
+
 export function boardOwnerOptions(projects: readonly PcbProject[]): string[] {
   const names = new Set<string>();
   let unassigned = false;
   for (const project of projects) {
-    const name = project.owner?.displayName?.trim();
+    const name = ownerText(project);
     if (name) names.add(name); else unassigned = true;
   }
   return [...[...names].sort((first, second) => first.localeCompare(second, "zh-Hant")), ...(unassigned ? [UNASSIGNED_OWNER] : [])];

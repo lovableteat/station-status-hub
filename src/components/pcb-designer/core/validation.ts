@@ -205,7 +205,7 @@ export function normalizePcbSaveState(state: PcbSaveState): PcbSaveState {
     Object.entries(cloned.modelAssets ?? {}).filter(([, asset]) => isModelAssetMetadata(asset)),
   ) as PcbSaveState["modelAssets"];
   const projects = cloned.projects.map((project) => ({
-    ...project,
+    ...withNormalizedOwner(project),
     board: normalizeBoard(project.board),
     components: project.components.map((component) => {
       return {
@@ -221,7 +221,7 @@ export function normalizePcbSaveState(state: PcbSaveState): PcbSaveState {
   const templates = cloned.templates.map((template) => ({
     ...template,
     project: {
-      ...template.project,
+      ...withNormalizedOwner(template.project),
       board: normalizeBoard(template.project.board),
     },
   }));
@@ -319,6 +319,13 @@ export function parseProjectJson(input: unknown): ParseResult<PcbProject> {
  * 負責人 is optional metadata: a malformed value is dropped instead of rejecting the board,
  * because one bad field must not make a whole stored workspace unreadable.
  */
+/** The board with its 負責人 cleaned (or removed when malformed). */
+export function withNormalizedOwner<T extends { owner?: unknown }>(project: T): T {
+  const { owner, ...rest } = project;
+  const normalized = normalizeBoardOwner(owner);
+  return (normalized ? { ...rest, owner: normalized } : rest) as T;
+}
+
 export function normalizeBoardOwner(value: unknown): PcbProject["owner"] {
   if (!isRecord(value) || !isNonEmptyString(value.displayName)) return undefined;
   const displayName = value.displayName.trim().slice(0, 60);

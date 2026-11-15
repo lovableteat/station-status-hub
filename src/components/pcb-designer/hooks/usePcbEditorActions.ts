@@ -80,6 +80,10 @@ export function usePcbEditorActions(
   dispatch: Dispatch<PcbWorkspaceAction>,
 ) {
   const toolBeforeSpaceRef = useRef<PcbTool | null>(null);
+  // Board content may change: edit rights, not locked, and not 已核准 (the reducer guards the same, this keeps
+  // shortcuts and buttons from reporting a success that did not happen).
+  const boardEditableRef = useRef(false);
+  boardEditableRef.current = state.canEdit && !state.documentLocked && state.activeProject.status !== "approved";
   const [measurementShortcuts, setMeasurementShortcuts] = useState<MeasurementShortcuts>(() => {
     try {
       const saved: unknown = JSON.parse(window.localStorage.getItem(MEASUREMENT_SHORTCUTS_KEY) || "null");
@@ -103,8 +107,8 @@ export function usePcbEditorActions(
       preferred?: PcbPoint,
       options?: Omit<PcbPlacementOptions, "layer">,
     ): PlacementResult => {
-      if (!state.canEdit || state.documentLocked) {
-        return { ok: false, reason: "文件已鎖定或目前為唯讀，無法放置元件。" };
+      if (!boardEditableRef.current) {
+        return { ok: false, reason: "文件已鎖定、這塊板已核准，或目前為唯讀，無法放置元件。" };
       }
       const component = state.data.library.find((item) => item.id === componentId);
       if (!component) return { ok: false, reason: "找不到元件庫項目。" };
@@ -123,8 +127,8 @@ export function usePcbEditorActions(
 
   const placePendingPlacement = useCallback(
     (index: number, preferred?: PcbPoint): PlacementResult => {
-      if (!state.canEdit || state.documentLocked) {
-        return { ok: false, reason: "文件已鎖定或目前為唯讀，無法放置元件。" };
+      if (!boardEditableRef.current) {
+        return { ok: false, reason: "文件已鎖定、這塊板已核准，或目前為唯讀，無法放置元件。" };
       }
       const pending = state.pendingPlacements[index];
       if (!pending) return { ok: false, reason: "找不到待放置 BOM 項目。" };
@@ -159,7 +163,7 @@ export function usePcbEditorActions(
   );
 
   const autoPlacePending = useCallback(() => {
-    if (!state.canEdit || state.documentLocked) {
+    if (!boardEditableRef.current) {
       return {
         placed: 0,
         failed: state.pendingPlacements.length,
@@ -255,8 +259,8 @@ export function usePcbEditorActions(
   const resetView = useCallback(() => dispatch({ type: "view/reset" }), [dispatch]);
   const moveComponent = useCallback(
     (instanceId: string, point: PcbPoint, bypassSnap = false): MoveResult => {
-      if (!state.canEdit || state.documentLocked) {
-        return { ok: false, reason: "文件已鎖定或目前為唯讀，無法移動元件。" };
+      if (!boardEditableRef.current) {
+        return { ok: false, reason: "文件已鎖定、這塊板已核准，或目前為唯讀，無法移動元件。" };
       }
       const result = moveComponentRecord(state.activeProject, instanceId, point, bypassSnap);
       if (result.ok && result.changed) dispatch({ type: "project/commit", update: result.project });
@@ -270,8 +274,8 @@ export function usePcbEditorActions(
       delta: PcbPoint,
       bypassSnap = false,
     ): GroupMoveResult => {
-      if (!state.canEdit || state.documentLocked) {
-        return { ok: false, reason: "文件已鎖定或目前為唯讀，無法群組移動元件。" };
+      if (!boardEditableRef.current) {
+        return { ok: false, reason: "文件已鎖定、這塊板已核准，或目前為唯讀，無法群組移動元件。" };
       }
       const result = moveComponentsRecord(state.activeProject, instanceIds, delta, bypassSnap);
       if (result.ok && result.changed) {
@@ -287,8 +291,8 @@ export function usePcbEditorActions(
       delta: PcbPoint,
       bypassSnap = false,
     ): ObjectGroupMoveResult => {
-      if (!state.canEdit || state.documentLocked) {
-        return { ok: false, reason: "文件已鎖定或目前為唯讀，無法移動選取群組。" };
+      if (!boardEditableRef.current) {
+        return { ok: false, reason: "文件已鎖定、這塊板已核准，或目前為唯讀，無法移動選取群組。" };
       }
       const result = moveObjectsRecord(state.activeProject, objectIds, delta, bypassSnap);
       if (result.ok && result.changed) {
@@ -300,10 +304,10 @@ export function usePcbEditorActions(
   );
   const arrangeSelectedComponents = useCallback(
     (arrangement: PcbComponentArrangement) => {
-      if (!state.canEdit || state.documentLocked) {
+      if (!boardEditableRef.current) {
         toast({
           title: "目前無法調整元件",
-          description: "文件已鎖定或目前為唯讀。",
+          description: "文件已鎖定、這塊板已核准，或目前為唯讀。",
           variant: "destructive",
         });
         return false;
@@ -349,8 +353,8 @@ export function usePcbEditorActions(
   );
   const moveKeepout = useCallback(
     (id: string, point: PcbPoint, bypassSnap = false): KeepoutMoveResult => {
-      if (!state.canEdit || state.documentLocked) {
-        return { ok: false, reason: "文件已鎖定或目前為唯讀，無法移動禁制區。" };
+      if (!boardEditableRef.current) {
+        return { ok: false, reason: "文件已鎖定、這塊板已核准，或目前為唯讀，無法移動禁制區。" };
       }
       const result = moveKeepoutRecord(state.activeProject, id, point, bypassSnap);
       if (result.ok && result.changed) dispatch({ type: "project/commit", update: result.project });
@@ -360,8 +364,8 @@ export function usePcbEditorActions(
   );
   const duplicateKeepout = useCallback(
     (id: string, offset: PcbPoint): KeepoutDuplicateResult => {
-      if (!state.canEdit || state.documentLocked) {
-        return { ok: false, reason: "文件已鎖定或目前為唯讀，無法複製禁制區。" };
+      if (!boardEditableRef.current) {
+        return { ok: false, reason: "文件已鎖定、這塊板已核准，或目前為唯讀，無法複製禁制區。" };
       }
       const result = duplicateKeepoutRecord(state.activeProject, id, offset);
       if (result.ok) {
@@ -374,7 +378,7 @@ export function usePcbEditorActions(
   );
   const updateBoard = useCallback(
     (patch: Partial<PcbProject["board"]>) => {
-      if (!state.canEdit || state.documentLocked) return false;
+      if (!boardEditableRef.current) return false;
       const board = { ...state.activeProject.board, ...patch };
       if (!isValidBoard(board)) return false;
       dispatch({ type: "project/commit", update: { ...state.activeProject, board } });
@@ -388,7 +392,7 @@ export function usePcbEditorActions(
    */
   const resizeBoardFromAnchor = useCallback(
     (size: { width?: number; height?: number }, anchor: PcbResizeAnchor) => {
-      if (!state.canEdit || state.documentLocked) return false;
+      if (!boardEditableRef.current) return false;
       const next = resizeBoard(state.activeProject, size, anchor);
       if (!isValidBoard(next.board)) return false;
       dispatch({ type: "project/commit", update: next });
@@ -398,7 +402,7 @@ export function usePcbEditorActions(
   );
   const updateComponent = useCallback(
     (instanceId: string, patch: Partial<PcbPlacedComponent>) => {
-      if (!state.canEdit || state.documentLocked) return false;
+      if (!boardEditableRef.current) return false;
       const source = state.activeProject.components.find((item) => item.instanceId === instanceId);
       if (!source || source.locked) return false;
       const candidate = {
@@ -427,7 +431,7 @@ export function usePcbEditorActions(
   );
   const updateKeepout = useCallback(
     (id: string, patch: Partial<PcbKeepout>) => {
-      if (!state.canEdit || state.documentLocked) return false;
+      if (!boardEditableRef.current) return false;
       const source = state.activeProject.keepouts.find((item) => item.id === id);
       if (!source) return false;
       const keepout = { ...source, ...patch };
@@ -456,7 +460,7 @@ export function usePcbEditorActions(
   );
   const updateMeasurement = useCallback(
     (id: string, patch: Partial<PcbMeasurement>) => {
-      if (!state.canEdit || state.documentLocked) return false;
+      if (!boardEditableRef.current) return false;
       const source = state.activeProject.measurements.find((item) => item.id === id);
       if (!source) return false;
       const measurement = { ...source, ...patch };
@@ -489,7 +493,7 @@ export function usePcbEditorActions(
     [dispatch, state.activeProject, state.canEdit, state.documentLocked],
   );
   const createKeepout = useCallback((start: PcbPoint, end: PcbPoint) => {
-    if (!state.canEdit || state.documentLocked) return null;
+    if (!boardEditableRef.current) return null;
     const result = createKeepoutRecord(state.activeProject, start, end);
     if (result) {
       dispatch({ type: "project/commit", update: result.project });
@@ -498,7 +502,7 @@ export function usePcbEditorActions(
     return result;
   }, [dispatch, state.activeProject, state.canEdit, state.documentLocked]);
   const createMeasurement = useCallback((start: PcbPoint, end: PcbPoint) => {
-    if (!state.canEdit || state.documentLocked) return null;
+    if (!boardEditableRef.current) return null;
     const result = createMeasurementRecord(state.activeProject, start, end);
     if (result) {
       dispatch({ type: "project/commit", update: result.project });
@@ -508,7 +512,7 @@ export function usePcbEditorActions(
   }, [dispatch, state.activeProject, state.canEdit, state.documentLocked]);
 
   const applySelectionEdit = useCallback((action: Parameters<typeof editSelectedObject>[2]) => {
-    if (!state.canEdit || state.documentLocked) return false;
+    if (!boardEditableRef.current) return false;
     const project = editSelectedObject(state.activeProject, state.selection, action);
     if (JSON.stringify(project) === JSON.stringify(state.activeProject)) return false;
     dispatch({ type: "project/commit", update: project });
@@ -516,7 +520,7 @@ export function usePcbEditorActions(
     return true;
   }, [dispatch, state.activeProject, state.canEdit, state.documentLocked, state.selection]);
   const deleteSelected = useCallback(() => {
-    if (!state.canEdit || state.documentLocked) return false;
+    if (!boardEditableRef.current) return false;
     const result = deletePcbSelection(state.activeProject, [
       ...state.selectedObjects,
       ...(state.selection ? [state.selection.id] : []),
@@ -530,7 +534,7 @@ export function usePcbEditorActions(
     return true;
   }, [dispatch, state.activeProject, state.canEdit, state.documentLocked, state.selectedObjects, state.selection]);
   const rotateSelected = useCallback(() => {
-    if (!state.canEdit || state.documentLocked) return false;
+    if (!boardEditableRef.current) return false;
     const ids = [...new Set([...state.selectedObjects, ...(state.selection ? [state.selection.id] : [])])];
     const selections = ids.map(id => selectionForObject(state.activeProject, id));
     if (!ids.length || selections.some(selection => !selection)) return false;
@@ -544,7 +548,7 @@ export function usePcbEditorActions(
     return true;
   }, [dispatch, state.activeProject, state.canEdit, state.documentLocked, state.selectedObjects, state.selection]);
   const rotateSelectedMeasurement = useCallback((direction: MeasurementRotationDirection) => {
-    if (!state.canEdit || state.documentLocked || state.selection?.kind !== "measurement") return false;
+    if (!boardEditableRef.current || state.selection?.kind !== "measurement") return false;
     const line = state.activeProject.measurements.find(item => item.id === state.selection?.id);
     if (!line) return false;
     const changed = applySelectionEdit({ type: "rotate", direction });
@@ -584,7 +588,7 @@ export function usePcbEditorActions(
     return applySelectionEdit({ type: "nudge", dx, dy });
   }, [applySelectionEdit, moveObjects, state.activeProject.components, state.activeProject.keepouts, state.selectedObjects, state.selection]);
   const duplicateSelected = useCallback((objectIds?: string[]) => {
-    if (!state.canEdit || state.documentLocked) return false;
+    if (!boardEditableRef.current) return false;
     const requestedIds = objectIds !== undefined
       ? objectIds
       : [...new Set([

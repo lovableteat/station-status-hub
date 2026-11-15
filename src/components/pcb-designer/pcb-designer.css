@@ -3190,7 +3190,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  
+
   .pcb-left-rail {
     overflow-y: auto;
     overscroll-behavior-y: contain;
@@ -3246,7 +3246,7 @@
 }
 
 @media (max-width: 1023px) and (max-height: 500px) {
-  
+
   .pcb-left-drawer,
   .pcb-drawer-scrim {
     position: fixed;

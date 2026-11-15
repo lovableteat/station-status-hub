@@ -259,7 +259,7 @@ export function PcbToolbar({
               <TooltipContent className="text-xs">匯出 JSON、BOM 或 PNG</TooltipContent>
             </Tooltip>
             <DropdownMenuContent align="start" className="pcb-dropdown-menu">
-              <DropdownMenuItem onSelect={onExportProject}>專案 JSON</DropdownMenuItem>
+              <DropdownMenuItem onSelect={onExportProject}>板子 JSON</DropdownMenuItem>
               <DropdownMenuItem onSelect={onExportBomCsv}>BOM CSV</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => void onExportBomXlsx()}>BOM XLSX</DropdownMenuItem>
               <DropdownMenuCheckboxItem

@@ -278,7 +278,7 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
           />
         </label>
         <p className="pcb-dxf-import-hint">
-          讀取 LINE／LWPOLYLINE／POLYLINE／ARC／CIRCLE，接合封閉板邊並依實際輪廓裁板，內部封閉輪廓作為孔洞，請檢查匯入結果；也會隨專案或自訂模板一起儲存。
+          讀取 LINE／LWPOLYLINE／POLYLINE／ARC／CIRCLE，接合封閉板邊並依實際輪廓裁板，內部封閉輪廓作為孔洞，請檢查匯入結果；也會隨板子或自訂模板一起儲存。
         </p>
         {dxfMessage && <p className="pcb-dxf-import-message" data-tone={dxfMessage.tone}>{dxfMessage.text}</p>}
       </div>
