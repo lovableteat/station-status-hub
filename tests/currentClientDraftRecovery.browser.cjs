@@ -166,13 +166,13 @@ async function openPcbSettings(page){
  await page.waitForFunction(()=>document.querySelector('.pcb-editing-lock')?.textContent.includes('你正在編輯'));
  // Closing a modal can temporarily hide the desktop toolbar from accessibility
  // queries. A zero-count snapshot is not evidence that the layout is mobile.
- const settings=page.getByRole('button',{name:'專案設定',exact:true});
- const mobileActions=page.getByRole('button',{name:'開啟 PCB 專案操作',exact:true});
+ const settings=page.getByRole('button',{name:'板子設定',exact:true});
+ const mobileActions=page.getByRole('button',{name:'開啟板子操作',exact:true});
  const control=settings.or(mobileActions).filter({visible:true});
  await control.waitFor({state:'visible'});assert.equal(await control.count(),1,'One actual responsive settings control must be available');
- const opensMenu=await control.getAttribute('aria-label')==='開啟 PCB 專案操作';
+ const opensMenu=await control.getAttribute('aria-label')==='開啟板子操作';
  await control.click();
- if(opensMenu)await page.getByRole('menuitem',{name:'專案設定',exact:true}).click();
+ if(opensMenu)await page.getByRole('menuitem',{name:'板子設定',exact:true}).click();
  const form=page.locator('form[data-pcb-dialog-form="project-settings"]');await form.waitFor();return form;
 }
 const PCB_STATUS_SELECTOR='label[data-pcb-field-tone] > select';

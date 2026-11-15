@@ -1,6 +1,6 @@
 import { recoverableLazy } from "@/components/common/recoverableLazy";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { Check, CircuitBoard, FlaskConical, LayoutTemplate, LoaderCircle, MoreHorizontal, PanelLeft, PanelRight, Settings2 } from "lucide-react";
+import { Check, CircuitBoard, FlaskConical, LayoutTemplate, LoaderCircle, MoreHorizontal, PanelLeft, PanelRight, Save, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -42,6 +42,7 @@ import { createPcbOwnerDirectoryLoader } from "./hooks/usePcbOwnerDirectory.ts";
 import { PcbProjectTransitionNotice } from "./PcbProjectTransitionNotice.tsx";
 import { PcbLeftRail, type PcbLeftTab } from "./PcbLeftRail.tsx";
 import { PcbToolbar } from "./PcbToolbar.tsx";
+import { PcbMobileActionBar } from "./PcbMobileActionBar.tsx";
 import { PcbCanvas } from "./PcbCanvas.tsx";
 import { PcbCollaborators } from "./PcbCollaborators.tsx";
 import { PcbInspector } from "./PcbInspector.tsx";
@@ -291,6 +292,8 @@ export function PcbDesignerWorkspace({
   const startPlacement = useCallback((componentId: string) => {
     setPlacementComponentId(componentId);
     setTool("select");
+    // On narrow screens the library is a drawer over the board: close it so the next tap places the part.
+    setOpenDrawer(null);
   }, [setTool]);
   const cancelPlacement = useCallback(() => setPlacementComponentId(null), []);
   const completePlacement = useCallback(() => setPlacementComponentId(null), []);
@@ -553,6 +556,35 @@ export function PcbDesignerWorkspace({
     else workspace.createLibraryComponent(component);
   };
 
+  const exportBomXlsx = () => {
+    void downloadBomXlsx(workspace.activeProject).catch((error) =>
+      notifyError("無法匯出 BOM XLSX", error));
+  };
+  const exportPng = () => {
+    const options = {
+      project: workspace.activeProject,
+      filename: projectExportFilename(workspace.activeProject.name).replace(".pcb-project.json", ".png"),
+      includeGrid: exportIncludesGrid,
+    };
+    const operation = onExportPng
+      ? Promise.resolve(onExportPng(options))
+      : (() => {
+        const svg = document.querySelector<SVGSVGElement>("[data-pcb-canvas]");
+        if (!svg) return Promise.reject(new Error("找不到 PCB SVG 畫布。"));
+        return exportPcbSvgAsPng(
+          svg,
+          options.filename,
+          options.includeGrid,
+          workspace.activeProject.board,
+        );
+      })();
+    void operation.catch((error) => notifyError("無法匯出 PNG", error));
+  };
+  const openRightPanel = (tab: "board" | "objects" | "checks") => {
+    workspace.setRightTab(tab);
+    setOpenDrawer("right");
+  };
+
   const notifyError = (title: string, error: unknown) => {
     toast({
       title,
@@ -584,26 +616,20 @@ export function PcbDesignerWorkspace({
             title="打開板子清單、元件庫與模板"
           >
             <PanelLeft className="h-4 w-4" />
+            <span className="pcb-panel-toggle-word">板子</span>
           </Button>
           <span className="pcb-project-symbol" aria-hidden="true">
             <CircuitBoard className="h-4 w-4" />
           </span>
-          <div className="pcb-project-heading">
-            <h1 id="pcb-designer-title">PCB Designer</h1>
-            <span>Layout workspace</span>
+          {/* The open board's identity; switching boards happens in the 板子 list (one place). */}
+          <div className="pcb-board-identity"
+            title={`${workspace.activeProject.name} · 版本 ${workspace.activeProject.revision || "1"}${workspace.activeProject.projectGroup ? ` · ${workspace.activeProject.projectGroup}` : ""} · 負責人：${workspace.activeProject.owner?.displayName || "未指派"} · 最後編輯者：${workspace.activeProject.lastEditedBy ?? "尚無紀錄"}`}>
+            <h1 id="pcb-designer-title">{workspace.activeProject.name}</h1>
+            <span>版本 {workspace.activeProject.revision || "1"}{workspace.activeProject.projectGroup ? ` · ${workspace.activeProject.projectGroup}` : ""}</span>
           </div>
-          <select
-            className="pcb-project-select"
-            value={workspace.activeProject.id}
-            onChange={(event) => workspace.openProject(event.target.value)}
-            aria-label="目前的板子"
-          >
-            {workspace.data.projects.map((project) => (
-              <option key={project.id} value={project.id}>{project.projectGroup ? `${project.projectGroup} / ` : ""}{project.name} · {project.revision || "1"}</option>
-            ))}
-          </select>
-          <span className="pcb-status-chip">{statusLabel(workspace.activeProject.status)}</span>
-          <span className="pcb-save-state" data-status={workspace.persistenceStatus} role="status">
+          <span className={cn("pcb-status-chip", `is-${workspace.activeProject.status}`)} title="板子狀態；在「板子設定」修改">{statusLabel(workspace.activeProject.status)}</span>
+          <span className="pcb-save-state" data-status={workspace.persistenceStatus} role="status"
+            title="手動儲存模式（Ctrl+S）：修改後要按「儲存」才會寫進雲端；換板子時會先自動儲存">
             {workspace.persistenceStatus === "saving" && <LoaderCircle aria-hidden="true" className="h-3 w-3 motion-safe:animate-spin" />}
             {workspace.persistenceStatus === "synced" && <Check aria-hidden="true" className="h-3 w-3" />}
             {persistenceLabel(workspace.persistenceStatus)}
@@ -630,6 +656,18 @@ export function PcbDesignerWorkspace({
           ) : !workspace.canEdit && <span className="pcb-read-only">唯讀</span>}
 
           <div className="pcb-mobile-project-actions">
+            <Button
+              type="button"
+              size="sm"
+              className={cn("pcb-mobile-save", workspace.hasUnsavedChanges && "is-dirty")}
+              disabled={!workspace.canEdit || workspace.persistenceStatus === "saving"}
+              pending={workspace.persistenceStatus === "saving"}
+              onClick={() => void handleSave()}
+              title={workspace.hasUnsavedChanges ? "有未儲存的修改，按這裡寫進雲端" : "把這塊板寫進雲端"}
+            >
+              {workspace.persistenceStatus !== "saving" && <Save aria-hidden="true" className="h-4 w-4" />}
+              儲存
+            </Button>
             <Button
               type="button"
               variant="ghost"
@@ -659,7 +697,7 @@ export function PcbDesignerWorkspace({
                 <DropdownMenuItem
                   onSelect={openTemplateCenter}
                 >
-                  <LayoutTemplate className="mr-2 h-4 w-4" />開啟模板中心
+                  <LayoutTemplate className="mr-2 h-4 w-4" />模板
                 </DropdownMenuItem>
                 {canEditModule("pcb-designer") && (
                   <DropdownMenuItem onSelect={() => setResearchOpen(true)}>
@@ -705,21 +743,9 @@ export function PcbDesignerWorkspace({
             className="pcb-panel-toggle h-8 w-8 rounded-lg"
             onClick={() => setOpenDrawer((current) => current === "right" ? null : "right")}
             aria-label="開啟屬性面板"
-            title="屬性面板"
+            title="打開板設定、物件清單與配置檢查"
           >
             <PanelRight className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="pcb-template-center-action"
-            onClick={openTemplateCenter}
-            aria-label="開啟模板中心"
-            title="模板只用來建立新板子，不會覆蓋目前的板子"
-          >
-            <LayoutTemplate className="h-4 w-4" />
-            <span>模板中心</span>
           </Button>
           <Button
             type="button"
@@ -765,6 +791,7 @@ export function PcbDesignerWorkspace({
         canMutate={workspace.canEditBoard}
         canImport={workspace.canMutate}
         canSave={workspace.canEdit}
+        isDirty={workspace.hasUnsavedChanges}
         documentLocked={workspace.documentLocked}
         tool={workspace.tool}
         activeLayer={workspace.activeLayer}
@@ -783,30 +810,8 @@ export function PcbDesignerWorkspace({
         onViewModeChange={changeViewMode}
         onExportProject={() => downloadProject(workspace.activeProject)}
         onExportBomCsv={() => downloadBomCsv(workspace.activeProject)}
-        onExportBomXlsx={() => {
-          void downloadBomXlsx(workspace.activeProject).catch((error) =>
-            notifyError("無法匯出 BOM XLSX", error));
-        }}
-        onExportPng={() => {
-          const options = {
-            project: workspace.activeProject,
-            filename: projectExportFilename(workspace.activeProject.name).replace(".pcb-project.json", ".png"),
-            includeGrid: exportIncludesGrid,
-          };
-          const operation = onExportPng
-            ? Promise.resolve(onExportPng(options))
-            : (() => {
-              const svg = document.querySelector<SVGSVGElement>("[data-pcb-canvas]");
-              if (!svg) return Promise.reject(new Error("找不到 PCB SVG 畫布。"));
-              return exportPcbSvgAsPng(
-                svg,
-                options.filename,
-                options.includeGrid,
-                workspace.activeProject.board,
-              );
-            })();
-          void operation.catch((error) => notifyError("無法匯出 PNG", error));
-        }}
+        onExportBomXlsx={exportBomXlsx}
+        onExportPng={exportPng}
         onExportIncludesGridChange={setExportIncludesGrid}
         onUndo={workspace.undo}
         onRedo={workspace.redo}
@@ -903,20 +908,31 @@ export function PcbDesignerWorkspace({
       </div>
 
       <footer className="pcb-status-bar">
+        {/* Only what the header and toolbar do not already show (save state, zoom, view and layer live there). */}
         <span>元件 {workspace.activeProject.components.length}</span>
-        <span className="font-mono">{workspace.activeProject.board.width}×{workspace.activeProject.board.height} mm</span>
-        <span>檢視 {viewMode.toUpperCase()}</span>
-        <span>放置層 {workspace.activeLayer === "top" ? "Top" : "Bottom"}</span>
-        {viewMode === "2d" && <span className="font-mono">{workspace.zoom}%</span>}
-        <span>網格 {workspace.activeProject.board.gridSize} mm</span>
-        <button type="button" className="pcb-check-status" title="開啟配置檢查，查看並定位板上的問題"
-          onClick={() => { workspace.setRightTab("checks"); setOpenDrawer("right"); }}>
+        <span className="pcb-status-board font-mono">板 {workspace.activeProject.board.width}×{workspace.activeProject.board.height} mm</span>
+        <span className="pcb-status-grid">網格 {workspace.activeProject.board.gridSize} mm</span>
+        <button type="button" className="pcb-check-status" data-issues={workspace.drcIssues.length || undefined} title="開啟配置檢查，查看並定位板上的問題"
+          onClick={() => openRightPanel("checks")}>
           {workspace.drcIssues.length ? `檢查：${workspace.drcIssues.length} 個問題` : "檢查：沒有問題"}
         </button>
-        <span className="ml-auto">
-          {persistenceLabel(workspace.persistenceStatus)} · 手動儲存模式（Ctrl+S）
-        </span>
       </footer>
+      <PcbMobileActionBar
+        workspace={workspace}
+        viewMode={viewMode}
+        placing={Boolean(placementComponentId)}
+        onViewModeChange={changeViewMode}
+        onCancelPlacement={cancelPlacement}
+        onOpenBoards={() => { setLeftRailTab("projects"); setOpenDrawer("left"); }}
+        onOpenLibrary={() => { setLeftRailTab("library"); setOpenDrawer("left"); }}
+        onOpenPanel={openRightPanel}
+        onImportProject={() => projectInputRef.current?.click()}
+        onExportProject={() => downloadProject(workspace.activeProject)}
+        onExportBomCsv={() => downloadBomCsv(workspace.activeProject)}
+        onExportBomXlsx={exportBomXlsx}
+        onExportPng={exportPng}
+        onArrange={workspace.arrangeSelectedComponents}
+      />
 
       <PcbDialogs
         dialog={dialog}

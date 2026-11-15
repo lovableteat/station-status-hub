@@ -23,6 +23,8 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { toast } from "@/hooks/use-toast";
+import { CircleHelp } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   canPlaceComponent,
   clientPointToBoard,
@@ -1684,10 +1686,16 @@ export function PcbCanvas({
           <span className="pcb-placement-banner-dot" style={{ backgroundColor: placementLibraryComponent.color }} />
           <strong>{placementLibraryComponent.name}</strong>
           <span>移動游標預覽，點擊可連續放置</span>
-          <kbd>R</kbd>
-          <span>旋轉 {placementRotation}°</span>
-          <kbd>Esc</kbd>
-          <span>取消</span>
+          {/* Real buttons, so a touch screen without R / Esc can rotate and leave placement. */}
+          <button type="button" className="pcb-placement-banner-action" aria-keyshortcuts="R"
+            title="把要放置的元件轉 90°（鍵盤 R）"
+            onClick={() => setPlacementRotation((current) => (current + 90) % 360)}>
+            旋轉 90°<span className="pcb-placement-banner-value">（目前 {placementRotation}°）</span>
+          </button>
+          <button type="button" className="pcb-placement-banner-action" aria-keyshortcuts="Escape"
+            title="結束放置，回到選取（鍵盤 Esc）" onClick={onPlacementCancel}>
+            取消放置
+          </button>
         </div>
       )}
       {!placementLibraryComponent && workspace.tool === "keepout" && (
@@ -1702,16 +1710,32 @@ export function PcbCanvas({
         </div>
       )}
           <div className="pcb-canvas-hud" data-export-hidden>
-            <span>{placementLibraryComponent ? "放置元件" : workspace.tool === "select" ? "選取" : workspace.tool === "pan" ? "平移" : workspace.tool === "measure" ? "測量" : "禁制區"}</span>
-            {workspace.tool === "select" && <span>拖曳框選 · Ctrl / Shift 點選多選 · Delete 刪除 · Esc 取消選取</span>}
+            <span className="pcb-canvas-hud-mode">{placementLibraryComponent ? "放置元件" : workspace.tool === "select" ? "選取" : workspace.tool === "pan" ? "平移" : workspace.tool === "measure" ? "測量" : "禁制區"}</span>
             {selectionIds.length > 0 && <span>已選 {selectionIds.length} 項</span>}
-            {selectedKeepout && workspace.tool === "select" && <span>拖曳四角縮放 · Delete 刪除</span>}
-            {selectedMeasurementVisual && workspace.tool === "select" && <span>右鍵複製／旋轉 · 方向鍵移動整條線 · 拖曳亮色端點調整 · Alt 暫停吸附</span>}
-            <span>Alt 暫停吸附</span>
-            <span className="font-mono">
+            <span className="font-mono" title="游標所在的板上座標（mm）">
               X {cursorPoint?.x.toFixed(2) ?? "—"} · Y {cursorPoint?.y.toFixed(2) ?? "—"}
             </span>
-            <span className="font-mono">{workspace.zoom}%</span>
+            {/* The shortcut list moved out of the always-on bar; touch screens do not need it. */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className="pcb-canvas-hud-help" aria-label="畫布操作說明" title="這個模式能用的滑鼠與鍵盤操作">
+                  <CircleHelp aria-hidden="true" className="h-3.5 w-3.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="start" className="pcb-canvas-help w-72 text-xs" data-export-hidden>
+                <p className="pcb-canvas-help-title">畫布操作</p>
+                <ul>
+                  {workspace.tool === "select" && <li>拖曳框選；Ctrl / Shift 點選加選</li>}
+                  {workspace.tool === "select" && <li>Delete 刪除選取；Esc 取消選取</li>}
+                  {selectedKeepout && workspace.tool === "select" && <li>禁制區：拖曳四角縮放</li>}
+                  {selectedMeasurementVisual && workspace.tool === "select" && <li>量測線：右鍵複製／旋轉；方向鍵移動整條線；拖曳亮色端點調整</li>}
+                  <li>方向鍵移動選取；Shift 0.1 mm、Ctrl 10 mm</li>
+                  <li>拖曳時按住 Alt 暫停吸附網格</li>
+                  <li>空白鍵或 H 拖曳畫布；滾輪縮放；F 符合板框</li>
+                  <li>V 選取、M 測量、K 禁制區、R 旋轉、L 鎖定文件</li>
+                </ul>
+              </PopoverContent>
+            </Popover>
           </div>
         </main>
       </ContextMenuTrigger>

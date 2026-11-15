@@ -257,7 +257,7 @@ test("provides a complete keepout workflow with visible creation, resize, and de
   assert.match(canvasSource, /beginKeepoutResize/);
   assert.match(canvasSource, /pcb-keepout-resize-handle/);
   assert.match(canvasSource, /workspace\.updateKeepout\(interaction\.id, interaction\.preview\)/);
-  assert.match(canvasSource, /拖曳四角縮放 · Delete 刪除/);
+  assert.match(canvasSource, /禁制區：拖曳四角縮放/);
   assert.match(inspectorSource, /data-selection-kind=["']keepout["'][\s\S]{0,1800}SelectionActions/);
   assert.match(editorHookSource, /keepout\.x \+ keepout\.width > state\.activeProject\.board\.width/);
 });
@@ -368,7 +368,8 @@ test("supports marquee selection and mixed component/keepout clipboard workflows
   assert.match(canvasSource, /workspace\.selectObjects/);
   assert.match(canvasSource, /data-pcb-marquee/);
   assert.match(canvasSource, /selectedKeepoutIds/);
-  assert.match(canvasSource, /Ctrl \/ Shift 點選多選 · Delete 刪除/);
+  assert.match(canvasSource, /拖曳框選；Ctrl \/ Shift 點選加選/);
+  assert.match(canvasSource, /Delete 刪除選取；Esc 取消選取/);
   assert.match(editorHookSource, /copiedObjectIdsRef/);
   assert.match(editorHookSource, /已貼上整組布局/);
   assert.match(editorHookSource, /目前沒有可貼上的內容/);
@@ -463,7 +464,8 @@ test("lets users drag either measurement endpoint with snapping and safe persist
   assert.match(canvasSource, /className=["']pcb-measurement-resize-handle["']/);
   assert.match(canvasSource, /interaction\.endpoint === ["']start["'][\s\S]{0,160}x1:/);
   assert.match(canvasSource, /workspace\.updateMeasurement\(interaction\.id, interaction\.preview\)/);
-  assert.match(canvasSource, /拖曳亮色端點調整 · Alt 暫停吸附/);
+  assert.match(canvasSource, /拖曳亮色端點調整/);
+  assert.match(canvasSource, /拖曳時按住 Alt 暫停吸附網格/);
   assert.match(editorHookSource, /measurement\.x1 < 0[\s\S]{0,500}Math\.hypot/);
   assert.match(editorCssSource, /pcb-measurement-endpoint-control:hover[\s\S]{0,180}#67e8f9/);
 });
@@ -627,7 +629,8 @@ test("provides board, objects, visible placement checks, and PNG workflows", () 
   assert.doesNotMatch(workspaceSource, /執行 DRC/);
   assert.match(workspaceSource, /aria-label="開啟屬性面板"/);
   assert.match(workspaceSource, /檢查：沒有問題/);
-  assert.match(workspaceSource, /setRightTab\("checks"\)/);
+  assert.match(workspaceSource, /openRightPanel\("checks"\)/);
+  assert.match(workspaceSource, /workspace\.setRightTab\(tab\)/);
 });
 
 test("keeps STEP model metadata serializable and assignment scoped to the selected component", () => {

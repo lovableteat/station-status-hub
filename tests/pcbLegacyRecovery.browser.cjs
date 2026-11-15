@@ -61,7 +61,7 @@ for (const [mode, ownership] of [['ok', 'own'], ['absent', 'shared-only']]) test
   }
   for (const call of await protectedCalls(page)) assert.deepEqual(call.args, {}, 'Zero owner/actor parameters');
   assert.equal(await page.getByRole('button', { name: '儲存', exact: true }).isDisabled(), true);
-  assert.equal(await page.getByRole('button', { name: '匯入 JSON', exact: true }).isDisabled(), true);
+  assert.equal(await page.locator('[data-testid="pcb-project-bar"] input[type="file"]').isDisabled(), true, 'board JSON import stays gated');
   assert.equal(await page.evaluate(() => pcbRecoveryFixture.api.saveNow()), false);
   await page.keyboard.press('Control+s'); await page.getByTestId('pcb-cloud-retry').click(); await blocked(page, 'legacy-recovery');
   await unchanged(page, before, true); await screenshot('read-only');

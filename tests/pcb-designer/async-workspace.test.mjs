@@ -35,7 +35,7 @@ async function setup() {
   };
   for (const [file, name] of [['PcbLeftRail', 'left-rail'], ['PcbToolbar', 'toolbar'], ['PcbCanvas', 'canvas'],
     ['PcbCollaborators', 'collaborators'], ['PcbInspector', 'inspector'], ['PcbDialogs', 'dialogs'],
-    ['PcbStepModelDialog', 'step-preview'], ['PcbStepRecoveryDialog', 'step-recovery'], ['PcbResearchDialog', 'research']]) mocks[`./${file}.tsx`] = { [file]: stub(name) };
+    ['PcbStepModelDialog', 'step-preview'], ['PcbStepRecoveryDialog', 'step-recovery'], ['PcbResearchDialog', 'research'], ['PcbMobileActionBar', 'mobile-actions']]) mocks[`./${file}.tsx`] = { [file]: stub(name) };
   const { PcbDesignerWorkspace } = loader({ window, mocks })('src/components/pcb-designer/PcbDesignerWorkspace.tsx');
   let root; await act(async () => { root = create(React.createElement(PcbDesignerWorkspace)); });
   return { calls, workspace, target, asset, root, parse, assignment,

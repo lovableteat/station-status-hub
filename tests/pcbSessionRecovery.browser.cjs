@@ -103,9 +103,9 @@ const { buildPcbRecoveryFixture } = require('./support/pcbRecoveryBrowser.cjs');
         const screenshot = label => page.screenshot({ path: path.join(evidence, `${viewport.width}-${name}-${label}.png`), fullPage: true });
         const settings = async () => {
           if (viewport.width === 390) {
-            await page.getByRole('button', { name: '開啟 PCB 專案操作', exact: true }).click();
-            await page.getByRole('menuitem', { name: '專案設定', exact: true }).click();
-          } else await page.getByRole('button', { name: '專案設定', exact: true }).click();
+            await page.getByRole('button', { name: '開啟板子操作', exact: true }).click();
+            await page.getByRole('menuitem', { name: '板子設定', exact: true }).click();
+          } else await page.getByRole('button', { name: '板子設定', exact: true }).click();
           await page.getByRole('dialog').waitFor();
         };
         try {
@@ -156,7 +156,7 @@ const { buildPcbRecoveryFixture } = require('./support/pcbRecoveryBrowser.cjs');
         assert.equal(await page.getByTestId('pcb-cloud-access').getAttribute('data-status'), ['missing', 'expired'].includes(initial) ? 'session-required' : 'denied');
         const draft = await saved();
         assert.equal(await page.getByRole('button', { name: '儲存', exact: true }).isDisabled(), true);
-        assert.equal(await page.getByRole('button', { name: '匯入 JSON', exact: true }).isDisabled(), true);
+        assert.equal(await page.locator('[data-testid="pcb-project-bar"] input[type="file"]').isDisabled(), true, 'board JSON import stays gated');
         // Disabled UI and the real persistence API both fail closed.
         await page.keyboard.press('Control+s');
         assert.equal(await page.evaluate(() => pcbRecoveryFixture.api.saveNow()), false);
@@ -291,7 +291,7 @@ const { buildPcbRecoveryFixture } = require('./support/pcbRecoveryBrowser.cjs');
         assert.equal(await page.evaluate(() => pcbRecoveryFixture.state.ownerChanged), true);
         assert.match(await page.getByTestId('pcb-cloud-access').innerText(), /帳號已變更/);
         assert.equal(await page.getByRole('button', { name: '儲存', exact: true }).isDisabled(), true);
-        assert.equal(await page.getByRole('button', { name: '匯入 JSON', exact: true }).isDisabled(), true);
+        assert.equal(await page.locator('[data-testid="pcb-project-bar"] input[type="file"]').isDisabled(), true, 'board JSON import stays gated');
         await retry().click(); await retry().click();
         await page.keyboard.press('Control+s');
         const actions = await page.evaluate(async () => {

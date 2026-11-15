@@ -271,9 +271,9 @@ test('dialog-rapid-reopen-rejected-profile-stable-viewport', 'dialog', async ({ 
 
 async function pcbSettings(page, viewport) {
   if (viewport.width === 390) {
-    await page.getByRole('button', { name: '開啟 PCB 專案操作', exact: true }).click();
-    await page.getByRole('menuitem', { name: '專案設定', exact: true }).click();
-  } else await page.getByRole('button', { name: '專案設定', exact: true }).click();
+    await page.getByRole('button', { name: '開啟板子操作', exact: true }).click();
+    await page.getByRole('menuitem', { name: '板子設定', exact: true }).click();
+  } else await page.getByRole('button', { name: '板子設定', exact: true }).click();
   await page.getByRole('dialog').waitFor();
 }
 
