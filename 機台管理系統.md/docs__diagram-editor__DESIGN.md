@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/diagram-editor/DESIGN.md`；程式參考基準：`6f5d24856c0e65551249287092ede47dc3fc78a6`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/diagram-editor/DESIGN.md`；程式參考基準：`73c35ddc80233d8f975fa713e722edb558203d30`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 ---
 name: AutoCheck Diagram Editor
