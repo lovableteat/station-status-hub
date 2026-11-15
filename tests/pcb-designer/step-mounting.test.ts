@@ -11,6 +11,7 @@ import {
   getPcbMountY,
   MAX_SOFTWARE_PIECE_GROUPS,
   addSoftwarePieceBounds,
+  classifySoftwarePieceAgainstBoard,
   isSoftwarePieceInsideBoardMaterial,
   mergeSoftwarePieceBounds,
   splitSoftwarePolygonAtBoardSurface,
@@ -239,6 +240,13 @@ test("compat 3D: only a piece wholly inside the board material is hidden; one cr
   // A vertical lead face (zero plan area) inside the material, and one touching nothing.
   const leadFace = [{ x: 30, y: -0.8, z: 5 }, { x: 30.6, y: -0.8, z: 5 }, { x: 30.6, y: 0.8, z: 5 }, { x: 30, y: 0.8, z: 5 }];
   assert.equal(isSoftwarePieceInsideBoardMaterial(leadFace, board, corners), true, "a lead face inside the material is hidden");
+  // The three places, used to choose how the piece is drawn.
+  assert.equal(classifySoftwarePieceAgainstBoard(leadFace, board, corners), "inside");
+  assert.equal(classifySoftwarePieceAgainstBoard([{ x: -2, y: 0.5, z: -2 }, { x: 2, y: 0.5, z: -2 }, { x: 2, y: 0.5, z: 2 }], board, corners), "outside", "wholly in the cut-out");
+  assert.equal(classifySoftwarePieceAgainstBoard([{ x: 55, y: 0.5, z: -1 }, { x: 57, y: 0.5, z: -1 }, { x: 57, y: 0.5, z: 1 }], board, corners), "outside", "wholly past the board edge");
+  const acrossEdgeAtSixty = [{ x: 49, y: 0.5, z: -1 }, { x: 51, y: 0.5, z: -1 }, { x: 51, y: 0.5, z: 1 }, { x: 49, y: 0.5, z: 1 }];
+  assert.equal(classifySoftwarePieceAgainstBoard(acrossEdgeAtSixty, board, corners), "crossing", "across the board edge: drawn after the board");
+  assert.equal(classifySoftwarePieceAgainstBoard(narrowAcross, board, corners), "crossing");
 });
 
 test("compat 3D click areas: a part with very many separate pieces collapses to one area instead of slowing down", () => {

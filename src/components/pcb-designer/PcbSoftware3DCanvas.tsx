@@ -35,7 +35,7 @@ import {
 
   getSoftwareLayerRenderOrder,
   getSoftwareLightLevel,
-  isSoftwarePieceInsideBoardMaterial,
+  classifySoftwarePieceAgainstBoard,
   joinSoftwarePieceBounds,
   mergeSoftwarePieceBounds,
   projectSoftwarePoint,
@@ -184,6 +184,8 @@ export function PcbSoftware3DCanvas({
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hitTargetsRef = useRef<HitTarget[]>([]);
+  /** Board-thickness piece classification, per board shape; it does not change while the view turns. */
+  const pieceClassCacheRef = useRef<{ board: unknown; classes: Map<string, "inside" | "outside" | "crossing"> }>({ board: null, classes: new Map() });
   const pointerDragRef = useRef<PointerDragState | null>(null);
   const [view, setView] = useState<SoftwareViewState>(DEFAULT_SOFTWARE_VIEW);
   const [viewport, setViewport] = useState(() => getSoftwareCanvasResolution(1, 1));
@@ -451,10 +453,21 @@ export function PcbSoftware3DCanvas({
     // board, the far piece before it, so the opaque board hides what it covers on screen and nothing else.
     // Near pieces of a part on the other side (leads poking through) also become its click area.
     const boundaryRings = [boardPolygon, ...holes].map((ring) => ring.map((point) => ({ x: point.x - project.board.width / 2, z: point.y - project.board.height / 2 })));
-    const isInsideBoardMaterial = (points: readonly SoftwarePoint3[]) => isSoftwarePieceInsideBoardMaterial(points, (x, z) => {
-      const planPoint = { x: x + project.board.width / 2, y: z + project.board.height / 2 };
-      return pointInBoardPolygon(planPoint, boardPolygon) && !holes.some((ring) => pointInBoardPolygon(planPoint, ring));
-    }, boundaryRings);
+    if (pieceClassCacheRef.current.board !== project.board) pieceClassCacheRef.current = { board: project.board, classes: new Map() };
+    const pieceClasses = pieceClassCacheRef.current.classes;
+    const classifyWithinPiece = (points: readonly SoftwarePoint3[]) => {
+      const key = points.map((point) => `${point.x.toFixed(3)},${point.y.toFixed(3)},${point.z.toFixed(3)}`).join(";");
+      let result = pieceClasses.get(key);
+      if (!result) {
+        result = classifySoftwarePieceAgainstBoard(points, (x, z) => {
+          const planPoint = { x: x + project.board.width / 2, y: z + project.board.height / 2 };
+          return pointInBoardPolygon(planPoint, boardPolygon) && !holes.some((ring) => pointInBoardPolygon(planPoint, ring));
+        }, boundaryRings);
+        if (pieceClasses.size > 200_000) pieceClasses.clear();
+        pieceClasses.set(key, result);
+      }
+      return result;
+    };
     let nearPieceClusters: SoftwarePieceBounds[] = [];
     let trackNearPieces = false;
     const addComponentPolygon = (
@@ -467,8 +480,13 @@ export function PcbSoftware3DCanvas({
     ) => {
       const { near, within, beyond } = splitSoftwarePolygonAtBoardSurface(worldPoints, camera.eye.y, BOARD_THICKNESS);
       if (beyond.length) addPolygon(beyond, fill, stroke, SOFTWARE_RENDER_ORDER.farObject, alpha, lineWidth);
-      // Inside the board thickness: hidden by the board material, unless it is in a cut-out or past the edge.
-      if (within.length && !isInsideBoardMaterial(within)) addPolygon(within, fill, stroke, SOFTWARE_RENDER_ORDER.farObject, alpha, lineWidth);
+      // Inside the board thickness: hidden by the material; in a cut-out or past the edge it is sorted with the
+      // walls; across an edge it is drawn after the board, as the original renderer did, so its visible part stays.
+      if (within.length) {
+        const place = classifyWithinPiece(within);
+        if (place === "outside") addPolygon(within, fill, stroke, SOFTWARE_RENDER_ORDER.farObject, alpha, lineWidth);
+        else if (place === "crossing") addPolygon(within, fill, stroke, SOFTWARE_RENDER_ORDER.nearObject, alpha, lineWidth);
+      }
       if (near.length) {
         addPolygon(near, fill, stroke, SOFTWARE_RENDER_ORDER.nearObject, alpha, lineWidth);
         if (trackNearPieces) addSoftwarePieceBounds(nearPieceClusters, near.map((point) => projectSoftwarePoint(point, camera)));

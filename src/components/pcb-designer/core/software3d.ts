@@ -174,17 +174,23 @@ function planSegmentsMeet(a: PlanPoint, b: PlanPoint, c: PlanPoint, d: PlanPoint
 }
 
 /**
- * A piece inside the board thickness is hidden only when all of it is inside the board material: every
- * point is on material, no corner of the board outline or a cut-out lies inside the piece in plan, and no
- * outline or cut-out edge crosses a piece edge. (A piece spanning or crossing a cut-out, a notch or the
- * board edge is partly visible and is kept.) Edges outside the piece's bounding box are skipped.
+ * Where a piece inside the board thickness sits against the board in plan:
+ * - "inside": wholly in the board material (every point on material, no outline or cut-out corner inside it,
+ *   no outline or cut-out edge crossing it). It can never be seen.
+ * - "outside": wholly in a cut-out or past the board edge (no point on material, nothing crossing).
+ * - "crossing": across an outline or cut-out edge. Part of it is visible; the caller draws it like the
+ *   original renderer did (after the board) so that part never disappears.
+ * Edges outside the piece's bounding box are skipped. The answer does not depend on the camera.
  */
-export function isSoftwarePieceInsideBoardMaterial(
+export function classifySoftwarePieceAgainstBoard(
   points: readonly SoftwarePoint3[],
   isInsideMaterial: (x: number, z: number) => boolean,
   boundaryRings: readonly (readonly PlanPoint[])[] = [],
-): boolean {
-  if (!points.length || !points.every((point) => isInsideMaterial(point.x, point.z))) return false;
+): "inside" | "outside" | "crossing" {
+  if (!points.length) return "outside";
+  let onMaterial = 0;
+  for (const point of points) if (isInsideMaterial(point.x, point.z)) onMaterial += 1;
+  if (onMaterial !== 0 && onMaterial !== points.length) return "crossing";
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
   for (const point of points) {
     minX = Math.min(minX, point.x); maxX = Math.max(maxX, point.x);
@@ -195,22 +201,29 @@ export function isSoftwarePieceInsideBoardMaterial(
       const a = ring[k];
       const b = ring[(k + 1) % ring.length];
       if (Math.max(a.x, b.x) < minX || Math.min(a.x, b.x) > maxX || Math.max(a.z, b.z) < minZ || Math.min(a.z, b.z) > maxZ) continue;
-      // A boundary corner strictly inside the piece.
       if (a.x > minX && a.x < maxX && a.z > minZ && a.z < maxZ) {
         let inside = false;
         for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
           const p = points[j], q = points[i];
           if ((p.z > a.z) !== (q.z > a.z) && a.x < (q.x - p.x) * (a.z - p.z) / (q.z - p.z) + p.x) inside = !inside;
         }
-        if (inside) return false;
+        if (inside) return "crossing";
       }
-      // A boundary edge crossing a piece edge.
       for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-        if (planSegmentsMeet(points[j], points[i], a, b)) return false;
+        if (planSegmentsMeet(points[j], points[i], a, b)) return "crossing";
       }
     }
   }
-  return true;
+  return onMaterial ? "inside" : "outside";
+}
+
+/** Whether a piece inside the board thickness is wholly in the board material (and so never visible). */
+export function isSoftwarePieceInsideBoardMaterial(
+  points: readonly SoftwarePoint3[],
+  isInsideMaterial: (x: number, z: number) => boolean,
+  boundaryRings: readonly (readonly PlanPoint[])[] = [],
+): boolean {
+  return classifySoftwarePieceAgainstBoard(points, isInsideMaterial, boundaryRings) === "inside";
 }
 
 /** Screen bounds of one or more drawn pieces, used as a click area. */
