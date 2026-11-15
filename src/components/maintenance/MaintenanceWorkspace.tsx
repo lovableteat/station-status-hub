@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, ClipboardList, Plus, Search, UserRound, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, ClipboardList, Plus, Search, UserRound, Wrench, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUser } from '@/components/auth/UserContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -50,6 +50,7 @@ export function MaintenanceWorkspace() {
   };
   const filtered = useMemo(() => filterFaults(data.issues, filters, user || undefined), [data.issues, filters, user]);
   const selected = data.issues.find(issue => issue.id === selectedId);
+  const openCount = data.issues.filter(issue => getFaultStatus(issue) !== 'resolved').length;
   const closeReport = () => setReport(previous => ({ ...previous, open: false }));
   const retry = async () => {
     setRetrying(true);
@@ -67,7 +68,17 @@ export function MaintenanceWorkspace() {
   ];
   if (!activeProjectId) return <div className="maintenance-center mf-empty">請先選擇或建立專案，再開始記錄維修問題。</div>;
   return <div className="maintenance-center maintenance-fault-center" data-detail-open={!!selected}>
-    <header className="mf-page-head"><div><p className="mf-eyebrow">{activeProject?.name}{activeProject?.is_archived && ' · 已封存，僅供查閱'}</p><h1>故障清單 <span>{loading || error ? '—' : `${data.issues.filter(issue => getFaultStatus(issue) !== 'resolved').length} 件未解決`}</span></h1></div>{canEdit && <Button ref={reportTriggerRef} onClick={() => setReport(previous => ({ open: true, session: previous.session + 1 }))}><Plus size={17}/>快速報修</Button>}</header>
+    <header className="mf-page-head">
+      <div className="mf-heading-group">
+        <span className="mf-heading-icon" aria-hidden="true"><Wrench size={22}/></span>
+        <div>
+          <h1>故障清單</h1>
+          <p className="mf-eyebrow">{activeProject?.name}{activeProject?.is_archived && ' · 已封存，僅供查閱'}</p>
+        </div>
+        {!loading && !error && <span className="mf-fault-unresolved" data-open={openCount > 0}>{openCount} 件未解決</span>}
+      </div>
+      {canEdit && <Button ref={reportTriggerRef} onClick={() => setReport(previous => ({ open: true, session: previous.session + 1 }))} className="mf-report-trigger"><Plus size={17} aria-hidden="true"/>快速報修</Button>}
+    </header>
     <div className="mf-layout" data-selected={!!selected}>
       <section className="mf-list-panel" aria-label="故障清單">
         <div className="mf-filter-bar"><label className="mf-search"><Search size={17}/><input aria-label="搜尋機台或故障" value={filters.query} placeholder="搜尋序號、資產編號或故障" onChange={event => setFilter({ ...filters, query: event.target.value })}/>{filters.query && <button aria-label="清除搜尋" onClick={() => setFilter({ ...filters, query: '' })}><X size={15}/></button>}</label>
@@ -90,7 +101,7 @@ export function MaintenanceWorkspace() {
           </article>;
         })}{filtered.length > limit && <Button className="mf-load-more" variant="outline" onClick={() => setLimit(value => value + 75)}>顯示更多（剩 {filtered.length - limit} 件）</Button>}</>}</div>
       </section>
-      {selected ? <MaintenanceDetail key={`${user?.userId}:${activeProjectId}:${selected.id}`} actorId={user?.userId} projectId={activeProjectId ?? ""} issue={selected} data={data} canEdit={canEdit} onBack={() => selectIssue(null)} refresh={refresh} assignmentRequest={assignmentRequest} onAssignmentHandled={() => setAssignmentRequest(undefined)}/> : <section className="mf-detail-placeholder"><ClipboardList size={24} aria-hidden="true"/><h2>選擇故障查看詳情</h2><p>可在這裡查看處理紀錄、照片與交接重點。</p></section>}
+      {selected ? <MaintenanceDetail key={`${user?.userId}:${activeProjectId}:${selected.id}`} actorId={user?.userId} projectId={activeProjectId ?? ""} issue={selected} data={data} canEdit={canEdit} onBack={() => selectIssue(null)} refresh={refresh} assignmentRequest={assignmentRequest} onAssignmentHandled={() => setAssignmentRequest(undefined)}/> : <section className="mf-detail-placeholder" aria-labelledby="mf-detail-placeholder-title"><div className="mf-detail-invitation"><span aria-hidden="true"><ClipboardList size={26}/></span><h2 id="mf-detail-placeholder-title">選擇故障查看詳情</h2><p>選取左側故障，即可查看處理紀錄、照片與交接。</p></div></section>}
     </div>
     {report.session > 0 && <MaintenanceReport key={report.session} open={report.open} projectId={activeProjectId} systems={data.systems} assetSuggestions={[...new Set(data.issues.map(assetLabel).filter(value => value !== '未記錄機台'))]} onClose={() => { closeReport(); void refresh(); }} onExited={() => { setReport(previous => previous.session === report.session && !previous.open ? { open: false, session: 0 } : previous); reportTriggerRef.current?.focus({ preventScroll: true }); }} onCreated={id => { closeReport(); selectIssue(id); void refresh(); showMaintenanceSuccess('報修已建立'); }}/ >}
   </div>;

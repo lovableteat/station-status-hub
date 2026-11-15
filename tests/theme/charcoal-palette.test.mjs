@@ -64,6 +64,16 @@ test("diagram editor preserves its requested Apple palette without changing the 
   assert.notEqual(surrounding.css, css);
 });
 
+test("maintenance fault colors survive compilation within their own stylesheet", async () => {
+  const from = new URL("../../src/components/maintenance/maintenanceFaultLayout.css", import.meta.url);
+  const css = await readFile(from, "utf8");
+  const compiled = await postcss([charcoalPalette()]).process(css, { from: from.pathname });
+  assert.match(compiled.css, /--mf-panel: #1b2936/);
+  assert.match(compiled.css, /--mf-teal: #75deca/);
+  const outside = await postcss([charcoalPalette()]).process(css, { from: "src/index.css" });
+  assert.doesNotMatch(outside.css, /--mf-panel: #1b2936/);
+});
+
 test("solid action and destructive fills keep readable text across hover states", async () => {
   const result = await postcss([charcoalPalette()]).process(`
     .bg-blue-600 { background-color: #2563eb; }

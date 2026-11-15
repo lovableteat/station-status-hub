@@ -186,9 +186,8 @@ export default function charcoalPalette() {
     Declaration(declaration) {
       if (visited.has(declaration)) return;
       visited.add(declaration);
-      // The diagram workspace has a user-requested Apple light palette. Keep
-      // its authored chrome and canvas colors out of the site's charcoal pass.
-      if (/(?:^|[\\/])diagramEditor\.css$/.test(declaration.source?.input.file ?? "")) return;
+      // These workspaces define their own surface and accent colors.
+      if (/(?:^|[\\/])(?:diagramEditor|maintenanceFaultLayout)\.css$/.test(declaration.source?.input.file ?? "")) return;
       if (declaration.parent?.selector?.includes(".pcb-canvas .pcb-component-object")) return;
       for (let parent = declaration.parent; parent; parent = parent.parent) {
         if (parent.type === "atrule" && /^(?:media|page)$/i.test(parent.name) && /print/i.test(parent.params)) return;
