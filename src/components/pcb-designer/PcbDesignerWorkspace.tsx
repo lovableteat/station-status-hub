@@ -272,10 +272,10 @@ export function PcbDesignerWorkspace({
       return;
     }
     const remoteSaved = await saveNow();
-    if (remoteClient && !remoteSaved) {
+    if (!remoteSaved) {
       toast({
-        title: "已儲存在本機，但雲端同步失敗",
-        description: "內容仍保留在此瀏覽器，請確認網路後再按一次儲存。",
+        title: remoteClient ? "雲端儲存未完成" : "本機儲存未完成",
+        description: "修改仍留在目前頁面，請勿關閉；確認網路與瀏覽器儲存空間後重試。",
         variant: "destructive",
       });
       return;

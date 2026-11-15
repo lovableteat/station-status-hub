@@ -407,6 +407,7 @@ export function usePcbWorkspace({
     visibleLayer: state.visibleLayer,
     selectedObjects: state.selectedObjects,
     persistenceStatus: persistence.status,
+    saveError: persistence.saveError,
     remoteReady: cloudReady,
     remoteAccessStatus: ownerChanged ? "denied" : remoteAccess.status !== "ready" ? remoteAccess.status : remoteLoadStatus,
     ownerChanged,

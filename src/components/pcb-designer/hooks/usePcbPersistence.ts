@@ -34,6 +34,7 @@ export interface PcbPersistenceControl {
   status: PcbPersistenceStatus;
   lastSavedEditor: string | null;
   lastSavedProjectId: string | null;
+  saveError: string | null;
 }
 
 /** Saves only on explicit user action; remote writes are serialized in click order. */
@@ -61,6 +62,7 @@ export function usePcbPersistence({
   const [status, setStatus] = useState<PcbPersistenceStatus>(client ? "synced" : "local");
   const [lastSavedEditor, setLastSavedEditor] = useState<string | null>(null);
   const [lastSavedProjectId, setLastSavedProjectId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   stateRef.current = state;
   repositoryRef.current = repository;
@@ -116,6 +118,7 @@ export function usePcbPersistence({
   }, []);
 
   const saveNow = useCallback(async () => {
+    setSaveError(null);
     const snapshot = structuredClone(stateRef.current);
     const editorLabel = editor?.displayName?.trim() || editor?.username?.trim() || null;
     const activeProjectId = snapshot.activeProjectId;
@@ -130,16 +133,23 @@ export function usePcbPersistence({
     }
     // Keep a local recovery copy immediately, but only mark the document clean
     // after the shared cloud write confirms success.
-    repositoryRef.current.save(snapshot, ownerId);
+    const localSaved = repositoryRef.current.save(snapshot, ownerId) !== null;
+    const fail = (reason: string) => {
+      recoverySavedRef.current = repositoryRef.current.saveRecovery(ownerId, stateRef.current, savedRevision, recoveryClientId);
+      setSaveError(`${reason}${localSaved || recoverySavedRef.current
+        ? "修改已保留在此瀏覽器，請稍後重試。"
+        : "瀏覽器也無法寫入草稿；修改只留在目前頁面的記憶體，請勿關閉或重新整理。"}`);
+      setStatus("unsaved");
+      return false;
+    };
 
     if (!client && remoteClient) {
       // Cloud access/lease is unavailable. This is a recovery copy, not a local-mode save.
-      repositoryRef.current.saveRecovery(ownerId, snapshot, savedRevision, recoveryClientId);
-      setStatus("unsaved");
-      return false;
+      return fail("目前沒有雲端連線或這塊板子的編輯權。" );
     }
 
     if (!client) {
+      if (!localSaved) return fail("本機儲存失敗。" );
       setSavedRevision(snapshot.updatedAt);
       setLastSavedEditor(editorLabel);
       setLastSavedProjectId(activeProjectId);
@@ -167,7 +177,7 @@ export function usePcbPersistence({
         setLastSavedProjectId(activeProjectId);
         setStatus("synced");
       } else {
-        setStatus("unsaved");
+        fail("雲端儲存未完成，請確認網路與編輯權。" );
       }
     }
     return saved;
@@ -181,5 +191,6 @@ export function usePcbPersistence({
     status: status === "saving" ? "saving" : hasUnsavedChanges ? "unsaved" : status,
     lastSavedEditor,
     lastSavedProjectId,
+    saveError,
   };
 }

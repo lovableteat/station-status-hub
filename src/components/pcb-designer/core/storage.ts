@@ -274,12 +274,12 @@ export class PcbLocalRepository {
     return this.seed(ownerId);
   }
 
-  save(state: PcbSaveState, ownerId?: string): PcbSaveState {
+  save(state: PcbSaveState, ownerId?: string): PcbSaveState | null {
     const next = normalizePcbSaveState({ ...clone(state), updatedAt: timestamp() });
     try {
       this.storage.setItem(ownerId === undefined ? PCB_STORAGE_KEY : pcbOwnerStorageKey(ownerId), JSON.stringify({ version: PAYLOAD_VERSION, state: next }));
     } catch {
-      // localStorage can be unavailable (private browsing/quota); retain in-memory state.
+      return null;
     }
     return next;
   }
@@ -326,6 +326,6 @@ export class PcbLocalRepository {
 
   private seed(ownerId?: string): PcbSaveState {
     const state = createSeedState();
-    return this.save(state, ownerId);
+    return this.save(state, ownerId) ?? state;
   }
 }

@@ -195,6 +195,11 @@ export function createWorkspaceState(
   });
 }
 
+function nextProjectRevision(previous: string): string {
+  // Cloud upserts ignore older revisions, including snapshots restored by undo.
+  return new Date(Math.max(Date.now(), (Date.parse(previous) || 0) + 1)).toISOString();
+}
+
 function replaceProject(
   state: PcbWorkspaceState,
   project: PcbProject,
@@ -202,7 +207,8 @@ function replaceProject(
   pendingPlacements = state.pendingPlacements,
   selectionSnapshot = currentSelectionSnapshot(state),
 ): PcbWorkspaceState {
-  const update = { ...clone(project), updatedAt: timestamp() };
+  const previous = state.data.projects.find((item) => item.id === project.id) ?? state.activeProject;
+  const update = { ...clone(project), updatedAt: nextProjectRevision(previous.updatedAt) };
   const previousHistory = state.historyByProject[update.id]
     ?? createHistoryState(state.activeProject);
   const history = push
@@ -340,15 +346,17 @@ export function reduceWorkspaceState(
       if (project.id === state.activeProject.id) {
         return replaceProject(state, { ...project, name });
       }
+      const updatedAt = nextProjectRevision(project.updatedAt);
       return materialize({
         ...state,
         data: {
           ...state.data,
           projects: state.data.projects.map((item) =>
             item.id === project.id
-              ? { ...clone(item), name, updatedAt: timestamp() }
+              ? { ...clone(item), name, updatedAt }
               : clone(item),
           ),
+          updatedAt,
         },
       });
     }
@@ -792,7 +800,7 @@ export function reduceWorkspaceState(
     case "history/undo":
     case "history/redo": {
       const history = state.historyByProject[state.activeProject.id];
-      if (!history) return state;
+      if (!history || !(action.type === "history/undo" ? history.undo : history.redo).length) return state;
       const nextHistory = action.type === "history/undo"
         ? undoHistory(history)
         : redoHistory(history);
@@ -807,6 +815,8 @@ export function reduceWorkspaceState(
         ? undoHistory(selectionHistory)
         : redoHistory(selectionHistory);
       const project = clone(nextHistory.current);
+      project.updatedAt = nextProjectRevision(state.activeProject.updatedAt);
+      nextHistory.current = clone(project);
       const pendingPlacements = clone(nextPendingHistory.current);
       return materialize({
         ...state,
@@ -819,7 +829,7 @@ export function reduceWorkspaceState(
             ...(state.data.pendingPlacementsByProject ?? {}),
             [project.id]: pendingPlacements,
           },
-          updatedAt: timestamp(),
+          updatedAt: project.updatedAt,
         },
         historyByProject: {
           ...state.historyByProject,
