@@ -3316,41 +3316,6 @@
     flex: 1 0 auto;
   }
 
-  .pcb-toolbar {
-    min-height: 44px;
-    gap: 2px;
-    border-radius: 11px;
-    padding: 3px 4px;
-    scroll-padding-inline: 8px;
-    overscroll-behavior-x: contain;
-  }
-
-  .pcb-file-actions {
-    height: 40px;
-    position: sticky;
-    left: 0;
-    z-index: 2;
-    box-shadow: 10px 0 18px #121f33;
-  }
-
-  .pcb-toolbar .pcb-tool-button,
-  .pcb-view-switch button,
-  .pcb-active-layer-button,
-  .pcb-layer-visibility-trigger {
-    min-height: 40px;
-  }
-
-  .pcb-toolbar .pcb-tool-button.is-labeled {
-    min-width: auto;
-    padding-inline: 9px;
-  }
-
-  .pcb-toolbar .pcb-tool-button.is-labeled kbd,
-  .pcb-layer-switch-label,
-  .pcb-tool-separator {
-    display: none;
-  }
-
   .pcb-canvas-host,
   .pcb-left-rail,
   .pcb-inspector {
