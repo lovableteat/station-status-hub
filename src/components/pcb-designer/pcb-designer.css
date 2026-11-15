@@ -1248,6 +1248,7 @@
 }
 
 
+/* Platform visual layer: keep the CAD workflow, but share the surrounding UI language. */
 .pcb-designer-workspace {
   --pcb-page: #070e1b;
   --pcb-panel: #111b2d;
@@ -3146,15 +3147,7 @@
   --pcb-project-field: #102440;
 }
 
-.pcb-dialog [data-pcb-dialog-form="project-settings"] [data-pcb-field-tone="dimensions"] {
-  --pcb-project-label: #ddd6fe;
-  --pcb-project-border: rgb(167 139 250 / 52%);
-  --pcb-project-field: #211f3b;
-}
 
-.pcb-dialog [data-pcb-dialog-form="project-settings"] [data-pcb-field-tone="dimensions"] label {
-  color: var(--pcb-project-label);
-}
 
 .pcb-dialog [data-pcb-dialog-form="project-settings"] [data-pcb-field-tone="draft"] {
   --pcb-project-label: #fde68a;
@@ -3214,6 +3207,7 @@
   }
 
 
+  /* Drawer height follows the canvas; scroll the entire rail on short screens. */
   .pcb-left-rail {
     overflow-y: auto;
     overscroll-behavior-y: contain;
@@ -3270,6 +3264,7 @@
 
 @media (max-width: 1023px) and (max-height: 500px) {
 
+  /* A landscape canvas can be shorter than a single rail action row. */
   .pcb-left-drawer,
   .pcb-drawer-scrim {
     position: fixed;
@@ -3464,6 +3459,9 @@
 }
 
 
+/* --- Board resize anchor -------------------------------------------------
+   Resizing used to always grow away from the origin; this picks which edge or
+   corner stays put, and placed items shift to match. */
 .pcb-resize-anchor {
   margin-top: 12px;
   padding: 12px;
@@ -3525,6 +3523,7 @@
 }
 
 
+/* --- DXF board outline import ------------------------------------------- */
 .pcb-dxf-import {
   margin-top: 12px;
   padding: 12px;
@@ -3606,6 +3605,7 @@
 }
 
 
+/* --- STEP import result and true top-view footprint -------------------- */
 .pcb-step-dialog {
   overflow: hidden;
   border: 1px solid rgb(104 187 226 / 0.46);
@@ -3751,6 +3751,7 @@
 }
 
 
+/* UI chrome only: PCB layer, canvas and model colors retain their domain meaning. */
 .pcb-designer-workspace {
   --pcb-page: hsl(var(--background)); --pcb-panel: hsl(var(--card));
   --pcb-panel-raised: hsl(var(--secondary)); --pcb-border: hsl(var(--border));
