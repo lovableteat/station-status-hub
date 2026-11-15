@@ -80,8 +80,8 @@ export function resolvePcbPackageKey(component: Pick<PcbPlacedComponent, "id" | 
   if (component.modelAssetId) return null;
   if (component.packageModel === "box") return null;
   if (isPackageKey(component.packageModel)) return component.packageModel;
-  const builtIn = BUILT_IN_PACKAGES[component.id];
-  if (builtIn) return builtIn;
+  // Own properties only: an imported id such as "constructor" or "__proto__" is not a built-in part.
+  if (typeof component.id === "string" && Object.prototype.hasOwnProperty.call(BUILT_IN_PACKAGES, component.id)) return BUILT_IN_PACKAGES[component.id];
   switch (component.type?.trim().toLocaleLowerCase()) {
     case "resistor": return "chip-resistor";
     case "capacitor": return component.shape === "circle" ? "electrolytic" : "chip-capacitor";
@@ -316,7 +316,7 @@ export function getPcbPackageAsset(
 ): PcbModelAsset | null {
   if (!kit) return null;
   const key = resolvePcbPackageKey(component);
-  if (!key) return null;
+  if (!key || !isPackageKey(key)) return null;
   const W = component.width, D = component.height, H = component.maxHeight;
   if (![W, D, H].every((value) => Number.isFinite(value) && value > 0) || !SUPPORTED[key](W, D, H)) return null;
   let cache = caches.get(kit);

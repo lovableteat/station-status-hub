@@ -173,6 +173,22 @@ test("a 3D 示意外形 name must be a real package; prototype names from an imp
   if (parsed.ok) assert.doesNotThrow(() => parsed.value.components.forEach((component) => getPcbPackageAsset(component, kit)));
 });
 
+test("an imported part whose id is a prototype name is not a built-in part and never throws", () => {
+  for (const id of ["__proto__", "constructor", "toString", "hasOwnProperty", "valueOf"]) {
+    const part = custom(undefined, 5, 5, 1, { id });
+    assert.doesNotThrow(() => resolvePcbPackageKey(part), id);
+    assert.equal(resolvePcbPackageKey(part), null, `${id} stays a box`);
+    assert.doesNotThrow(() => getPcbPackageAsset(part, kit), id);
+    assert.equal(getPcbPackageAsset(part, kit), null);
+  }
+  const project = { ...createBlankProject("匯入"), components: [custom(undefined, 5, 5, 1, { id: "constructor" })] };
+  const parsed = parseProjectJson(JSON.stringify(project));
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) assert.doesNotThrow(() => parsed.value.components.forEach((component) => getPcbPackageAsset(component, kit)));
+  // Real built-in ids still get their package.
+  assert.equal(resolvePcbPackageKey(placed({ ...builtIn("builtin-j-47053-1000") })), "header");
+});
+
 test("choosing 自動 again clears a library part's 3D 示意外形 (library edits merge fields)", () => {
   const library = [{ ...BUILT_IN_COMPONENTS[0], id: "mine", source: "custom" as const, packageModel: "qfn" as const }];
   const project = createBlankProject("板");
