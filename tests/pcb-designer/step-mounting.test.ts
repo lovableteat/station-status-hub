@@ -219,6 +219,34 @@ test("compat 3D: the per-board grid classifier gives the exact test's answer, an
   }
 });
 
+test("compat 3D: a long diagonal board edge only marks the grid cells it crosses, and answers stay exact", () => {
+  // A 120 x 100 triangle: two sides cut into many points, the hypotenuse one long edge (Codex's slow case).
+  const outline: Array<{ x: number; z: number }> = [];
+  for (let i = 0; i <= 200; i += 1) outline.push({ x: -60 + 120 * i / 200, z: -50 });
+  for (let i = 1; i <= 200; i += 1) outline.push({ x: 60, z: -50 + 100 * i / 200 });
+  const inTriangle = (x: number, z: number) => {
+    let inside = false;
+    for (let i = 0, j = outline.length - 1; i < outline.length; j = i++) {
+      const a = outline[j], b = outline[i];
+      if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) inside = !inside;
+    }
+    return inside;
+  };
+  const classify = createSoftwareBoardClassifier([outline], inTriangle);
+  const quad = (x0: number, x1: number, z0: number, z1: number) => [{ x: x0, y: 0.5, z: z0 }, { x: x1, y: 0.5, z: z0 }, { x: x1, y: 0.5, z: z1 }, { x: x0, y: 0.5, z: z1 }];
+  let seed = 11;
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const seen = { inside: 0, outside: 0, crossing: 0 };
+  for (let n = 0; n < 3000; n += 1) {
+    const x = -65 + random() * 130, z = -55 + random() * 110, w = random() * 2, d = random() * 2;
+    const points = quad(x, x + w, z, z + d);
+    const answer = classify(points);
+    seen[answer] += 1;
+    assert.equal(answer, classifySoftwarePieceAgainstBoard(points, inTriangle, [outline]), JSON.stringify([x, z, w, d]));
+  }
+  assert.ok(seen.inside > 0 && seen.outside > 0 && seen.crossing > 0, JSON.stringify(seen));
+});
+
 test("compat 3D click areas: two lead ends far apart get two areas; touching pieces share one", () => {
   const point = (x: number, y: number) => ({ x, y, depth: 100, visible: true });
   const groups: Parameters<typeof addSoftwarePieceBounds>[0] = [];

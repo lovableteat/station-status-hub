@@ -256,9 +256,21 @@ export function createSoftwareBoardClassifier(
   const column = (x: number) => Math.max(0, Math.min(cells - 1, Math.floor((x - minX) / cellWidth)));
   const row = (z: number) => Math.max(0, Math.min(cells - 1, Math.floor((z - minZ) / cellDepth)));
   const buckets: number[][] = Array.from({ length: cells * cells }, () => []);
+  // An edge goes only into the cells it passes through: it is walked in pieces no longer than half a cell,
+  // and each piece's (at most 2 x 2) cells are marked. A long diagonal fills a line of cells, not its box.
+  const step = Math.min(cellWidth, cellDepth) / 2;
   edges.forEach(([a, b], index) => {
-    for (let i = column(Math.min(a.x, b.x)); i <= column(Math.max(a.x, b.x)); i += 1) {
-      for (let j = row(Math.min(a.z, b.z)); j <= row(Math.max(a.z, b.z)); j += 1) buckets[j * cells + i].push(index);
+    const pieces = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / step));
+    for (let piece = 0; piece < pieces; piece += 1) {
+      const fromX = a.x + (b.x - a.x) * piece / pieces, toX = a.x + (b.x - a.x) * (piece + 1) / pieces;
+      const fromZ = a.z + (b.z - a.z) * piece / pieces, toZ = a.z + (b.z - a.z) * (piece + 1) / pieces;
+      for (let i = column(Math.min(fromX, toX)); i <= column(Math.max(fromX, toX)); i += 1) {
+        for (let j = row(Math.min(fromZ, toZ)); j <= row(Math.max(fromZ, toZ)); j += 1) {
+          const bucket = buckets[j * cells + i];
+          // Edges are added one at a time, so "already here" means it is the last one in the bucket.
+          if (bucket[bucket.length - 1] !== index) bucket.push(index);
+        }
+      }
     }
   });
   const cellInside = new Int8Array(cells * cells); // 0 unknown, 1 inside material, 2 outside
