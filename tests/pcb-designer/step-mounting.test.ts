@@ -13,6 +13,7 @@ import {
   addSoftwarePieceBounds,
   classifySoftwarePieceAgainstBoard,
   createSoftwareBoardClassifier,
+  isSoftwarePieceBehindBoard,
   isSoftwarePieceInsideBoardMaterial,
   mergeSoftwarePieceBounds,
   splitSoftwarePolygonAtBoardSurface,
@@ -245,6 +246,21 @@ test("compat 3D: a long diagonal board edge only marks the grid cells it crosses
     assert.equal(answer, classifySoftwarePieceAgainstBoard(points, inTriangle, [outline]), JSON.stringify([x, z, w, d]));
   }
   assert.ok(seen.inside > 0 && seen.outside > 0 && seen.crossing > 0, JSON.stringify(seen));
+});
+
+test("compat 3D: a far-side piece is skipped only when the board really hides it from the camera", () => {
+  const board = (x: number, z: number) => Math.abs(x) <= 50 && Math.abs(z) <= 50 && !(Math.abs(x) < 10 && Math.abs(z) < 10);
+  const rings = [
+    [[-50, -50], [50, -50], [50, 50], [-50, 50]].map(([x, z]) => ({ x, z })),
+    [[-10, -10], [10, -10], [10, 10], [-10, 10]].map(([x, z]) => ({ x, z })),
+  ];
+  const classify = createSoftwareBoardClassifier(rings, board);
+  const under = (x0: number, x1: number) => [{ x: x0, y: -8, z: 30 }, { x: x1, y: -8, z: 30 }, { x: x1, y: -2, z: 30 }, { x: x0, y: -2, z: 30 }];
+  assert.equal(isSoftwarePieceBehindBoard(under(20, 22), { x: 0, y: 150, z: 0 }, 1.6, classify), true, "from above, under solid board: hidden");
+  assert.equal(isSoftwarePieceBehindBoard(under(46, 48), { x: 400, y: 20, z: 30 }, 1.6, classify), false, "low view past the board edge: drawn");
+  assert.equal(isSoftwarePieceBehindBoard([{ x: -2, y: -8, z: -2 }, { x: 2, y: -8, z: -2 }, { x: 2, y: -8, z: 2 }], { x: 0, y: 150, z: 0 }, 1.6, classify), false, "under the cut-out: drawn");
+  assert.equal(isSoftwarePieceBehindBoard(under(20, 22), { x: 0, y: 0.3, z: 200 }, 1.6, classify), false, "camera inside the board thickness: drawn");
+  assert.equal(isSoftwarePieceBehindBoard([{ x: 20, y: 8, z: 30 }, { x: 22, y: 8, z: 30 }, { x: 22, y: 2, z: 30 }], { x: 0, y: -150, z: 0 }, 1.6, classify), true, "from below, a Top body over solid board: hidden");
 });
 
 test("compat 3D click areas: two lead ends far apart get two areas; touching pieces share one", () => {

@@ -276,6 +276,34 @@ export function createSoftwareBoardClassifier(
   const cellInside = new Int8Array(cells * cells); // 0 unknown, 1 inside material, 2 outside
   const seen = new Uint32Array(edges.length);
   let stamp = 0;
+  const rayStamp = new Uint32Array(edges.length);
+  let rayRun = 0;
+  /**
+   * Material test through the grid: a ray towards +x crosses only edges registered in this row of cells, so
+   * the parity over those edges (outline and cut-outs alike) says inside material or not. A point on an edge
+   * goes to the caller's exact test, which decides boundary points.
+   */
+  const insideMaterialFast = (x: number, z: number): boolean => {
+    if (x < minX || x > maxX || z < minZ || z > maxZ) return false;
+    const j = row(z);
+    const i0 = column(x);
+    rayRun += 1;
+    if (rayRun === 0xffffffff) { rayStamp.fill(0); rayRun = 1; }
+    let inside = false;
+    for (let i = i0; i < cells; i += 1) {
+      for (const index of buckets[j * cells + i]) {
+        if (rayStamp[index] === rayRun) continue;
+        rayStamp[index] = rayRun;
+        const [a, b] = edges[index];
+        const cross = (b.x - a.x) * (z - a.z) - (b.z - a.z) * (x - a.x);
+        if (cross === 0 && Math.min(a.x, b.x) <= x && x <= Math.max(a.x, b.x) && Math.min(a.z, b.z) <= z && z <= Math.max(a.z, b.z)) {
+          return isInsideMaterial(x, z);
+        }
+        if ((a.z > z) !== (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) inside = !inside;
+      }
+    }
+    return inside;
+  };
   return (points) => {
     if (!points.length) return "outside";
     let pMinX = Infinity, pMaxX = -Infinity, pMinZ = Infinity, pMaxZ = -Infinity;
@@ -297,11 +325,41 @@ export function createSoftwareBoardClassifier(
     }
     if (!nearby.length) {
       const cell = j0 * cells + i0;
-      if (!cellInside[cell]) cellInside[cell] = isInsideMaterial(minX + (i0 + 0.5) * cellWidth, minZ + (j0 + 0.5) * cellDepth) ? 1 : 2;
+      if (!cellInside[cell]) cellInside[cell] = insideMaterialFast(minX + (i0 + 0.5) * cellWidth, minZ + (j0 + 0.5) * cellDepth) ? 1 : 2;
       return cellInside[cell] === 1 ? "inside" : "outside";
     }
-    return classifyAgainstEdges(points, isInsideMaterial, nearby);
+    return classifyAgainstEdges(points, insideMaterialFast, nearby);
   };
+}
+
+/**
+ * Whether the board hides a piece on its far side: seen from the camera, the piece's outline projected onto
+ * the board surface facing the camera lies wholly on board material, so every line of sight to it passes
+ * through the board. Such a piece need not be projected, sorted or drawn. Past the board edge or over a
+ * cut-out the projection leaves the material and the piece is drawn. Only used with the camera outside the
+ * board thickness.
+ */
+export function isSoftwarePieceBehindBoard(
+  points: readonly SoftwarePoint3[],
+  eye: SoftwarePoint3,
+  boardThickness: number,
+  classify: (points: readonly SoftwarePoint3[]) => "inside" | "outside" | "crossing",
+): boolean {
+  const surface = boardThickness / 2;
+  if (Math.abs(eye.y) <= surface || !points.length) return false;
+  const plane = eye.y > 0 ? surface : -surface;
+  const projected: SoftwarePoint3[] = [];
+  for (const point of points) {
+    const rise = point.y - eye.y;
+    if (rise === 0) return false;
+    const t = (plane - eye.y) / rise;
+    if (!(t > 0 && t < 1)) return false;
+    projected.push({ x: eye.x + (point.x - eye.x) * t, y: plane, z: eye.z + (point.z - eye.z) * t });
+  }
+  // One corner off the material already shows the piece (a cheap per-cell answer in low views, where the
+  // projection is long); only a piece that may really be hidden gets the whole-outline test.
+  for (const corner of projected) if (classify([corner]) !== "inside") return false;
+  return classify(projected) === "inside";
 }
 
 /** Whether a piece inside the board thickness is wholly in the board material (and so never visible). */

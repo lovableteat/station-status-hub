@@ -36,6 +36,7 @@ import {
   getSoftwareLayerRenderOrder,
   getSoftwareLightLevel,
   createSoftwareBoardClassifier,
+  isSoftwarePieceBehindBoard,
   joinSoftwarePieceBounds,
   mergeSoftwarePieceBounds,
   projectSoftwarePoint,
@@ -460,6 +461,7 @@ export function PcbSoftware3DCanvas({
     // Component faces are split at the board surface facing the camera: the near piece is drawn after the
     // board, the far piece before it, so the opaque board hides what it covers on screen and nothing else.
     // Near pieces of a part on the other side (leads poking through) also become its click area.
+    const cullHiddenPieces = Math.abs(camera.eye.y) > 0.35 * Math.hypot(camera.eye.x, camera.eye.y, camera.eye.z);
     let nearPieceClusters: SoftwarePieceBounds[] = [];
     let trackNearPieces = false;
     const addComponentPolygon = (
@@ -471,7 +473,11 @@ export function PcbSoftware3DCanvas({
       lineWidth = 0.7,
     ) => {
       const { near, within, beyond } = splitSoftwarePolygonAtBoardSurface(worldPoints, camera.eye.y, BOARD_THICKNESS);
-      if (beyond.length) addPolygon(beyond, fill, stroke, SOFTWARE_RENDER_ORDER.farObject, alpha, lineWidth);
+      // Far side: skipped when the board hides it from the camera (tested only when looking down more than about
+      // 20°, where many pieces are hidden; in low views it costs more than it saves), otherwise drawn before the board.
+      if (beyond.length && !(cullHiddenPieces && isSoftwarePieceBehindBoard(beyond, camera.eye, BOARD_THICKNESS, classifyWithinPiece))) {
+        addPolygon(beyond, fill, stroke, SOFTWARE_RENDER_ORDER.farObject, alpha, lineWidth);
+      }
       // Inside the board thickness: hidden by the material; in a cut-out or past the edge it is sorted with the
       // walls; across an edge it is drawn after the board, as the original renderer did, so its visible part stays.
       if (within.length) {
