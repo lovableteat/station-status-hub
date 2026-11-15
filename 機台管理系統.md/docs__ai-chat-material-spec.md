@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/ai-chat-material-spec.md`；程式參考基準：`95f74535e25c3e194ec692595dd60d52a85f321b`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/ai-chat-material-spec.md`；程式參考基準：`d44c34c3d0122921ff38ce1fa1fe46aa5df55697`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # AI 問答的料號／SPEC 來源
 
