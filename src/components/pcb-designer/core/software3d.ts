@@ -104,32 +104,20 @@ export function getSoftwareLayerRenderOrder(
   return isNearSide ? SOFTWARE_RENDER_ORDER.nearObject : SOFTWARE_RENDER_ORDER.farObject;
 }
 
-/**
- * The compat 3D paints faces in order and has no depth buffer. Each component face is split at the board
- * surface that faces the camera: the piece on the camera's side is drawn after the board, the rest before
- * it. The board is one opaque shape with its cut-outs, so on screen it hides exactly what it covers (leads
- * inside the board, a part on the other side) and nothing else: board edges, low views and cut-outs stay
- * right, and no geometry is removed.
- */
-export function splitSoftwarePolygonAtBoardSurface(
-  points: readonly SoftwarePoint3[],
-  eyeY: number,
-  boardThickness: number,
-): { near: SoftwarePoint3[]; far: SoftwarePoint3[] } {
-  const side = eyeY >= 0 ? 1 : -1;
-  const plane = side * boardThickness / 2;
-  const distances = points.map((point) => side * (point.y - plane));
-  if (distances.every((distance) => distance >= 0)) return { near: [...points], far: [] };
-  if (distances.every((distance) => distance <= 0)) return { near: [], far: [...points] };
-  const near: SoftwarePoint3[] = [];
-  const far: SoftwarePoint3[] = [];
+/** Splits a polygon at the plane y = planeY into the part with y >= planeY and the part with y <= planeY. */
+function splitPolygonAtY(points: readonly SoftwarePoint3[], planeY: number): { above: SoftwarePoint3[]; below: SoftwarePoint3[] } {
+  const distances = points.map((point) => point.y - planeY);
+  if (distances.every((distance) => distance >= 0)) return { above: [...points], below: [] };
+  if (distances.every((distance) => distance <= 0)) return { above: [], below: [...points] };
+  const above: SoftwarePoint3[] = [];
+  const below: SoftwarePoint3[] = [];
   points.forEach((current, index) => {
     const nextIndex = (index + 1) % points.length;
     const next = points[nextIndex];
     const currentDistance = distances[index];
     const nextDistance = distances[nextIndex];
-    if (currentDistance >= 0) near.push(current);
-    if (currentDistance <= 0) far.push(current);
+    if (currentDistance >= 0) above.push(current);
+    if (currentDistance <= 0) below.push(current);
     if ((currentDistance > 0 && nextDistance < 0) || (currentDistance < 0 && nextDistance > 0)) {
       const t = currentDistance / (currentDistance - nextDistance);
       const crossing = {
@@ -137,11 +125,39 @@ export function splitSoftwarePolygonAtBoardSurface(
         y: current.y + (next.y - current.y) * t,
         z: current.z + (next.z - current.z) * t,
       };
-      near.push(crossing);
-      far.push({ ...crossing });
+      above.push(crossing);
+      below.push({ ...crossing });
     }
   });
-  return { near: near.length >= 3 ? near : [], far: far.length >= 3 ? far : [] };
+  return { above: above.length >= 3 ? above : [], below: below.length >= 3 ? below : [] };
+}
+
+/**
+ * The compat 3D paints faces in order and has no depth buffer, so each component face is cut into three
+ * bands by the two board surfaces: near (the camera's side, drawn after the board), within (inside the
+ * board thickness) and beyond (the far side, drawn before the board, which hides it where it covers it on
+ * screen). The caller drops a "within" piece that is inside the board material (it can never be seen) and
+ * draws the rest with the board walls, so a piece in a cut-out or past the board edge stays visible.
+ */
+export function splitSoftwarePolygonAtBoardSurface(
+  points: readonly SoftwarePoint3[],
+  eyeY: number,
+  boardThickness: number,
+): { near: SoftwarePoint3[]; within: SoftwarePoint3[]; beyond: SoftwarePoint3[] } {
+  const surface = boardThickness / 2;
+  const top = splitPolygonAtY(points, surface);
+  const bottom = top.below.length ? splitPolygonAtY(top.below, -surface) : { above: [], below: [] };
+  return eyeY >= 0
+    ? { near: top.above, within: bottom.above, beyond: bottom.below }
+    : { near: bottom.below, within: bottom.above, beyond: top.above };
+}
+
+/** The centre of a polygon, in plan (x, z). */
+export function getSoftwarePolygonPlanCentre(points: readonly SoftwarePoint3[]): { x: number; z: number } {
+  let x = 0;
+  let z = 0;
+  for (const point of points) { x += point.x; z += point.z; }
+  return { x: x / points.length, z: z / points.length };
 }
 
 /** Screen bounds of one or more drawn pieces, used as a click area. */
@@ -185,7 +201,11 @@ export function addSoftwarePieceBounds(groups: SoftwarePieceBounds[], points: It
     if (piecesTouch(groups[index], grown)) grown = joinSoftwarePieceBounds(groups.splice(index, 1)[0], grown);
   }
   groups.push(grown);
+  if (groups.length > MAX_SOFTWARE_PIECE_GROUPS) groups.splice(0, groups.length, groups.reduce(joinSoftwarePieceBounds));
 }
+
+/** More separate click groups than this for one part collapse into one area (keeps the merge cheap). */
+export const MAX_SOFTWARE_PIECE_GROUPS = 64;
 
 /** Final pass: groups that grew into each other are joined. */
 export function mergeSoftwarePieceBounds(groups: readonly SoftwarePieceBounds[]): SoftwarePieceBounds[] {

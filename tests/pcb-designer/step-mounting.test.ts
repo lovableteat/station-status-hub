@@ -9,6 +9,7 @@ import {
   getPcb3DFloorY,
   getPcbComponentWorldYRange,
   getPcbMountY,
+  MAX_SOFTWARE_PIECE_GROUPS,
   addSoftwarePieceBounds,
   mergeSoftwarePieceBounds,
   splitSoftwarePolygonAtBoardSurface,
@@ -156,26 +157,34 @@ const square = (x0: number, x1: number, y0: number, y1: number) => [
   { x: x0, y: y0, z: 0 }, { x: x1, y: y0, z: 0 }, { x: x1, y: y1, z: 0 }, { x: x0, y: y1, z: 0 },
 ];
 
-test("compat 3D: seen from above, a lead through the board is split at the top surface; nothing is thrown away", () => {
-  const { near, far } = splitSoftwarePolygonAtBoardSurface(square(0, 0.6, -8.95, 3), 60, 1.6);
-  assert.ok(near.length >= 3 && far.length >= 3);
-  assert.ok(near.every((point) => point.y >= 0.8 - 1e-9), "drawn after the board: only above the top surface");
-  assert.ok(far.every((point) => point.y <= 0.8 + 1e-9), "drawn before the board, which hides it where it covers it");
-  const yMax = (points: Array<{ y: number }>) => Math.max(...points.map((point) => point.y));
-  const yMin = (points: Array<{ y: number }>) => Math.min(...points.map((point) => point.y));
-  assert.equal(yMin(far), -8.95);
-  assert.equal(yMax(near), 3);
-  assert.ok(Math.abs(yMin(near) - 0.8) < 1e-9 && Math.abs(yMax(far) - 0.8) < 1e-9, "both pieces meet at the surface");
+const yMax = (points: Array<{ y: number }>) => Math.max(...points.map((point) => point.y));
+const yMin = (points: Array<{ y: number }>) => Math.min(...points.map((point) => point.y));
+const assertRange = (points: Array<{ y: number }>, [low, high]: [number, number], message: string) =>
+  assert.ok(Math.abs(yMin(points) - low) < 1e-9 && Math.abs(yMax(points) - high) < 1e-9, `${message}: ${yMin(points)}…${yMax(points)}`);
+
+test("compat 3D: seen from above, a lead through the board is cut into above / inside / under the board; nothing is lost", () => {
+  const { near, within, beyond } = splitSoftwarePolygonAtBoardSurface(square(0, 0.6, -8.95, 3), 60, 1.6);
+  assert.ok(near.length >= 3 && within.length >= 3 && beyond.length >= 3);
+  assertRange(near, [0.8, 3], "drawn after the board: only above the top surface");
+  assert.ok(Math.abs(yMin(within) - -0.8) < 1e-9 && Math.abs(yMax(within) - 0.8) < 1e-9, "inside the board thickness");
+  assertRange(beyond, [-8.95, -0.8], "under the board: drawn before it, hidden where it covers it");
   assert.equal(SOFTWARE_RENDER_ORDER.farObject < SOFTWARE_RENDER_ORDER.board && SOFTWARE_RENDER_ORDER.board < SOFTWARE_RENDER_ORDER.nearObject, true);
 });
 
 test("compat 3D: a Bottom part is drawn before the board from above (so it shows past the board edge) and after it from below", () => {
   const bottomBody = square(46, 48, -10, -8);
-  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(bottomBody, 60, 1.6), { near: [], far: bottomBody }, "kept, behind the board");
-  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(bottomBody, 0.3, 1.6), { near: [], far: bottomBody }, "low views keep it too: no jump");
-  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(bottomBody, -60, 1.6), { near: bottomBody, far: [] });
+  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(bottomBody, 60, 1.6), { near: [], within: [], beyond: bottomBody }, "kept, behind the board");
+  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(bottomBody, 0.3, 1.6), { near: [], within: [], beyond: bottomBody }, "low views keep it too: no jump");
+  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(bottomBody, -60, 1.6), { near: bottomBody, within: [], beyond: [] });
   const topLead = splitSoftwarePolygonAtBoardSurface(square(0, 0.6, -8.95, 3), -60, 1.6);
-  assert.ok(topLead.near.every((point) => point.y <= -0.8 + 1e-9), "from below only the part under the board is in front");
+  assertRange(topLead.near, [-8.95, -0.8], "from below only the part under the board is in front");
+  assertRange(topLead.beyond, [0.8, 3], "range");
+});
+
+test("compat 3D: a face inside the board thickness is its own band, so the board material can hide it outright", () => {
+  const insideNearEdge = square(49.8, 49.9, 0.4, 0.6);
+  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(insideNearEdge, 60, 1.6), { near: [], within: insideNearEdge, beyond: [] });
+  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(insideNearEdge, -60, 1.6), { near: [], within: insideNearEdge, beyond: [] });
 });
 
 test("compat 3D click areas: two lead ends far apart get two areas; touching pieces share one", () => {
@@ -201,5 +210,13 @@ test("compat 3D click areas: a big STEP piece list does not overflow the stack",
 
 test("compat 3D: a face lying on the surface stays in front of the board", () => {
   const onSurface = square(0, 6, 0.8, 0.8);
-  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(onSurface, 60, 1.6), { near: onSurface, far: [] });
+  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(onSurface, 60, 1.6), { near: onSurface, within: [], beyond: [] });
+});
+
+test("compat 3D click areas: a part with very many separate pieces collapses to one area instead of slowing down", () => {
+  const groups: Parameters<typeof addSoftwarePieceBounds>[0] = [];
+  for (let index = 0; index < 500; index += 1) addSoftwarePieceBounds(groups, [{ x: index * 10, y: 0, depth: 1, visible: true }]);
+  assert.ok(groups.length <= MAX_SOFTWARE_PIECE_GROUPS);
+  const all = groups.reduce((a, b) => ({ ...a, left: Math.min(a.left, b.left), right: Math.max(a.right, b.right) }));
+  assert.deepEqual([all.left, all.right], [0, 4990], "every piece is still clickable");
 });

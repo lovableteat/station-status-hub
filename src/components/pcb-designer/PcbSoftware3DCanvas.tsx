@@ -1,4 +1,4 @@
-import { getBoardPolygon, getBoardHoles } from "./core/boardOutline.ts";
+import { getBoardPolygon, getBoardHoles, pointInBoardPolygon } from "./core/boardOutline.ts";
 import { getPcbModelRenderIndices } from "./core/modelProjection.ts";
 import { getRenderedKeepouts } from "./core/componentKeepout.ts";
 import {
@@ -35,6 +35,7 @@ import {
 
   getSoftwareLayerRenderOrder,
   getSoftwareLightLevel,
+  getSoftwarePolygonPlanCentre,
   joinSoftwarePieceBounds,
   mergeSoftwarePieceBounds,
   projectSoftwarePoint,
@@ -307,9 +308,10 @@ export function PcbSoftware3DCanvas({
       renderOrder: number,
       alpha = 1,
       lineWidth = 0.7,
+      minimumArea = 0.08,
     ) => {
       const points = worldPoints.map((point) => projectSoftwarePoint(point, camera));
-      if (points.some((point) => !point.visible) || projectedArea(points) < 0.08) return;
+      if (points.some((point) => !point.visible) || projectedArea(points) < minimumArea) return;
       shapes.push({
         kind: "polygon",
         points,
@@ -358,7 +360,7 @@ export function PcbSoftware3DCanvas({
       for (let piece = 0; piece < pieces; piece += 1) {
         const a = { x: p.x + (q.x - p.x) * piece / pieces, y: p.y + (q.y - p.y) * piece / pieces };
         const b = { x: p.x + (q.x - p.x) * (piece + 1) / pieces, y: p.y + (q.y - p.y) * (piece + 1) / pieces };
-        addPolygon([world(a,.8),world(b,.8),world(b,-.8),world(a,-.8)],project.board.background,project.board.background,SOFTWARE_RENDER_ORDER.farObject,1,.7);
+        addPolygon([world(a,.8),world(b,.8),world(b,-.8),world(a,-.8)],project.board.background,project.board.background,SOFTWARE_RENDER_ORDER.farObject,1,.7,0);
       }
     });
 
@@ -446,6 +448,11 @@ export function PcbSoftware3DCanvas({
     // Component faces are split at the board surface facing the camera: the near piece is drawn after the
     // board, the far piece before it, so the opaque board hides what it covers on screen and nothing else.
     // Near pieces of a part on the other side (leads poking through) also become its click area.
+    const isInsideBoardMaterial = (points: readonly SoftwarePoint3[]) => {
+      const centre = getSoftwarePolygonPlanCentre(points);
+      const planPoint = { x: centre.x + project.board.width / 2, y: centre.z + project.board.height / 2 };
+      return pointInBoardPolygon(planPoint, boardPolygon) && !holes.some((ring) => pointInBoardPolygon(planPoint, ring));
+    };
     let nearPieceClusters: SoftwarePieceBounds[] = [];
     let trackNearPieces = false;
     const addComponentPolygon = (
@@ -456,8 +463,10 @@ export function PcbSoftware3DCanvas({
       alpha = 1,
       lineWidth = 0.7,
     ) => {
-      const { near, far } = splitSoftwarePolygonAtBoardSurface(worldPoints, camera.eye.y, BOARD_THICKNESS);
-      if (far.length) addPolygon(far, fill, stroke, SOFTWARE_RENDER_ORDER.farObject, alpha, lineWidth);
+      const { near, within, beyond } = splitSoftwarePolygonAtBoardSurface(worldPoints, camera.eye.y, BOARD_THICKNESS);
+      if (beyond.length) addPolygon(beyond, fill, stroke, SOFTWARE_RENDER_ORDER.farObject, alpha, lineWidth);
+      // Inside the board thickness: hidden by the board material, unless it is in a cut-out or past the edge.
+      if (within.length && !isInsideBoardMaterial(within)) addPolygon(within, fill, stroke, SOFTWARE_RENDER_ORDER.farObject, alpha, lineWidth);
       if (near.length) {
         addPolygon(near, fill, stroke, SOFTWARE_RENDER_ORDER.nearObject, alpha, lineWidth);
         if (trackNearPieces) addSoftwarePieceBounds(nearPieceClusters, near.map((point) => projectSoftwarePoint(point, camera)));
