@@ -88,6 +88,14 @@ interface SceneLine {
 
 type SceneShape = ScenePolygon | SceneLine;
 
+/** A mesh face cut at the board surfaces for one camera side, with the place of its board-thickness piece. */
+interface CutFace {
+  near: SoftwarePoint3[];
+  within: SoftwarePoint3[];
+  withinPlace: "inside" | "outside" | "crossing" | null;
+  beyond: SoftwarePoint3[];
+}
+
 interface HitTarget {
   kind: "component" | "keepout";
   id: string;
@@ -185,6 +193,13 @@ export function PcbSoftware3DCanvas({
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hitTargetsRef = useRef<HitTarget[]>([]);
+  /**
+   * Per mapped mesh, only for faces that cross a board surface (leads through the board): their cut at the
+   * board surfaces for the camera's side and the place of their board-thickness piece. Neither depends on the
+   * view, so turning the camera reuses them; rebuilt when the part moves or the board changes. Faces wholly on
+   * one side need no cut and are not stored, so memory does not grow with big models.
+   */
+  const faceCacheRef = useRef(new WeakMap<object, { signature: string; board: unknown; sides: Partial<Record<"top" | "bottom", Map<number, CutFace>>> }>());
   const pointerDragRef = useRef<PointerDragState | null>(null);
   const [view, setView] = useState<SoftwareViewState>(DEFAULT_SOFTWARE_VIEW);
   const [viewport, setViewport] = useState(() => getSoftwareCanvasResolution(1, 1));
@@ -233,15 +248,22 @@ export function PcbSoftware3DCanvas({
     };
   }, [loadModelAsset, modelAssetKey]);
 
+  // Mapped meshes are reused per component object (an edit replaces only the edited one), so moving one part
+  // re-maps that part alone and the face cache of the others stays valid.
+  const mappingCacheRef = useRef(new WeakMap<object, { asset: unknown; parts: CachedModelPart[] }>());
   const mappedModelParts = useMemo(() => {
     const mapped: Record<string, CachedModelPart[]> = {};
     project.components.forEach((component) => {
       const asset = component.modelAssetId ? modelAssets[component.modelAssetId] : getPcbPackageAsset(component, packageKit);
       if (!asset) return;
-      mapped[component.instanceId] = asset.parts.map((part) => ({
+      const reused = mappingCacheRef.current.get(component);
+      if (reused && reused.asset === asset) { mapped[component.instanceId] = reused.parts; return; }
+      const parts = asset.parts.map((part) => ({
         part: { ...part, index: getPcbModelRenderIndices(part.index, asset.metadata.upAxis) },
         positions: mapPcbModelPartToComponentSpace(part, asset, component),
       }));
+      mappingCacheRef.current.set(component, { asset, parts });
+      mapped[component.instanceId] = parts;
     });
     return mapped;
   }, [modelAssets, packageKit, project.components]);
@@ -464,15 +486,14 @@ export function PcbSoftware3DCanvas({
     const cullHiddenPieces = Math.abs(camera.eye.y) > 0.35 * Math.hypot(camera.eye.x, camera.eye.y, camera.eye.z);
     let nearPieceClusters: SoftwarePieceBounds[] = [];
     let trackNearPieces = false;
-    const addComponentPolygon = (
-      worldPoints: SoftwarePoint3[],
+    const drawBands = (
+      bands: { near: SoftwarePoint3[]; within: SoftwarePoint3[]; withinPlace: "inside" | "outside" | "crossing" | null; beyond: SoftwarePoint3[] },
       fill: string,
       stroke: string,
-      _renderOrder: number,
       alpha = 1,
       lineWidth = 0.7,
     ) => {
-      const { near, within, beyond } = splitSoftwarePolygonAtBoardSurface(worldPoints, camera.eye.y, BOARD_THICKNESS);
+      const { near, within, withinPlace, beyond } = bands;
       // Far side: skipped when the board hides it from the camera (tested only when looking down more than about
       // 20°, where many pieces are hidden; in low views it costs more than it saves), otherwise drawn before the board.
       if (beyond.length && !(cullHiddenPieces && isSoftwarePieceBehindBoard(beyond, camera.eye, BOARD_THICKNESS, classifyWithinPiece))) {
@@ -481,15 +502,27 @@ export function PcbSoftware3DCanvas({
       // Inside the board thickness: hidden by the material; in a cut-out or past the edge it is sorted with the
       // walls; across an edge it is drawn after the board, as the original renderer did, so its visible part stays.
       if (within.length) {
-        const place = classifyWithinPiece(within);
-        if (place === "outside") addPolygon(within, fill, stroke, SOFTWARE_RENDER_ORDER.farObject, alpha, lineWidth);
-        else if (place === "crossing") addPolygon(within, fill, stroke, SOFTWARE_RENDER_ORDER.nearObject, alpha, lineWidth);
+        if (withinPlace === "outside") addPolygon(within, fill, stroke, SOFTWARE_RENDER_ORDER.farObject, alpha, lineWidth);
+        else if (withinPlace === "crossing") addPolygon(within, fill, stroke, SOFTWARE_RENDER_ORDER.nearObject, alpha, lineWidth);
       }
       if (near.length) {
         addPolygon(near, fill, stroke, SOFTWARE_RENDER_ORDER.nearObject, alpha, lineWidth);
         if (trackNearPieces) addSoftwarePieceBounds(nearPieceClusters, near.map((point) => projectSoftwarePoint(point, camera)));
       }
     };
+    const cutAtBoard = (worldPoints: readonly SoftwarePoint3[]) => {
+      const { near, within, beyond } = splitSoftwarePolygonAtBoardSurface(worldPoints, camera.eye.y, BOARD_THICKNESS);
+      return { near, within, beyond, withinPlace: within.length ? classifyWithinPiece(within) : null };
+    };
+    const addComponentPolygon = (
+      worldPoints: SoftwarePoint3[],
+      fill: string,
+      stroke: string,
+      _renderOrder: number,
+      alpha = 1,
+      lineWidth = 0.7,
+    ) => drawBands(cutAtBoard(worldPoints), fill, stroke, alpha, lineWidth);
+    const cameraSide: "top" | "bottom" = camera.eye.y >= 0 ? "top" : "bottom";
     const addComponentBox = (worldVertices: SoftwarePoint3[], color: string, stroke: string, renderOrder: number, alpha = 1, lineWidth = 0.7) => {
       BOX_FACES.forEach((face) => {
         const worldPoints = face.map((index) => worldVertices[index]);
@@ -553,10 +586,20 @@ export function PcbSoftware3DCanvas({
         // (painter sorting otherwise lets hidden walls show through). STEP meshes keep every face.
         const cullBackFaces = asset.metadata.id.startsWith("package:");
         const facing = component.layer === "bottom" ? -1 : 1;
+        const signature = [component.x, component.y, component.rotation, component.layer, component.insertionDepth ?? 0].join(",");
+        let entry = faceCacheRef.current.get(cachedParts);
+        if (!entry || entry.signature !== signature || entry.board !== project.board) {
+          entry = { signature, board: project.board, sides: {} };
+          faceCacheRef.current.set(cachedParts, entry);
+        }
+        const cutFaces = entry.sides[cameraSide] ?? (entry.sides[cameraSide] = new Map<number, CutFace>());
+        const surface = BOARD_THICKNESS / 2;
+        let faceNumber = 0;
         cachedParts.forEach(({ part, positions }) => {
           const color = getPcbModelPartColor(asset, part.id, "#b7bec7");
+          const stroke = shadeColor(color, selected ? 0.82 : 0.58);
           // Skipping triangles opens holes in a STEP model; draw every source face.
-          for (let offset = 0; offset < part.index.length; offset += 3) {
+          for (let offset = 0; offset < part.index.length; offset += 3, faceNumber += 1) {
             const worldPoints = [0, 1, 2].map((corner) => {
               const vertexIndex = part.index[offset + corner] * 3;
               return transformPcbComponentPoint({
@@ -574,14 +617,16 @@ export function PcbSoftware3DCanvas({
               };
               if ((normal.x * toEye.x + normal.y * toEye.y + normal.z * toEye.z) * facing < 0) continue;
             }
-            addComponentPolygon(
-              worldPoints,
-              shadeColor(color, getSoftwareLightLevel(normal)),
-              shadeColor(color, selected ? 0.82 : 0.58),
-              renderOrder,
-              1,
-              0,
-            );
+            const fill = shadeColor(color, getSoftwareLightLevel(normal));
+            const lowest = Math.min(worldPoints[0].y, worldPoints[1].y, worldPoints[2].y);
+            const highest = Math.max(worldPoints[0].y, worldPoints[1].y, worldPoints[2].y);
+            const nearSide = cameraSide === "top" ? lowest >= surface : highest <= -surface;
+            const farSide = cameraSide === "top" ? highest < -surface : lowest > surface;
+            if (nearSide) { drawBands({ near: worldPoints, within: [], withinPlace: null, beyond: [] }, fill, stroke, 1, 0); continue; }
+            if (farSide) { drawBands({ near: [], within: [], withinPlace: null, beyond: worldPoints }, fill, stroke, 1, 0); continue; }
+            let cut = cutFaces.get(faceNumber);
+            if (!cut) { cut = cutAtBoard(worldPoints); cutFaces.set(faceNumber, cut); }
+            drawBands(cut, fill, stroke, 1, 0);
           }
         });
       }
