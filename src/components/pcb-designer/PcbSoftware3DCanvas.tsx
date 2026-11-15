@@ -107,8 +107,11 @@ interface FaceCacheEntry {
   /** Position and rotation on the board, and the board shape (compared by reference). */
   placement: string;
   board: string;
-  placed: Partial<Record<CameraSide, Map<number, CutFace>>>;
+  /** Per face, the place of its board-thickness piece: 0 not known yet, 1 inside, 2 outside, 3 crossing. */
+  places: Partial<Record<CameraSide, Uint8Array>>;
 }
+
+const PLACE_CODES = [null, "inside", "outside", "crossing"] as const;
 
 interface HitTarget {
   kind: "component" | "keepout";
@@ -210,9 +213,9 @@ export function PcbSoftware3DCanvas({
   /**
    * Per mapped mesh, only for faces that cross a board surface (leads through the board). Level 1: the cut at
    * the board surfaces in mounted part space, which depends on height only (layer, insertion depth, 高), not on
-   * where the part sits. Level 2: those pieces placed on the board with the place of their board-thickness
-   * piece, redone when the part moves or the board shape changes. Turning the camera reuses both. Faces wholly
-   * on one side need no cut and are not stored, so memory does not grow with big models.
+   * where the part sits. Level 2: one byte per face, the place of its board-thickness piece, cleared when the
+   * part moves or the board shape changes. Pieces are placed on the board each frame (cheap, per-part maths).
+   * Faces wholly on one side need no cut and are not stored.
    */
   const faceCacheRef = useRef(new WeakMap<object, FaceCacheEntry>());
   const pointerDragRef = useRef<PointerDragState | null>(null);
@@ -625,15 +628,16 @@ export function PcbSoftware3DCanvas({
         const placement = [component.x, component.y, component.rotation].join(",");
         let entry = faceCacheRef.current.get(cachedParts);
         if (!entry || entry.height !== height) {
-          entry = { height, cuts: {}, placement, board: boardShapeKey, placed: {} };
+          entry = { height, cuts: {}, placement, board: boardShapeKey, places: {} };
           faceCacheRef.current.set(cachedParts, entry);
         } else if (entry.placement !== placement || entry.board !== boardShapeKey) {
           entry.placement = placement;
           entry.board = boardShapeKey;
-          entry.placed = {};
+          entry.places = {};
         }
         const cuts = entry.cuts[cameraSide] ?? (entry.cuts[cameraSide] = new Map());
-        const placedFaces = entry.placed[cameraSide] ?? (entry.placed[cameraSide] = new Map<number, CutFace>());
+        const faceCount = cachedParts.reduce((total, { part }) => total + Math.floor(part.index.length / 3), 0);
+        const places = entry.places[cameraSide] ?? (entry.places[cameraSide] = new Uint8Array(faceCount));
         const surface = BOARD_THICKNESS / 2;
         let faceNumber = 0;
         cachedParts.forEach(({ part, positions }) => {
@@ -662,19 +666,25 @@ export function PcbSoftware3DCanvas({
             const farSide = cameraSide === "top" ? highest < -surface : lowest > surface;
             if (nearSide) { drawBands({ near: worldPoints, within: [], withinPlace: null, beyond: [] }, fill, stroke, 1, 0); continue; }
             if (farSide) { drawBands({ near: [], within: [], withinPlace: null, beyond: worldPoints }, fill, stroke, 1, 0); continue; }
-            let placedFace = placedFaces.get(faceNumber);
-            if (!placedFace) {
-              let cut = cuts.get(faceNumber);
-              if (!cut) {
-                const { near, within, beyond } = splitSoftwarePolygonAtBoardSurface(raised, camera.eye.y, BOARD_THICKNESS);
-                cut = { near, within, beyond };
-                cuts.set(faceNumber, cut);
-              }
-              const within = placeAll(cut.within);
-              placedFace = { near: placeAll(cut.near), within, beyond: placeAll(cut.beyond), withinPlace: within.length ? classifyWithinPiece(within) : null };
-              placedFaces.set(faceNumber, placedFace);
+            let cut = cuts.get(faceNumber);
+            if (!cut) {
+              const { near, within, beyond } = splitSoftwarePolygonAtBoardSurface(raised, camera.eye.y, BOARD_THICKNESS);
+              cut = { near, within, beyond };
+              cuts.set(faceNumber, cut);
             }
-            drawBands(placedFace, fill, stroke, 1, 0);
+            let within: SoftwarePoint3[] = [];
+            let withinPlace: CutFace["withinPlace"] = null;
+            if (cut.within.length) {
+              const code = places[faceNumber];
+              if (code === 1) {
+                withinPlace = "inside";
+              } else {
+                within = placeAll(cut.within);
+                withinPlace = code ? PLACE_CODES[code] : classifyWithinPiece(within);
+                if (!code) places[faceNumber] = PLACE_CODES.indexOf(withinPlace);
+              }
+            }
+            drawBands({ near: placeAll(cut.near), within, withinPlace, beyond: placeAll(cut.beyond) }, fill, stroke, 1, 0);
           }
         });
       }
