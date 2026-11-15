@@ -6004,11 +6004,22 @@ export function MaterialRequestPage() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-semibold text-foreground">料號申請</h1>
-              {(collaborationStatus !== "remote" || !isBomRealtimeConnected) && <span className={cn("inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-black", collaborationStatusMeta.badgeClassName)}>
+              {(collaborationStatus !== "remote" || !isBomRealtimeConnected) && <span className={cn("material-mobile-sync-badge inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-black", collaborationStatusMeta.badgeClassName)}>
                 <span className={cn("h-1.5 w-1.5 rounded-full", collaborationStatusMeta.dotClassName)} />
-                {collaborationStatusMeta.label}
+                <span className="material-mobile-sync-label">{collaborationStatusMeta.label}</span>
               </span>}
             </div>
+          </div>
+          <div className="material-mobile-bom-control">
+            <MaterialMobileBomPicker groups={bomSeriesGroups} value={activeBomId} onValueChange={switchActiveBom} historicalVersion={isHistoricalVersion && activeVersionInfo ? { name: activeSeriesName, version: activeVersionInfo.version } : undefined}>
+              <span className="flex min-w-0 items-center gap-2">
+                <Layers3 aria-hidden="true" className="material-mobile-bom-icon h-4 w-4 shrink-0 text-primary" />
+                <span className="material-mobile-bom-label" aria-hidden="true">BOM</span>
+                {activeWorkspaceProjectLabel && <span className="material-mobile-bom-project truncate">{activeWorkspaceProjectLabel} /</span>}
+                <span className="min-w-0 truncate" title={activeSeriesName}>{activeSeriesName}{isHistoricalVersion && activeVersionInfo ? ` · ${activeVersionInfo.version.displayNumber}（歷史）` : ""}</span>
+              </span>
+              <span className="material-mobile-bom-count">{seriesList.length} BOM</span>
+            </MaterialMobileBomPicker>
           </div>
           <div className="material-mobile-title-actions flex shrink-0 items-center gap-1.5">
             <Button
@@ -6022,7 +6033,7 @@ export function MaterialRequestPage() {
               <Plus className="h-4 w-4" />新增
             </Button>
             <Drawer open={mobileToolsOpen} onOpenChange={setMobileToolsOpen} shouldScaleBackground={false}>
-              <DrawerTrigger asChild><Button type="button" variant="outline" className="h-11 gap-1.5 rounded-lg px-3" aria-label="排序與工具"><MoreHorizontal className="h-4 w-4" />工具</Button></DrawerTrigger>
+              <DrawerTrigger asChild><Button type="button" variant="outline" className="material-mobile-tools-trigger h-11 gap-1.5 rounded-lg px-3" aria-label="排序與工具"><MoreHorizontal className="h-4 w-4" />工具</Button></DrawerTrigger>
               <DrawerContent data-testid="material-mobile-tools" className="material-mobile-tools-sheet" onCloseAutoFocus={event => { if (bomManagerOpen || circuitChangesOpen || pendingDialogOpen || exportDialogOpen || nonPvlDialogOpen || pageTrackerDialogOpen || rlcPriorityOpen || guideOpen || tableSettingsOpen) event.preventDefault(); }}>
                 <DrawerHeader className="material-mobile-tools-heading">
                   <div><DrawerTitle>排序與工具</DrawerTitle><DrawerDescription>{activeSeriesName}</DrawerDescription></div>
@@ -6061,16 +6072,6 @@ export function MaterialRequestPage() {
                 </div>
               </DrawerContent>
             </Drawer>
-          </div>
-          <div className="material-mobile-bom-control">
-            <MaterialMobileBomPicker groups={bomSeriesGroups} value={activeBomId} onValueChange={switchActiveBom} historicalVersion={isHistoricalVersion && activeVersionInfo ? { name: activeSeriesName, version: activeVersionInfo.version } : undefined}>
-              <span className="flex min-w-0 items-center gap-2">
-                <Layers3 aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />
-                {activeWorkspaceProjectLabel && <span className="material-mobile-bom-project truncate">{activeWorkspaceProjectLabel} /</span>}
-                <span className="min-w-0 truncate" title={activeSeriesName}>{activeSeriesName}{isHistoricalVersion && activeVersionInfo ? ` · ${activeVersionInfo.version.displayNumber}（歷史）` : ""}</span>
-              </span>
-              <span className="material-mobile-bom-count">{seriesList.length} BOM</span>
-            </MaterialMobileBomPicker>
           </div>
         </div>
 

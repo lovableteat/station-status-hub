@@ -64,6 +64,10 @@ async function run(browser, width) {
     assert.ok(result.layout.contextStyle.border !== '0px' && result.layout.contextStyle.background !== 'rgba(0, 0, 0, 0)');
     for (const row of result.layout.rows) assert.deepEqual(row.status,result.layout.rows[0].status,'status columns must stay aligned');
     const controls=result.layout.controls;
+    const bomControl = controls.find(control => control.name === '切換 BOM');
+    const addControl = controls.find(control => control.name === '新增料號');
+    assert.ok(Math.abs(bomControl.y - addControl.y) <= 1, 'BOM switcher and Add share the top row');
+    assert.ok(bomControl.x + bomControl.w <= addControl.x + .5, 'BOM switcher sits immediately left of Add');
     for(let i=0;i<controls.length;i++)for(let j=i+1;j<controls.length;j++)assert.ok(
       controls[i].x+controls[i].w<=controls[j].x+.5 || controls[j].x+controls[j].w<=controls[i].x+.5 ||
       controls[i].y+controls[i].h<=controls[j].y+.5 || controls[j].y+controls[j].h<=controls[i].y+.5,'controls overlap');
