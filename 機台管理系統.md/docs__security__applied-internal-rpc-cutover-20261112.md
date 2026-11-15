@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/security/applied-internal-rpc-cutover-20261112.md`；程式參考基準：`2c5dd8829effc42acd60f64089701abb57e481c2`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/security/applied-internal-rpc-cutover-20261112.md`；程式參考基準：`d2e6655650253851ac249848c0b634ac1256ab83`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Applied internal RPC and daily-stats baseline
 
@@ -19,7 +19,7 @@ Only unauthenticated OPTIONS was live-smoke-tested (200 `ok`). No production GET
 
 ## Exact migration-history synchronization
 
-The repository file [20261112001122_restrict_internal_stats_cleanup_execution.sql](https://github.com/lovableteat/station-status-hub/blob/2c5dd8829effc42acd60f64089701abb57e481c2/supabase/migrations/20261112001122_restrict_internal_stats_cleanup_execution.sql) was copied from the existing server `supabase_migrations.schema_migrations` record, not reconstructed or given a new timestamp. Its single statement matches the retained cutover evidence byte-for-byte:
+The repository file [20261112001122_restrict_internal_stats_cleanup_execution.sql](https://github.com/lovableteat/station-status-hub/blob/d2e6655650253851ac249848c0b634ac1256ab83/supabase/migrations/20261112001122_restrict_internal_stats_cleanup_execution.sql) was copied from the existing server `supabase_migrations.schema_migrations` record, not reconstructed or given a new timestamp. Its single statement matches the retained cutover evidence byte-for-byte:
 
 - Version: `20261112001122`
 - Name: `restrict_internal_stats_cleanup_execution`
