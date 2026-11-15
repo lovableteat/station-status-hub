@@ -51,5 +51,8 @@ test('a model already bound to a part (view only) shows no up-axis choice', asyn
 
 test('while saving, the choice cannot be changed', async () => {
   const view = await open({ asset: asset('y'), busy: true, onConfirm() {}, suggestedUpAxis: 'z', onUpAxisChange() {} });
-  try { assert.ok(view.buttons().every(button => button.props.disabled === true)); } finally { await view.close(); }
+  try {
+    assert.equal(view.buttons().length, 3, 'the choice is there');
+    assert.ok(view.buttons().every(button => button.props.disabled === true));
+  } finally { await view.close(); }
 });

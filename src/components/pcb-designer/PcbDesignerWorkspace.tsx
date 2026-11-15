@@ -30,7 +30,7 @@ import {
 import { parseProjectJson } from "./core/validation.ts";
 import { importStepModel } from "../data-center/stepImport.ts";
 import type { ImportedStepModel, ModelUpAxis } from "../data-center/dataCenterTypes.ts";
-import { inferPcbStepUpAxis, orientImportedStepModel } from "./core/stepOrientation.ts";
+import { inferPcbStepUpAxis, orientImportedStepModel, pickPcbStepUpAxisForBox } from "./core/stepOrientation.ts";
 import {
   PCB_MODEL_FILE_ACCEPT,
   MAX_PCB_MODEL_FILE_BYTES,
@@ -469,7 +469,10 @@ export function PcbDesignerWorkspace({
       throw new Error("請先選取可編輯的元件。");
     }
     const parsed = await importStepModel(file);
-    const asset = toPcbModelAsset(orientImportedStepModel(parsed, inferPcbStepUpAxis(parsed.bounds)));
+    // Binding fits the model into this part's current size, so use the up axis that stretches it least.
+    const boundPart = workspace.activeProject.components.find((component) => component.instanceId === componentId);
+    const upAxis = boundPart ? pickPcbStepUpAxisForBox(parsed.bounds, boundPart) : inferPcbStepUpAxis(parsed.bounds);
+    const asset = toPcbModelAsset(orientImportedStepModel(parsed, upAxis));
     await modelAssetStoreRef.current.put(asset);
     if (remoteClient?.saveModelAsset && !(await remoteClient.saveModelAsset(asset))) {
       await modelAssetStoreRef.current.delete(asset.metadata.id);

@@ -41,6 +41,36 @@ export function getPcbStepDimensions(bounds: ImportedStepBounds, upAxis: ModelUp
   return { widthMm: roundMm(span("x")), depthMm: roundMm(span("y")), heightMm: roundMm(span("z")) };
 }
 
+/**
+ * For a STEP bound to a part that already has a size. That path fits the model into the part's 長×寬×高, so
+ * the axis that stretches it least wins; the old thinnest-side choice is one of the candidates, so binding
+ * never gets more distorted than before. Near-ties go to the file-based suggestion.
+ */
+export function pickPcbStepUpAxisForBox(
+  bounds: ImportedStepBounds,
+  box: { width: number; height: number; maxHeight: number },
+): ModelUpAxis {
+  const suggested = inferPcbStepUpAxis(bounds);
+  const sizes = [box.width, box.height, box.maxHeight];
+  if (!sizes.every((size) => Number.isFinite(size) && size > 0)) return suggested;
+  const span = (axis: ModelUpAxis) => Math.max(bounds.max[AXIS_INDEX[axis]] - bounds.min[AXIS_INDEX[axis]], 0.001);
+  const stretch = (upAxis: ModelUpAxis) => {
+    const [across, frontToBack] = upAxis === "x" ? ["y", "z"] as const : upAxis === "y" ? ["x", "z"] as const : ["x", "y"] as const;
+    return Math.abs(Math.log(span(across) / box.width)) + Math.abs(Math.log(span(frontToBack) / box.height))
+      + Math.abs(Math.log(span(upAxis) / box.maxHeight));
+  };
+  let best = suggested;
+  let bestStretch = stretch(suggested);
+  for (const axis of PCB_STEP_UP_AXES) {
+    const candidate = stretch(axis);
+    if (candidate < bestStretch - 0.05) {
+      best = axis;
+      bestStretch = candidate;
+    }
+  }
+  return best;
+}
+
 /** The same imported model with another up axis; geometry is untouched, only the axis and the derived size change. */
 export function orientImportedStepModel<T extends ImportedStepModel>(model: T, upAxis: ModelUpAxis): T {
   const dimensions = getPcbStepDimensions(model.bounds, upAxis);

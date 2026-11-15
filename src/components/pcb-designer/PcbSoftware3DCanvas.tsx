@@ -1,4 +1,4 @@
-import { getBoardPolygon, getBoardHoles, pointInBoardPolygon } from "./core/boardOutline.ts";
+import { getBoardPolygon, getBoardHoles } from "./core/boardOutline.ts";
 import { getPcbModelRenderIndices } from "./core/modelProjection.ts";
 import { getRenderedKeepouts } from "./core/componentKeepout.ts";
 import {
@@ -26,7 +26,6 @@ import {
   DEFAULT_SOFTWARE_VIEW,
 
   SOFTWARE_RENDER_ORDER,
-  clipSoftwarePolygonToBoardSide,
   compareSoftwareRenderDepth,
   createSoftwareBoxVertices,
   createSoftwareCamera,
@@ -36,6 +35,7 @@ import {
   getSoftwareLayerRenderOrder,
   getSoftwareLightLevel,
   projectSoftwarePoint,
+  splitSoftwarePolygonAtBoardSurface,
 
   transformPcbComponentPoint,
   type SoftwarePoint3,
@@ -431,22 +431,24 @@ export function PcbSoftware3DCanvas({
       }))
       .filter(({ viewState }) => viewState.visible);
 
-    // Component faces go through the board-side clip: the board hides what is inside or behind it.
-    const isOverBoard = (x: number, z: number) => {
-      const point = { x: x + project.board.width / 2, y: z + project.board.height / 2 };
-      return pointInBoardPolygon(point, boardPolygon) && !holes.some((ring) => pointInBoardPolygon(point, ring));
-    };
+    // Component faces are split at the board surface facing the camera: the near piece is drawn after the
+    // board, the far piece before it, so the opaque board hides what it covers on screen and nothing else.
+    // Near pieces of a part on the other side (leads poking through) also become its click area.
+    let nearPiecePoints: SoftwareProjectedPoint[] = [];
     const addComponentPolygon = (
       worldPoints: SoftwarePoint3[],
       fill: string,
       stroke: string,
-      renderOrder: number,
+      _renderOrder: number,
       alpha = 1,
       lineWidth = 0.7,
     ) => {
-      const visible = clipSoftwarePolygonToBoardSide(worldPoints, camera.eye.y, BOARD_THICKNESS, isOverBoard);
-      if (!visible.points.length) return;
-      addPolygon(visible.points, fill, stroke, visible.nearSide ? SOFTWARE_RENDER_ORDER.nearObject : renderOrder, alpha, lineWidth);
+      const { near, far } = splitSoftwarePolygonAtBoardSurface(worldPoints, camera.eye.y, BOARD_THICKNESS);
+      if (far.length) addPolygon(far, fill, stroke, SOFTWARE_RENDER_ORDER.farObject, alpha, lineWidth);
+      if (near.length) {
+        addPolygon(near, fill, stroke, SOFTWARE_RENDER_ORDER.nearObject, alpha, lineWidth);
+        near.forEach((point) => nearPiecePoints.push(projectSoftwarePoint(point, camera)));
+      }
     };
     const addComponentBox = (worldVertices: SoftwarePoint3[], color: string, stroke: string, renderOrder: number, alpha = 1, lineWidth = 0.7) => {
       BOX_FACES.forEach((face) => {
@@ -463,6 +465,7 @@ export function PcbSoftware3DCanvas({
       const localBounds = createSoftwareBoxVertices(component.width, component.maxHeight, component.height);
       const worldBounds = localBounds.map((point) => transformPcbComponentPoint(point, component, project.board, BOARD_THICKNESS));
       const projectedBounds = getProjectedBounds(worldBounds.map((point) => projectSoftwarePoint(point, camera)));
+      nearPiecePoints = [];
       if (projectedBounds && isNearSide) {
         hits.push({
           kind: "component",
@@ -542,10 +545,14 @@ export function PcbSoftware3DCanvas({
         });
       }
 
-      if (selected && projectedBounds && isNearSide) {
+      // A part on the other side is clickable where its pieces poke through to the camera's side.
+      const pokingBounds = isNearSide ? null : getProjectedBounds(nearPiecePoints);
+      if (pokingBounds) hits.push({ kind: "component", id: component.instanceId, ...pokingBounds, selected, label: component.reference });
+      const labelBounds = isNearSide ? projectedBounds : pokingBounds;
+      if (selected && labelBounds) {
         labels.push({
-          x: (projectedBounds.left + projectedBounds.right) / 2,
-          y: projectedBounds.top - 10,
+          x: (labelBounds.left + labelBounds.right) / 2,
+          y: labelBounds.top - 10,
           text: component.reference,
         });
       }

@@ -105,42 +105,43 @@ export function getSoftwareLayerRenderOrder(
 }
 
 /**
- * The compat 3D paints faces in order and has no depth buffer, so the board cannot hide what is inside it.
- * Seen from above, the part of a face below the top surface and over the board (leads in the board, a
- * Bottom part) is hidden; seen from below, the part above the bottom surface is. Returns the visible piece
- * (empty when all of it is hidden) and nearSide = true when that piece is on the camera's side of the board,
- * so it is drawn after the board (leads through the board then show from the other side). Edge-on views and
- * faces outside the outline or over a cut-out are left as they are.
+ * The compat 3D paints faces in order and has no depth buffer. Each component face is split at the board
+ * surface that faces the camera: the piece on the camera's side is drawn after the board, the rest before
+ * it. The board is one opaque shape with its cut-outs, so on screen it hides exactly what it covers (leads
+ * inside the board, a part on the other side) and nothing else: board edges, low views and cut-outs stay
+ * right, and no geometry is removed.
  */
-export function clipSoftwarePolygonToBoardSide(
+export function splitSoftwarePolygonAtBoardSurface(
   points: readonly SoftwarePoint3[],
   eyeY: number,
   boardThickness: number,
-  isOverBoard: (x: number, z: number) => boolean,
-): { points: SoftwarePoint3[]; nearSide: boolean } {
-  const surface = boardThickness / 2;
-  const side = eyeY > surface ? 1 : eyeY < -surface ? -1 : 0;
-  if (!side || points.length < 3) return { points: [...points], nearSide: false };
-  const centroidX = points.reduce((sum, point) => sum + point.x, 0) / points.length;
-  const centroidZ = points.reduce((sum, point) => sum + point.z, 0) / points.length;
-  if (!isOverBoard(centroidX, centroidZ)) return { points: [...points], nearSide: false };
-  const distance = (point: SoftwarePoint3) => side * (point.y - side * surface);
-  const kept: SoftwarePoint3[] = [];
+): { near: SoftwarePoint3[]; far: SoftwarePoint3[] } {
+  const side = eyeY >= 0 ? 1 : -1;
+  const plane = side * boardThickness / 2;
+  const distances = points.map((point) => side * (point.y - plane));
+  if (distances.every((distance) => distance >= 0)) return { near: [...points], far: [] };
+  if (distances.every((distance) => distance <= 0)) return { near: [], far: [...points] };
+  const near: SoftwarePoint3[] = [];
+  const far: SoftwarePoint3[] = [];
   points.forEach((current, index) => {
-    const next = points[(index + 1) % points.length];
-    const currentDistance = distance(current);
-    const nextDistance = distance(next);
-    if (currentDistance >= 0) kept.push(current);
-    if ((currentDistance >= 0) !== (nextDistance >= 0)) {
+    const nextIndex = (index + 1) % points.length;
+    const next = points[nextIndex];
+    const currentDistance = distances[index];
+    const nextDistance = distances[nextIndex];
+    if (currentDistance >= 0) near.push(current);
+    if (currentDistance <= 0) far.push(current);
+    if ((currentDistance > 0 && nextDistance < 0) || (currentDistance < 0 && nextDistance > 0)) {
       const t = currentDistance / (currentDistance - nextDistance);
-      kept.push({
+      const crossing = {
         x: current.x + (next.x - current.x) * t,
         y: current.y + (next.y - current.y) * t,
         z: current.z + (next.z - current.z) * t,
-      });
+      };
+      near.push(crossing);
+      far.push({ ...crossing });
     }
   });
-  return { points: kept.length >= 3 ? kept : [], nearSide: true };
+  return { near: near.length >= 3 ? near : [], far: far.length >= 3 ? far : [] };
 }
 
 export function compareSoftwareRenderDepth(

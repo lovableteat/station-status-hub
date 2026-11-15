@@ -2,14 +2,14 @@
 // (TO-220-3_Vertical, CP_Radial_D10.0mm_P5.00mm, PinHeader_1x05_P2.54mm_Vertical, SOIC-8): Z-up, seating plane at Z = 0.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getPcbStepDimensions, inferPcbStepUpAxis, orientImportedStepModel } from "../../src/components/pcb-designer/core/stepOrientation.ts";
+import { getPcbStepDimensions, inferPcbStepUpAxis, orientImportedStepModel, pickPcbStepUpAxisForBox } from "../../src/components/pcb-designer/core/stepOrientation.ts";
 import { getPcbModelLocalYRange, mapPcbModelPartToComponentSpace, toPcbModelAsset } from "../../src/components/pcb-designer/core/modelAssets.ts";
 import {
   SOFTWARE_RENDER_ORDER,
-  clipSoftwarePolygonToBoardSide,
   getPcb3DFloorY,
   getPcbComponentWorldYRange,
   getPcbMountY,
+  splitSoftwarePolygonAtBoardSurface,
   transformPcbComponentPoint,
 } from "../../src/components/pcb-designer/core/software3d.ts";
 import type { ImportedStepBounds, ImportedStepModel } from "../../src/components/data-center/dataCenterTypes.ts";
@@ -118,34 +118,45 @@ test("the 3D floor goes under the lowest mounted point, so a Bottom part or a le
   assert.ok(Math.abs(getPcb3DFloorY([[-8.95, 19.55]], 1.6) - -9.55) < 1e-9, "TO-220 leads through the board");
 });
 
+test("binding a STEP to a part with a size picks the axis that stretches it least, never worse than before", () => {
+  // Codex's case: a flat Y-up model (its Z range starts at 0) bound to a part that was sized for it lying flat.
+  const flatYUp = bounds([0, 0, 0], [10, 2, 8]);
+  assert.equal(inferPcbStepUpAxis(flatYUp), "z", "the file rule alone would pick Z");
+  assert.equal(pickPcbStepUpAxisForBox(flatYUp, { width: 10, height: 8, maxHeight: 2 }), "y", "but the part's size says Y");
+  const to220 = REAL["TO-220 vertical"].bounds;
+  assert.equal(pickPcbStepUpAxisForBox(to220, { width: 10.3, height: 4.5, maxHeight: 28.5 }), "z", "a part sized standing up");
+  assert.equal(pickPcbStepUpAxisForBox(to220, { width: 10.3, height: 28.5, maxHeight: 4.5 }), "y", "a part sized lying down keeps fitting");
+  assert.equal(pickPcbStepUpAxisForBox(to220, { width: 10, height: 10, maxHeight: 10 }), "z", "no clear fit: the file-based suggestion");
+  assert.equal(pickPcbStepUpAxisForBox(to220, { width: Number.NaN, height: 4.5, maxHeight: 28.5 }), "z", "an invalid size falls back to the suggestion");
+});
+
 const square = (x0: number, x1: number, y0: number, y1: number) => [
   { x: x0, y: y0, z: 0 }, { x: x1, y: y0, z: 0 }, { x: x1, y: y1, z: 0 }, { x: x0, y: y1, z: 0 },
 ];
-const overBoard = (x: number, z: number) => Math.abs(x) <= 50 && Math.abs(z) <= 40;
 
-test("compat 3D: seen from above, a lead inside the board is cut at the top surface and drawn after the board", () => {
-  const lead = square(0, 0.6, -8.95, 3);
-  const visible = clipSoftwarePolygonToBoardSide(lead, 60, 1.6, overBoard);
-  assert.equal(visible.nearSide, true);
-  assert.ok(visible.points.length >= 3);
-  assert.ok(visible.points.every((point) => point.y >= 0.8 - 1e-9), "nothing below the top surface");
-  assert.ok(Math.abs(Math.min(...visible.points.map((point) => point.y)) - 0.8) < 1e-9, "cut exactly at the surface");
-  assert.equal(SOFTWARE_RENDER_ORDER.nearObject > SOFTWARE_RENDER_ORDER.board, true);
+test("compat 3D: seen from above, a lead through the board is split at the top surface; nothing is thrown away", () => {
+  const { near, far } = splitSoftwarePolygonAtBoardSurface(square(0, 0.6, -8.95, 3), 60, 1.6);
+  assert.ok(near.length >= 3 && far.length >= 3);
+  assert.ok(near.every((point) => point.y >= 0.8 - 1e-9), "drawn after the board: only above the top surface");
+  assert.ok(far.every((point) => point.y <= 0.8 + 1e-9), "drawn before the board, which hides it where it covers it");
+  const yMax = (points: Array<{ y: number }>) => Math.max(...points.map((point) => point.y));
+  const yMin = (points: Array<{ y: number }>) => Math.min(...points.map((point) => point.y));
+  assert.equal(yMin(far), -8.95);
+  assert.equal(yMax(near), 3);
+  assert.ok(Math.abs(yMin(near) - 0.8) < 1e-9 && Math.abs(yMax(far) - 0.8) < 1e-9, "both pieces meet at the surface");
+  assert.equal(SOFTWARE_RENDER_ORDER.farObject < SOFTWARE_RENDER_ORDER.board && SOFTWARE_RENDER_ORDER.board < SOFTWARE_RENDER_ORDER.nearObject, true);
 });
 
-test("compat 3D: from above a Bottom part is hidden; from below its body shows and a Top lead pokes through", () => {
-  const bottomBody = square(10, 20, -10.8, -0.8);
-  assert.deepEqual(clipSoftwarePolygonToBoardSide(bottomBody, 60, 1.6, overBoard).points, [], "hidden by the board from above");
-  const fromBelow = clipSoftwarePolygonToBoardSide(bottomBody, -60, 1.6, overBoard);
-  assert.equal(fromBelow.points.length, 4);
-  const topLead = clipSoftwarePolygonToBoardSide(square(0, 0.6, -8.95, 3), -60, 1.6, overBoard);
-  assert.equal(topLead.nearSide, true, "drawn after the board when seen from below");
-  assert.ok(topLead.points.every((point) => point.y <= -0.8 + 1e-9), "only the part under the board");
+test("compat 3D: a Bottom part is drawn before the board from above (so it shows past the board edge) and after it from below", () => {
+  const bottomBody = square(46, 48, -10, -8);
+  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(bottomBody, 60, 1.6), { near: [], far: bottomBody }, "kept, behind the board");
+  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(bottomBody, 0.3, 1.6), { near: [], far: bottomBody }, "low views keep it too: no jump");
+  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(bottomBody, -60, 1.6), { near: bottomBody, far: [] });
+  const topLead = splitSoftwarePolygonAtBoardSurface(square(0, 0.6, -8.95, 3), -60, 1.6);
+  assert.ok(topLead.near.every((point) => point.y <= -0.8 + 1e-9), "from below only the part under the board is in front");
 });
 
-test("compat 3D: faces outside the board outline and edge-on views are left alone", () => {
-  const overhang = square(55, 60, -3, 3);
-  assert.deepEqual(clipSoftwarePolygonToBoardSide(overhang, 60, 1.6, overBoard), { points: overhang, nearSide: false });
-  const lead = square(0, 0.6, -8.95, 3);
-  assert.deepEqual(clipSoftwarePolygonToBoardSide(lead, 0.2, 1.6, overBoard), { points: lead, nearSide: false });
+test("compat 3D: a face lying on the surface stays in front of the board", () => {
+  const onSurface = square(0, 6, 0.8, 0.8);
+  assert.deepEqual(splitSoftwarePolygonAtBoardSurface(onSurface, 60, 1.6), { near: onSurface, far: [] });
 });

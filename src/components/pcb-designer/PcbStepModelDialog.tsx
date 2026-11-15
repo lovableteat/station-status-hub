@@ -109,7 +109,7 @@ export function PcbStepModelDialog({
                       </button>
                     ))}
                   </div>
-                  <small>高元件（TO-220、電解電容、排針）若顯示成躺平，改選另一軸再加入。</small>
+                  <small>高元件（TO-220、電解電容、排針）若顯示成躺平，改選另一軸再加入；上下顛倒時，放上板後在「模型朝向」轉 180°。</small>
                 </div>
               )}
               <div className="pcb-step-axis-note">
