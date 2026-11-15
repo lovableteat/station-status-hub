@@ -19,6 +19,15 @@ function fixture() {
 }
 const isRounded = (value: number) => assert.equal(value, Math.round(value * 10000) / 10000);
 
+test("moving rejects non-finite coordinates including overflow after rounding", () => {
+  const project = fixture();
+  for (const value of [NaN, Infinity, -Infinity, 1e308]) {
+    assert.equal(moveComponent(project, "U1", { x: value, y: 20 }, true).ok, false);
+    assert.equal(moveComponent(project, "U1", { x: 30, y: value }, true).ok, false);
+  }
+  assert.deepEqual([project.components[0].x, project.components[0].y], [30, 20]);
+});
+
 test("ten 0.1 mm nudges end at an exact millimetre for components, keepouts and measurements", () => {
   let project = fixture();
   for (let index = 0; index < 10; index++) {

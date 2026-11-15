@@ -30,11 +30,11 @@ export function runDrc(project: PcbProject): PcbDrcIssue[] {
 
   for (const component of components) {
     if (!isWithinBoard(component, project.board)) {
-      issues.push(issue("OUT_OF_BOUNDS", [component.instanceId], `${component.reference} extends beyond the board boundary.`));
+      issues.push(issue("OUT_OF_BOUNDS", [component.instanceId], `${component.reference} 超出板框`));
     }
     const keepout = getComponentKeepout(component);
     if (keepout && !isWithinBoard({ ...keepout, x: keepout.x + keepout.width / 2, y: keepout.y + keepout.height / 2, rotation: keepout.rotation ?? 0 }, project.board)) {
-      issues.push(issue("OUT_OF_BOUNDS", [component.instanceId], `${component.reference} 的禁制區超出板框。`, "-keepout"));
+      issues.push(issue("OUT_OF_BOUNDS", [component.instanceId], `${component.reference} 的禁制區超出板框`, "-keepout"));
     }
   }
 
@@ -43,7 +43,7 @@ export function runDrc(project: PcbProject): PcbDrcIssue[] {
       const first = components[firstIndex];
       const second = components[secondIndex];
       if (first.layer === second.layer && rectanglesOverlap(first, second)) {
-        issues.push(issue("COMPONENT_COLLISION", [first.instanceId, second.instanceId], `${first.reference} collides with ${second.reference}.`));
+        issues.push(issue("COMPONENT_COLLISION", [first.instanceId, second.instanceId], `${first.reference} 與 ${second.reference} 重疊（${first.layer === "top" ? "Top" : "Bottom"}）`));
       }
     }
   }
@@ -53,13 +53,13 @@ export function runDrc(project: PcbProject): PcbDrcIssue[] {
     if (attachedKeepout) {
       for (const other of components) {
         if (other.instanceId !== component.instanceId && other.layer === component.layer && overlapsKeepout(other, attachedKeepout)) {
-          issues.push(issue("KEEPOUT_COLLISION", [other.instanceId, component.instanceId], `${other.reference} 進入 ${component.reference} 的禁制區。`, `-owner-${component.instanceId}`));
+          issues.push(issue("KEEPOUT_COLLISION", [other.instanceId, component.instanceId], `${other.reference} 進入 ${component.reference} 的禁制區`, `-owner-${component.instanceId}`));
         }
       }
     }
     for (const keepout of [...project.keepouts].sort((first, second) => first.id.localeCompare(second.id))) {
       if (overlapsKeepout(component, keepout)) {
-        issues.push(issue("KEEPOUT_COLLISION", [component.instanceId, keepout.id], `${component.reference} intersects keepout ${keepout.name}.`));
+        issues.push(issue("KEEPOUT_COLLISION", [component.instanceId, keepout.id], `${component.reference} 進入禁制區『${keepout.name}』`));
       }
     }
   }

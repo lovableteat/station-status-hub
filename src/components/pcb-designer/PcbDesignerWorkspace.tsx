@@ -890,6 +890,10 @@ export function PcbDesignerWorkspace({
         <span>放置層 {workspace.activeLayer === "top" ? "Top" : "Bottom"}</span>
         {viewMode === "2d" && <span className="font-mono">{workspace.zoom}%</span>}
         <span>網格 {workspace.activeProject.board.gridSize} mm</span>
+        <button type="button" className="pcb-check-status" title="開啟配置檢查，查看並定位板上的問題"
+          onClick={() => { workspace.setRightTab("checks"); setOpenDrawer("right"); }}>
+          {workspace.drcIssues.length ? `檢查：${workspace.drcIssues.length} 個問題` : "檢查：沒有問題"}
+        </button>
         <span className="ml-auto">
           {persistenceLabel(workspace.persistenceStatus)} · 手動儲存模式（Ctrl+S）
         </span>

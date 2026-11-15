@@ -211,6 +211,9 @@ export function moveComponent(
       ? snapValue(point.y, project.board.gridSize)
       : point.y),
   };
+  if (![candidate.x, candidate.y].every(Number.isFinite)) {
+    return { ok: false, reason: "座標必須是可表示的有效數值。" };
+  }
   if (candidate.x === source.x && candidate.y === source.y) {
     return { ok: true, project, component: source, changed: false };
   }

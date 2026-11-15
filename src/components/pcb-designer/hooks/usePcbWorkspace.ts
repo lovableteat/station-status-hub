@@ -558,7 +558,7 @@ export function usePcbWorkspace({
     [],
   );
   const setRightTab = useCallback(
-    (tab: "board" | "selection" | "drc") =>
+    (tab: "board" | "objects" | "checks") =>
       dispatch({ type: "panel/right", tab }),
     [],
   );

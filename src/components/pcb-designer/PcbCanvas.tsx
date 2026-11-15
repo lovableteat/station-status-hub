@@ -33,7 +33,9 @@ import {
 import {
   getPcbComponentViewState,
   getPcbSelectionIds,
+  isPcbLayerVisible,
 } from "./core/viewSync.ts";
+import { getKeepoutCorners, keepoutResizeAnchor, resizeKeepout, type KeepoutResizeHandle } from "./core/keepoutGeometry.ts";
 import { getMarqueeSelectionIds } from "./core/selection.ts";
 import { getComponentKeepoutBounds, KEEPOUT_SIDES, KEEPOUT_SIDE_LABELS, resizeComponentKeepoutSide } from "./core/componentKeepout.ts";
 import { PcbComponentKeepoutDialog } from "./PcbComponentKeepoutDialog";
@@ -68,7 +70,6 @@ interface PcbRect extends PcbPoint {
   height: number;
 }
 
-type KeepoutResizeHandle = "nw" | "ne" | "sw" | "se";
 type MeasurementEndpoint = "start" | "end";
 
 interface PcbCanvasProps {
@@ -112,6 +113,7 @@ type PointerInteraction =
     pointerId: number;
     id: string;
     handle: KeepoutResizeHandle;
+    rotation: number;
     anchor: PcbPoint;
     preview: PcbRect;
     bypassSnap: boolean;
@@ -154,38 +156,6 @@ function samePoint(left: PcbPoint | null, right: PcbPoint | null): boolean {
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
-}
-
-function keepoutResizeAnchor(bounds: PcbRect, handle: KeepoutResizeHandle): PcbPoint {
-  return {
-    x: handle.endsWith("w") ? bounds.x + bounds.width : bounds.x,
-    y: handle.startsWith("n") ? bounds.y + bounds.height : bounds.y,
-  };
-}
-
-function resizeKeepout(
-  anchor: PcbPoint,
-  handle: KeepoutResizeHandle,
-  target: PcbPoint,
-  minimumSize: number,
-  board: { width: number; height: number },
-): PcbRect {
-  const boundedTarget = {
-    x: clamp(target.x, 0, board.width),
-    y: clamp(target.y, 0, board.height),
-  };
-  const edgeX = handle.endsWith("w")
-    ? Math.min(anchor.x - minimumSize, boundedTarget.x)
-    : Math.max(anchor.x + minimumSize, boundedTarget.x);
-  const edgeY = handle.startsWith("n")
-    ? Math.min(anchor.y - minimumSize, boundedTarget.y)
-    : Math.max(anchor.y + minimumSize, boundedTarget.y);
-  return {
-    x: Math.min(anchor.x, edgeX),
-    y: Math.min(anchor.y, edgeY),
-    width: Math.abs(edgeX - anchor.x),
-    height: Math.abs(edgeY - anchor.y),
-  };
 }
 
 function selectionBounds(workspace: PcbWorkspaceApi, preview?: PcbPoint) {
@@ -274,6 +244,10 @@ export function PcbCanvas({
     () => componentViewStates.filter(({ viewState }) => viewState.visible),
     [componentViewStates],
   );
+  const visibleDrcIssues = useMemo(() => {
+    const visibleIds = new Set(visibleComponents.map(({ component }) => component.instanceId));
+    return workspace.drcIssues.filter((issue) => issue.objectIds.some((id) => visibleIds.has(id)));
+  }, [visibleComponents, workspace.drcIssues]);
   const loadModelAsset = workspace.loadModelAsset;
   const modelAssetIds = useMemo(
     () => [...new Set(project.components.map((component) => component.modelAssetId).filter(Boolean))] as string[],
@@ -549,6 +523,9 @@ export function PcbCanvas({
   const selectedKeepout = workspace.selection?.kind === "keepout"
     ? workspace.selectedObject as PcbKeepout
     : null;
+  const selectedKeepoutCorners = selectedBounds && selectedKeepout
+    ? getKeepoutCorners({ ...selectedBounds, rotation: selectedKeepout.rotation })
+    : null;
   const selectedMeasurement = workspace.selection?.kind === "measurement"
     ? workspace.selectedObject as PcbMeasurement
     : null;
@@ -791,7 +768,8 @@ export function PcbCanvas({
       pointerId: event.pointerId,
       id: selectedKeepout.id,
       handle,
-      anchor: keepoutResizeAnchor(selectedBounds, handle),
+      rotation: selectedKeepout.rotation ?? 0,
+      anchor: keepoutResizeAnchor({ ...selectedBounds, rotation: selectedKeepout.rotation }, handle),
       preview: selectedBounds,
       bypassSnap: event.altKey,
     });
@@ -915,6 +893,7 @@ export function PcbCanvas({
           snappedPoint,
           project.board.snapToGrid && !bypassSnap ? gridSize : 0.1,
           project.board,
+          interaction.rotation,
         ),
       });
     } else if (interaction.kind === "measurement-resize") {
@@ -1481,49 +1460,42 @@ export function PcbCanvas({
               ))}
             </g>
           )}
-          {selectedBounds && (
+          {selectedBounds && selectedKeepoutCorners && (
             <>
-              <rect
-                x={selectedBounds.x}
-                y={selectedBounds.y}
-                width={selectedBounds.width}
-                height={selectedBounds.height}
+              <polygon
+                data-keepout-selection-outline={selectedKeepout?.id}
+                points={["nw", "ne", "se", "sw"].map((handle) => {
+                  const point = selectedKeepoutCorners[handle as KeepoutResizeHandle];
+                  return `${point.x},${point.y}`;
+                }).join(" ")}
                 fill="none"
                 stroke="#f8fafc"
                 strokeWidth={strokeWidth}
                 strokeDasharray={`${strokeWidth * 3} ${strokeWidth * 2}`}
                 pointerEvents="none"
               />
-              {workspace.selection?.kind === "keepout"
-                ? ([
-                  { handle: "nw", x: selectedBounds.x, y: selectedBounds.y, cursor: "nwse-resize" },
-                  { handle: "ne", x: selectedBounds.x + selectedBounds.width, y: selectedBounds.y, cursor: "nesw-resize" },
-                  { handle: "sw", x: selectedBounds.x, y: selectedBounds.y + selectedBounds.height, cursor: "nesw-resize" },
-                  { handle: "se", x: selectedBounds.x + selectedBounds.width, y: selectedBounds.y + selectedBounds.height, cursor: "nwse-resize" },
-                ] as const).map(({ handle, x, y, cursor }) => (
+              {([
+                  { handle: "nw", label: "左上", cursor: "nwse-resize" },
+                  { handle: "ne", label: "右上", cursor: "nesw-resize" },
+                  { handle: "sw", label: "左下", cursor: "nesw-resize" },
+                  { handle: "se", label: "右下", cursor: "nwse-resize" },
+                ] as const).map(({ handle, label, cursor }) => (
                   <circle
                     key={handle}
                     className="pcb-keepout-resize-handle"
                     data-pcb-object-kind="keepout"
                     data-pcb-object-id={workspace.selection?.id}
-                    cx={x}
-                    cy={y}
+                    data-keepout-resize-corner={handle}
+                    cx={selectedKeepoutCorners[handle].x}
+                    cy={selectedKeepoutCorners[handle].y}
                     r={strokeWidth * 3.2}
                     fill="#081827"
                     stroke="#f8fafc"
                     strokeWidth={strokeWidth}
                     style={{ cursor }}
                     onPointerDown={(event) => beginKeepoutResize(event, handle)}
-                    aria-label={`調整禁制區${handle}角`}
-                  />
-                ))
-                : [
-                  [selectedBounds.x, selectedBounds.y],
-                  [selectedBounds.x + selectedBounds.width, selectedBounds.y],
-                  [selectedBounds.x, selectedBounds.y + selectedBounds.height],
-                  [selectedBounds.x + selectedBounds.width, selectedBounds.y + selectedBounds.height],
-                ].map(([x, y]) => (
-                  <circle key={`${x}-${y}`} cx={x} cy={y} r={strokeWidth * 2.1} fill="#f8fafc" pointerEvents="none" />
+                    aria-label={`調整禁制區${label}角`}
+                  ><title>{`拖曳${label}角調整禁制區大小，對角保持固定`}</title></circle>
                 ))}
             </>
           )}
@@ -1667,12 +1639,14 @@ export function PcbCanvas({
         </g>
 
         <g data-layer="drc-overlay" data-export-hidden pointerEvents="none">
-          {workspace.drcIssues.flatMap((issue) => issue.objectIds.map((objectId) => {
+          {visibleDrcIssues.flatMap((issue) => issue.objectIds.map((objectId) => {
             const component = project.components.find((item) => item.instanceId === objectId);
             if (component) {
+              if (!isPcbLayerVisible(visibleLayer, component.layer)) return [];
               return (
                 <g
                   key={`${issue.id}-${objectId}`}
+                  data-drc-object-id={objectId}
                   transform={`translate(${component.x} ${component.y}) rotate(${component.rotation})`}
                 >
                   <rect
@@ -1691,10 +1665,12 @@ export function PcbCanvas({
             return keepout ? (
               <rect
                 key={`${issue.id}-${objectId}`}
+                data-drc-object-id={objectId}
                 x={keepout.x}
                 y={keepout.y}
                 width={keepout.width}
                 height={keepout.height}
+                transform={`rotate(${keepout.rotation ?? 0} ${keepout.x + keepout.width / 2} ${keepout.y + keepout.height / 2})`}
                 fill="none"
                 stroke="#fb7185"
                 strokeWidth={strokeWidth * 1.5}

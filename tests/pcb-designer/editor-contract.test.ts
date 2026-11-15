@@ -141,7 +141,7 @@ test("keeps header action heights consistent while collaboration grows with its 
   );
   assert.match(
     editorCssSource,
-    /\.pcb-inspector-tabs\s*\{[\s\S]{0,100}grid-template-columns:\s*repeat\(2,/,
+    /\.pcb-inspector-tabs\s*\{[\s\S]{0,100}grid-template-columns:\s*repeat\(3,/,
   );
   assert.match(
     editorCssSource,
@@ -583,7 +583,7 @@ test("keeps dense toolbar labels readable and stable across active and disabled 
 
 test("disables inspector mutation controls while a component is locked", () => {
   assert.match(inspectorSource, /const componentDisabled = disabled \|\| component\.locked/);
-  assert.match(inspectorSource, /disabled=\{!workspace\.canMutate \|\| component\.locked\}/);
+  assert.match(inspectorSource, /disabled=\{!workspace\.canMutate \|\| hasLocked\}/);
   assert.match(editorHookSource, /if \(!source \|\| source\.locked\) return false/);
 });
 
@@ -593,12 +593,18 @@ test("shows inspector duplication affordances for grouped selections and keepout
   assert.match(inspectorSource, /pcb-selection-count/);
 });
 
-test("provides complete board, selection, internal DRC, and PNG workflows", () => {
+test("provides board, objects, visible placement checks, and PNG workflows", () => {
   assert.match(inspectorSource, /rotateSelected/);
   assert.match(inspectorSource, /deleteSelected/);
-  assert.doesNotMatch(inspectorSource, /centerDrcIssue|runDrc/);
+  assert.match(inspectorSource, /centerDrcIssue/);
+  assert.match(inspectorSource, /\["board", "objects", "checks"\]/);
+  assert.match(inspectorSource, /pcb-check-count/);
+  assert.match(inspectorSource, /PcbObjectsList/);
+  assert.match(inspectorSource, /全部物件/);
+  assert.doesNotMatch(inspectorSource, /runDrc/);
   assert.match(inspectorSource, /component[\s\S]*keepout[\s\S]*measurement/i);
-  assert.match(editorHookSource, /centerDrcIssue[\s\S]{0,1200}zoom\/set/);
+  assert.match(editorHookSource, /centerDrcIssue/);
+  assert.match(editorHookSource, /zoom\/set/);
   assert.match(workspaceSource, /exportPcbSvgAsPng/);
   assert.match(workspaceSource, /includeGrid/);
   assert.match(toolbarSource, /exportIncludesGrid/);
@@ -618,7 +624,8 @@ test("provides complete board, selection, internal DRC, and PNG workflows", () =
   assert.doesNotMatch(workspaceSource, /pcb-drc-header-action/);
   assert.doesNotMatch(workspaceSource, /執行 DRC/);
   assert.match(workspaceSource, /aria-label="開啟屬性面板"/);
-  assert.doesNotMatch(inspectorSource, /DRC \$\{workspace\.drcIssues\.length\}/);
+  assert.match(workspaceSource, /檢查：沒有問題/);
+  assert.match(workspaceSource, /setRightTab\("checks"\)/);
 });
 
 test("keeps STEP model metadata serializable and assignment scoped to the selected component", () => {

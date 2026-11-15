@@ -120,10 +120,11 @@ test('current static server is GET-only, loopback-tested and has no legacy phase
   assert.equal((await fetch(origin+'assets/ApiManagementPage-x.js')).status,404,'Even a caller-provided map cannot supply the unrelated API route');
  }finally{await new Promise(resolve=>x.server.close(resolve));}
 });
-test('six scenarios cover maintenance clear/success and real keyboard raw PCB values',()=>{
- assert.equal(h.SCENARIOS.length,6);assert.equal(h.LABELS.length,7);
- assert.deepEqual(h.SCENARIOS.filter(x=>x.workspace==='pcb-designer').map(x=>x.rawWidth),['1e','-','12.','19']);
- assert.equal(h.PCB_ERROR,'板框尺寸必須介於 20 到 1000 mm。');
+test('six scenarios cover maintenance clear/success and invalid raw PCB names in the remaining settings fields',()=>{
+ assert.equal(h.SCENARIOS.length,6);assert.equal(h.LABELS.length,5);
+ assert.deepEqual(h.SCENARIOS.filter(x=>x.workspace==='pcb-designer').map(x=>x.rawName),['','   ','　',' ']);
+ assert.equal(h.PCB_ERROR,'名稱為必填欄位。');
+ assert.deepEqual(h.LABELS,['名稱','描述','所屬大專案','版本號','狀態']);
 });
 test('source guard: full current bundle, synthetic config and guard before Chromium',()=>{
  const source=fs.readFileSync(path.join(__dirname,'currentClientDraftRecovery.browser.cjs'),'utf8');
@@ -139,7 +140,8 @@ test('source guard: actual app identity, native File telemetry and exact raw sna
  const source=fs.readFileSync(path.join(__dirname,'currentClientDraftRecovery.browser.cjs'),'utf8');
  assert.equal(source.includes('setDocumentDraftActor'),false,'Never stub the application identity owner');
  assert.match(source,/value instanceof File/);assert.match(source,/new WeakMap/);assert.match(source,/sha256.*Array\.from/s);
- assert.match(source,/pressSequentially\(rawWidth\)/);assert.match(source,/raw-permissions-read.*length,0/);
+ assert.match(source,/pressSequentially\(rawName\)/);assert.match(source,/raw-permissions-read.*length,0/);
+ assert.doesNotMatch(source,/rawWidth|寬度 \(mm\)|高度 \(mm\)/,'Board dimensions are edited only in the board inspector');
  assert.match(source,/beforeUnload\(h\.page\),dirty/);assert.match(source,/JSON and PNG/);
  assert.equal(source.includes('page.setContent'),false);assert.equal(source.includes('addScriptTag'),false);
 });

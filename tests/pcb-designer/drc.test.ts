@@ -62,3 +62,20 @@ test("DRC reports keepout and board violations in stable object-id order", () =>
   ]);
   assert.deepEqual(violations.map((item) => item.id), ["drc-out-of-bounds-z1", "drc-keepout-collision-a1-keepout-1"]);
 });
+
+test("Chinese messages use project references and keepout names without changing issue identities", () => {
+  const owner = { ...component("owner", 5, 5, "bottom"), reference: "U1", keepout: { top: 4, right: 4, bottom: 4, left: 4 } };
+  const other = { ...component("other", 5, 5, "bottom"), reference: "C2" };
+  const outside = { ...component("outside", 15, 5), reference: "J1" };
+  const project = projectWith([owner, other, outside], [{ id: "K1", name: "螺絲孔禁制區", x: 3, y: 3, width: 4, height: 4, color: "#f00" }]);
+  const issues = runDrc(project);
+  assert.equal(issues.find(item => item.id === "drc-out-of-bounds-outside")?.message, "J1 超出板框");
+  assert.equal(issues.find(item => item.id === "drc-out-of-bounds-owner-keepout")?.message, "U1 的禁制區超出板框");
+  assert.equal(issues.find(item => item.id === "drc-component-collision-other-owner")?.message, "C2 與 U1 重疊（Bottom）");
+  assert.equal(issues.find(item => item.id === "drc-keepout-collision-other-owner-owner-owner")?.message, "C2 進入 U1 的禁制區");
+  assert.equal(issues.find(item => item.id === "drc-keepout-collision-k1-other")?.message, "C2 進入禁制區『螺絲孔禁制區』");
+  const identities = issues.map(({ id, code, objectIds }) => ({ id, code, objectIds }));
+  other.reference = "R3";
+  project.keepouts[0].name = "新名稱";
+  assert.deepEqual(runDrc(project).map(({ id, code, objectIds }) => ({ id, code, objectIds })), identities);
+});

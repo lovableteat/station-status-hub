@@ -170,7 +170,10 @@ export function PcbDialogs({
     if (!mounted.current || activeDialog.current !== dialog || settingsSession.current !== session || !session?.current || !projectSettingsReady || applying) return;
     const openedDialog = dialog;
     const current = currentProjects.find(project => project.id === session.draft.projectId);
-    const parsed = parseProjectSettings(session.draft.values);
+    // Retired size fields in recovered drafts must not resize the board invisibly.
+    const parsed = parseProjectSettings({ ...session.draft.values,
+      width: String(current?.board.width ?? ""), height: String(current?.board.height ?? ""),
+    });
     const message = projectSettingsConflict(session.draft, current) || (typeof parsed === "string" ? parsed : "");
     if (message) { session.write(session.draft.values, message); setError(message); return; }
     if (typeof parsed === "string") return;
@@ -558,10 +561,6 @@ export function PcbDialogs({
                       className="mt-1 h-9 border-[#356985] bg-[#10263a]"
                     />
                   </label>
-                  <div data-pcb-field-tone="dimensions" className="grid grid-cols-2 gap-3">
-                    <NumberField label="寬度 (mm)" preserveRaw={dialog.kind === "project-settings"} value={values.width} onChange={(value) => update("width", value)} />
-                    <NumberField label="高度 (mm)" preserveRaw={dialog.kind === "project-settings"} value={values.height} onChange={(value) => update("height", value)} />
-                  </div>
                   {dialog.kind === "project-settings" && (
                     <label data-pcb-field-tone={values.status || "draft"} className="block text-xs text-slate-300">
                       狀態
@@ -726,13 +725,11 @@ function TextField({
 
 function NumberField({
   axis,
-  preserveRaw = false,
   label,
   value,
   onChange,
 }: {
   axis?: "X" | "Y" | "Z";
-  preserveRaw?: boolean;
   label: string;
   value?: string;
   onChange: (value: string) => void;
@@ -741,10 +738,9 @@ function NumberField({
     <label data-dimension-axis={axis} className="block text-xs text-slate-300">
       {label}
       <Input
-        type={preserveRaw ? "text" : "number"}
-        inputMode={preserveRaw ? "decimal" : undefined}
-        min={preserveRaw ? undefined : "0.1"}
-        step={preserveRaw ? undefined : "0.1"}
+        type="number"
+        min="0.1"
+        step="0.1"
         value={value ?? ""}
         onChange={(event) => onChange(event.target.value)}
         className="mt-1 h-9 border-[#356985] bg-[#10263a] font-mono"

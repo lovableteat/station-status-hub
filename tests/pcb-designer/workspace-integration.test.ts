@@ -276,8 +276,11 @@ test("keeps project sizing and labels component dimensions as length width and h
   assert.match(dialogsSource, /NumberField axis=["']X["'] label=["']長度 \(mm\)["']/);
   assert.match(dialogsSource, /NumberField axis=["']Y["'] label=["']寬度 \(mm\)["']/);
   assert.match(dialogsSource, /NumberField axis=["']Z["'] label=["']高度 \(mm\)["']/);
-  assert.match(dialogsSource, /NumberField label=["']寬度 \(mm\)["']/);
-  assert.match(dialogsSource, /NumberField label=["']高度 \(mm\)["']/);
+  assert.doesNotMatch(dialogsSource, /NumberField label=["']寬度 \(mm\)["']/);
+  assert.doesNotMatch(dialogsSource, /NumberField label=["']高度 \(mm\)["']/);
+  const inspectorSource = await read("src/components/pcb-designer/PcbInspector.tsx");
+  assert.match(inspectorSource, /resizeBoardFromAnchor\(\{ width \}, resizeAnchor\)/);
+  assert.match(inspectorSource, /resizeBoardFromAnchor\(\{ height \}, resizeAnchor\)/);
 });
 
 test("keeps visible-layer filtering and grouped selection in sync across the PCB workspace", async () => {

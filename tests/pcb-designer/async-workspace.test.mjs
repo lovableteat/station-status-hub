@@ -14,7 +14,7 @@ async function setup() {
   const remote = { listModelAssets: async () => { calls.list++; return [asset.metadata]; }, saveModelAsset: async () => true };
   const workspace = { activeProject: project, data: { projects: [project], library: [], templates: [], updatedAt: 'synthetic' },
     remoteReady: true, remoteAccessStatus: 'ready', canMutate: true, canEdit: true, selectedObjects: [], selection: null,
-    projectLock: {}, activeLayer: 'top', tool: 'select', zoom: 100, persistenceStatus: 'synced', dirtyProjectIds: [],
+    projectLock: {}, activeLayer: 'top', tool: 'select', zoom: 100, persistenceStatus: 'synced', dirtyProjectIds: [], drcIssues: [],
     saveNow: async () => { calls.saved++; return true; }, setTool() {}, importLibraryModel() { calls.imported++; },
     captureModelAssignment: () => target,
     assignModelAsset: (...args) => { calls.targets.push(args); return assignment.promise; }, deleteProject: async () => false };

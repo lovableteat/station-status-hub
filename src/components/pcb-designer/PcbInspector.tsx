@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { boardSurfacePath } from "./core/boardOutline.ts";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { Check, Copy, Eye, FileUp, Lock, LockOpen, RotateCw, Scissors, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,8 @@ import {
   type PcbResizeAnchor,
 } from "./core/resizeBoard.ts";
 import type { PcbWorkspaceApi } from "./hooks/usePcbWorkspace.ts";
+import { PcbComponentCoordinates } from "./PcbComponentCoordinates.tsx";
+import { PcbObjectsList } from "./PcbObjectsList.tsx";
 
 function InspectorField({
   label,
@@ -54,10 +56,11 @@ function NumberField({
         step={step}
         defaultValue={value}
         disabled={disabled}
+        title={disabled ? "目前無法修改此物件，請先確認編輯權限與鎖定狀態" : `輸入${label}，按 Enter 或離開欄位套用`}
         onBlur={(event) => {
           const next = Number(event.currentTarget.value);
           if (
-            !Number.isFinite(next)
+            !event.currentTarget.value.trim() || !Number.isFinite(next)
             || (next !== value && !onCommit(next))
           ) {
             event.currentTarget.value = String(value);
@@ -87,62 +90,54 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
   ]).size;
   const canDuplicate = workspace.selection?.kind === "keepout"
     || workspace.selection?.kind === "component"
+    || workspace.selection?.kind === "measurement"
     || workspace.selectedObjects.length > 0;
+  const hasLocked = workspace.activeProject.components.some(item => item.locked
+    && (workspace.selectedObjects.includes(item.instanceId) || workspace.selection?.id === item.instanceId));
+  const mutationTitle = !workspace.canMutate ? "目前沒有編輯權限或文件已鎖定" : hasLocked ? "選取範圍包含鎖定元件，請先解除鎖定" : "";
   return (
     <div className="pcb-inspector-actions">
       <span className="pcb-selection-count">
-        Selected {selectionCount || workspace.selectedObjects.length}
+        已選 {selectionCount || workspace.selectedObjects.length} 個
       </span>
-      {component && (
+      {(component || keepout || selectionCount > 1 || workspace.selection?.kind === "measurement") && (
         <>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            disabled={!workspace.canMutate || component.locked}
+            disabled={!workspace.canMutate || hasLocked}
             onClick={workspace.rotateSelected}
-            aria-label="旋轉選取元件 90 度"
-            title="旋轉 90°"
+            aria-label="旋轉選取物件 90 度"
+            title={mutationTitle || "將選取物件各自順時針旋轉 90°"}
           >
             <RotateCw className="mr-1.5 h-3.5 w-3.5" />旋轉
           </Button>
-          <Button
+          {component && selectionCount === 1 && <Button
             type="button"
             variant="outline"
             size="sm"
             disabled={!workspace.canMutate}
             onClick={workspace.toggleSelectedLock}
             aria-label={component.locked ? "解除元件鎖定" : "鎖定元件"}
-            title={component.locked ? "解除鎖定" : "鎖定"}
+            title={!workspace.canMutate ? mutationTitle : component.locked ? "解除元件鎖定以便移動或編輯" : "鎖定元件以防止意外移動或編輯"}
+            aria-pressed={component.locked}
           >
             {component.locked
               ? <LockOpen className="mr-1.5 h-3.5 w-3.5" />
               : <Lock className="mr-1.5 h-3.5 w-3.5" />}
             {component.locked ? "解鎖" : "鎖定"}
-          </Button>
+          </Button>}
         </>
-      )}
-      {keepout && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={!workspace.canMutate}
-          onClick={workspace.rotateSelected}
-          aria-label="旋轉選取禁制區 90 度"
-          title="旋轉 90°"
-        >
-          <RotateCw className="mr-1.5 h-3.5 w-3.5" />旋轉
-        </Button>
       )}
       <Button
         type="button"
         variant="outline"
         size="sm"
-        disabled={!workspace.canMutate || !canDuplicate || Boolean(component?.locked)}
+        disabled={!workspace.canMutate || !canDuplicate}
         onClick={() => workspace.duplicateSelected()}
         aria-label="複製選取項目"
-        title="複製"
+        title={!workspace.canMutate ? "目前沒有編輯權限或文件已鎖定" : "在板上建立選取物件的副本，可一次復原"}
       >
         <Copy className="mr-1.5 h-3.5 w-3.5" />複製
       </Button>
@@ -151,10 +146,10 @@ function SelectionActions({ workspace }: { workspace: PcbWorkspaceApi }) {
         variant="outline"
         size="sm"
         className="pcb-danger-action"
-        disabled={!workspace.canMutate || Boolean(component?.locked)}
+        disabled={!workspace.canMutate || hasLocked}
         onClick={workspace.deleteSelected}
         aria-label="刪除選取物件"
-        title="刪除"
+        title={mutationTitle || "刪除所有選取物件，可使用復原還原"}
       >
         <Trash2 className="mr-1.5 h-3.5 w-3.5" />刪除
       </Button>
@@ -207,7 +202,6 @@ function BoardInspector({ workspace }: { workspace: PcbWorkspaceApi }) {
   };
   return (
     <div className="pcb-inspector-form">
-      <h2>板設定</h2>
       <Dialog open={!!dxfPreview} onOpenChange={open => { if (!open) setDxfPreview(null); }}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>確認 DXF 板形</DialogTitle><DialogDescription>確認輪廓後套用；取消會保留原板。元件不會刪除，超出版框時會提示調整。</DialogDescription></DialogHeader>
@@ -403,6 +397,8 @@ function ComponentInspector({
   return (
     <div className="pcb-inspector-form" data-selection-kind="component">
       <h2>{component.reference} · {component.name}</h2>
+      <CheckIssues workspace={workspace} objectId={component.instanceId} />
+      <PcbComponentCoordinates workspace={workspace} component={component} />
       <InspectorField label="名稱">
         <input
           key={component.name}
@@ -425,15 +421,15 @@ function ComponentInspector({
         <NumberField label="高 (mm)" value={component.maxHeight} disabled={componentDisabled} onCommit={(maxHeight) => workspace.updateComponent(component.instanceId, { maxHeight })} />
         <NumberField label="旋轉 (°)" value={component.rotation} disabled={componentDisabled} step="90" onCommit={(rotation) => workspace.updateComponent(component.instanceId, { rotation })} />
       </div>
-      <p className="pcb-inspector-note">長、寬、高是元件實體尺寸；位置請直接在畫布拖曳調整。</p>
+      <p className="pcb-inspector-note">長、寬、高是元件實體尺寸；中心座標可輸入數值或在畫布拖曳調整。</p>
       <InspectorField label="PCB 安裝面">
         <select value={component.layer} disabled={componentDisabled} onChange={event => workspace.updateComponent(component.instanceId, { layer: event.target.value as "top" | "bottom" })}>
           <option value="top">PCB 頂面 Top</option><option value="bottom">PCB 底面 Bottom</option>
         </select>
       </InspectorField>
-      <NumberField label="Pin 插入深度 (mm)" value={component.insertionDepth ?? 0} disabled={componentDisabled} step="0.1"
+      <NumberField label="接腳插入深度 (mm)" value={component.insertionDepth ?? 0} disabled={componentDisabled} step="0.1"
         onCommit={insertionDepth => workspace.updateComponent(component.instanceId, { insertionDepth })} />
-      <p className="pcb-inspector-note">0＝最低點接觸板面；增加深度讓 pin 伸入板內，不改變模型尺寸。請依實際 pin 長度調整，避免本體埋進板子。</p>
+      <p className="pcb-inspector-note">0＝最低點接觸板面；增加深度讓接腳伸入板內，不改變模型尺寸。請依實際接腳長度調整，避免本體埋進板子。</p>
       <div className="pcb-model-import" data-model-import-status={modelImportState.status}>
         {component.modelAssetId && <section className="pcb-inspector-section">
           <h3>模型朝向／貼板面</h3>
@@ -505,8 +501,8 @@ function KeepoutInspector({
         <input key={keepout.name} defaultValue={keepout.name} disabled={disabled} onBlur={(event) => workspace.updateKeepout(keepout.id, { name: event.currentTarget.value.trim() || keepout.name })} />
       </InspectorField>
       <div className="pcb-inspector-field-grid">
-        <NumberField label="X (mm)" value={keepout.x} disabled={disabled} onCommit={(x) => workspace.updateKeepout(keepout.id, { x })} />
-        <NumberField label="Y (mm)" value={keepout.y} disabled={disabled} onCommit={(y) => workspace.updateKeepout(keepout.id, { y })} />
+        <NumberField label="左上 X (mm)" value={keepout.x} disabled={disabled} onCommit={(x) => workspace.updateKeepout(keepout.id, { x })} />
+        <NumberField label="左上 Y (mm)" value={keepout.y} disabled={disabled} onCommit={(y) => workspace.updateKeepout(keepout.id, { y })} />
         <NumberField label="寬度 (mm)" value={keepout.width} disabled={disabled} onCommit={(width) => workspace.updateKeepout(keepout.id, { width })} />
         <NumberField label="高度 (mm)" value={keepout.height} disabled={disabled} onCommit={(height) => workspace.updateKeepout(keepout.id, { height })} />
         <NumberField label="旋轉 (°)" value={keepout.rotation ?? 0} disabled={disabled} onCommit={(rotation) => workspace.updateKeepout(keepout.id, { rotation })} />
@@ -637,6 +633,19 @@ function MeasurementInspector({
   );
 }
 
+function CheckIssues({ workspace, objectId }: { workspace: PcbWorkspaceApi; objectId?: string }) {
+  const issues = objectId ? workspace.drcIssues.filter(issue => issue.objectIds.includes(objectId)) : workspace.drcIssues;
+  if (objectId && !issues.length) return null;
+  return <div className="pcb-drc-panel">
+    {issues.length ? <div className="pcb-drc-list" aria-label={objectId ? "此元件的配置問題" : "配置檢查問題"}>
+      {issues.map(issue => <button type="button" key={issue.id}
+        title="選取與此問題有關的物件，並在畫布置中顯示"
+        onClick={() => workspace.centerDrcIssue(issue.id)}>{issue.message}</button>)}
+    </div> : <p className="pcb-inspector-empty">沒有發現問題</p>}
+    {!objectId && <p className="pcb-inspector-note">檢查超出板框、同一面元件重疊、進入禁制區。這是配置檢查，不是電氣設計規則檢查。</p>}
+  </div>;
+}
+
 export function PcbInspector({
   workspace,
   onImportModel,
@@ -647,47 +656,66 @@ export function PcbInspector({
   onViewModel?: (assetId: string) => void;
 }) {
   const selected = workspace.selection && workspace.selectedObject;
-  const activeTab = workspace.rightTab === "drc" ? "board" : workspace.rightTab;
+  const activeTab = workspace.rightTab;
+  const panelId = useId();
+  const selectionCount = new Set([...workspace.selectedObjects, ...(workspace.selection ? [workspace.selection.id] : [])]).size;
+  const totalObjects = workspace.activeProject.components.length + workspace.activeProject.keepouts.length + workspace.activeProject.measurements.length;
+  const hasDetail = Boolean(selected) || selectionCount > 1;
+  const tabs = ["board", "objects", "checks"] as const;
 
   return (
     <aside className="pcb-inspector" data-testid="pcb-inspector" aria-label="PCB 屬性面板">
       <div className="pcb-inspector-tabs" role="tablist" aria-label="PCB 檢查器分頁">
-        {(["board", "selection"] as const).map((tab) => (
+        {tabs.map((tab, index) => (
           <button
             key={tab}
             type="button"
             role="tab"
+            id={`${panelId}-${tab}`}
+            aria-controls={`${panelId}-body`}
+            tabIndex={activeTab === tab ? 0 : -1}
+            title={tab === "board" ? "調整板形、尺寸與網格設定" : tab === "objects" ? "尋找板上物件並編輯選取物件" : "查看配置問題並定位相關物件"}
             className={cn(
               "pcb-inspector-tab",
               activeTab === tab && "is-active",
             )}
             onClick={() => workspace.setRightTab(tab)}
             aria-selected={activeTab === tab}
+            onKeyDown={event => {
+              const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1;
+              if (next < 0) return;
+              event.preventDefault();
+              workspace.setRightTab(tabs[next]);
+              event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+            }}
           >
-            {tab === "board" ? "板設定" : "選取物"}
+            {tab === "board" ? "板設定" : tab === "objects" ? "物件" : <>檢查 <span className={cn("pcb-check-count", workspace.drcIssues.length > 0 && "has-issues")}>{workspace.drcIssues.length}</span></>}
           </button>
         ))}
       </div>
-      <div className="pcb-inspector-body">
+      <div className="pcb-inspector-body" role="tabpanel" id={`${panelId}-body`} aria-labelledby={`${panelId}-${activeTab}`}>
         {activeTab === "board" && <BoardInspector workspace={workspace} />}
-        {activeTab === "selection" && (
-          !selected ? (
-            <div className="py-8 text-center text-xs leading-5 text-slate-400">
-              尚未選取物件。可在畫布選取元件、禁制區或測量線。
-            </div>
-          ) : workspace.selection?.kind === "component" ? (
+        <PcbObjectsList workspace={workspace} hidden={activeTab !== "objects" || hasDetail} />
+        {activeTab === "checks" && <CheckIssues workspace={workspace} />}
+        {activeTab === "objects" && hasDetail && <>
+          <button type="button" className="pcb-objects-back" title="清除選取並返回所有板上物件，保留目前篩選條件" onClick={() => workspace.selectObjects([])}>‹ 全部物件 {totalObjects}</button>
+          {selectionCount > 1 ? <div data-selection-kind="multiple">
+            <SelectionActions workspace={workspace} />
+            <p className="pcb-inspector-note">可在工具列「對齊」調整選取元件的位置。</p>
+          </div> : workspace.selection?.kind === "component" ? (
             <ComponentInspector
+              key={workspace.selection.id}
               workspace={workspace}
               component={workspace.selectedObject as PcbPlacedComponent}
               onImportModel={onImportModel}
               onViewModel={onViewModel}
             />
           ) : workspace.selection?.kind === "keepout" ? (
-            <KeepoutInspector workspace={workspace} keepout={workspace.selectedObject as PcbKeepout} />
+            <KeepoutInspector key={workspace.selection.id} workspace={workspace} keepout={workspace.selectedObject as PcbKeepout} />
           ) : (
-            <MeasurementInspector workspace={workspace} measurement={workspace.selectedObject as PcbMeasurement} />
-          )
-        )}
+            <MeasurementInspector key={workspace.selection?.id} workspace={workspace} measurement={workspace.selectedObject as PcbMeasurement} />
+          )}
+        </>}
       </div>
     </aside>
   );

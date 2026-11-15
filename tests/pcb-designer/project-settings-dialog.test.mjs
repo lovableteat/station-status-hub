@@ -36,9 +36,22 @@ test('real dialog writes the last keystroke synchronously before an immediate ga
   assert.equal(s.calls.length, 0); await s.stop();
 });
 test('validation errors and raw invalid strings survive a real dialog remount', async () => {
-  const s = setup(); await s.mount(); await act(async () => s.edit('寬度 (mm)', '1e'));
-  await act(async () => s.submit()); assert.match(JSON.stringify(s.root.toJSON()), /板框尺寸/);
-  await s.stop(); await s.mount(); assert.equal(s.field('寬度 (mm)').props.value, '1e'); assert.match(JSON.stringify(s.root.toJSON()), /板框尺寸/); await s.stop();
+  const s = setup(); await s.mount(); await act(async () => s.edit('名稱', '  '));
+  await act(async () => s.submit()); assert.match(JSON.stringify(s.root.toJSON()), /名稱為必填/);
+  await s.stop(); await s.mount(); assert.equal(s.field('名稱').props.value, '  '); assert.match(JSON.stringify(s.root.toJSON()), /名稱為必填/); await s.stop();
+});
+
+test('settings hide dimensions and ignore retired dimensions from a recovered draft', async () => {
+  const s = setup();
+  const session = new s.core.ProjectSettingsSession('A', s.project);
+  session.write({ ...session.draft.values, name: 'Recovered', width: '1e', height: '999' });
+  await s.mount();
+  assert.doesNotMatch(JSON.stringify(s.root.toJSON()), /寬度 \(mm\)|高度 \(mm\)/);
+  await act(async () => s.submit());
+  assert.equal(s.calls.length, 1);
+  assert.equal(s.calls[0][2].width, s.project.board.width);
+  assert.equal(s.calls[0][2].height, s.project.board.height);
+  await s.stop();
 });
 test('denied render exposes no draft and same actor restored authorization recovers it', async () => {
   const s = setup(); await s.mount(); await act(async () => s.edit('名稱', 'private draft'));
@@ -114,17 +127,11 @@ test('captured handlers after switching the dialog cannot act on the new project
   await act(async () => { oldChange({ target: { value: 'late old project' } }); oldCancel(); oldSubmit({ preventDefault() {} }); });
   assert.equal(s.field('名稱').props.value, 'new project draft'); assert.equal(s.closes, 0); assert.equal(s.calls.length, 0); await s.stop();
 });
-test('raw incomplete settings numbers are text/decimal controls; other dialogs remain native number controls', async () => {
+test('board sizes are edited only in the board inspector, not in either project dialog', async () => {
   const s = setup(); await s.mount();
-  assert.equal(s.field('寬度 (mm)').props.type, 'text'); assert.equal(s.field('寬度 (mm)').props.inputMode, 'decimal');
-  assert.equal(s.field('高度 (mm)').props.type, 'text');
-  for (const raw of ['1e', '-', '12.']) {
-    await act(async () => s.edit('寬度 (mm)', raw)); await act(async () => s.submit());
-    await s.stop(); await s.mount(); assert.equal(s.field('寬度 (mm)').props.value, raw);
-    assert.match(JSON.stringify(s.root.toJSON()), /板框尺寸/);
-  }
+  assert.doesNotMatch(JSON.stringify(s.root.toJSON()), /寬度 \(mm\)|高度 \(mm\)/);
   await s.update({ dialog: { kind: 'new-project' } });
-  assert.equal(s.field('寬度 (mm)').props.type, 'number'); assert.equal(s.field('寬度 (mm)').props.inputMode, undefined);
+  assert.doesNotMatch(JSON.stringify(s.root.toJSON()), /寬度 \(mm\)|高度 \(mm\)/);
   await s.stop();
 });
 test('typing does not recanonicalize a stable current project; new project reference still checks full content', async () => {

@@ -5,12 +5,12 @@ const {createRequire}=require('node:module');
 const {execFileSync}=require('node:child_process');
 const fixture=require('./currentClientDraftRecovery.fixtures.cjs');
 const {BASE,sha,safePath,createNetworkSink,redactEvidence,sanitizeEvidence}=require('./exact80/exact80-server.cjs');
-const LABELS=['名稱','描述','所屬大專案','版本號','寬度 (mm)','高度 (mm)','狀態'];
-const PCB_ERROR='板框尺寸必須介於 20 到 1000 mm。';
-const PCB_RAW=['  SYNTHETIC retained PCB  ',' synthetic description 原始 whitespace ',' SYNTHETIC group ',' v2 raw ','19','88.500','review'];
+const LABELS=['名稱','描述','所屬大專案','版本號','狀態'];
+const PCB_ERROR='名稱為必填欄位。';
+const PCB_RAW=['  SYNTHETIC retained PCB  ',' synthetic description 原始 whitespace ',' SYNTHETIC group ',' v2 raw ','review'];
 const SCENARIOS=[{workspace:'station-status',mode:'clear'},{workspace:'station-status',mode:'success'},
- ...['1e','-','12.'].map(rawWidth=>({workspace:'pcb-designer',mode:'cancel',rawWidth})),
- {workspace:'pcb-designer',mode:'success',rawWidth:'19'}];
+ ...[['empty',''],['spaces','   '],['ideographic-space','　']].map(([nameCase,rawName])=>({workspace:'pcb-designer',mode:'cancel',nameCase,rawName})),
+ {workspace:'pcb-designer',mode:'success',nameCase:'corrected-name',rawName:' '}];
 function executionMode(env){
  if(env.CURRENT_DRAFT_RECOVERY_BUILD_ONLY==='1')return'build-only';
  assert.equal(env.GITHUB_ACTIONS,'true','Chromium is restricted to authorized PR CI; use explicit build-only locally');
@@ -185,28 +185,28 @@ async function pcbSnapshot(form){
  const status=pcbField(form,'狀態');assert.equal(await status.count(),1);assert.equal(await status.evaluate(pcbStatusLabel),'狀態');
  return{raw:await Promise.all(LABELS.map(label=>pcbField(form,label).inputValue())),errors:await form.getByRole('alert').allTextContents()};
 }
-async function pcbCase(h,mode,rawWidth){
+async function pcbCase(h,mode,rawName){
  let form=await openPcbSettings(h.page);const baseline=await pcbSnapshot(form);
- for(let i=0;i<LABELS.length;i++){const field=pcbField(form,LABELS[i]);if(i===6)await field.selectOption(PCB_RAW[i]);else if(i===4){await field.fill('');await field.pressSequentially(rawWidth);}else await field.fill(PCB_RAW[i]);}
- assert.equal(await form.getByLabel('寬度 (mm)',{exact:true}).inputValue(),rawWidth,'Keyboard tokens must remain raw, not coerce to a number');
- assert.equal(await form.evaluate(node=>node.checkValidity()),true,'Raw width must reach the custom validator, not fail native validation');
+ for(let i=0;i<LABELS.length;i++){const field=pcbField(form,LABELS[i]);if(LABELS[i]==='狀態')await field.selectOption(PCB_RAW[i]);else if(LABELS[i]==='名稱'){await field.fill('');if(rawName)await field.pressSequentially(rawName);}else await field.fill(PCB_RAW[i]);}
+ assert.equal(await form.getByLabel('名稱',{exact:true}).inputValue(),rawName,'Raw name whitespace must remain intact until the custom validator runs');
+ assert.equal(await form.evaluate(node=>node.checkValidity()),true,'Invalid name must reach the custom validator, not fail native validation');
  await form.getByRole('button',{name:'儲存',exact:true}).click();await form.getByRole('alert').filter({hasText:PCB_ERROR}).waitFor();
- const before=await pcbSnapshot(form);assert.deepEqual(before.raw,PCB_RAW.map((value,index)=>index===4?rawWidth:value));assert.deepEqual(before.errors,[PCB_ERROR]);
+ const before=await pcbSnapshot(form);assert.deepEqual(before.raw,PCB_RAW.map((value,index)=>index===0?rawName:value));assert.deepEqual(before.errors,[PCB_ERROR]);
  assert.equal(await beforeUnload(h.page),true);await denyAndRestore(h,'pcb-designer');form=await openPcbSettings(h.page);
- assert.deepEqual(await pcbSnapshot(form),before,'All7 raw strings and original error must survive the same-actor gate');
+ assert.deepEqual(await pcbSnapshot(form),before,'All five raw strings and original error must survive the same-actor gate');
  if(mode==='cancel'){
   await form.getByRole('button',{name:'取消',exact:true}).click();await form.waitFor({state:'detached'});
   assert.equal(await beforeUnload(h.page),false,'Cancel discards settings only; this case has no saved CAD change');
   form=await openPcbSettings(h.page);assert.deepEqual(await pcbSnapshot(form),baseline);
  }else{
-  await form.getByLabel('寬度 (mm)',{exact:true}).fill('120');await form.getByRole('button',{name:'儲存',exact:true}).click();await form.waitFor({state:'detached'});
+  await form.getByLabel('名稱',{exact:true}).fill(PCB_RAW[0]);await form.getByRole('button',{name:'儲存',exact:true}).click();await form.waitFor({state:'detached'});
   form=await openPcbSettings(h.page);const after=await pcbSnapshot(form);
-  assert.equal(after.raw[4],'120');assert.equal(after.raw[0],before.raw[0].trim());assert.deepEqual(after.errors,[]);
+  assert.equal(after.raw[0],PCB_RAW[0].trim());assert.equal(after.raw[1],before.raw[1]);assert.equal(after.raw[4],before.raw[4]);assert.deepEqual(after.errors,[]);
   assert.notDeepEqual(after,before,'Successful local CAS must clear the old invalid settings draft');
   // A successful settings apply dirties the CAD workspace. Do NOT claim all
   // document beforeunload warnings disappear without a cloud save.
  }
- return{before,clearedBy:mode,scope:'Seven raw settings/error only; successful local reducer receipt is not a cloud save or a complete board/CAD persistence test'};
+ return{before,clearedBy:mode,scope:'Five raw settings/error only; successful local reducer receipt is not a cloud save or a complete board/CAD persistence test'};
 }
 async function main(env=process.env){
  const mode=executionMode(env),root=path.resolve(__dirname,'..');
@@ -225,11 +225,11 @@ async function main(env=process.env){
   await new Promise(resolve=>sink.server.listen(0,'127.0.0.1',resolve));
   browser=await qa('playwright').chromium.launch({headless:true,args:[`--proxy-server=http://127.0.0.1:${sink.server.address().port}`,'--proxy-bypass-list=127.0.0.1','--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1','--force-webrtc-ip-handling-policy=disable_non_proxied_udp']});report.browserExecuted=true;
   for(const viewport of [{width:1280,height:800},{width:390,height:844}])for(const scenario of SCENARIOS){
-   const result={name:`${scenario.workspace}-${scenario.mode}${scenario.rawWidth?'-'+scenario.rawWidth:''}`,viewport,status:'running'};report.results.push(result);write();let h;
+   const result={name:`${scenario.workspace}-${scenario.mode}${scenario.nameCase?'-'+scenario.nameCase:''}`,viewport,status:'running'};report.results.push(result);write();let h;
    try{
     h=await harness(browser,viewport,files);await boot(h,scenario.workspace);
     const document=await h.page.evaluateHandle(()=>window.document);
-    result.recovery=scenario.workspace==='station-status'?await maintenanceCase(h,scenario.mode):await pcbCase(h,scenario.mode,scenario.rawWidth);
+    result.recovery=scenario.workspace==='station-status'?await maintenanceCase(h,scenario.mode):await pcbCase(h,scenario.mode,scenario.rawName);
     assert.equal(await h.page.evaluate(original=>document===original,document),true);await document.dispose();assert.equal(h.documentLoads,1);
     assert.deepEqual(h.forbidden,[]);assert.deepEqual(h.errors,[]);assert.equal(h.calls.filter(x=>x.kind==='raw-permissions-read').length,0,'New client must not fall back to raw permissions');
     assert.ok(h.calls.some(x=>x.kind==='protected-profile-read'));assert.ok(h.calls.some(x=>x.kind==='protected-profile-denial'));

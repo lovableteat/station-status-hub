@@ -59,7 +59,7 @@ export interface PcbWorkspaceState {
   zoom: number;
   viewCenter: PcbPoint;
   selection: PcbSelection | null;
-  rightTab: "board" | "selection" | "drc";
+  rightTab: "board" | "objects" | "checks";
   canUndo: boolean;
   canRedo: boolean;
 }
@@ -110,8 +110,8 @@ export type PcbWorkspaceAction =
   | {
     type: "persistence/hydrate";
     data: PcbSaveState;
-    preserveView?: Pick<PcbWorkspaceState, "zoom" | "viewCenter" | "activeLayer" | "visibleLayer" | "rightTab" | "selection" | "selectedObjects">
-      & { activeProjectId?: string | null };
+    preserveView?: Pick<PcbWorkspaceState, "zoom" | "viewCenter" | "activeLayer" | "visibleLayer" | "selection" | "selectedObjects">
+      & { activeProjectId?: string | null; rightTab: PcbWorkspaceState["rightTab"] | "selection" | "drc" };
   }
   | { type: "persistence/touch" }
   | { type: "drc/run" };

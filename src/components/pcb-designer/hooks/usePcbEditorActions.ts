@@ -68,6 +68,13 @@ const ARRANGEMENT_SHORTCUTS: Record<string, PcbComponentArrangement> = {
   v: "distribute-vertical",
 };
 
+function selectionForObject(project: PcbProject, id: string): PcbSelection | null {
+  if (project.components.some(item => item.instanceId === id)) return { kind: "component", id };
+  if (project.keepouts.some(item => item.id === id)) return { kind: "keepout", id };
+  if (project.measurements.some(item => item.id === id)) return { kind: "measurement", id };
+  return null;
+}
+
 export function usePcbEditorActions(
   state: PcbWorkspaceState,
   dispatch: Dispatch<PcbWorkspaceAction>,
@@ -522,7 +529,20 @@ export function usePcbEditorActions(
     toast({ title: `已刪除 ${result.count} 個選取項目`, description: "可使用 Ctrl+Z 一次復原整批項目。" });
     return true;
   }, [dispatch, state.activeProject, state.canEdit, state.documentLocked, state.selectedObjects, state.selection]);
-  const rotateSelected = useCallback(() => applySelectionEdit({ type: "rotate" }), [applySelectionEdit]);
+  const rotateSelected = useCallback(() => {
+    if (!state.canEdit || state.documentLocked) return false;
+    const ids = [...new Set([...state.selectedObjects, ...(state.selection ? [state.selection.id] : [])])];
+    const selections = ids.map(id => selectionForObject(state.activeProject, id));
+    if (!ids.length || selections.some(selection => !selection)) return false;
+    if (state.activeProject.components.some(item => ids.includes(item.instanceId) && item.locked)) {
+      toast({ title: "無法旋轉選取物件", description: "選取範圍包含鎖定元件，請先解除鎖定；尚未旋轉任何物件。", variant: "destructive" });
+      return false;
+    }
+    let project = state.activeProject;
+    for (const selection of selections) project = editSelectedObject(project, selection, { type: "rotate" });
+    dispatch({ type: "project/commit", update: project });
+    return true;
+  }, [dispatch, state.activeProject, state.canEdit, state.documentLocked, state.selectedObjects, state.selection]);
   const rotateSelectedMeasurement = useCallback((direction: MeasurementRotationDirection) => {
     if (!state.canEdit || state.documentLocked || state.selection?.kind !== "measurement") return false;
     const line = state.activeProject.measurements.find(item => item.id === state.selection?.id);
@@ -604,26 +624,28 @@ export function usePcbEditorActions(
     () => duplicateSelected(copiedObjectIdsRef.current),
     [duplicateSelected],
   );
-  const centerDrcIssue = useCallback((issueId: string) => {
-    const issue = state.drcIssues.find((item) => item.id === issueId);
-    if (!issue) return;
-    const objectId = issue.objectIds.find((id) =>
-      state.activeProject.components.some((item) => item.instanceId === id)
-      || state.activeProject.keepouts.some((item) => item.id === id)
-      || state.activeProject.measurements.some((item) => item.id === id));
-    if (!objectId) return;
-    const selection: PcbSelection = state.activeProject.components.some((item) => item.instanceId === objectId)
-      ? { kind: "component", id: objectId }
-      : state.activeProject.keepouts.some((item) => item.id === objectId)
-        ? { kind: "keepout", id: objectId }
-        : { kind: "measurement", id: objectId };
-    const center = selectionCenter(state.activeProject, selection);
-    dispatch({ type: "selection/set", selection });
-    if (center) {
-      dispatch({ type: "view/center", center });
-      dispatch({ type: "zoom/set", zoom: 150 });
+  const centerObjects = useCallback((selections: PcbSelection[]) => {
+    const targets = selections.filter(selection => selectionCenter(state.activeProject, selection));
+    if (!targets.length) return;
+    const ids = targets.map(selection => selection.id);
+    const layers = new Set(state.activeProject.components.filter(item => ids.includes(item.instanceId)).map(item => item.layer));
+    if (state.visibleLayer !== "all" && [...layers].some(layer => layer !== state.visibleLayer)) {
+      dispatch({ type: "view/layer", layer: layers.size === 1 ? [...layers][0] : "all" });
     }
-  }, [dispatch, state.activeProject, state.drcIssues]);
+    dispatch({ type: "selection/set-many", objectIds: ids });
+    const centers = targets.map(selection => selectionCenter(state.activeProject, selection)!);
+    dispatch({ type: "view/center", center: {
+      x: (Math.min(...centers.map(point => point.x)) + Math.max(...centers.map(point => point.x))) / 2,
+      y: (Math.min(...centers.map(point => point.y)) + Math.max(...centers.map(point => point.y))) / 2,
+    } });
+    dispatch({ type: "zoom/set", zoom: 150 });
+  }, [dispatch, state.activeProject, state.visibleLayer]);
+  const centerObject = useCallback((selection: PcbSelection) => centerObjects([selection]), [centerObjects]);
+  const centerDrcIssue = useCallback((issueId: string) => {
+    const issue = state.drcIssues.find(item => item.id === issueId);
+    if (!issue) return;
+    centerObjects(issue.objectIds.map(id => selectionForObject(state.activeProject, id)).filter((selection): selection is PcbSelection => Boolean(selection)));
+  }, [centerObjects, state.activeProject, state.drcIssues]);
 
   const shortcutRef = useRef({
     measurementShortcuts,
@@ -848,6 +870,7 @@ export function usePcbEditorActions(
     toggleSelectedLock,
     nudgeSelected,
     pasteCopied,
+    centerObject,
     centerDrcIssue,
     rotateSelectedMeasurement,
     measurementShortcuts,

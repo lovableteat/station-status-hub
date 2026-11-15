@@ -8,6 +8,7 @@ import type {
 } from "../types.ts";
 import { placeLibraryComponent } from "./editor.ts";
 import { getRotatedRectangleCorners, overlapsKeepout, roundPosition } from "./geometry.ts";
+import { getKeepoutCorners } from "./keepoutGeometry.ts";
 
 interface Bounds {
   left: number;
@@ -111,11 +112,12 @@ function componentBounds(component: PcbProject["components"][number]): Bounds {
 }
 
 function keepoutBounds(keepout: PcbKeepout): Bounds {
+  const corners = Object.values(getKeepoutCorners(keepout));
   return {
-    left: keepout.x,
-    top: keepout.y,
-    right: keepout.x + keepout.width,
-    bottom: keepout.y + keepout.height,
+    left: Math.min(...corners.map((point) => point.x)),
+    top: Math.min(...corners.map((point) => point.y)),
+    right: Math.max(...corners.map((point) => point.x)),
+    bottom: Math.max(...corners.map((point) => point.y)),
   };
 }
 

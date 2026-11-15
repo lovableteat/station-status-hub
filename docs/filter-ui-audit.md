@@ -45,7 +45,8 @@
 | 料號申請的 BOM workspace、料件表與行動卡片 | `src/components/material-requests/MaterialRequestPage.tsx` | **符合標準。** 搜尋、主料／待申請、排序在表格正上方同一列；active chips 可個別移除並附一個「全部清除」；欄位篩選位於表頭篩選列，採 Excel 勾選清單，按「確定」才套用，取消、Escape 或點外側會放棄草稿；選單保留升降冪排序與單欄清除。搜尋時僅套用目前顯示的勾選結果；全不選後確定可得到零筆（標記欄已移除，只保留行動版卡片的我的標記）；桌面零筆結果留在表格 body（`目前篩選條件沒有符合的料件`）並保留欄位 header；欄位顯示／欄寬／配色集中在「欄位」彈窗，匯出與上傳在頁首動作區。
 | 料號申請 BOM 版本管理的差異檢視 | `src/components/material-requests/BomDiffView.tsx` | **符合標準。** 篩選列（搜尋 → 變更類型 → 影響 → 追蹤未帶入）緊接差異表正上方；作用中條件含預設的「隱藏未變更 N 筆」都以 chip 顯示，可個別移除並附「全部清除」；零筆結果留在表格 body（`目前篩選條件沒有符合的差異`）並保留表頭；匯出差異 Excel 位於篩選列尾端的次要層級。左欄系列清單的搜尋也在結果正上方，封存系列另列可展開區段。 |
 | Data-center 的共享專案卡片清單 | `src/components/data-center/DeploymentPlanningCenter.tsx` | 共享專案庫若提供搜尋或篩選，應使用持久列、active chips 與清除規則。場景中的機櫃搜尋、圖層與模型庫屬操作上下文，依下節保留專用 UI；例外不應擴張到一般專案結果清單。
-| PCB 專案、模板與元件庫結果 | `src/components/pcb-designer/PcbLeftRail.tsx` | **待對齊。** 左 rail 已固定顯示搜尋與狀態／來源／類型下拉，但沒有 active chips 或全部清除。rail 可以維持窄欄布局，作用中條件仍必須一直看得到且可逐一清除；畫布與圖層工具不套用資料清單外觀。
+| PCB 專案、模板與元件庫結果 | `src/components/pcb-designer/PcbLeftRail.tsx` | 左 rail 已固定顯示搜尋與狀態／來源／類型下拉，並提供 active chips、個別清除與全部清除。rail 可以維持窄欄布局，作用中條件仍必須一直看得到且可逐一清除；畫布與圖層工具不套用資料清單外觀。
+| PCB 板上物件 | `src/components/pcb-designer/PcbObjectsList.tsx` | **符合標準。** 搜尋 → 層 → 類別位於表格正上方；chips 可個別或全部清除。零筆保留物件／層／狀態表頭及「目前篩選條件沒有符合的物件」。條件僅為本機手動篩選，查看物件詳細資料後返回仍保留；禁制區與量測不分層，包含在 Top／Bottom 篩選結果。
 | 後台工程師／使用者清單 | `src/components/user-management/UserManagement.tsx` | **待對齊。** 搜尋與團隊條件位於卡片清單上方，但缺少 active chips、個別清除、全部清除與一致的零筆骨架。相對順序應維持搜尋在前，團隊是領域條件。
 | 後台 API 資料預覽表 | `src/components/api-management/ApiDataTable.tsx` | **接近標準。** 搜尋與狀態在表格上方且保留 `TableHeader`；補上 active chips、個別清除與全部清除。`ApiKeyManagement.tsx` 的金鑰表目前沒有篩選，不要求新增空控制，但未來加搜尋／狀態時要直接遵守本標準。
 | AI 問答的共享提示詞、對話與來源清單 | `src/components/api-management/ApiChatConsole.tsx` | **待對齊。** 共享提示詞已有搜尋、分類與排序；搜尋／分類需有 active chips 與全部清除，排序可在行動版收合。對話或來源清單一旦可篩選也相同；模型/provider 選擇是執行上下文，不是清單篩選。

@@ -42,6 +42,12 @@ export type {
 
 const EMPTY_PENDING: PcbWorkspaceState["pendingPlacements"] = [];
 
+function normalizeRightTab(value: unknown): PcbWorkspaceState["rightTab"] {
+  if (value === "selection" || value === "objects") return "objects";
+  if (value === "drc" || value === "checks") return "checks";
+  return "board";
+}
+
 function materialize(
   state: Omit<PcbWorkspaceState, "activeProject" | "drcIssues" | "canUndo" | "canRedo"> & { activeProject?: PcbProject; drcIssues?: PcbWorkspaceState["drcIssues"] },
 ): PcbWorkspaceState {
@@ -201,7 +207,7 @@ export function createWorkspaceState(
       y: project.board.height / 2,
     },
     selection: null,
-    rightTab: "board",
+    rightTab: normalizeRightTab((data as PcbSaveState & { rightTab?: unknown }).rightTab),
   });
 }
 
@@ -901,7 +907,7 @@ export function reduceWorkspaceState(
           selection: action.selection ? clone(action.selection) : null,
           selectedObjects: clone(state.selectedObjects),
         },
-        action.selection ? "selection" : state.rightTab,
+        action.selection ? "objects" : state.rightTab,
       );
     case "selection/set-many": {
       const requestedIds = [...new Set(action.objectIds)]
@@ -921,7 +927,7 @@ export function reduceWorkspaceState(
           selection: preferredId ? selectionForObject(state, preferredId) : null,
           selectedObjects,
         },
-        selectedObjects.length ? "selection" : state.rightTab,
+        selectedObjects.length ? "objects" : state.rightTab,
       );
     }
     case "selection/toggle": {
@@ -940,7 +946,7 @@ export function reduceWorkspaceState(
       return replaceSelectionSnapshot(state, {
         selection: preferredId ? selectionForObject(state, preferredId) : null,
         selectedObjects,
-      });
+      }, selectedObjects.length ? "objects" : state.rightTab);
     }
     case "selection/delete": {
       const result = deletePcbSelection(state.activeProject, [
@@ -984,7 +990,7 @@ export function reduceWorkspaceState(
         selectedObjects: [],
       });
     case "panel/right":
-      return { ...state, rightTab: action.tab };
+      return { ...state, rightTab: normalizeRightTab(action.tab) };
     case "permission/set":
       return { ...state, canEdit: action.canEdit, projectGeneration: state.projectGeneration + Number(state.canEdit !== action.canEdit) };
     case "persistence/hydrate": {
@@ -1047,7 +1053,7 @@ export function reduceWorkspaceState(
         data: { ...hydrated.data, activeProjectId: activeProject.id },
         activeLayer: preserve.activeLayer,
         visibleLayer: preserve.visibleLayer,
-        rightTab: preserve.rightTab,
+        rightTab: normalizeRightTab(preserve.rightTab),
         zoom: preserve.zoom,
         viewCenter: clone(preserve.viewCenter),
         selection,
@@ -1083,7 +1089,7 @@ export function reduceWorkspaceState(
       return {
         ...state,
         drcIssues: runDrc(state.activeProject),
-        rightTab: state.selection ? "selection" : "board",
+        rightTab: "checks",
       };
   }
 }
