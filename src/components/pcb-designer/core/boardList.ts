@@ -162,6 +162,15 @@ export function fullTimeLabel(iso: string): string {
   return Number.isFinite(time) ? new Date(time).toLocaleString("zh-TW", { hour12: false }) : "";
 }
 
+/** 2026/11/17 14:20 — who-did-what records read to the minute; seconds are noise there. */
+export function minuteTimeLabel(iso: string): string {
+  const time = Date.parse(iso);
+  if (!Number.isFinite(time)) return "";
+  const date = new Date(time);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 const STATUS_WORDS: Record<PcbProject["status"], string> = { draft: "草稿", review: "審核中", approved: "已核准" };
 
 /**
@@ -176,6 +185,6 @@ export function statusChangeLabel(project: Pick<PcbProject, "status" | "statusCh
 export function statusChangeRecord(project: Pick<PcbProject, "status" | "statusChange">): { by: string; when: string } | null {
   const change = project.statusChange;
   if (!change || change.status !== project.status) return null;
-  const when = fullTimeLabel(change.at);
+  const when = minuteTimeLabel(change.at);
   return when ? { by: change.byName ?? "", when } : null;
 }

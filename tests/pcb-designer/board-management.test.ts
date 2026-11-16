@@ -145,7 +145,7 @@ test("a 狀態 change records who made it and when; other settings leave the rec
     baselineRevision: initialProjectSettings(state.activeProject).baselineRevision, settings: settings({ status: "approved" }), actor });
   assert.equal(approved.projectSettingsReceipt?.accepted, true);
   assert.deepEqual(approved.activeProject.statusChange, { status: "approved", at: actor.at, byName: "王工程師", byId: "u-1" });
-  assert.match(statusChangeLabel(approved.activeProject), /^王工程師 .+ 改為已核准$/);
+  assert.match(statusChangeLabel(approved.activeProject), /^王工程師 \d{4}\/\d{2}\/\d{2} \d{2}:\d{2} 改為已核准$/, "the record reads to the minute");
   assert.equal(statusChangeRecord(approved.activeProject)?.by, "王工程師");
   // Changing anything but 狀態 writes no record, and keeps an existing one as it was.
   const renamed = reduceWorkspaceState(state, { type: "project/settings", requestToken: "b", projectId: "p",

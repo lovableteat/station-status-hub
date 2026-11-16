@@ -842,7 +842,9 @@ export function PcbDesignerWorkspace({
       {workspace.boardApproved && (
         <div className="pcb-approval-bar" role="status" data-testid="pcb-approval-bar">
           <span>
-            這塊板已核准{approvalRecord && <span data-testid="pcb-approval-record" className="pcb-approval-record">（{approvalRecord.by ? `${approvalRecord.by} 於 ` : ""}{approvalRecord.when} 核准）</span>}，修改前請先建立新版或改回草稿。
+            {approvalRecord
+              ? <><span data-testid="pcb-approval-record" className="pcb-approval-record">{approvalRecord.by ? `${approvalRecord.by} 於 ` : ""}{approvalRecord.when}</span> 核准了這塊板，修改前請先建立新版或改回草稿。</>
+              : "這塊板已核准，修改前請先建立新版或改回草稿。"}
           </span>
           {workspace.canMutate && (
             <>
