@@ -15,6 +15,7 @@ import type { TabularImportError } from "./core/tabular.ts";
 import type { NewProjectInput, TemplateInput } from "./core/workspace.ts";
 import { ProjectSettingsSession, parseProjectSettings, projectSettingsConflict, type ProjectSettings } from "./core/projectSettingsDraft.ts";
 import { boardSurfacePath } from "./core/boardOutline.ts";
+import { statusChangeLabel } from "./core/boardList.ts";
 import { isPcbPackageModelChoice, PCB_PACKAGE_KEYS, PCB_PACKAGE_LABELS } from "./core/packageModels.ts";
 import { usePcbOwnerDirectory, type PcbOwnerDirectoryLoader } from "./hooks/usePcbOwnerDirectory.ts";
 import type {
@@ -622,18 +623,26 @@ export function PcbDialogs({
                     />
                   </label>
                   {dialog.kind === "project-settings" && (
-                    <label data-pcb-field-tone={values.status || "draft"} className="block text-xs text-slate-300">
-                      狀態
-                      <select
-                        value={values.status}
-                        onChange={(event) => update("status", event.target.value)}
-                        className="mt-1 h-9 w-full rounded-md border border-[#356985] bg-[#10263a] px-3 text-sm"
-                      >
-                        <option value="draft">草稿</option>
-                        <option value="review">審核中</option>
-                        <option value="approved">已核准</option>
-                      </select>
-                    </label>
+                    <>
+                      <label data-pcb-field-tone={values.status || "draft"} className="block text-xs text-slate-300">
+                        狀態
+                        <select
+                          value={values.status}
+                          onChange={(event) => update("status", event.target.value)}
+                          aria-describedby="pcb-status-record"
+                          className="mt-1 h-9 w-full rounded-md border border-[#356985] bg-[#10263a] px-3 text-sm"
+                        >
+                          <option value="draft">草稿</option>
+                          <option value="review">審核中</option>
+                          <option value="approved">已核准</option>
+                        </select>
+                      </label>
+                      {/* Outside the label so a screen reader names the field 「狀態」 and reads this as its description. */}
+                      <p id="pcb-status-record" data-testid="pcb-status-record" className="-mt-2 text-[11px] leading-4 text-slate-400">
+                        {statusChangeLabel(dialog.project) ? `目前狀態：${statusChangeLabel(dialog.project)}` : "目前狀態尚無變更紀錄"}
+                        {values.status !== dialog.project.status ? "；儲存後會記下你的名字與時間" : ""}
+                      </p>
+                    </>
                   )}
                 </>
               )}

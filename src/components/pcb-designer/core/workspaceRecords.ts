@@ -23,8 +23,10 @@ export function withProjectIdentity(
   name = project.name,
 ): PcbProject {
   const now = timestamp();
+  // A copy, new version or board from a template starts as its own draft: the source's 核准 record does not follow it.
+  const { statusChange: _sourceStatusChange, ...copy } = clone(project);
   return {
-    ...clone(project),
+    ...copy,
     id: createId("project"),
     name,
     createdAt: now,

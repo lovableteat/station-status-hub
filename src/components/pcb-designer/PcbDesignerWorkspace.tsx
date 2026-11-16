@@ -40,6 +40,7 @@ import {
   toStepLibraryComponent,
 } from "./core/modelAssets.ts";
 import { PcbDialogs, type PcbDialogState } from "./PcbDialogs.tsx";
+import { statusChangeRecord } from "./core/boardList.ts";
 import { createPcbOwnerDirectoryLoader } from "./hooks/usePcbOwnerDirectory.ts";
 import { PcbProjectTransitionNotice } from "./PcbProjectTransitionNotice.tsx";
 import { PcbLeftRail, type PcbLeftTab } from "./PcbLeftRail.tsx";
@@ -604,6 +605,8 @@ export function PcbDesignerWorkspace({
       variant: "destructive",
     });
   };
+  // Who approved the open board and when (boards approved before 2026-11-17 have no record).
+  const approvalRecord = workspace.boardApproved ? statusChangeRecord(workspace.activeProject) : null;
 
   return (
     <section
@@ -838,7 +841,9 @@ export function PcbDesignerWorkspace({
       />
       {workspace.boardApproved && (
         <div className="pcb-approval-bar" role="status" data-testid="pcb-approval-bar">
-          <span>這塊板已核准，修改前請先建立新版或改回草稿。</span>
+          <span>
+            這塊板已核准{approvalRecord && <span data-testid="pcb-approval-record" className="pcb-approval-record">（{approvalRecord.by ? `${approvalRecord.by} 於 ` : ""}{approvalRecord.when} 核准）</span>}，修改前請先建立新版或改回草稿。
+          </span>
           {workspace.canMutate && (
             <>
               <Button type="button" size="sm" className="pcb-approval-primary"

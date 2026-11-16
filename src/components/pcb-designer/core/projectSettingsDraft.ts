@@ -41,10 +41,17 @@ export function parseProjectSettings(values: Record<string, string>): ProjectSet
   return { name, description: values.description ?? '', projectGroup: values.projectGroup?.trim(), revision: values.revision?.trim() || '1',
     status: values.status as PcbProject['status'], owner, width, height };
 }
-export function applyProjectSettings(project: PcbProject, baselineRevision: string, settings: ProjectSettings): PcbProject | null {
+/** Who changed the 狀態 and when; recorded only when the status really changes. */
+export interface ProjectStatusActor { at: string; name?: string; id?: string }
+
+export function applyProjectSettings(project: PcbProject, baselineRevision: string, settings: ProjectSettings, actor?: ProjectStatusActor): PcbProject | null {
   if (projectSettingsRevision(project) !== baselineRevision) return null;
   const { width, height, ...fields } = settings;
-  return { ...project, ...fields, board: resizeBoard(project, { width, height }, 'top-left').board };
+  const statusChanged = settings.status !== project.status && actor && Number.isFinite(Date.parse(actor.at));
+  const statusChange: PcbProject['statusChange'] = statusChanged
+    ? { status: settings.status, at: actor.at, ...(actor.name?.trim() ? { byName: actor.name.trim().slice(0, 60) } : {}), ...(actor.id ? { byId: actor.id } : {}) }
+    : project.statusChange;
+  return { ...project, ...fields, ...(statusChange ? { statusChange } : {}), board: resizeBoard(project, { width, height }, 'top-left').board };
 }
 
 /** Synchronous event-handler writes survive an immediately following gate unmount. */

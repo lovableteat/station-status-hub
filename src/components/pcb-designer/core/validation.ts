@@ -303,16 +303,27 @@ export function parseProjectJson(input: unknown): ParseResult<PcbProject> {
   if (!value.keepouts.every(validateKeepout) || !uniqueIds(value.keepouts, "id")) return { ok: false, error: "Keepouts are invalid." };
   if (!value.measurements.every(validateMeasurement) || !uniqueIds(value.measurements, "id")) return { ok: false, error: "Measurements are invalid." };
 
-  const { owner: rawOwner, ...rest } = value;
+  const { owner: rawOwner, statusChange: rawStatusChange, ...rest } = value;
   const owner = normalizeBoardOwner(rawOwner);
+  const statusChange = normalizeStatusChange(rawStatusChange);
   return {
     ok: true,
     value: structuredClone({
       ...rest,
       ...(owner ? { owner } : {}),
+      ...(statusChange ? { statusChange } : {}),
       board: normalizeBoard(value.board as RecordValue),
     }) as unknown as PcbProject,
   };
+}
+
+/** The 狀態 change record is optional metadata: a malformed one is dropped, never the board. */
+export function normalizeStatusChange(value: unknown): PcbProject["statusChange"] {
+  if (!isRecord(value) || (value.status !== "draft" && value.status !== "review" && value.status !== "approved")) return undefined;
+  if (!isNonEmptyString(value.at) || !Number.isFinite(Date.parse(value.at))) return undefined;
+  const byName = isNonEmptyString(value.byName) ? value.byName.trim().slice(0, 60) : undefined;
+  const byId = isNonEmptyString(value.byId) && value.byId.length <= 120 ? value.byId : undefined;
+  return { status: value.status, at: value.at, ...(byName ? { byName } : {}), ...(byId ? { byId } : {}) };
 }
 
 /**
@@ -320,10 +331,11 @@ export function parseProjectJson(input: unknown): ParseResult<PcbProject> {
  * because one bad field must not make a whole stored workspace unreadable.
  */
 /** The board with its 負責人 cleaned (or removed when malformed). */
-export function withNormalizedOwner<T extends { owner?: unknown }>(project: T): T {
-  const { owner, ...rest } = project;
+export function withNormalizedOwner<T extends { owner?: unknown; statusChange?: unknown }>(project: T): T {
+  const { owner, statusChange, ...rest } = project;
   const normalized = normalizeBoardOwner(owner);
-  return (normalized ? { ...rest, owner: normalized } : rest) as T;
+  const change = normalizeStatusChange(statusChange);
+  return { ...rest, ...(normalized ? { owner: normalized } : {}), ...(change ? { statusChange: change } : {}) } as T;
 }
 
 export function normalizeBoardOwner(value: unknown): PcbProject["owner"] {

@@ -178,6 +178,17 @@ export interface PcbProject {
   lastEditedById?: string;
   /** 負責人: who is responsible for this board. Business metadata only, never the storage owner or RPC actor. */
   owner?: PcbBoardOwner;
+  /** The last 狀態 change (e.g. who approved it and when). Absent on boards whose status never changed since 2026-11-17. */
+  statusChange?: PcbStatusChange;
+}
+
+export interface PcbStatusChange {
+  status: PcbProject["status"];
+  /** ISO time of the change. */
+  at: string;
+  /** Display name of the account that changed it, when known. */
+  byName?: string;
+  byId?: string;
 }
 
 export interface PcbBoardOwner {

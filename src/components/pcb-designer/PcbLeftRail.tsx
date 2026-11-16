@@ -38,6 +38,7 @@ import {
   fullTimeLabel,
   isBoardFamilyOpen,
   relativeTimeLabel,
+  statusChangeLabel,
   type BoardFamily,
   type BoardSort,
 } from "./core/boardList.ts";
@@ -250,7 +251,7 @@ export function PcbLeftRail({
     const current = project.id === activeId;
     const editor = current ? activeEditorName : project.lastEditedBy ?? "尚無紀錄";
     return (
-      <span className="pcb-board-row-meta" title={`更新：${fullTimeLabel(project.updatedAt)} · 最後編輯者：${editor}`}>
+      <span className="pcb-board-row-meta" title={[`更新：${fullTimeLabel(project.updatedAt)}`, `最後編輯者：${editor}`, statusChangeLabel(project) && `狀態：${statusChangeLabel(project)}`].filter(Boolean).join(" · ")}>
         {withName ? `版本 ${project.revision || "1"} · ` : ""}
         <UserRound className="pcb-board-owner-icon" aria-hidden="true" />{boardOwnerName(project)}
         <span aria-hidden="true"> · </span>{relativeTimeLabel(project.updatedAt)}

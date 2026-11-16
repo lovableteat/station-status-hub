@@ -130,3 +130,21 @@ export function fullTimeLabel(iso: string): string {
   const time = Date.parse(iso);
   return Number.isFinite(time) ? new Date(time).toLocaleString("zh-TW", { hour12: false }) : "";
 }
+
+const STATUS_WORDS: Record<PcbProject["status"], string> = { draft: "草稿", review: "審核中", approved: "已核准" };
+
+/**
+ * 「王小明 2026/11/17 14:20 改為已核准」 for the current 狀態, or "" when this status has no record
+ * (set before 2026-11-17, or the record is for a different status than the board shows).
+ */
+export function statusChangeLabel(project: Pick<PcbProject, "status" | "statusChange">): string {
+  const record = statusChangeRecord(project);
+  return record ? `${record.by ? `${record.by} ` : ""}${record.when} 改為${STATUS_WORDS[project.status]}` : "";
+}
+
+export function statusChangeRecord(project: Pick<PcbProject, "status" | "statusChange">): { by: string; when: string } | null {
+  const change = project.statusChange;
+  if (!change || change.status !== project.status) return null;
+  const when = fullTimeLabel(change.at);
+  return when ? { by: change.byName ?? "", when } : null;
+}

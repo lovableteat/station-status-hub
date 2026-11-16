@@ -433,9 +433,12 @@ export function usePcbWorkspace({
       if (!settingsEditable.current || projectId !== previous.activeProject.id || settingsReceipt.current) return Promise.resolve(false);
       if (projectSettingsRevision(previous.activeProject) !== baselineRevision) return Promise.resolve(false);
       const requestToken = crypto.randomUUID();
+      // The account that opened the workspace is the one changing the 狀態 (who approved it, and when).
+      const identity = draftOwnerRef.current;
+      const actor = { at: new Date().toISOString(), name: identity?.displayName?.trim() || identity?.username?.trim() || undefined, id: identity?.userId || undefined };
       return new Promise(resolve => {
         settingsReceipt.current = { requestToken, resolve };
-        dispatch({ type: "project/settings", requestToken, projectId, baselineRevision, settings });
+        dispatch({ type: "project/settings", requestToken, projectId, baselineRevision, settings, actor });
       });
     },
     [],

@@ -335,7 +335,7 @@ export function reduceWorkspaceState(
   if (action.type === "project/settings") {
     const project = state.canEdit && !state.documentLocked && !state.transitionBusy && action.projectId === state.activeProject.id
       && !isBlockedByApproval(state, action)
-      ? applyProjectSettings(state.activeProject, action.baselineRevision, action.settings) : null;
+      ? applyProjectSettings(state.activeProject, action.baselineRevision, action.settings, action.actor) : null;
     return {
       ...(project ? replaceProject(state, project) : state),
       projectSettingsReceipt: { requestToken: action.requestToken, accepted: Boolean(project) },
@@ -873,6 +873,10 @@ export function reduceWorkspaceState(
         : redoHistory(selectionHistory);
       const project = clone(nextHistory.current);
       project.updatedAt = nextProjectRevision(state.activeProject.updatedAt);
+      // 狀態 only changes through 板子設定, which records who and when; undo/redo never switches it back or forward.
+      project.status = state.activeProject.status;
+      if (state.activeProject.statusChange) project.statusChange = clone(state.activeProject.statusChange);
+      else delete project.statusChange;
       nextHistory.current = clone(project);
       const pendingPlacements = clone(nextPendingHistory.current);
       return materialize({

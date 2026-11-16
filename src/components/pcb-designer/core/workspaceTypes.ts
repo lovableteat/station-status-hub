@@ -1,4 +1,4 @@
-import type { ProjectSettings } from "./projectSettingsDraft.ts";
+import type { ProjectSettings, ProjectStatusActor } from "./projectSettingsDraft.ts";
 import type {
   PcbDrcIssue,
   PcbLibraryComponent,
@@ -74,7 +74,7 @@ export type PcbWorkspaceAction =
   | { type: "project/delete"; projectId: string }
   | { type: "project/import"; project: PcbProject }
   | { type: "project/commit"; update: PcbProject }
-  | { type: "project/settings"; requestToken: string; projectId: string; baselineRevision: string; settings: ProjectSettings }
+  | { type: "project/settings"; requestToken: string; projectId: string; baselineRevision: string; settings: ProjectSettings; actor?: ProjectStatusActor }
   | { type: "model/assign"; projectId: string; generation: number; requestToken: string; componentId: string; metadata: PcbModelAssetMetadata }
   | { type: "project/commit-with-bom"; update: PcbProject; pendingPlacements: PendingPlacement[] }
   | { type: "template/apply"; templateId: string }

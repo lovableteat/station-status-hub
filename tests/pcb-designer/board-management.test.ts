@@ -6,9 +6,11 @@ import {
   boardOwnerOptions,
   buildBoardList,
   relativeTimeLabel,
+  statusChangeLabel,
+  statusChangeRecord,
 } from "../../src/components/pcb-designer/core/boardList.ts";
 import { isPcbSaveState } from "../../src/components/pcb-designer/core/storage.ts";
-import { normalizeBoardOwner, parseProjectJson } from "../../src/components/pcb-designer/core/validation.ts";
+import { normalizeBoardOwner, normalizeStatusChange, parseProjectJson } from "../../src/components/pcb-designer/core/validation.ts";
 import { createWorkspaceState, isBlockedByApproval, reduceWorkspaceState } from "../../src/components/pcb-designer/core/workspace.ts";
 import { initialProjectSettings, parseProjectSettings } from "../../src/components/pcb-designer/core/projectSettingsDraft.ts";
 import type { PcbProject, PcbSaveState } from "../../src/components/pcb-designer/types.ts";
@@ -117,6 +119,67 @@ test("an approved board refuses content edits, keeps 建立新版, and only a st
   assert.equal(version.data.projects.find(project => project.id === "p")?.status, "approved", "the approved version stays as it was");
 });
 
+test("a 狀態 change records who made it and when; other settings leave the record alone", () => {
+  const draft = board("p", { status: "draft" });
+  const state = createWorkspaceState({ projects: [draft], templates: BUILT_IN_TEMPLATES, library: BUILT_IN_COMPONENTS, activeProjectId: "p", updatedAt: draft.updatedAt }, true);
+  const settings = (values: Record<string, string>) => parseProjectSettings({ ...initialProjectSettings(state.activeProject).values, ...values }) as Exclude<ReturnType<typeof parseProjectSettings>, string>;
+  const actor = { at: "2026-11-17T06:20:00.000Z", name: "王工程師", id: "u-1" };
+  const approved = reduceWorkspaceState(state, { type: "project/settings", requestToken: "a", projectId: "p",
+    baselineRevision: initialProjectSettings(state.activeProject).baselineRevision, settings: settings({ status: "approved" }), actor });
+  assert.equal(approved.projectSettingsReceipt?.accepted, true);
+  assert.deepEqual(approved.activeProject.statusChange, { status: "approved", at: actor.at, byName: "王工程師", byId: "u-1" });
+  assert.match(statusChangeLabel(approved.activeProject), /^王工程師 .+ 改為已核准$/);
+  assert.equal(statusChangeRecord(approved.activeProject)?.by, "王工程師");
+  // Changing anything but 狀態 writes no record, and keeps an existing one as it was.
+  const renamed = reduceWorkspaceState(state, { type: "project/settings", requestToken: "b", projectId: "p",
+    baselineRevision: initialProjectSettings(state.activeProject).baselineRevision, settings: settings({ name: "新名稱" }), actor: { ...actor, name: "別人" } });
+  assert.equal(renamed.activeProject.statusChange, undefined, "no status change, no record");
+  const reviewRecord = { status: "review" as const, at: "2026-11-16T01:00:00.000Z", byName: "林工程師" };
+  const inReview = createWorkspaceState({ projects: [board("r", { status: "review", statusChange: reviewRecord })], templates: BUILT_IN_TEMPLATES, library: BUILT_IN_COMPONENTS, activeProjectId: "r", updatedAt: draft.updatedAt }, true);
+  const reviewRenamed = reduceWorkspaceState(inReview, { type: "project/settings", requestToken: "c", projectId: "r",
+    baselineRevision: initialProjectSettings(inReview.activeProject).baselineRevision,
+    settings: parseProjectSettings({ ...initialProjectSettings(inReview.activeProject).values, name: "審核中改名" }) as Exclude<ReturnType<typeof parseProjectSettings>, string>, actor });
+  assert.equal(reviewRenamed.activeProject.name, "審核中改名");
+  assert.deepEqual(reviewRenamed.activeProject.statusChange, reviewRecord, "the 林工程師 record is kept, not replaced by 王工程師");
+  // A record for another status (an older client changed it) is not shown as the current one.
+  assert.equal(statusChangeLabel({ status: "draft", statusChange: approved.activeProject.statusChange }), "");
+  assert.equal(statusChangeLabel(board("q")), "");
+});
+
+test("undo and redo never switch the 狀態: approving again has to go through 板子設定 and its record", () => {
+  const start = board("p", { status: "review" });
+  let state = createWorkspaceState({ projects: [start], templates: BUILT_IN_TEMPLATES, library: BUILT_IN_COMPONENTS, activeProjectId: "p", updatedAt: start.updatedAt }, true);
+  const apply = (status: PcbProject["status"], at: string, name: string) => {
+    state = reduceWorkspaceState(state, { type: "project/settings", requestToken: at, projectId: "p",
+      baselineRevision: initialProjectSettings(state.activeProject).baselineRevision,
+      settings: parseProjectSettings({ ...initialProjectSettings(state.activeProject).values, status }) as Exclude<ReturnType<typeof parseProjectSettings>, string>,
+      actor: { at, name } });
+  };
+  apply("approved", "2026-11-17T01:00:00.000Z", "王工程師");
+  apply("draft", "2026-11-17T02:00:00.000Z", "李工程師");
+  const moved = reduceWorkspaceState(state, { type: "project/commit", update: { ...state.activeProject, description: "改了描述" } });
+  const undone = reduceWorkspaceState(reduceWorkspaceState(moved, { type: "history/undo" }), { type: "history/undo" });
+  assert.equal(undone.activeProject.description, start.description, "the edits themselves are undone");
+  assert.equal(undone.activeProject.status, "draft", "the board does not become 已核准 again through undo");
+  assert.deepEqual(undone.activeProject.statusChange, { status: "draft", at: "2026-11-17T02:00:00.000Z", byName: "李工程師" });
+  const redone = reduceWorkspaceState(undone, { type: "history/redo" });
+  assert.equal(redone.activeProject.status, "draft");
+  assert.equal(statusChangeLabel(redone.activeProject).startsWith("李工程師"), true);
+});
+
+test("the 狀態 record survives saving and loading; a malformed one is dropped, never the board", () => {
+  const project = board("p", { status: "approved", statusChange: { status: "approved", at: "2026-11-17T06:20:00.000Z", byName: " 王工程師 ", byId: "u-1" } });
+  const parsed = parseProjectJson(JSON.stringify(project));
+  assert.ok(parsed.ok);
+  assert.deepEqual(parsed.ok && parsed.value.statusChange, { status: "approved", at: "2026-11-17T06:20:00.000Z", byName: "王工程師", byId: "u-1" });
+  for (const statusChange of [{ status: "x", at: "2026-11-17T06:20:00.000Z" }, { status: "approved", at: "not a date" }, "approved", null]) {
+    const broken = parseProjectJson(JSON.stringify({ ...project, statusChange }));
+    assert.ok(broken.ok, JSON.stringify(statusChange));
+    assert.equal(broken.ok && "statusChange" in broken.value, false, JSON.stringify(statusChange));
+  }
+  assert.equal(normalizeStatusChange({ status: "review", at: "2026-11-17T00:00:00.000Z", byName: "x".repeat(90) })?.byName?.length, 60);
+});
+
 test("copies, imports and template boards never inherit an approval", () => {
   const approved = board("p", { status: "approved", owner: { displayName: "王工程師" } });
   const template = { ...BUILT_IN_TEMPLATES[0], project: { ...BUILT_IN_TEMPLATES[0].project, status: "approved" as const } };
@@ -131,6 +194,19 @@ test("copies, imports and template boards never inherit an approval", () => {
   const fromTemplate = reduceWorkspaceState(state, { type: "template/apply", templateId: template.id });
   assert.equal(fromTemplate.activeProject.status, "draft");
   assert.match(fromTemplate.activeProject.name, /新板子$/);
+  // The 核准 record stays with the approved board; nothing made from it carries it.
+  const record = { status: "approved" as const, at: "2026-11-17T06:20:00.000Z", byName: "王工程師" };
+  const recorded = createWorkspaceState({ projects: [{ ...approved, statusChange: record }], templates: [{ ...template, project: { ...template.project, statusChange: record } }], library: BUILT_IN_COMPONENTS, activeProjectId: "p", updatedAt: approved.updatedAt }, true);
+  for (const action of [
+    { type: "project/duplicate" as const, projectId: "p" },
+    { type: "project/duplicate" as const, projectId: "p", newRevision: true },
+    { type: "project/import" as const, project: { ...approved, statusChange: record } },
+    { type: "template/apply" as const, templateId: template.id },
+  ]) {
+    const next = reduceWorkspaceState(recorded, action);
+    assert.equal(next.activeProject.statusChange, undefined, action.type);
+    assert.deepEqual(next.data.projects.find(project => project.id === "p")?.statusChange, record, "the approved board keeps its record");
+  }
   const created = reduceWorkspaceState(state, { type: "project/create", input: { name: "新板", owner: { userId: "u-9", displayName: "我" } } });
   assert.deepEqual(created.activeProject.owner, { userId: "u-9", displayName: "我" });
 });
