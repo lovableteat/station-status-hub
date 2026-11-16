@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   BOM_DIFF_QUERY_KEYS, bomSeriesStem, bomVersionComparePair, buildBomSeriesList, createBomVersionWorkspaceId, deriveLegacyBomVersion, findBomSeriesByWorkspace,
-  inferBomSeriesForFile, nextBomVersionNumber, normalizeBomVersion, readBomDiffLocation, resolveCurrentBomVersion,
+  inferBomSeriesForFile, nextBomVersionNumber, normalizeBomVersion, readBomDiffLocation, readBomLocateLocation, resolveCurrentBomVersion, writeBomLocateLocation,
 } from "../src/components/material-requests/bomVersioning.ts";
 
 const workspace = (id: string, overrides: Record<string, unknown> = {}) => ({
@@ -123,4 +123,17 @@ test("version workspace ids carry the series slug and version number plus a rand
   const id = createBomVersionWorkspaceId("Vera_CPU_Rack_CPU_Module.xlsx", 4, "abc123");
   assert.equal(id, "bom:vera-cpu-rack-cpu-module-xlsx:v4:abc123");
   assert.match(createBomVersionWorkspaceId("", 1), /^bom:bom:v1:[a-z0-9]{6}$/);
+});
+
+test("a part located from a version comparison round-trips through the URL", () => {
+  const url = new URL("https://example.test/?workspace=material-requests&q=keep");
+  writeBomLocateLocation(url, { recordId: "Sheet1-12", workspaceId: "bom-v3", returnTo: { seriesId: "series:qa", before: "bom-v2", after: "bom-v3", lostOnly: true } });
+  assert.deepEqual(readBomLocateLocation(url.search), { recordId: "Sheet1-12", workspaceId: "bom-v3", returnTo: { seriesId: "series:qa", before: "bom-v2", after: "bom-v3", lostOnly: true } });
+  assert.equal(url.searchParams.get("q"), "keep");
+  writeBomLocateLocation(url, null);
+  assert.equal(readBomLocateLocation(url.search), null);
+  assert.equal([...url.searchParams.keys()].some((key) => key.startsWith("bomLocate")), false);
+  assert.equal(readBomLocateLocation("?bomLocate=r1&bomLocateBom=w1"), null, "no comparison to go back to");
+  assert.equal(readBomLocateLocation("?bomLocate=r1&bomLocateBom=w1&bomLocateBack=%5B%22s%22%2C%22a%22%2C%22a%22%5D"), null, "the same version on both sides");
+  assert.equal(readBomLocateLocation("?bomLocate=r1&bomLocateBom=w1&bomLocateBack=not-json"), null);
 });

@@ -278,6 +278,39 @@ export function readBomDiffLocation(search: string): { seriesId: string; before:
   return { seriesId, before, after, lostOnly: params.get("bomDiffLost") === "1" };
 }
 
+/**
+ * 到料號表補填 / 在料號表查看 from a version comparison: the part shown in the table and the comparison that
+ * 返回比對 reopens, so a refresh, back or shared link shows the same located part.
+ */
+export const BOM_LOCATE_QUERY_KEYS = ["bomLocate", "bomLocateBom", "bomLocateBack"] as const;
+
+export interface BomLocateLocation {
+  recordId: string;
+  workspaceId: string;
+  returnTo: { seriesId: string; before: string; after: string; lostOnly: boolean };
+}
+
+export function readBomLocateLocation(search: string): BomLocateLocation | null {
+  const params = new URLSearchParams(search);
+  const recordId = params.get("bomLocate")?.trim();
+  const workspaceId = params.get("bomLocateBom")?.trim();
+  if (!recordId || !workspaceId) return null;
+  let back: unknown = null;
+  try { back = JSON.parse(params.get("bomLocateBack") ?? "null"); } catch { back = null; }
+  if (!Array.isArray(back) || back.length < 3 || !back.slice(0, 3).every((value) => typeof value === "string" && value.trim())) return null;
+  const [seriesId, before, after, lost] = back as [string, string, string, unknown];
+  if (before === after) return null;
+  return { recordId, workspaceId, returnTo: { seriesId, before, after, lostOnly: lost === 1 } };
+}
+
+export function writeBomLocateLocation(url: URL, value: BomLocateLocation | null) {
+  for (const key of BOM_LOCATE_QUERY_KEYS) url.searchParams.delete(key);
+  if (!value) return;
+  url.searchParams.set("bomLocate", value.recordId);
+  url.searchParams.set("bomLocateBom", value.workspaceId);
+  url.searchParams.set("bomLocateBack", JSON.stringify([value.returnTo.seriesId, value.returnTo.before, value.returnTo.after, value.returnTo.lostOnly ? 1 : 0]));
+}
+
 export function formatBomVersionTitle(version: Pick<BomSeriesVersion, "displayNumber" | "version">) {
   return version.version.label ? `${version.displayNumber} · ${version.version.label}` : version.displayNumber;
 }

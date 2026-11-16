@@ -17,7 +17,7 @@
 }
 
 .bom-diff-sources {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
 }
 
 .bom-diff-view [data-version-side="before"] {
@@ -79,7 +79,6 @@
   opacity: 1;
 }
 
-.bom-diff-complete,
 .bom-diff-table-state {
   display: inline-flex;
   align-items: center;
@@ -89,14 +88,6 @@
   background-color: hsl(var(--bom-diff-feedback) / 0.12);
   color: hsl(var(--bom-diff-feedback));
   font-weight: 650;
-}
-
-.bom-diff-complete {
-  --bom-diff-feedback: var(--success);
-  min-height: 1.75rem;
-  padding-inline: 0.5rem;
-  font-size: 0.75rem;
-  white-space: nowrap;
 }
 
 .bom-diff-table-state {
@@ -117,24 +108,46 @@
   color: hsl(var(--foreground) / 0.85);
 }
 
-/* Summary is a sentence, not buttons: the counts you can click are the filter chips. */
-.bom-diff-summary {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.125rem 0.875rem;
-  color: hsl(var(--foreground) / 0.85);
-  font-size: 0.8125rem;
+.bom-diff-count {
+  margin-inline-start: auto;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.bom-diff-summary > span[data-tone="success"] { color: hsl(var(--success)); }
-.bom-diff-summary > span[data-tone="danger"] { color: hsl(var(--destructive)); }
-.bom-diff-summary > span[data-tone="warning"] { color: hsl(var(--warning)); }
-.bom-diff-summary > span { font-weight: 650; white-space: nowrap; }
-.bom-diff-summary > .bom-diff-summary-groups { color: hsl(var(--muted-foreground)); font-weight: 400; }
+.bom-diff-detail-heading {
+  display: flex;
+  min-height: 2rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.375rem 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.bom-diff-detail-heading > p {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.bom-diff-view .bom-diff-locate {
+  height: 2rem;
+  gap: 0.375rem;
+  padding-inline: 0.625rem;
+  font-size: 0.8125rem;
+}
+
+.bom-diff-view .bom-diff-locate svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.bom-diff-lost .bom-diff-locate {
+  margin-top: 0.5rem;
+}
 
 .bom-diff-kind {
   gap: 0.375rem;
@@ -185,8 +198,150 @@
 
 @media (min-width: 900px) {
   .bom-diff-toolbar {
-    grid-template-columns: minmax(0, 1fr) clamp(19rem, 40vw, 28rem);
+    grid-template-columns: minmax(0, 1fr) clamp(22rem, 46vw, 40rem);
   }
+}
+
+/* Phone and narrow windows: the whole comparison scrolls, so the change cards are never squeezed under the filters. */
+.bom-diff-view[data-compact] {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.bom-diff-view[data-compact] .bom-diff-filter-row > .bom-diff-search {
+  flex-basis: 100%;
+}
+
+.bom-diff-view[data-compact] .bom-diff-kinds {
+  width: 100%;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.bom-diff-view[data-compact] .bom-diff-kinds > button {
+  flex: none;
+}
+
+.bom-diff-view[data-compact] .bom-diff-filter-tail {
+  width: 100%;
+}
+
+.bom-diff-results--cards {
+  flex: none;
+}
+
+.bom-diff-cards {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bom-diff-card {
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.625rem;
+  background: hsl(var(--card));
+}
+
+.bom-diff-card[data-open] {
+  border-color: hsl(var(--primary) / 0.4);
+}
+
+.bom-diff-card-head {
+  display: grid;
+  width: 100%;
+  min-height: 2.75rem;
+  gap: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+}
+
+.bom-diff-card-head:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
+}
+
+.bom-diff-card-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+  color: hsl(var(--foreground));
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.bom-diff-card-title > .font-mono {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bom-diff-card-chevron {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  margin-inline-start: auto;
+  color: hsl(var(--muted-foreground));
+}
+
+.bom-diff-card[data-open] .bom-diff-card-chevron {
+  transform: rotate(180deg);
+}
+
+.bom-diff-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.bom-diff-card-preview {
+  display: grid;
+  gap: 0.125rem;
+  color: hsl(var(--foreground) / 0.85);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.bom-diff-cards-empty {
+  border: 1px dashed hsl(var(--border));
+  border-radius: 0.625rem;
+  padding: 1.5rem 0.75rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.bom-diff-line-list {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.bom-diff-line-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.bom-diff-line-item strong,
+.bom-diff-line-item span > span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.bom-diff-line-item strong {
+  color: hsl(var(--foreground));
+  font-weight: 650;
+}
+
+.bom-diff-line-item span > span {
+  color: hsl(var(--muted-foreground));
 }
 
 @media (max-width: 767px) {
@@ -201,28 +356,28 @@
     min-width: 2.75rem;
   }
 
-  .bom-diff-view .bom-diff-summary {
-    flex: 1 0 100%;
-    order: 1;
+  .bom-diff-view .bom-diff-locate {
+    min-height: 2.75rem;
   }
 
-  .bom-diff-view {
-    overflow-y: auto;
+  /* The pickers name both versions; on a phone the file cards give way and only 匯出差異 Excel stays on that row. */
+  .bom-diff-sources {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: end;
   }
 
-  .bom-diff-results {
-    flex: 1 0 12rem;
-  }
-
-  .bom-diff-results > table > thead {
-    position: static;
+  .bom-diff-source {
+    display: none;
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .bom-diff-complete,
-  .bom-diff-summary {
-    animation: bom-diff-reveal 160ms ease-out both;
+  .bom-diff-card-chevron {
+    transition: transform 150ms ease-out;
+  }
+
+  .bom-diff-card .bom-diff-detail {
+    animation: bom-diff-reveal 150ms ease-out both;
   }
 
   .bom-diff-spinner {

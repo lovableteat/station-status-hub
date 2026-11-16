@@ -80,7 +80,8 @@ function startHarness() {
     await dialog.waitFor({ state: 'detached' });
     const uploadFeedback = page.locator('[data-ui="toast"]').filter({ hasText: 'BOM 版本已建立' });
     await uploadFeedback.waitFor();
-    assert.match(await uploadFeedback.textContent(), /12 筆廠商料明細/);
+    assert.match(await uploadFeedback.textContent(), /V2 → V3：新增 1 · 移除 0 · 變更 1/, 'the upload result says what changed');
+    assert.match(await uploadFeedback.textContent(), /已帶入舊版的追蹤、Note、負責人與 SPEC 附件 2 筆/, 'and what carried over');
     assert.ok(await uploadFeedback.evaluate(element => element.classList.contains('bom-upload-toast') && !element.classList.contains('bom-upload-toast--warning')));
     if (process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH) await page.screenshot({ path: process.env.AUDIT_BOM_VERSION_SCREENSHOT_PATH.replace(/\.png$/, '-upload-success.png') });
     await uploadFeedback.locator('[toast-close]').click();

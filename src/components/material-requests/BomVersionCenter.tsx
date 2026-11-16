@@ -1,9 +1,10 @@
 import { recoverableLazy } from "@/components/common/recoverableLazy";
 import { Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronDown, CircleAlert, CircleCheck, Download, FileArchive, FileText, GitCompareArrows, Layers3, LoaderCircle, Pencil, Search, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, CircleAlert, CircleCheck, Download, FileArchive, FileText, GitCompareArrows, Layers3, LoaderCircle, MoreHorizontal, Pencil, Search, Trash2, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 
-import { BomDiffView } from "./BomDiffView";
+import { BomDiffView, type BomDiffViewState } from "./BomDiffView";
 import { diffBomRecords, type BomDiffEntry, type BomDiffResult } from "./bomDiff";
 import { exportBomDiffExcel } from "./bomDiffExport";
 import {
@@ -42,14 +43,64 @@ function VersionActivity({ children }: { children: string }) {
   return <p role="status" className="bom-version-activity"><LoaderCircle className="bom-version-spinner" aria-hidden="true" />{children}</p>;
 }
 
-function UploadTimestamp({ value }: { value: string }) {
+/** 11/17 14:28 this year, 2025/11/17 14:28 otherwise; the full date and time stay in the label and title. */
+function UploadTimestamp({ value, by }: { value: string; by?: string }) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return <span className="font-semibold text-foreground">{value || "—"}</span>;
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  const pad = (part: number) => String(part).padStart(2, "0");
+  const day = `${sameYear ? "" : `${date.getFullYear()}/`}${pad(date.getMonth() + 1)}/${pad(date.getDate())}`;
   return (
-    <time dateTime={date.toISOString()} aria-label={formatBomTimestamp(value)} className="bom-version-uploaded-at inline-flex whitespace-nowrap tabular-nums">
-      <span>{date.toLocaleDateString("zh-TW", { year: "numeric", month: "2-digit", day: "2-digit" })}</span>
-      <span>{date.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" })}</span>
+    <time dateTime={date.toISOString()} aria-label={formatBomTimestamp(value)} title={[formatBomTimestamp(value), by].filter(Boolean).join(" · ")} className="bom-version-uploaded-at inline-flex whitespace-nowrap tabular-nums">
+      <span>{day}</span>
+      <span>{pad(date.getHours())}:{pad(date.getMinutes())}</span>
     </time>
+  );
+}
+
+/** The table scroll hint only shows when the table really is wider than its box. */
+function useOverflowX<T extends HTMLElement>() {
+  const [node, setNode] = useState<T | null>(null);
+  const [overflowing, setOverflowing] = useState(false);
+  useEffect(() => {
+    if (!node || typeof ResizeObserver === "undefined") { setOverflowing(false); return; }
+    const update = () => setOverflowing(node.scrollWidth > node.clientWidth + 1);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    if (node.firstElementChild) observer.observe(node.firstElementChild);
+    return () => observer.disconnect();
+  }, [node]);
+  return [setNode, overflowing] as const;
+}
+
+/** Rare and destructive version actions, each with its word: 頁數進度, 下載原檔, 編輯說明, 刪除版本. */
+function VersionMoreMenu({ item, canEdit, ready, pending, onPages, onDownload, onEdit, onDelete }: {
+  item: BomSeriesVersion;
+  canEdit: boolean;
+  ready: boolean;
+  pending: boolean;
+  onPages: () => void;
+  onDownload: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const source = item.version.source;
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="ghost" size="sm" aria-label={`${item.displayNumber} 更多操作`} title={`${item.displayNumber}：頁數進度、下載原檔、編輯說明、刪除版本`} className="bom-version-more">
+          <MoreHorizontal aria-hidden="true" />更多
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="bom-version-menu">
+        <DropdownMenuItem disabled={!canEdit} onSelect={onPages} title={`記錄 ${item.displayNumber} 每一頁的建料進度`}><FileText aria-hidden="true" />頁數進度</DropdownMenuItem>
+        <DropdownMenuItem disabled={!source} onSelect={onDownload} title={source ? `下載上傳時的原始 Excel：${source.name}` : "這個版本上傳時沒有保存原始 Excel"}><Download aria-hidden="true" />{source ? "下載原檔" : "下載原檔（沒有保存）"}</DropdownMenuItem>
+        {canEdit && <DropdownMenuItem disabled={!ready || pending} onSelect={onEdit} title={`修改 ${item.displayNumber} 的版本標籤與說明`}><Pencil aria-hidden="true" />編輯說明</DropdownMenuItem>}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled={!canEdit || !ready || pending} onSelect={onDelete} title={`永久刪除 ${item.displayNumber}（會先確認）`} className="bom-version-menu-danger"><Trash2 aria-hidden="true" />刪除版本</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -86,6 +137,15 @@ export interface BomVersionCenterProps {
   onDownloadSource: (version: BomSeriesVersion) => void;
   /** Opens straight into a comparison (the 查看差異 action after an upload). A new token opens it again. */
   diffRequest?: BomDiffRequest | null;
+  /** Shows a compared part in the material table so what did not carry over can be filled in; false when it cannot be found. */
+  onLocateDiffEntry?: (target: BomDiffLocateTarget) => boolean;
+}
+
+export interface BomDiffLocateTarget {
+  workspaceId: string;
+  record: MaterialWorkbookRecord;
+  /** The comparison to reopen from the table's 返回比對. */
+  returnTo: Omit<BomDiffRequest, "token">;
 }
 
 export interface BomDiffRequest {
@@ -95,6 +155,8 @@ export interface BomDiffRequest {
   after: string;
   /** Start with 只看未帶入 when the upload left website data behind. */
   lostOnly?: boolean;
+  /** 返回比對 from the material table: the filters and open part the user left with. */
+  view?: BomDiffViewState;
 }
 
 function useCompact() {
@@ -139,8 +201,9 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const {
     open, onOpenChange, canEdit, ready, busy = false, activeBomId, activeProjectId, activeProjectName, historyAccountId, projects, projectNames, seriesList, exportedBy,
     loadRecords, currentBomName, matchCurrentBom, onLocateCurrentBom, onView, onSetCurrent, onUploadVersion, onUploadNew, onAssignProject, onRenameSeries, onUpdateVersion, onSetArchived, onDeleteVersion, onDeleteSeries, onOpenPageTracker, onDownloadSource,
-    diffRequest,
+    diffRequest, onLocateDiffEntry,
   } = props;
+  const [tableScrollRef, tableOverflows] = useOverflowX<HTMLDivElement>();
   const compact = useCompact();
   const [query, setQuery] = useState("");
   const [collapsedProjects, setCollapsedProjects] = useState<string[]>([]);
@@ -202,18 +265,20 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   // Runs after the reset above in the same commit, so an upload's 查看差異 lands directly on its comparison.
   const consumedDiffRequest = useRef<number | null>(null);
   const [diffAttempt, setDiffAttempt] = useState(0);
-  const [diffViewSeed, setDiffViewSeed] = useState<{ token: number; lostOnly: boolean }>({ token: 0, lostOnly: false });
+  const [diffViewSeed, setDiffViewSeed] = useState<{ token: number; lostOnly: boolean; view?: BomDiffViewState }>({ token: 0, lostOnly: false });
   useEffect(() => {
     if (!open || !diffRequest || consumedDiffRequest.current === diffRequest.token) return;
     const series = seriesList.find((item) => item.id === diffRequest.seriesId);
     if (!series?.versions.some((item) => item.workspace.id === diffRequest.before) || !series.versions.some((item) => item.workspace.id === diffRequest.after)) return;
     consumedDiffRequest.current = diffRequest.token;
     setSelectedSeriesId(series.id);
+    // ← 返回系列 on a phone lands on this series' versions, not the series list.
+    setMobilePane("detail");
     // Keep a finished result for the same pair; a failed one is retried through diffAttempt.
     setDiffLoad((current) => (current?.error ? null : current));
     setDiffAttempt((current) => current + 1);
     setDiffPair({ before: diffRequest.before, after: diffRequest.after });
-    setDiffViewSeed({ token: diffRequest.token, lostOnly: Boolean(diffRequest.lostOnly) });
+    setDiffViewSeed({ token: diffRequest.token, lostOnly: Boolean(diffRequest.lostOnly), view: diffRequest.view });
     setMode("diff");
   }, [open, diffRequest, seriesList]);
 
@@ -241,7 +306,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     // A link that is still waiting (e.g. to versions that no longer exist) gives way to what the user picked.
     if (diffRequest) consumedDiffRequest.current = diffRequest.token;
     setDiffPair({ before: before.workspace.id, after: after.workspace.id });
-    setDiffViewSeed((current) => (current.lostOnly ? { ...current, lostOnly: false } : current));
+    setDiffViewSeed((current) => (current.lostOnly || current.view ? { token: current.token, lostOnly: false } : current));
     setMode("diff");
   };
 
@@ -293,6 +358,19 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     }
     if (url.href !== window.location.href) replaceWorkspaceHistory(url);
   }, [open, showingDiff, diffSeries?.id, diffBefore?.workspace.id, diffAfter?.workspace.id, diffLostOnly, diffRequest]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A compared part can be shown in the material table when the new side is the version people edit (or the one on screen).
+  const canLocateDiff = Boolean(onLocateDiffEntry && diffAfter && (diffAfter.isCurrent || diffAfter.workspace.id === activeBomId));
+  // 補填 only where something can be filled in: the current version, by someone who may edit.
+  const canFillDiff = canLocateDiff && Boolean(diffAfter?.isCurrent) && canEdit;
+  const locateDiffEntry = (entry: BomDiffEntry, view: BomDiffViewState) => {
+    const record = entry.lines.find((line) => line.after)?.after;
+    if (!record || !onLocateDiffEntry || !diffSeries || !diffBefore || !diffAfter) return;
+    const located = onLocateDiffEntry({ workspaceId: diffAfter.workspace.id, record, returnTo: { seriesId: diffSeries.id, before: diffBefore.workspace.id, after: diffAfter.workspace.id, lostOnly: view.filters.trackingLostOnly, view } });
+    if (!located) return;
+    nvLocateClosing.current = true;
+    onOpenChange(false);
+  };
 
   const runAction = async (kind: VersionAction, action: () => Promise<void>, success: string) => {
     setPendingAction(kind);
@@ -358,7 +436,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         <div className="flex min-w-0 items-center gap-2">
           <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground" title={series.name}>{series.name}</p>
           <span className={cn(CHIP, "h-6 min-w-9 flex-none justify-center font-mono text-sm font-bold tabular-nums", CHIP_TONE.primary)}>{series.current.displayNumber}</span>
-          {isActive && <span className={cn(CHIP, "flex-none", activeSeries?.version.isCurrent ? CHIP_TONE.success : CHIP_TONE.warning)}>{activeSeries?.version.isCurrent ? "使用中" : `檢視 ${activeSeries?.version.displayNumber}`}</span>}
+          {isActive && <span className={cn(CHIP, "flex-none", activeSeries?.version.isCurrent ? CHIP_TONE.success : CHIP_TONE.warning)} title={activeSeries?.version.isCurrent ? "料號表正在顯示這個系列的目前版本" : `料號表正在唯讀顯示 ${activeSeries?.version.displayNumber}（歷史版本）`}>{activeSeries?.version.isCurrent ? "畫面中" : `畫面中 ${activeSeries?.version.displayNumber}`}</span>}
           {archived && <span className={cn(CHIP, "flex-none", CHIP_TONE.neutral)}>已封存</span>}
         </div>
         <div className="bom-series-metadata"><span>{series.versions.length} 個版本</span><span>{series.recordCount.toLocaleString()} 筆</span><span>更新 {formatBomRelativeTime(series.updatedAt)}</span></div>
@@ -412,84 +490,111 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         </div>
       </div>
 
-      <div className="bom-version-table-scroll min-h-0 flex-1 overflow-auto rounded-xl border border-border" role="region" tabIndex={0} aria-label="版本表格，可橫向捲動查看完整欄位">
-        <table data-testid="bom-version-table" className="w-full min-w-[960px] border-collapse text-sm">
-          <thead className="sticky top-0 z-10 bg-card text-left text-xs text-muted-foreground">
-            <tr>
-              <th className="whitespace-nowrap px-2 py-2 font-semibold">版本</th>
-              <th className="whitespace-nowrap px-2 py-2 font-semibold">狀態</th>
-              <th className="whitespace-nowrap px-2 py-2 font-semibold">標籤／說明</th>
-              <th className="whitespace-nowrap px-2 py-2 font-semibold">來源檔</th>
-              <th className="whitespace-nowrap px-2 py-2 font-semibold">筆數</th>
-              <th className="whitespace-nowrap px-2 py-2 font-semibold">上傳時間</th>
-              <th className="whitespace-nowrap px-2 py-2 font-semibold">追蹤帶入</th>
-              <th className="whitespace-nowrap px-2 py-2 font-semibold">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...selectedSeries.versions].reverse().map((item) => {
-              const isActive = item.workspace.id === activeBomId;
-              const carry = item.version.carry;
-              const comparePair = bomVersionComparePair(selectedSeries, item);
-              const compareOther = comparePair && (comparePair.before === item ? comparePair.after : comparePair.before);
-              const carriedCount = carry?.tracked ?? carry?.matched ?? 0;
-              const carryTitle = carry ? (carry.tracked === undefined
-                ? `${carry.matched} 筆料件對上前一版（這個版本建立時尚未分開統計有帶入資料的筆數）`
-                : `${carry.matched} 筆料件對上前一版，其中 ${carry.tracked} 筆的追蹤、Note、負責人或 SPEC 附件已帶入`) + (carry.orphaned > 0 ? `；${carry.orphaned} 筆舊版資料找不到對應料件，可在比對中查看` : "") : "";
-              return [
-                <tr key={item.workspace.id} data-version-id={item.workspace.id} data-current={item.isCurrent} className="border-t border-border/60 align-top">
-                  <td className="px-2 py-2 whitespace-nowrap"><span className={cn("inline-flex h-9 min-w-14 items-center justify-center rounded-md border px-2 font-mono text-base font-bold tabular-nums", item.isCurrent ? "border-primary bg-primary text-primary-foreground" : "border-primary/40 bg-primary/10 text-foreground")}>{item.displayNumber}</span></td>
-                  <td className="px-2 py-2 text-xs">
-                    <span className="bom-version-chip-row flex gap-1">
-                      {item.isCurrent ? <span className={cn(CHIP, CHIP_TONE.success)}>目前版本</span> : <span className={cn(CHIP, CHIP_TONE.neutral)}>歷史</span>}
-                      {isActive && <span className={cn(CHIP, CHIP_TONE.warning)}>畫面中</span>}
-                      {item.version.source ? null : <span className={cn(CHIP, CHIP_TONE.neutral)} title="這個版本沒有保存原始 Excel">無原檔</span>}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2 text-xs">
-                    <span className="bom-version-label-note" title={[item.version.label || "未設定標籤", item.version.note, !item.stored ? "版本化前上傳的 BOM" : ""].filter(Boolean).join(" · ")}>
-                      <strong className={cn("font-semibold", item.version.label ? "text-foreground" : "font-normal text-muted-foreground")}>{item.version.label || "未設定標籤"}</strong>
-                      {item.version.note && <span className="text-foreground/80">{item.version.note}</span>}
-                      {!item.stored && <span className="text-muted-foreground">版本化前上傳的 BOM</span>}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2 text-xs text-foreground/85"><span className="bom-version-source-file" title={`${item.workspace.payload.sourceFile} · ${item.workspace.payload.sheetName}`}>{item.workspace.payload.sourceFile}</span></td>
-                  <td className="px-2 py-2 text-xs tabular-nums text-foreground/85">{item.workspace.payload.recordCount.toLocaleString()}</td>
-                  <td className="px-2 py-2 text-xs"><span className="bom-version-upload"><UploadTimestamp value={item.version.uploadedAt} />{item.version.uploadedBy && <span className="bom-version-uploader text-muted-foreground" title={item.version.uploadedBy}>{item.version.uploadedBy}</span>}</span></td>
-                  <td className="px-2 py-2 text-xs">
-                    {carry ? (
-                      <span className="bom-version-chip-row flex gap-1" title={carryTitle}>
-                        <span className={cn(CHIP, carry.tracked === undefined ? CHIP_TONE.neutral : CHIP_TONE.success)}>{carry.tracked === undefined ? "對上" : "帶入"} {carriedCount}</span>
-                        {carry.orphaned > 0 && <span className={cn(CHIP, CHIP_TONE.danger)}>未帶入 {carry.orphaned}</span>}
-                        {carry.manual > 0 && <span className={cn(CHIP, CHIP_TONE.neutral)} title="網站上手動新增、新版 Excel 沒有的料件，已保留到這一版">手動 {carry.manual}</span>}
-                      </span>
-                    ) : <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <div className="bom-version-row-actions flex items-center gap-1">
-                      {!isActive && <Button type="button" variant="secondary" size="sm" onClick={() => onView(item.workspace.id)} title={item.isCurrent ? "回到目前版本的料號表" : `在料號表唯讀查看 ${item.displayNumber}`} className="h-8 px-2 text-xs lg:h-7">檢視</Button>}
-                      {!item.isCurrent && <Button type="button" variant="outline" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onSetCurrent(item, selectedSeries)} title={`讓所有人改用 ${item.displayNumber} 維護料件與追蹤`} className="h-8 px-2 text-xs lg:h-7">設為目前版本</Button>}
-                      {comparePair && compareOther && <Button type="button" variant="ghost" size="sm" onClick={() => openDiff(selectedSeries, comparePair.before, comparePair.after)} title={`比對 ${comparePair.before.displayNumber}（舊）與 ${comparePair.after.displayNumber}（新）`} className="h-8 px-2 text-xs lg:h-7">比對 {compareOther.displayNumber}</Button>}
-                      <span className="bom-version-icon-actions">
-                        <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onOpenPageTracker(item.workspace.id)} aria-label="頁數" title={`記錄 ${item.displayNumber} 每一頁的建料進度`} className="h-8 w-8 p-0 lg:h-7 lg:w-7"><FileText className="h-3.5 w-3.5" aria-hidden="true" /></Button>
-                        {item.version.source && <Button type="button" variant="ghost" size="sm" onClick={() => onDownloadSource(item)} aria-label="原檔" title={`下載上傳時的原始 Excel：${item.version.source.name}`} className="h-8 w-8 p-0 lg:h-7 lg:w-7"><Download className="h-3.5 w-3.5" aria-hidden="true" /></Button>}
-                        {canEdit && <Button type="button" variant="ghost" size="sm" disabled={!ready || pending} aria-pressed={editingVersionId === item.workspace.id} onClick={() => setEditingVersionId(editingVersionId === item.workspace.id ? null : item.workspace.id)} aria-label="編輯說明" title={`修改 ${item.displayNumber} 的版本標籤與說明`} className="h-8 w-8 p-0 lg:h-7 lg:w-7"><Pencil className="h-3.5 w-3.5" aria-hidden="true" /></Button>}
-                        <Button type="button" variant="ghost" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onDeleteVersion(item, selectedSeries)} aria-label="刪除" title={`永久刪除 ${item.displayNumber}（會先確認）`} className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive lg:h-7 lg:w-7"><Trash2 className="h-3.5 w-3.5" aria-hidden="true" /></Button>
-                      </span>
-                    </div>
-                  </td>
-                </tr>,
-                editingVersionId === item.workspace.id && (
-                  <tr key={`${item.workspace.id}:edit`}><td colSpan={8} className="px-2 pb-2">
-                    <VersionEditor version={item} busy={pending} saving={pendingAction === "version"} onCancel={() => setEditingVersionId(null)} onSave={(patch) => void runAction("version", () => onUpdateVersion(item, selectedSeries, patch), "版本說明已更新").then(saved => { if (saved) setEditingVersionId(null); })} />
-                  </td></tr>
-                ),
-              ];
+      {(() => {
+        const versions = [...selectedSeries.versions].reverse();
+        const describe = (item: BomSeriesVersion) => {
+          const isActive = item.workspace.id === activeBomId;
+          const carry = item.version.carry;
+          const comparePair = bomVersionComparePair(selectedSeries, item);
+          const compareOther = comparePair && (comparePair.before === item ? comparePair.after : comparePair.before);
+          const carriedCount = carry?.tracked ?? carry?.matched ?? 0;
+          const carryTitle = carry ? (carry.tracked === undefined
+            ? `${carry.matched} 筆料件對上前一版（這個版本建立時尚未分開統計有帶入資料的筆數）`
+            : `${carry.matched} 筆料件對上前一版，其中 ${carry.tracked} 筆的追蹤、Note、負責人或 SPEC 附件已帶入`) + (carry.orphaned > 0 ? `；${carry.orphaned} 筆舊版資料找不到對應料件，可在比對中查看` : "") : "";
+          const editing = editingVersionId === item.workspace.id;
+          const statusChips = <>
+            {item.isCurrent ? <span className={cn(CHIP, CHIP_TONE.success)}>目前版本</span> : <span className={cn(CHIP, CHIP_TONE.neutral)}>歷史</span>}
+            {isActive && <span className={cn(CHIP, CHIP_TONE.warning)} title="料號表正在顯示這個版本">畫面中</span>}
+          </>;
+          const carryChips = carry ? (
+            <span className="bom-version-chip-row flex gap-1" title={carryTitle}>
+              <span className={cn(CHIP, carry.tracked === undefined ? CHIP_TONE.neutral : CHIP_TONE.success)}>{carry.tracked === undefined ? "對上" : "帶入"} {carriedCount}</span>
+              {carry.orphaned > 0 && <span className={cn(CHIP, CHIP_TONE.danger)}>未帶入 {carry.orphaned}</span>}
+              {carry.manual > 0 && <span className={cn(CHIP, CHIP_TONE.neutral)} title="網站上手動新增、新版 Excel 沒有的料件，已保留到這一版">手動 {carry.manual}</span>}
+            </span>
+          ) : null;
+          const labelNote = (
+            <span className="bom-version-label-note" title={[item.version.label || "未設定標籤", item.version.note, !item.stored ? "版本化前上傳的 BOM" : ""].filter(Boolean).join(" · ")}>
+              <strong className={cn("font-semibold", item.version.label ? "text-foreground" : "font-normal text-muted-foreground")}>{item.version.label || "未設定標籤"}</strong>
+              {item.version.note && <span className="text-foreground/80">{item.version.note}</span>}
+              {!item.stored && <span className="text-muted-foreground">版本化前上傳的 BOM</span>}
+            </span>
+          );
+          const source = (
+            <span className="bom-version-source" title={`${item.workspace.payload.sourceFile} · ${item.workspace.payload.sheetName} · ${item.workspace.payload.recordCount.toLocaleString()} 筆`}>
+              <span className="bom-version-source-file">{item.workspace.payload.sourceFile}</span>
+              <span className="bom-version-record-count">{item.workspace.payload.recordCount.toLocaleString()} 筆</span>
+            </span>
+          );
+          const uploaded = <span className="bom-version-upload"><UploadTimestamp value={item.version.uploadedAt} by={item.version.uploadedBy} />{item.version.uploadedBy && <span className="bom-version-uploader text-muted-foreground" title={item.version.uploadedBy}>{item.version.uploadedBy}</span>}</span>;
+          // Fixed slots: 檢視, 設為目前版本 and 比對 line up on every row even when a row has no 檢視 or 設為目前版本.
+          const actions = <>
+            <span className="bom-version-slot">{!isActive && <Button type="button" variant="secondary" size="sm" onClick={() => onView(item.workspace.id)} title={item.isCurrent ? "回到目前版本的料號表" : `在料號表唯讀查看 ${item.displayNumber}`}>檢視</Button>}</span>
+            <span className="bom-version-slot">{!item.isCurrent && <Button type="button" variant="outline" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onSetCurrent(item, selectedSeries)} title={`讓所有人改用 ${item.displayNumber} 維護料件與追蹤`}>設為目前版本</Button>}</span>
+            <span className="bom-version-slot">{comparePair && compareOther && <Button type="button" variant="ghost" size="sm" onClick={() => openDiff(selectedSeries, comparePair.before, comparePair.after)} title={`比對 ${comparePair.before.displayNumber}（舊）與 ${comparePair.after.displayNumber}（新）`} className="bom-version-compare">比對 {compareOther.displayNumber}</Button>}</span>
+            <VersionMoreMenu item={item} canEdit={canEdit} ready={ready} pending={pending}
+              onPages={() => onOpenPageTracker(item.workspace.id)}
+              onDownload={() => onDownloadSource(item)}
+              onEdit={() => setEditingVersionId(item.workspace.id)}
+              onDelete={() => onDeleteVersion(item, selectedSeries)} />
+          </>;
+          const editor = editing && <VersionEditor version={item} busy={pending} saving={pendingAction === "version"} onCancel={() => setEditingVersionId(null)} onSave={(patch) => void runAction("version", () => onUpdateVersion(item, selectedSeries, patch), "版本說明已更新").then(saved => { if (saved) setEditingVersionId(null); })} />;
+          return { item, statusChips, carryChips, labelNote, source, uploaded, actions, editor };
+        };
+        if (compact) return (
+          // Phone: one card per version, every action with its word, nothing hidden off to the side.
+          <ol data-testid="bom-version-cards" className="bom-version-cards" aria-label={`${selectedSeries.name} 的版本`}>
+            {versions.map((version) => {
+              const { item, statusChips, carryChips, labelNote, source, uploaded, actions, editor } = describe(version);
+              return (
+                <li key={item.workspace.id} data-version-id={item.workspace.id} data-current={item.isCurrent} className="bom-version-card">
+                  <div className="bom-version-card-head">
+                    <span className="bom-version-number" data-current={item.isCurrent}>{item.displayNumber}</span>
+                    <span className="bom-version-chip-row flex min-w-0 gap-1">{statusChips}</span>
+                    {carryChips}
+                  </div>
+                  <div className="bom-version-card-body">{labelNote}{source}{uploaded}</div>
+                  <div className="bom-version-row-actions bom-version-card-actions">{actions}</div>
+                  {editor}
+                </li>
+              );
             })}
-          </tbody>
-        </table>
-      </div>
-      <p className="bom-version-footnote text-xs text-muted-foreground"><strong>歷史版本唯讀</strong><span>料件與追蹤在目前版本維護。上傳新版時帶入追蹤、Note、負責人與 SPEC 附件，未帶入的可在比對中查看。</span><span className="bom-version-scroll-hint">← 左右捲動查看完整欄位 →</span></p>
+          </ol>
+        );
+        return (
+          <div ref={tableScrollRef} className="bom-version-table-scroll min-h-0 flex-1 overflow-auto rounded-xl border border-border" role="region" tabIndex={0} aria-label={tableOverflows ? "版本表格，可橫向捲動查看完整欄位" : "版本表格"}>
+            <table data-testid="bom-version-table" className="w-full border-collapse text-sm">
+              <thead className="sticky top-0 z-10 bg-card text-left text-xs text-muted-foreground">
+                <tr>
+                  <th className="bom-version-col-version whitespace-nowrap px-2 py-2 font-semibold">版本</th>
+                  <th className="bom-version-col-label whitespace-nowrap px-2 py-2 font-semibold">標籤／說明</th>
+                  <th className="bom-version-col-source whitespace-nowrap px-2 py-2 font-semibold">來源檔</th>
+                  <th className="bom-version-col-fit whitespace-nowrap px-2 py-2 font-semibold">上傳</th>
+                  <th className="bom-version-col-fit whitespace-nowrap px-2 py-2 font-semibold">追蹤帶入</th>
+                  <th className="bom-version-col-fit whitespace-nowrap px-2 py-2 font-semibold">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {versions.map((version) => {
+                  const { item, statusChips, carryChips, labelNote, source, uploaded, actions, editor } = describe(version);
+                  return [
+                    <tr key={item.workspace.id} data-version-id={item.workspace.id} data-current={item.isCurrent} className="border-t border-border/60 align-top">
+                      <td className="px-2 py-2 whitespace-nowrap"><span className="bom-version-cell-version"><span className="bom-version-number" data-current={item.isCurrent}>{item.displayNumber}</span><span className="bom-version-chip-row flex gap-1">{statusChips}</span></span></td>
+                      <td className="bom-version-col-label px-2 py-2 text-xs">{labelNote}</td>
+                      <td className="bom-version-col-source px-2 py-2 text-xs text-foreground/85">{source}</td>
+                      <td className="px-2 py-2 text-xs">{uploaded}</td>
+                      <td className="px-2 py-2 text-xs">{carryChips ?? <span className="text-muted-foreground">—</span>}</td>
+                      <td className="px-2 py-1.5"><div className="bom-version-row-actions">{actions}</div></td>
+                    </tr>,
+                    editor && <tr key={`${item.workspace.id}:edit`}><td colSpan={6} className="px-2 pb-2">{editor}</td></tr>,
+                  ];
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
+      <p className="bom-version-footnote text-xs text-muted-foreground"><strong>歷史版本唯讀</strong><span>料件與追蹤在目前版本維護，只能在目前版本修改。</span>{tableOverflows && !compact && <span className="bom-version-scroll-hint">← 左右捲動查看完整欄位 →</span>}</p>
     </section>
   );
 
@@ -520,6 +625,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
           <BomDiffView
             key={`diff:${diffViewSeed.token}`}
             initialLostOnly={diffViewSeed.lostOnly}
+            initialView={diffViewSeed.view}
             onLostOnlyChange={setDiffLostOnly}
             series={diffSeries}
             before={diffBefore}
@@ -533,6 +639,9 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
             onSwap={() => setDiffPair((current) => (current ? { before: current.after, after: current.before } : current))}
             onBack={() => setMode("series")}
             onExport={(visible) => void exportDiff(visible)}
+            compact={compact}
+            onLocate={canLocateDiff ? locateDiffEntry : undefined}
+            locateFills={canFillDiff}
           />
         ) : (
           <div className="bom-version-columns grid min-h-0 min-w-0 flex-1">

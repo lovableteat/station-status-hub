@@ -144,7 +144,7 @@ test("duplicate controls were merged: one clear, one page-progress entry, delete
   assert.doesNotMatch(toolbar, /columnVisibility\.marked|只看我的標記/);
   assert.doesNotMatch(source, /function AlternativeRows\(|function SummaryTile\(|saveQuickBomPageTracker|pageTrackerPanelCollapsed/);
   assert.doesNotMatch(source, /function BomManagerDialog\(/, "the flat BOM list was replaced by the version center");
-  assert.match(versionCenter, /aria-label="刪除" title=\{`永久刪除 \$\{item\.displayNumber\}（會先確認）`\}/, "deleting a version is an icon button inside BOM management with its purpose in the title");
+  assert.match(versionCenter, /title=\{`永久刪除 \$\{item\.displayNumber\}（會先確認）`\} className="bom-version-menu-danger"><Trash2 aria-hidden="true" \/>刪除版本<\/DropdownMenuItem>/, "deleting a version stays inside BOM management, as a worded item in the row's 更多 menu");
   assert.match(versionCenter, /刪除系列/);
   assert.doesNotMatch(versionCenter, /BOM ID<\/p>|歷史 BOM 清單/);
 });

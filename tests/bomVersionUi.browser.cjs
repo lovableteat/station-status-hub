@@ -100,28 +100,28 @@ async function run(browser, origin, width) {
     await detail.getByRole('button',{name:'取消',exact:true}).tap(); assert.equal((await calls(page)).some(call=>call.name==='rename'),false);
     await detail.getByRole('button',{name:'修改系列名稱',exact:true}).tap(); await detail.getByRole('textbox',{name:'系列名稱',exact:true}).fill('QA 已更新系列名稱');
     await detail.getByRole('button',{name:'儲存名稱',exact:true}).tap(); await detail.getByRole('heading',{name:'QA 已更新系列名稱',exact:true}).waitFor();
-    const row = detail.getByTestId('bom-version-table').locator('tr[data-version-id]').first();
-    await row.getByRole('button',{name:'編輯說明',exact:true}).tap();
+    const row = detail.locator('[data-version-id]').first();
+    const openMore = async label => { await row.getByRole('button',{name:/更多操作$/}).tap(); await page.getByRole('menuitem',{name:label,exact:true}).tap(); };
+    assert.equal(await detail.getByTestId(width<1024?'bom-version-cards':'bom-version-table').count(),1,'phone shows version cards, desktop the version table');
+    await openMore('編輯說明');
     await detail.getByLabel('版本標籤',{exact:true}).fill('取消的標籤'); await detail.getByRole('button',{name:'取消',exact:true}).tap();
     assert.equal((await calls(page)).some(call=>call.name==='editVersion'),false);
-    await row.getByRole('button',{name:'編輯說明',exact:true}).tap();
+    await openMore('編輯說明');
     await detail.getByLabel('版本標籤',{exact:true}).fill('QA 版次說明'); await detail.getByLabel('版本說明',{exact:true}).fill('保留原本儲存 callback');
     await detail.getByRole('button',{name:'儲存',exact:true}).tap();
     await page.waitForFunction(()=>window.__bomUiFixture.calls.some(call=>call.name==='editVersion'));
     assert.ok((await calls(page)).some(call=>call.name==='editVersion'&&call.args[2].label==='QA 版次說明'));
-    await row.getByRole('button',{name:'頁數',exact:true}).tap(); assert.ok((await calls(page)).some(call=>call.name==='pages'));
+    await openMore('頁數進度'); assert.ok((await calls(page)).some(call=>call.name==='pages'));
     await detail.getByRole('button',{name:'比對版本',exact:true}).tap(); await center.getByTestId('bom-diff-view').waitFor(); await center.getByTestId('bom-diff-summary').waitFor();
     await center.getByRole('button',{name:'← 返回系列',exact:true}).tap(); await detail.waitFor();
     assert.equal((await calls(page)).filter(call=>call.name==='loadRecords').length,2);
-    const table=detail.getByTestId('bom-version-table'); await table.evaluate(el=>el.parentElement.scrollLeft=0);
+    if(width>=1024) await detail.getByTestId('bom-version-table').evaluate(el=>el.parentElement.scrollLeft=0);
     await assertFrame(page,center,width,884); await page.screenshot({path:path.join(evidence,`detail-${width}.png`)});
     await page.setViewportSize({width,height:500}); await page.waitForFunction(()=>{const box=document.querySelector('[data-testid="bom-version-center"]').getBoundingClientRect();return box.height<=innerHeight&&box.y>=0;}); await assertFrame(page,center,width,500);
     await detail.getByRole('button',{name:'上傳此系列新版',exact:true}).scrollIntoViewIfNeeded(); await detail.getByRole('button',{name:'上傳此系列新版',exact:true}).tap();
     if(width<1024) {
-      const tableSize=await detail.locator('.bom-version-table-scroll').evaluate(el=>({height:el.clientHeight,basis:getComputedStyle(el).flexBasis}));
-      assert.ok(tableSize.height>=180,JSON.stringify(tableSize)); assert.equal(tableSize.basis,'200px');
       const before=(await calls(page)).filter(call=>call.name==='pages').length;
-      await row.getByRole('button',{name:'頁數',exact:true}).scrollIntoViewIfNeeded(); await row.getByRole('button',{name:'頁數',exact:true}).tap();
+      await row.getByRole('button',{name:/更多操作$/}).scrollIntoViewIfNeeded(); await openMore('頁數進度');
       assert.equal((await calls(page)).filter(call=>call.name==='pages').length,before+1,'short phone can scroll to a version action');
     }
     await page.screenshot({path:path.join(evidence,`short-${width}.png`)});

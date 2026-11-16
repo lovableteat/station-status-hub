@@ -39,15 +39,25 @@ async function versionFlow(page,width,report){
  await list.getByRole('button',{name:/Vera_CPU_Rack_E1\.S/}).first().click();await detail.waitFor();
  await detail.getByRole('button',{name:'上傳此系列新版',exact:true}).click();assert.ok(await page.evaluate(()=>window.__bomUiFixture.calls.some(c=>c.name==='uploadVersion')));
  await detail.getByRole('button',{name:'修改系列名稱',exact:true}).click();await detail.getByRole('textbox',{name:'系列名稱',exact:true}).fill('QA 單行版本管理');await detail.getByRole('button',{name:'儲存名稱',exact:true}).click();await detail.getByRole('heading',{name:'QA 單行版本管理',exact:true}).waitFor();
+ // Rare and destructive version actions live in each row's 更多 menu, every item with its word.
+ const openMore=async(row,label)=>{await row.getByRole('button',{name:/更多操作$/}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();};
+ if(width>=1024){
  const table=detail.getByTestId('bom-version-table'),row=table.locator('tr[data-version-id]').first();
  const cells=await row.locator('td').evaluateAll(cells=>cells.map(cell=>({text:cell.innerText,whiteSpace:getComputedStyle(cell).whiteSpace,height:cell.getBoundingClientRect().height,children:[...cell.children].map(n=>({top:n.getBoundingClientRect().top,bottom:n.getBoundingClientRect().bottom,height:n.getBoundingClientRect().height,display:getComputedStyle(n).display}))})));
  report.versionCells=cells;const actionBounds=await row.locator('td').last().evaluate(el=>{const b=el.getBoundingClientRect(),s=el.closest('.bom-version-table-scroll').getBoundingClientRect();return{left:b.left,right:b.right,hostLeft:s.left,hostRight:s.right}});report.actionBounds=actionBounds;if(width>=768)assert.ok(actionBounds.left>=actionBounds.hostLeft-1&&actionBounds.right<=actionBounds.hostRight+1,'Version row actions stay visible at default table position: '+JSON.stringify(actionBounds));assert.ok(cells.every(cell=>cell.height<=(width<1024?66:56)),JSON.stringify(cells));assert.ok(cells.every(cell=>cell.whiteSpace==='nowrap'),'Every version data cell keeps a single line');
  const actionGroup=await row.locator('td').last().locator(':scope > div').evaluate(el=>({wrap:getComputedStyle(el).flexWrap,tops:[...el.children].map(n=>n.getBoundingClientRect().top)}));assert.equal(actionGroup.wrap,'nowrap');assert.ok(Math.max(...actionGroup.tops)-Math.min(...actionGroup.tops)<=1);
- await row.getByRole('button',{name:'編輯說明',exact:true}).click();await detail.getByLabel('版本標籤',{exact:true}).fill('QA 單行標籤');await detail.getByLabel('版本說明',{exact:true}).fill('QA 保留完整說明');await page.screenshot({path:path.join(evidence,'version-edit-'+width+'.png')});await detail.getByRole('button',{name:'儲存',exact:true}).click();await page.waitForFunction(()=>window.__bomUiFixture.calls.some(c=>c.name==='editVersion'));
- await row.getByRole('button',{name:'頁數',exact:true}).click();assert.ok(await page.evaluate(()=>window.__bomUiFixture.calls.some(c=>c.name==='pages')));
+ const slots=await table.locator('tr[data-version-id]').evaluateAll(rows=>rows.map(r=>{const b=[...r.querySelectorAll('td:last-child button')].find(n=>/^比對 V/.test(n.innerText));return b?Math.round(b.getBoundingClientRect().left):null;}).filter(v=>v!==null));
+ assert.ok(Math.max(...slots)-Math.min(...slots)<=1,'比對 sits at the same place on every row: '+JSON.stringify(slots));report.compareSlots=slots;
+ }else{
+ const cards=detail.getByTestId('bom-version-cards');await cards.waitFor();assert.equal(await detail.getByTestId('bom-version-table').count(),0,'A phone shows version cards, not a table that scrolls sideways');
+ const bounds=await cards.evaluate(el=>({width:el.clientWidth,scrollWidth:el.scrollWidth}));assert.ok(bounds.scrollWidth<=bounds.width+1,'Version cards never scroll sideways: '+JSON.stringify(bounds));
+ const heights=await cards.locator('.bom-version-card-actions button').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().height));assert.ok(heights.length&&heights.every(h=>h>=44),'Card actions are thumb-sized: '+JSON.stringify(heights));report.cardActionHeights=heights;
+ }
+ const row=detail.locator('[data-version-id]').first();
+ await openMore(row,'編輯說明');await detail.getByLabel('版本標籤',{exact:true}).fill('QA 單行標籤');await detail.getByLabel('版本說明',{exact:true}).fill('QA 保留完整說明');await page.screenshot({path:path.join(evidence,'version-edit-'+width+'.png')});await detail.getByRole('button',{name:'儲存',exact:true}).click();await page.waitForFunction(()=>window.__bomUiFixture.calls.some(c=>c.name==='editVersion'));
+ await openMore(row,'頁數進度');assert.ok(await page.evaluate(()=>window.__bomUiFixture.calls.some(c=>c.name==='pages')));
  await detail.getByRole('button',{name:'比對版本',exact:true}).click();await center.getByTestId('bom-diff-view').waitFor();await center.getByRole('button',{name:'← 返回系列',exact:true}).click();await detail.waitFor();
- await table.evaluate(el=>el.parentElement.scrollLeft=0);await frame(page,center,width);await page.screenshot({path:path.join(evidence,'versions-'+width+'.png')});
- if(width<1024){const bounds=await detail.locator('.bom-version-table-scroll').evaluate(el=>({width:el.clientWidth,scrollWidth:el.scrollWidth}));assert.ok(bounds.scrollWidth>bounds.width,'Version table alone scrolls sideways on phone');}
+ if(width>=1024)await detail.getByTestId('bom-version-table').evaluate(el=>el.parentElement.scrollLeft=0);await frame(page,center,width);await page.screenshot({path:path.join(evidence,'versions-'+width+'.png')});
  await center.locator('[data-ui="dialog-close"]').click();await center.waitFor({state:'hidden'});
 }
 async function trackerFlow(page,width,report){

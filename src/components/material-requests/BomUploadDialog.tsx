@@ -63,7 +63,7 @@ export function BomUploadDialog({
         <DialogHeader className="pr-10">
           <DialogTitle className="flex items-center gap-2 text-xl"><FileSpreadsheet className="size-5 shrink-0 text-primary" aria-hidden="true" />確認上傳 BOM</DialogTitle>
           <DialogDescription>
-            新板子建立新系列{activeProjectName ? `，歸入「${activeProjectName}」` : ""}。同一塊板選既有系列，保留舊版並依位號與料號帶入追蹤、Note、負責人與 SPEC 附件。
+            每個檔案選擇建立新系列（新板子），或成為既有系列的新版本（同一塊板）。
           </DialogDescription>
         </DialogHeader>
 
@@ -94,12 +94,12 @@ export function BomUploadDialog({
                     <div>
                       <Label htmlFor={`bom-upload-name-${index}`} className="text-xs text-muted-foreground">新系列名稱</Label>
                       <Input id={`bom-upload-name-${index}`} value={upload.seriesName} maxLength={BOM_SERIES_NAME_LIMIT} disabled={busy} onChange={(event) => update(upload.key, { seriesName: event.target.value })} aria-invalid={Boolean(problems[index])} className={cn("mt-1 h-10 text-sm", problems[index] && "border-destructive")} />
-                      {problems[index] && <p className="mt-1 text-xs text-destructive">{problems[index]}</p>}
+                      {problems[index] ? <p className="mt-1 text-xs text-destructive">{problems[index]}</p> : activeProjectName && <p className="mt-1 text-xs text-muted-foreground">會歸入「{activeProjectName}」</p>}
                     </div>
                   ) : targetSeries ? (
                     <p className="self-end pb-2 text-xs text-foreground/80">
                       <strong className="text-primary">{targetSeries.current.displayNumber} → V{nextBomVersionNumber(targetSeries)}</strong>
-                      {` · 依 ${targetSeries.current.workspace.payload.recordCount.toLocaleString()} 筆舊版明細比對並帶入網站資料；建立後可直接看差異。`}
+                      {" · 保留舊版，依位號與料號帶入追蹤、Note、負責人與 SPEC 附件；完成後可直接看差異。"}
                     </p>
                   ) : null}
                 </div>

@@ -61,7 +61,15 @@
 .bom-version-center .bom-version-action-compare:disabled { opacity: .76; border-color: hsl(var(--border)); background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
 .bom-version-action-archive:enabled { color: hsl(var(--warning)); }
 .bom-version-action-archive:enabled:hover { background: hsl(var(--warning) / .15); }
-.bom-version-table-scroll table { min-width: 1020px; }
+/* 標籤／說明 and 來源檔 share what is left and cut long text with …; every other column is as wide as its content,
+   so 追蹤帶入 and 操作 stay on screen from about 1366px wide. */
+.bom-version-table-scroll table { min-width: 900px; }
+.bom-version-table-scroll th.bom-version-col-label { width: 55%; }
+.bom-version-table-scroll th.bom-version-col-source { width: 45%; }
+.bom-version-table-scroll th:is(.bom-version-col-version, .bom-version-col-fit) { width: 1%; }
+.bom-version-table-scroll td:is(.bom-version-col-label, .bom-version-col-source) { max-width: 0; min-width: 7.5rem; }
+/* Below 1500px the uploader moves into the time's hover text so 標籤 and 來源檔 stay readable. */
+@media (max-width: 1499px) { .bom-version-table-scroll .bom-version-uploader { display: none; } }
 .bom-version-table-scroll thead { background: color-mix(in srgb, hsl(var(--card)), hsl(var(--info)) 16%); color: hsl(var(--info)); }
 .bom-version-table-scroll tr[data-current="true"] { background: hsl(var(--success) / .11); }
 .bom-version-table-scroll tr[data-current="true"] > td:first-child { box-shadow: inset 3px 0 hsl(var(--success) / .7); }
@@ -69,13 +77,15 @@
 .bom-version-table-scroll table th { padding: 10px; font-size: 12px; white-space: nowrap; }
 .bom-version-table-scroll table td { padding: 8px 10px; font-size: 13px; line-height: 20px; vertical-align: middle; }
 .bom-version-table-scroll table tr[data-version-id] > td { white-space: nowrap; }
-.bom-version-table-scroll table tr[data-version-id] > td:first-child > span { height: 28px; min-width: 46px; font-size: 14px; }
-.bom-version-table-scroll table tr[data-version-id] > td:nth-child(3) { min-width: 180px; }
-.bom-version-table-scroll table tr[data-version-id] > td:nth-child(4) { min-width: 180px; }
-.bom-version-label-note { display: flex; max-width: 170px; gap: 8px; overflow: hidden; white-space: nowrap; }
+.bom-version-cell-version { display: inline-flex; align-items: center; gap: 8px; }
+.bom-version-number { display: inline-flex; height: 28px; min-width: 46px; flex: none; align-items: center; justify-content: center; border: 1px solid hsl(var(--primary) / .4); border-radius: 6px; padding-inline: 8px; background: hsl(var(--primary) / .1); color: hsl(var(--foreground)); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bom-version-number[data-current="true"] { border-color: hsl(var(--primary)); background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+.bom-version-label-note { display: flex; min-width: 0; gap: 8px; overflow: hidden; white-space: nowrap; }
 .bom-version-label-note > strong { flex: none; }
 .bom-version-label-note > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.bom-version-source-file { display: block; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bom-version-source { display: flex; min-width: 0; align-items: baseline; gap: 8px; white-space: nowrap; }
+.bom-version-source-file { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.bom-version-record-count { flex: none; color: hsl(var(--muted-foreground)); font-variant-numeric: tabular-nums; }
 /* Desktop: 操作 stays on screen while the wider columns scroll underneath it. On a phone the column is as wide
    as the screen, so it scrolls with the row and 版本 stays readable. */
 @media (min-width: 1024px) {
@@ -83,8 +93,18 @@
   .bom-version-table-scroll thead th:last-child { z-index: 11; background-color: color-mix(in srgb, hsl(var(--card)), hsl(var(--info)) 16%); }
   .bom-version-table-scroll tr[data-current="true"] > td:last-child { background-image: linear-gradient(hsl(var(--success) / .11), hsl(var(--success) / .11)); }
 }
-.bom-version-icon-actions { display: inline-flex; flex: none; align-items: center; gap: 2px; margin-inline-start: 2px; padding-inline-start: 6px; border-inline-start: 1px solid hsl(var(--border)); }
-.bom-version-table-scroll table td:last-child .bom-version-icon-actions button { width: 32px; padding-inline: 0; }
+/* Fixed slots so 檢視, 設為目前版本 and 比對 sit at the same place on every row; 更多 holds the rare and destructive actions. */
+.bom-version-table-scroll .bom-version-row-actions { display: grid; grid-template-columns: 3.25rem 6.75rem 4.75rem auto; align-items: center; gap: 4px; }
+.bom-version-slot { display: flex; min-width: 0; }
+.bom-version-table-scroll .bom-version-slot { height: 32px; align-items: center; }
+.bom-version-slot > button { width: 100%; }
+.bom-version-center .bom-version-more { gap: 4px; padding-inline: 8px; color: hsl(var(--foreground) / .85); }
+.bom-version-more svg { width: 16px; height: 16px; }
+.bom-version-menu [role="menuitem"] { gap: 10px; min-height: 40px; }
+@media (max-width: 1023px) { .bom-version-menu [role="menuitem"] { min-height: 44px; } }
+.bom-version-menu [role="menuitem"] svg { flex: none; width: 16px; height: 16px; color: hsl(var(--muted-foreground)); }
+.bom-version-menu .bom-version-menu-danger, .bom-version-menu .bom-version-menu-danger svg { color: hsl(var(--destructive)); }
+.bom-version-menu .bom-version-menu-danger:focus { background: hsl(var(--destructive) / .14); color: hsl(var(--destructive)); }
 .bom-version-upload, .bom-version-uploaded-at { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 8px; white-space: nowrap; }
 .bom-version-uploaded-at > span:last-child { color: hsl(var(--foreground) / .85); }
 .bom-version-uploader { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
@@ -126,7 +146,7 @@
 @media (prefers-reduced-motion: reduce) {
   .workspace-dialog-surface.bom-version-center[data-ui="dialog"][data-state] { animation: none; }
 }
-@media (min-width: 1024px) and (max-width: 1399px) { .bom-version-columns { grid-template-columns: 320px minmax(0, 1fr); gap: 20px; } .bom-series-sidebar { padding-right: 16px; } }
+@media (min-width: 1024px) and (max-width: 1599px) { .bom-version-columns { grid-template-columns: 280px minmax(0, 1fr); gap: 20px; } .bom-series-sidebar { padding-right: 16px; } }
 @media (max-width: 1023px) {
   .workspace-dialog-surface.bom-version-center[data-ui="dialog"] { width: calc(100vw - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); gap: 14px; padding: 16px; }
   .bom-version-header { gap: 8px; }
@@ -148,6 +168,20 @@
   .bom-version-footnote { max-height: 72px; overflow-y: auto; }
   .bom-version-center [data-testid="bom-series-detail"] { overflow-y: auto; }
   .bom-version-center .bom-version-table-scroll { flex: 1 0 200px; }
-  .bom-version-table-scroll table td:last-child button { height: 44px; min-height: 44px; }
-  .bom-version-table-scroll table td:last-child .bom-version-icon-actions button { width: 44px; }
+  /* One screen, one job: the detail and comparison screens drop the window summary line. */
+  .bom-version-center:is([data-mobile-pane="detail"], [data-view="diff"]) .bom-version-overview { display: none; }
+  .bom-version-center:is([data-mobile-pane="detail"], [data-view="diff"]) .bom-version-header { padding-bottom: 8px; }
+  .bom-version-cards { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .bom-version-card { display: grid; gap: 8px; border: 1px solid hsl(var(--border)); border-radius: 10px; padding: 10px 12px; background: hsl(var(--background) / .4); }
+  .bom-version-card[data-current="true"] { border-color: hsl(var(--success) / .45); background: hsl(var(--success) / .08); box-shadow: inset 3px 0 hsl(var(--success) / .7); }
+  .bom-version-card-head { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+  .bom-version-card-head > .bom-version-chip-row:last-child:not(:nth-child(2)) { margin-inline-start: auto; }
+  .bom-version-card-body { display: grid; min-width: 0; gap: 2px; color: hsl(var(--foreground) / .85); font-size: 13px; line-height: 20px; }
+  .bom-version-card-body .bom-version-label-note { white-space: normal; }
+  .bom-version-card-body .bom-version-label-note > span { overflow-wrap: anywhere; }
+  .bom-version-card-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .bom-version-card-actions > .bom-version-slot:empty { display: none; }
+  .bom-version-card-actions button { min-height: 44px; padding-inline: 12px; font-size: 14px; }
+  .bom-version-card-actions .bom-version-more { margin-inline-start: auto; }
+  .bom-version-card > div:last-child:not(.bom-version-card-actions) { margin-top: 2px; }
 }

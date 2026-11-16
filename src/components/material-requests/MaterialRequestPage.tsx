@@ -98,6 +98,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { useIsCompactLayout } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 import { useUser } from "@/components/auth/UserContext";
 import { useMaterialPersonalMarks } from "./useMaterialPersonalMarks";
 import { MaterialTableScroll } from "./MaterialTableScroll";
@@ -156,14 +157,14 @@ import { applyBomNoteSnapshot, applyRealtimeBomRecords, mergeBomWorkspaceRecords
 import type { BomTableColorTheme, BomWorkspaceArchive, BomWorkspaceProject } from "./materialBomStorage";
 import { loadBomWorkspaceArchives, loadBomWorkspaceProjects, saveBomWorkspaceArchive, saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
 import { loadBomWorkspaceRecords, loadBomWorkspaceVersions, saveBomWorkspaceVersion } from "./materialBomStorage";
-import { BomVersionCenter, type BomDiffRequest } from "./BomVersionCenter";
+import { BomVersionCenter, type BomDiffLocateTarget, type BomDiffRequest } from "./BomVersionCenter";
 import { buildNvBomTableIndex, matchNvBomTableChange, type NvBomTableCandidate } from "./nvBomTableMatch";
 import type { NvBomChange } from "./nvBomCompare";
 import { BomUploadDialog, NEW_BOM_SERIES_TARGET, type BomUploadMeta, type PendingBomUpload } from "./BomUploadDialog";
 import { carryBomTracking, diffBomRecords } from "./bomDiff";
 import {
   BOM_SERIES_NAME_LIMIT, BOM_VERSION_LABEL_LIMIT, BOM_VERSION_NOTE_LIMIT, bomFileBaseName, buildBomSeriesList, createBomSeriesId,
-  createBomVersionWorkspaceId, findBomSeriesByWorkspace, inferBomSeriesForFile, nextBomVersionNumber, readBomDiffLocation,
+  bomVersionComparePair, createBomVersionWorkspaceId, findBomSeriesByWorkspace, inferBomSeriesForFile, nextBomVersionNumber, readBomDiffLocation, readBomLocateLocation, writeBomLocateLocation,
   type BomSeries, type BomSeriesVersion, type BomWorkspaceVersion,
 } from "./bomVersioning";
 import { createBomSourceUrl, uploadBomSourceFile } from "./materialBomSources";
@@ -177,6 +178,8 @@ import { MaterialWeeklyProgressDialog } from "./MaterialWeeklyProgressDialog";
 import { useSpecFillNavigation } from "./useSpecFillNavigation";
 const MaterialSpecFillDialog = recoverableLazy(() => import("./MaterialSpecFillDialog").then(module => ({ default: module.MaterialSpecFillDialog })));
 const CircuitChangesWorkspace = recoverableLazy(() => import("../circuit-changes/CircuitChangesWorkspace"));
+/** A part shown in the table from a comparison; a version comparison keeps the pair so 返回比對 can reopen it. */
+type BomTableLocation = NvBomTableCandidate & { returnDiff?: Omit<BomDiffRequest, "token"> };
 import { restoreMaterialColumnSort, sortMaterialTableRows, type MaterialColumnSort } from "./materialTableSort";
 import { MaterialRequestOwnerPicker, type MaterialRequestOwner } from "./MaterialRequestOwnerPicker";
 import { useMaterialRequestOwners } from "./useMaterialRequestOwners";
@@ -3580,7 +3583,8 @@ export function MaterialRequestPage() {
   const [mobileFilterColumn, setMobileFilterColumn] = useState<ColumnFilterKey>("manufacturer");
   const [bomWorkspaces, setBomWorkspaces] = useState<BomWorkspace[]>(() => [createDefaultBomWorkspace()]);
   const [collaborationStatus, setCollaborationStatus] = useState<CollaborationStatus>("checking");
-  const [activeBomId, setActiveBomId] = useState(loadActiveBomId);
+  // A link to a located part (bomLocate…) opens on the version that part belongs to.
+  const [activeBomId, setActiveBomId] = useState(() => (typeof window !== "undefined" && readBomLocateLocation(window.location.search)?.workspaceId) || loadActiveBomId());
   const [showMarkedOnly, setShowMarkedOnly] = useState(false);
   const [query, setQuery] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
@@ -3613,7 +3617,19 @@ export function MaterialRequestPage() {
   const [isImporting, setIsImporting] = useState(false);
   // A link carrying an open comparison (bomDiff…) reopens BOM 版本管理 on it.
   const [bomManagerOpen, setBomManagerOpen] = useState(() => typeof window !== "undefined" && readBomDiffLocation(window.location.search) !== null);
-  const [nvBomTableLocation, setNvBomTableLocation] = useState<NvBomTableCandidate | null>(null);
+  const [nvBomTableLocation, setNvBomTableLocation] = useState<BomTableLocation | null>(null);
+  // A comparison asked for a part of a version that is still loading: located once that version is on screen.
+  const [pendingBomLocation, setPendingBomLocation] = useState<BomTableLocation | null>(() => {
+    const linked = typeof window !== "undefined" ? readBomLocateLocation(window.location.search) : null;
+    return linked ? { id: linked.recordId, workspaceId: linked.workspaceId, refDes: "", mpn: "", manufacturer: "", physicalPartNumber: "", virtualPartNumber: "", returnDiff: linked.returnTo } : null;
+  });
+  // The saved per-BOM view is restored first; a location applied before that would be wiped by the restored filters.
+  const [restoredViewBomId, setRestoredViewBomId] = useState<string | null>(null);
+  const locateCurrentBomRef = useRef<(candidate: BomTableLocation) => boolean>(() => false);
+  const pendingBomLocationRef = useRef(pendingBomLocation);
+  pendingBomLocationRef.current = pendingBomLocation;
+  const bomTableLocationRef = useRef(nvBomTableLocation);
+  bomTableLocationRef.current = nvBomTableLocation;
   const tableResultsRef = useRef<HTMLDivElement>(null);
   const [circuitChangesOpen, setCircuitChangesOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ title: string; description: string; workspaceIds: string[] } | null>(null);
@@ -3980,7 +3996,7 @@ export function MaterialRequestPage() {
     };
     const syncWorkspaces = async (preferredBomId?: string) => {
       const requestId = ++workspaceSyncRequestRef.current;
-      const preferredWorkspaceId = preferredBomId ?? loadActiveBomId();
+      const preferredWorkspaceId = preferredBomId ?? ((typeof window !== "undefined" && readBomLocateLocation(window.location.search)?.workspaceId) || loadActiveBomId());
       const cachedResult = await loadCachedBomWorkspacesDetailed();
       let cachedRangeKey = "";
       if (
@@ -4019,7 +4035,8 @@ export function MaterialRequestPage() {
       }
     };
 
-    void syncWorkspaces(loadActiveBomId());
+    // A located-part link (bomLocate…) names the version to open; otherwise the last BOM this browser opened.
+    void syncWorkspaces((typeof window !== "undefined" && readBomLocateLocation(window.location.search)?.workspaceId) || loadActiveBomId());
     const accountGeneration = bomAccountRef.current.generation;
     const applyRemoteChange = (change: BomWorkspaceChange) => {
       if (!active || !canViewModuleAccess || accountGeneration !== bomAccountRef.current.generation) return;
@@ -4197,6 +4214,7 @@ export function MaterialRequestPage() {
       setColumnSort(null);
     } finally {
       loadedViewStateKeyRef.current = key;
+      setRestoredViewBomId(activeBomId);
     }
   }, [activeBomId, user?.userId]);
 
@@ -4297,6 +4315,11 @@ export function MaterialRequestPage() {
   const switchActiveBomRef = useRef<(value: string) => void>(() => {});
   useEffect(() => {
     if (!activeProjectId || !workspaceListSettled) return;
+    if (pendingBomLocationRef.current || bomTableLocationRef.current?.returnDiff) {
+      // A link or a comparison chose this BOM: record it as picked under this project so it is not switched away later.
+      try { window.localStorage.setItem(ACTIVE_BOM_PROJECT_KEY, activeProjectId); } catch { /* storage unavailable */ }
+      return;
+    }
     let pickedUnderProjectId: string | null = null;
     try { pickedUnderProjectId = window.localStorage.getItem(ACTIVE_BOM_PROJECT_KEY); } catch { /* storage unavailable */ }
     if (pickedUnderProjectId === activeProjectId) return;
@@ -4488,7 +4511,7 @@ export function MaterialRequestPage() {
   }, [filteredGroups]);
 
   const activeFilterChips = useMemo(() => {
-    if (locatedBomCandidate) return [{ key: "nv-location", label: `NV 比對定位：${locatedBomCandidate.mpn} · ${locatedBomCandidate.refDes}` }];
+    if (locatedBomCandidate) return [{ key: "nv-location", label: `${locatedBomCandidate.returnDiff ? "版本比對定位" : "NV 比對定位"}：${locatedBomCandidate.mpn || locatedBomCandidate.manufacturer || "未填 MPN"} · ${locatedBomCandidate.refDes}` }];
     const chips: Array<{ key: string; label: string }> = [];
 
     if (query) chips.push({ key: "query", label: `關鍵字：${query}` });
@@ -4618,6 +4641,32 @@ export function MaterialRequestPage() {
   }, [availability, columnFilters, columnSort, query, searchColumn, showMarkedOnly, sortMode]);
 
   useEffect(() => {
+    if (!pendingBomLocation || !canMatchNvBom || activeWorkspace.id !== pendingBomLocation.workspaceId || restoredViewBomId !== pendingBomLocation.workspaceId) return;
+    setPendingBomLocation(null);
+    locateCurrentBomRef.current(pendingBomLocation);
+  }, [pendingBomLocation, canMatchNvBom, activeWorkspace.id, restoredViewBomId]);
+
+  // A waiting location is dropped as soon as another BOM is chosen, so it never lands later on the wrong board.
+  // A link to a version that no longer exists says so instead of silently showing another BOM.
+  useEffect(() => {
+    // Decided only once the BOM list has loaded: before that the page may still be on a placeholder BOM.
+    if (!pendingBomLocation || !workspaceListSettled) return;
+    const missing = !bomWorkspaces.some((workspace) => workspace.id === pendingBomLocation.workspaceId);
+    if (activeBomId === pendingBomLocation.workspaceId && !missing) return;
+    setPendingBomLocation(null);
+    if (missing) toast({ title: "找不到連結裡的 BOM 版本", description: "這個版本可能已被刪除，畫面顯示的是其他 BOM。請回到 BOM 管理重新比對。", variant: "destructive" });
+  }, [activeBomId, pendingBomLocation, workspaceListSettled, bomWorkspaces, toast]);
+
+  // A part located from a version comparison is mirrored into the URL (AGENTS rule 4); clearing it clears the link.
+  useEffect(() => {
+    if (typeof window === "undefined" || pendingBomLocation) return;
+    const located = nvBomTableLocation?.returnDiff && nvBomTableLocation.workspaceId === activeBomId ? nvBomTableLocation : null;
+    const url = new URL(window.location.href);
+    writeBomLocateLocation(url, located?.returnDiff ? { recordId: located.id, workspaceId: located.workspaceId, returnTo: { seriesId: located.returnDiff.seriesId, before: located.returnDiff.before, after: located.returnDiff.after, lostOnly: Boolean(located.returnDiff.lostOnly) } } : null);
+    if (url.href !== window.location.href) replaceWorkspaceHistory(url);
+  }, [nvBomTableLocation, pendingBomLocation, activeBomId]);
+
+  useEffect(() => {
     if (!locatedBomCandidate || bomManagerOpen) return;
     const frame = requestAnimationFrame(() => {
       const row = tableResultsRef.current?.querySelector<HTMLElement>("[data-nv-bom-located]");
@@ -4735,9 +4784,9 @@ export function MaterialRequestPage() {
     const createdSeriesIds = new Set<string>();
     let workspaces = bomWorkspaces;
     let lastWorkspaceId = activeBomId;
-    let totalRecords = 0;
     let orphanedTotal = 0;
     let newSeriesCount = 0;
+    let newSeriesRecords = 0;
     let newVersionCount = 0;
     let trackedTotal = 0;
     // Every new version of an existing series is compared with the version it replaced; the result toast names each one.
@@ -4836,12 +4885,11 @@ export function MaterialRequestPage() {
           return legacy ? { ...item, version: { ...legacy.version, seriesId, seriesName, isCurrent: false, currentChangedAt: stamp } } : item;
         }), finalWorkspace];
         if (series) newVersionCount += 1;
-        else { createdSeriesIds.add(seriesId); newSeriesCount += 1; }
+        else { createdSeriesIds.add(seriesId); newSeriesCount += 1; newSeriesRecords += workspace.payload.recordCount; }
         if (previous && comparison) {
           comparisons.push({ seriesId, seriesName, before: previous.workspace.id, beforeNumber: previous.displayNumber, after: workspaceId, afterNumber: `V${versionNumber}`, summary: comparison });
         }
         lastWorkspaceId = workspaceId;
-        totalRecords += workspace.payload.recordCount;
       }
 
       await reloadBomWorkspaces(lastWorkspaceId).catch(() => {
@@ -4854,7 +4902,7 @@ export function MaterialRequestPage() {
       setExpandedKey(null);
       setPage(1);
       if (orphanedTotal > 0) {
-        report.push(`有資料沒有帶到新版本：${orphanedTotal.toLocaleString()} 筆舊版追蹤、Note、負責人或 SPEC 附件找不到對應料件，請在差異的「未帶入」查看並補填。`);
+        report.push(`${orphanedTotal.toLocaleString()} 筆舊版資料沒有帶到新版，${uploads.length > 1 ? "請在各系列比對的「未帶入」補填" : "按「查看差異」補填"}。`);
       }
       const hasWarnings = report.length > 0;
       const createdTitle = uploads.length === 1 ? "BOM 版本已建立" : `${uploads.length} 個 BOM 版本已建立`;
@@ -4874,8 +4922,9 @@ export function MaterialRequestPage() {
         description: <span className="grid gap-1">
           {comparisons.slice(0, 3).map((item) => <strong key={item.after} data-testid="bom-upload-comparison" className="font-semibold text-foreground">{comparisonLine(item)}</strong>)}
           {comparisons.length > 3 && <span>另有 {comparisons.length - 3} 個系列的新版本，可在 BOM 管理逐一比對。</span>}
-          <span>{totalRecords.toLocaleString()} 筆廠商料明細 · 新系列 {newSeriesCount} 個 · 新版本 {newVersionCount} 個{newVersionCount > 0 ? ` · 帶入網站資料 ${trackedTotal.toLocaleString()} 筆` : ""}</span>
-          {importProject && newSeriesCount > 0 && <span>新系列已歸入「{importProject.projectName}」</span>}
+          {newSeriesCount > 0 && <span>建立新系列 {newSeriesCount} 個，{newSeriesRecords.toLocaleString()} 筆廠商料明細{importProject ? `，歸入「${importProject.projectName}」` : ""}</span>}
+          {newVersionCount > 0 && trackedTotal > 0 && <span>已帶入舊版的追蹤、Note、負責人與 SPEC 附件 {trackedTotal.toLocaleString()} 筆</span>}
+          {newVersionCount > 0 && trackedTotal === 0 && orphanedTotal === 0 && <span>舊版沒有需要帶入的追蹤、Note、負責人或 SPEC 附件</span>}
           {report.map((warning, index) => <span key={index}>{warning}</span>)}
         </span>,
         action: openComparison ? <ToastAction altText={`查看「${comparisonResult!.seriesName}」${comparisonResult!.beforeNumber} 與 ${comparisonResult!.afterNumber} 的差異`} onClick={openComparison} title={`打開 BOM 版本管理，直接比對「${comparisonResult!.seriesName}」${comparisonResult!.beforeNumber} → ${comparisonResult!.afterNumber}`}>{nameSeries ? `查看「${comparisonResult!.seriesName}」差異` : "查看差異"}</ToastAction> : undefined,
@@ -5750,7 +5799,34 @@ export function MaterialRequestPage() {
     setPage(1);
   };
 
-  const locateCurrentBom = (candidate: NvBomTableCandidate) => {
+  const reopenLocatedComparison = () => {
+    const returnDiff = locatedBomCandidate?.returnDiff;
+    if (returnDiff) setBomDiffRequest({ token: Date.now(), ...returnDiff });
+    setBomManagerOpen(true);
+  };
+
+  // 到料號表補填 / 在料號表查看 from a version comparison: show that part of the new version in the table.
+  const locateBomDiffEntry = ({ workspaceId, record, returnTo }: BomDiffLocateTarget) => {
+    const candidate: BomTableLocation = {
+      id: record.id,
+      workspaceId,
+      refDes: record.refDes ?? "",
+      mpn: record.manufacturerPartNumber ?? "",
+      manufacturer: record.manufacturer ?? "",
+      physicalPartNumber: record.partNumber ?? "",
+      virtualPartNumber: record.virtualAlternative ?? "",
+      sourceRow: record.sourceRow,
+      returnDiff: returnTo,
+    };
+    if (workspaceId === activeWorkspace.id && canMatchNvBom) return locateCurrentBom(candidate);
+    if (!bomWorkspaces.some((workspace) => workspace.id === workspaceId)) return false;
+    // Still loading the version on screen: wait for it instead of switching, which would wipe the user's filters.
+    if (workspaceId !== activeBomId) switchActiveBom(workspaceId);
+    setPendingBomLocation(candidate);
+    return true;
+  };
+
+  const locateCurrentBom = (candidate: BomTableLocation) => {
     const group = canMatchNvBom && candidate.workspaceId === activeWorkspace.id
       ? displayGroups.find(item => item.records.some(record => record.id === candidate.id))
       : undefined;
@@ -5758,12 +5834,15 @@ export function MaterialRequestPage() {
       toast({ title: "無法定位這筆料件", description: "目前 BOM 版本或資料已變更。請回到版本管理重新確認。", variant: "destructive" });
       return false;
     }
-    setNvBomTableLocation(candidate);
+    // A location from a link carries only the record id; the chip names the part from the loaded record.
+    const record = candidate.refDes ? undefined : group.records.find((item) => item.id === candidate.id);
+    setNvBomTableLocation(record ? { ...candidate, refDes: record.refDes ?? "", mpn: record.manufacturerPartNumber ?? "", manufacturer: record.manufacturer ?? "", physicalPartNumber: record.partNumber ?? "", virtualPartNumber: record.virtualAlternative ?? "" } : candidate);
     setExpandedKey(group.key);
     setPage(1);
     if (isCompactLayout) setMobileView("table");
     return true;
   };
+  locateCurrentBomRef.current = locateCurrentBom;
 
   const loadLatestBomData = async () => {
     const requestId = startWorkspaceLoad();
@@ -5873,7 +5952,7 @@ export function MaterialRequestPage() {
   const activeFilterControls = activeFilterChips.length > 0 && (
     <div data-testid="material-active-filters" className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
       {activeFilterChips.map(chip => <button key={chip.key} type="button" onClick={() => removeFilterChip(chip.key)} aria-label={`移除篩選：${chip.label}`} title={chip.label} className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 text-foreground lg:min-h-8"><span className="max-w-[20rem] truncate">{isCompactLayout && chip.key === "availability" && availability === "required" ? "狀態：料號待補" : chip.label}</span><X className="h-3 w-3 shrink-0" /></button>)}
-      {locatedBomCandidate && <Button type="button" variant="outline" size="sm" onClick={() => setBomManagerOpen(true)}>返回 NV 比對</Button>}
+      {locatedBomCandidate && <Button type="button" variant="outline" size="sm" onClick={reopenLocatedComparison} title={locatedBomCandidate.returnDiff ? "回到剛才的版本比對" : "回到剛才的 NV 原始 BOM 比對"}>{locatedBomCandidate.returnDiff ? "返回比對" : "返回 NV 比對"}</Button>}
       <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="min-h-11 text-muted-foreground hover:text-foreground lg:min-h-8">全部清除</Button>
     </div>
   );
@@ -5971,6 +6050,7 @@ export function MaterialRequestPage() {
         currentBomName={currentNvBomName}
         matchCurrentBom={matchCurrentBom}
         onLocateCurrentBom={locateCurrentBom}
+        onLocateDiffEntry={locateBomDiffEntry}
         onView={(id) => { switchActiveBom(id); setBomManagerOpen(false); }}
         onSetCurrent={requestSetCurrentBomVersion}
         onUploadVersion={(series) => { uploadTargetSeriesRef.current = series.id; fileInputRef.current?.click(); }}
@@ -6017,12 +6097,12 @@ export function MaterialRequestPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>把「{pendingCurrent?.series.name}」切換到 {pendingCurrent?.version.displayNumber}？</AlertDialogTitle>
             <AlertDialogDescription>
-              目前版本是 {pendingCurrent?.series.current.displayNumber}。切換後所有人在切換器看到的都是 {pendingCurrent?.version.displayNumber}，料件與追蹤改在這一版維護；舊版本仍保留可比對。
+              目前版本是 {pendingCurrent?.series.current.displayNumber}。切換後所有人打開這塊板看到的都是 {pendingCurrent?.version.displayNumber}，料件與追蹤改在這一版維護；舊版本仍保留可比對。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <label className="flex items-center gap-2 text-sm text-foreground">
-            <Checkbox checked={carryOnSwitch} onCheckedChange={(value) => setCarryOnSwitch(value === true)} aria-label="帶入追蹤紀錄" />
-            把 {pendingCurrent?.series.current.displayNumber} 的追蹤紀錄依位號與料號帶到 {pendingCurrent?.version.displayNumber}
+            <Checkbox checked={carryOnSwitch} onCheckedChange={(value) => setCarryOnSwitch(value === true)} aria-label="帶入網站資料" />
+            把 {pendingCurrent?.series.current.displayNumber} 的追蹤、Note、負責人與 SPEC 附件依位號與料號帶到 {pendingCurrent?.version.displayNumber}
           </label>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
@@ -6325,7 +6405,12 @@ export function MaterialRequestPage() {
           <History className="h-4 w-4 flex-none" aria-hidden="true" />
           <span className="min-w-0 flex-1">正在檢視「{activeVersionInfo.series.name}」{activeVersionInfo.version.displayNumber}（歷史版本，唯讀）；目前版本為 {activeVersionInfo.series.current.displayNumber}。料件與追蹤只能在目前版本修改。</span>
           <Button type="button" variant="outline" size="sm" onClick={() => switchActiveBom(activeVersionInfo.series.current.workspace.id)} className="h-9 border-amber-300/40 bg-amber-400/10 text-amber-50 hover:bg-amber-400/20 lg:h-8">回到目前版本 {activeVersionInfo.series.current.displayNumber}</Button>
-          <Button type="button" variant="ghost" size="sm" onClick={() => setBomManagerOpen(true)} className="h-9 text-amber-100 hover:bg-amber-400/15 lg:h-8">比對差異</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => {
+            // Same pair as the version row's 比對 button: the older version on the 舊版 side.
+            const pair = bomVersionComparePair(activeVersionInfo.series, activeVersionInfo.version);
+            if (pair) setBomDiffRequest({ token: Date.now(), seriesId: activeVersionInfo.series.id, before: pair.before.workspace.id, after: pair.after.workspace.id });
+            setBomManagerOpen(true);
+          }} title={`比對 ${activeVersionInfo.version.displayNumber} 與目前版本 ${activeVersionInfo.series.current.displayNumber}`} className="h-9 text-amber-100 hover:bg-amber-400/15 lg:h-8">比對 {activeVersionInfo.series.current.displayNumber}</Button>
         </div>
       )}
       {remoteSyncFailed && (
@@ -6636,3 +6721,4 @@ export function MaterialRequestPage() {
   );
 }
 import { isValidBomUsage } from "@/lib/inputValidation";
+
