@@ -62,7 +62,7 @@ export function buildBomDiffWorkbookRows(result: BomDiffResult, context: BomDiff
     ["料件群組", `舊 ${summary.beforeGroups.toLocaleString()} · 新 ${summary.afterGroups.toLocaleString()}`],
     ["新增／移除／變更／未變更", `${summary.added} / ${summary.removed} / ${summary.changed} / ${summary.unchanged}`],
     ["變更類型統計", kindLine],
-    ["追蹤未帶入", `${summary.trackingLost} 筆`],
+    ["未帶入（追蹤、Note、負責人、SPEC 附件）", `${summary.trackingLost} 筆`],
     ["本檔列出的群組", context.visibleEntries ? `${entries.length}（依目前篩選）` : `${entries.length}（全部）`],
     ["匯出", `${context.exportedBy || "未填"} · ${context.exportedAt}`],
     ["判讀說明", "影響生產：位號、數量、主料、替代料、新增、移除；狀態變更：Sourcing Status、phase out、零件狀態；文字變更：料名、規格、符號、封裝、虛擬料號、分組。"],

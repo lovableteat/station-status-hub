@@ -6,7 +6,8 @@
  * shift the comparison. Pure functions only: no React, no Supabase, no imports
  * with runtime side effects, so the module also runs under `node --test`.
  */
-import type { MaterialTrackingHistoryEntry, MaterialWorkbookRecord } from "./materialRequestUtils";
+import { getMaterialSpecDocuments } from "./materialAttachments.ts";
+import { getLatestTrackingEntry, type MaterialTrackingHistoryEntry, type MaterialWorkbookRecord } from "./materialRequestUtils.ts";
 
 export type BomDiffField =
   | "name" | "qty" | "refDes" | "manufacturer" | "manufacturerPartNumber" | "sourcingStatus"
@@ -314,7 +315,11 @@ function latestEntry(history: MaterialTrackingHistoryEntry[] | undefined) {
   return history && history.length > 0 ? history[history.length - 1] : undefined;
 }
 
-/** True when the row carries any tracking status, note, ticket, link or history. */
+/**
+ * True when the row carries anything maintained on the website rather than in the
+ * imported Excel: tracking status, history, ticket or link, the 負責人 or 分類 picked
+ * in 待處理料, the website Note, or SPEC attachments.
+ */
 export function bomRecordHasTracking(record: MaterialWorkbookRecord) {
   const latest = latestEntry(record.trackingHistory);
   return Boolean(
@@ -325,8 +330,37 @@ export function bomRecordHasTracking(record: MaterialWorkbookRecord) {
     || normalizeBomText(record.requestTicket)
     || normalizeBomText(record.requestUrl)
     || normalizeBomText(latest?.note)
-    || normalizeBomText(latest?.requestInfo),
+    || normalizeBomText(latest?.requestInfo)
+    || normalizeBomText(record.requestOwnerName)
+    || normalizeBomText(record.requestOwnerId)
+    || normalizeBomText(record.note)
+    || Boolean(record.pendingCategory)
+    || getMaterialSpecDocuments(record).length > 0,
   );
+}
+
+const PENDING_CATEGORY_LABELS: Record<NonNullable<MaterialWorkbookRecord["pendingCategory"]>, string> = { connector: "CONNECTOR", ic: "IC", rlc: "RLC", other: "其他" };
+
+/** Short labels of the website data on a row, for the 未帶入 detail ("狀態 已發信", "負責人 王小明", ...). */
+export function describeBomWebsiteData(record: MaterialWorkbookRecord) {
+  const latest = latestEntry(record.trackingHistory);
+  const status = normalizeBomText(record.trackingStatus) || normalizeBomText(latest?.status);
+  const progress = normalizeBomText(latest?.note) || normalizeBomText(record.trackingNote) || normalizeBomText(latest?.requestInfo);
+  const owner = normalizeBomText(record.requestOwnerName);
+  const note = normalizeBomText(record.note);
+  const documents = getMaterialSpecDocuments(record).length;
+  const ticket = normalizeBomText(record.requestTicket) || normalizeBomText(latest?.requestTicket);
+  return [
+    status && `狀態 ${status}`,
+    progress && `進度 ${progress}`,
+    ticket && `單號 ${ticket}`,
+    owner && `負責人 ${owner}`,
+    note && `Note ${note}`,
+    documents > 0 && `SPEC 附件 ${documents} 個`,
+    record.pendingCategory && `待處理分類 ${PENDING_CATEGORY_LABELS[record.pendingCategory] ?? record.pendingCategory}`,
+    !status && record.applicationRequired === true && "需申請",
+    !status && (record.trackingHistory?.length ?? 0) > 0 && `追蹤紀錄 ${record.trackingHistory!.length} 筆`,
+  ].filter((item): item is string => Boolean(item));
 }
 
 function diffLine(before: MaterialWorkbookRecord | undefined, after: MaterialWorkbookRecord | undefined): BomVendorLineChange {
@@ -459,6 +493,21 @@ export function diffBomRecords(before: readonly MaterialWorkbookRecord[], after:
   };
 }
 
+/**
+ * One line per change for the 變更內容 column: field changes first, then the vendor
+ * lines that appeared or disappeared, named by 廠商 / MPN instead of "N 處增減".
+ */
+export function bomDiffEntryPreview(entry: Pick<BomDiffEntry, "kinds" | "changes" | "lines" | "before" | "after">) {
+  if (entry.kinds.includes("added")) return [`新版新增 ${entry.after?.rows.length ?? 0} 筆廠商明細`];
+  if (entry.kinds.includes("removed")) return [`舊版 ${entry.before?.rows.length ?? 0} 筆廠商明細在新版消失`];
+  const vendorText = (record: MaterialWorkbookRecord | undefined) => vendorLabel(record) || normalizeBomText(record?.partNumber) || "（未填廠商）";
+  return [
+    ...entry.changes.map((change) => `${change.label}：${change.before || "（空白）"} → ${change.after || "（空白）"}`),
+    ...entry.lines.filter((line) => line.kind === "removed").map((line) => `移除廠商：${vendorText(line.before)}`),
+    ...entry.lines.filter((line) => line.kind === "added").map((line) => `新增廠商：${vendorText(line.after)}`),
+  ];
+}
+
 const isImportedEntry = (entry: MaterialTrackingHistoryEntry) => entry.id.startsWith(IMPORTED_TRACKING_PREFIX);
 
 function hasEntryContent(entry: MaterialTrackingHistoryEntry) {
@@ -474,6 +523,25 @@ export function mergeBomTrackingHistories(previous: MaterialTrackingHistoryEntry
   return [...importedEntries, ...preserved];
 }
 
+const filled = (value: string | undefined) => (normalizeBomText(value) ? (value as string) : "");
+
+/**
+ * Website-only fields never come from an imported workbook (Note, 負責人, SPEC files),
+ * so they always follow the matched line; the newer copy wins when both have one.
+ */
+function carryWebsiteFields(primary: MaterialWorkbookRecord, fallback: MaterialWorkbookRecord) {
+  const documents = getMaterialSpecDocuments({ specDocuments: [...getMaterialSpecDocuments(primary), ...getMaterialSpecDocuments(fallback)] });
+  const ownerSource = normalizeBomText(primary.requestOwnerName) || normalizeBomText(primary.requestOwnerId) ? primary : fallback;
+  return {
+    note: filled(primary.note) || fallback.note || "",
+    ...(ownerSource.requestOwnerId ? { requestOwnerId: ownerSource.requestOwnerId } : {}),
+    ...(ownerSource.requestOwnerName ? { requestOwnerName: ownerSource.requestOwnerName } : {}),
+    ...(documents.length > 0 ? { specDocuments: documents, specDocument: documents[0] } : {}),
+    pendingCategory: primary.pendingCategory ?? fallback.pendingCategory,
+  };
+}
+
+/** A new Excel upload: tracking typed into the workbook is refreshed, everything else follows from the old version. */
 function carryLine(previous: MaterialWorkbookRecord, next: MaterialWorkbookRecord): MaterialWorkbookRecord {
   const importedHasTracking = Boolean(normalizeBomText(next.trackingStatus) || (next.trackingHistory ?? []).some(hasEntryContent));
   const previousHadImported = (previous.trackingHistory ?? []).some(isImportedEntry);
@@ -491,33 +559,104 @@ function carryLine(previous: MaterialWorkbookRecord, next: MaterialWorkbookRecor
     requestTicket: pick(next.requestTicket, latest?.requestTicket, previous.requestTicket),
     requestUrl: pick(next.requestUrl, latest?.requestUrl, previous.requestUrl),
     remark: normalizeBomText(next.remark) ? next.remark : previous.remark ?? "",
-    specDocument: next.specDocument ?? previous.specDocument,
-    pendingCategory: next.pendingCategory ?? previous.pendingCategory,
+    ...carryWebsiteFields(previous, next),
     ...(typeof (next.applicationRequired ?? previous.applicationRequired) === "boolean" ? { applicationRequired: next.applicationRequired ?? previous.applicationRequired } : {}),
+  };
+}
+
+const entryTime = (entry: MaterialTrackingHistoryEntry) => {
+  const parsed = Date.parse(entry.createdAt ?? "");
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+/**
+ * Making another version current again. The version that was current is the live
+ * copy, so its Note, 負責人, SPEC files and 分類 replace the target's, including
+ * values that were cleared on purpose. History is never lost: entries only the
+ * target has stay in front, except entries dated after everything the current
+ * version has (made while the target was current), which go last and decide the
+ * status. Undated entries are never given a date; they simply stay in front.
+ */
+function carryLineFromCurrent(current: MaterialWorkbookRecord, target: MaterialWorkbookRecord): MaterialWorkbookRecord {
+  const ownHistory = current.trackingHistory ?? [];
+  const targetHistory = target.trackingHistory ?? [];
+  // Progress kept only on the record (no history yet) would lose to the target's entries, because the latest entry
+  // is what the page shows. Keep it as the undated legacy entry, the same thing the tracking editor does before its first entry.
+  const legacy = ownHistory.length === 0 && targetHistory.length > 0 ? getLatestTrackingEntry(current) : null;
+  // The target may already hold this same legacy entry from an earlier switch: reuse it instead of storing it twice.
+  const sameId = legacy ? targetHistory.find((entry) => entry.id === legacy.id) : undefined;
+  const sameContent = (entry: MaterialTrackingHistoryEntry) => legacy !== null
+    && (["status", "note", "requestTicket", "requestUrl"] as const).every((key) => normalizeBomText(entry[key]) === normalizeBomText(legacy[key]));
+  const legacyEntry = !legacy ? null : !sameId ? legacy : sameContent(sameId) ? sameId : { ...legacy, id: `${legacy.id}:${current.id}` };
+  const currentHistory = legacyEntry ? [legacyEntry] : ownHistory;
+  const currentIds = new Set(currentHistory.map((entry) => entry.id));
+  const targetOnly = targetHistory.filter((entry) => !currentIds.has(entry.id));
+  const currentTimes = currentHistory.map(entryTime).filter((value): value is number => value !== null);
+  const currentNewest = currentTimes.length > 0 ? Math.max(...currentTimes) : null;
+  const newer = currentNewest === null ? [] : targetOnly.filter((entry) => (entryTime(entry) ?? -Infinity) > currentNewest);
+  const trackingHistory = [...targetOnly.filter((entry) => !newer.includes(entry)), ...currentHistory, ...newer];
+  const latest = latestEntry(trackingHistory);
+  const currentLatest = latestEntry(currentHistory);
+  // Only progress fields decide whether the current version "has tracking"; a Note alone does not clear an old status.
+  const currentHasTracking = Boolean(currentHistory.length > 0 || normalizeBomText(current.trackingStatus) || normalizeBomText(current.trackingNote)
+    || normalizeBomText(current.requestTicket) || normalizeBomText(current.requestUrl));
+  const progress = newer.length > 0
+    // The newest entries are the target's own, so is the progress that went with them (a ticket cleared there stays cleared).
+    ? { status: normalizeBomText(latest?.status) || target.trackingStatus || "", note: target.trackingNote ?? "", ticket: target.requestTicket ?? "", url: target.requestUrl ?? "" }
+    : currentHasTracking
+      ? { status: filled(current.trackingStatus) || normalizeBomText(currentLatest?.status), note: current.trackingNote ?? "", ticket: current.requestTicket ?? "", url: current.requestUrl ?? "" }
+      // The current version never tracked this line: the target keeps its own progress.
+      : { status: target.trackingStatus ?? "", note: target.trackingNote ?? "", ticket: target.requestTicket ?? "", url: target.requestUrl ?? "" };
+  const documents = getMaterialSpecDocuments(current);
+  const applicationRequired = current.applicationRequired ?? target.applicationRequired;
+  return {
+    ...target,
+    trackingStatus: progress.status,
+    trackingHistory,
+    trackingNote: progress.note,
+    requestTicket: progress.ticket,
+    requestUrl: progress.url,
+    // remark is a workbook column: the target's own value, or the current one when the target's is blank (same as an upload).
+    remark: normalizeBomText(target.remark) ? target.remark : current.remark ?? "",
+    note: current.note ?? "",
+    requestOwnerId: current.requestOwnerId,
+    requestOwnerName: current.requestOwnerName,
+    specDocuments: documents.length > 0 ? documents : undefined,
+    specDocument: documents[0],
+    pendingCategory: current.pendingCategory,
+    ...(typeof applicationRequired === "boolean" ? { applicationRequired } : {}),
   };
 }
 
 export interface BomCarryResult {
   records: MaterialWorkbookRecord[];
+  /** Old lines matched to a new line by position and vendor identity. */
   matched: number;
+  /** Matched old lines that had website data (tracking, Note, 負責人, SPEC files) carried over. */
+  tracked: number;
   orphaned: MaterialWorkbookRecord[];
   manual: number;
 }
 
 /**
- * Copies RD tracking from the previous version onto the matching rows of the new
- * version. Rows are matched by design position and vendor identity, never by row
- * number. Old rows with tracking and no counterpart are reported, not dropped.
+ * Copies website data (RD tracking, Note, 負責人, SPEC files) from the previous
+ * version onto the matching rows of the new version. Rows are matched by design
+ * position and vendor identity, never by row number. Old rows with data and no
+ * counterpart are reported, not dropped. `from: "current"` is the switch back to an
+ * older version, where the version that was current wins over the target's own data.
  */
-export function carryBomTracking(previous: readonly MaterialWorkbookRecord[], next: readonly MaterialWorkbookRecord[]): BomCarryResult {
+export function carryBomTracking(previous: readonly MaterialWorkbookRecord[], next: readonly MaterialWorkbookRecord[], options: { from?: "upload" | "current" } = {}): BomCarryResult {
+  const carryOne = options.from === "current" ? carryLineFromCurrent : carryLine;
   const carried = new Map<MaterialWorkbookRecord, MaterialWorkbookRecord>();
   const matchedPrevious = new Set<MaterialWorkbookRecord>();
+  let tracked = 0;
   for (const match of matchGroups(buildBomDiffGroups(previous), buildBomDiffGroups(next))) {
     if (!match.before || !match.after) continue;
     for (const line of matchBomVendorLines(match.before.rows, match.after.rows)) {
       if (!line.before || !line.after) continue;
-      carried.set(line.after, carryLine(line.before, line.after));
+      carried.set(line.after, carryOne(line.before, line.after));
       matchedPrevious.add(line.before);
+      if (bomRecordHasTracking(line.before)) tracked += 1;
     }
   }
   const nextIds = new Set(next.map((record) => record.id));
@@ -526,6 +665,7 @@ export function carryBomTracking(previous: readonly MaterialWorkbookRecord[], ne
   return {
     records: [...next.map((record) => carried.get(record) ?? record), ...manualRecords.map((record) => ({ ...record }))],
     matched: matchedPrevious.size,
+    tracked,
     orphaned,
     manual: manualRecords.length,
   };

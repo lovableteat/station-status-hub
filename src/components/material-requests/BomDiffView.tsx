@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { ArrowLeftRight, ChevronDown, ChevronRight, CircleAlert, CircleCheck, Download, LoaderCircle, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 
 import {
-  BOM_CHANGE_IMPACTS, BOM_CHANGE_KINDS, bomChangeImpactLabel, bomChangeKindLabel, bomDiffFieldValue,
+  BOM_CHANGE_IMPACTS, BOM_CHANGE_KINDS, bomChangeImpactLabel, bomChangeKindLabel, bomDiffEntryPreview, bomDiffFieldValue, bomRecordHasTracking, describeBomWebsiteData,
   type BomChangeImpact, type BomChangeKind, type BomDiffEntry, type BomDiffResult, type BomVendorLineChange,
 } from "./bomDiff";
 import type { BomSeries, BomSeriesVersion } from "./bomVersioning";
@@ -39,6 +39,7 @@ function LineRow({ line }: { line: BomVendorLineChange }) {
 }
 
 function EntryDetail({ entry }: { entry: BomDiffEntry }) {
+  const lost = entry.lines.filter((line) => line.kind === "removed" && line.before && bomRecordHasTracking(line.before));
   return (
     <div className="grid gap-3 border-t border-border/60 bg-background/30 px-3 py-3 text-sm lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <div className="min-w-0">
@@ -73,14 +74,31 @@ function EntryDetail({ entry }: { entry: BomDiffEntry }) {
           <thead><tr className="text-left text-xs text-muted-foreground"><th className="px-2 py-1 font-semibold">狀態</th><th className="px-2 py-1 font-semibold">廠商</th><th className="px-2 py-1 font-semibold">MPN</th><th className="px-2 py-1 font-semibold">實體料號</th><th className="px-2 py-1 font-semibold">Sourcing</th><th className="px-2 py-1 font-semibold">phase out／零件狀態</th></tr></thead>
           <tbody>{entry.lines.map((line, index) => <LineRow key={index} line={line} />)}</tbody>
         </table>
+        {lost.length > 0 && (
+          <div data-testid="bom-diff-lost-data" className="bom-diff-lost">
+            <p className="bom-diff-lost-title">舊版資料沒有帶到新版（請在新版對應料件重新填寫）</p>
+            <ul>
+              {lost.map((line, index) => (
+                <li key={index}>
+                  <strong>{[bomDiffFieldValue(line.before, "manufacturer"), bomDiffFieldValue(line.before, "manufacturerPartNumber")].filter(Boolean).join(" / ") || bomDiffFieldValue(line.before, "partNumber") || "（未填廠商）"}</strong>
+                  <span>{describeBomWebsiteData(line.before!).join(" · ")}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 export function BomDiffView({
-  series, before, after, result, loading, error, onPickBefore, onPickAfter, onSwap, onBack, onExport, exporting,
+  series, before, after, result, loading, error, onPickBefore, onPickAfter, onSwap, onBack, onExport, exporting, initialLostOnly = false, onLostOnlyChange,
 }: {
+  /** Opened from an upload that left website data behind: start on 只看未帶入. */
+  initialLostOnly?: boolean;
+  /** 只看未帶入 is mirrored into the URL by the window, so clearing its chip also clears the link. */
+  onLostOnlyChange?: (lostOnly: boolean) => void;
   series: BomSeries;
   before: BomSeriesVersion;
   after: BomSeriesVersion;
@@ -94,7 +112,8 @@ export function BomDiffView({
   onExport: (visibleEntries: BomDiffEntry[]) => void;
   exporting: boolean;
 }) {
-  const [filters, setFilters] = useState<BomDiffFilters>(EMPTY_BOM_DIFF_FILTERS);
+  const [filters, setFilters] = useState<BomDiffFilters>(() => ({ ...EMPTY_BOM_DIFF_FILTERS, trackingLostOnly: initialLostOnly }));
+  useEffect(() => { onLostOnlyChange?.(filters.trackingLostOnly); }, [filters.trackingLostOnly, onLostOnlyChange]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(filters.query);
   const entries = useMemo(() => result?.entries ?? [], [result]);
@@ -106,18 +125,12 @@ export function BomDiffView({
   if (deferredQuery.trim()) chips.push({ key: "query", label: `搜尋：${deferredQuery.trim()}`, clear: () => setFilters((current) => ({ ...current, query: "" })) });
   for (const kind of filters.kinds) chips.push({ key: `kind:${kind}`, label: `變更類型：${bomChangeKindLabel(kind)}`, clear: () => toggleKind(kind) });
   if (filters.impact !== "all") chips.push({ key: "impact", label: `影響：${bomChangeImpactLabel(filters.impact)}`, clear: () => setFilters((current) => ({ ...current, impact: "all" })) });
-  if (filters.trackingLostOnly) chips.push({ key: "tracking", label: "只看追蹤未帶入", clear: () => setFilters((current) => ({ ...current, trackingLostOnly: false })) });
+  if (filters.trackingLostOnly) chips.push({ key: "tracking", label: "只看未帶入", clear: () => setFilters((current) => ({ ...current, trackingLostOnly: false })) });
   if (!filters.includeUnchanged) chips.push({ key: "unchanged", label: `隱藏未變更 ${unchangedCount.toLocaleString()} 筆`, clear: () => setFilters((current) => ({ ...current, includeUnchanged: true })) });
   const clearAll = () => setFilters({ ...EMPTY_BOM_DIFF_FILTERS, includeUnchanged: true });
 
   const summary = loading || error ? null : result?.summary;
-  const kpis = summary ? [
-    { label: "新增", value: summary.added, tone: "success" as const },
-    { label: "移除", value: summary.removed, tone: "danger" as const },
-    { label: "變更", value: summary.changed, tone: "warning" as const },
-    { label: "未變更", value: summary.unchanged, tone: "neutral" as const },
-    { label: "追蹤未帶入", value: summary.trackingLost, tone: summary.trackingLost > 0 ? "danger" as const : "neutral" as const },
-  ] : [];
+  const lostCount = summary?.trackingLost ?? 0;
 
   return (
     <section data-testid="bom-diff-view" className="bom-diff-view flex min-h-0 min-w-0 flex-1 flex-col gap-3">
@@ -159,13 +172,15 @@ export function BomDiffView({
           {summary && <span data-testid="bom-diff-complete" className="bom-diff-complete"><CircleCheck className="h-4 w-4 shrink-0" aria-hidden="true" />比對完成</span>}
         </div>
         {summary && (
-          <div data-testid="bom-diff-summary" className="bom-diff-summary flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-            {kpis.map((kpi) => <span key={kpi.label} className={cn(CHIP, "h-7 px-2 text-xs", CHIP_TONE[kpi.tone])}>{kpi.label} {kpi.value.toLocaleString()}</span>)}
-            <span className="text-xs text-muted-foreground">位號群組：舊 {summary.beforeGroups.toLocaleString()} · 新 {summary.afterGroups.toLocaleString()}</span>
-            {BOM_CHANGE_KINDS.filter((kind) => summary.kinds[kind.key] > 0).map((kind) => (
-              <span key={kind.key} className="text-xs text-muted-foreground">{kind.label} {summary.kinds[kind.key]}</span>
-            ))}
-          </div>
+          // Plain text: the clickable counts live once, in the filter chips below.
+          <p data-testid="bom-diff-summary" className="bom-diff-summary">
+            <span data-tone="success">新增 {summary.added.toLocaleString()}</span>
+            <span data-tone="danger">移除 {summary.removed.toLocaleString()}</span>
+            <span data-tone="warning">變更 {summary.changed.toLocaleString()}</span>
+            <span>未變更 {summary.unchanged.toLocaleString()}</span>
+            <span data-tone={lostCount > 0 ? "danger" : undefined}>未帶入 {lostCount.toLocaleString()}</span>
+            <span className="bom-diff-summary-groups">位號群組 舊 {summary.beforeGroups.toLocaleString()} → 新 {summary.afterGroups.toLocaleString()}</span>
+          </p>
         )}
         <Button type="button" variant="outline" size="sm" disabled={!summary || exporting || visible.length === 0} aria-busy={exporting || undefined} onClick={() => onExport(visible)} className="bom-diff-export h-9 shrink-0 gap-1.5 text-sm lg:h-8">
           {exporting ? <LoaderCircle className="bom-diff-spinner h-4 w-4" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}
@@ -181,15 +196,20 @@ export function BomDiffView({
             <Input value={filters.query} onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))} placeholder="搜尋位號、料名、廠商、MPN、料號" aria-label="搜尋差異" className="h-9 pl-8 text-sm" />
           </div>
           <div className="flex flex-wrap items-center gap-1" role="group" aria-label="變更類型">
-            {BOM_CHANGE_KINDS.map((kind) => (
-              <button key={kind.key} type="button" aria-pressed={filters.kinds.includes(kind.key)} onClick={() => toggleKind(kind.key)} className={cn(CHIP, "h-8 cursor-pointer px-2 text-xs transition-colors lg:h-7", filters.kinds.includes(kind.key) ? CHIP_TONE[KIND_TONE[kind.key]] : "border-border bg-transparent text-muted-foreground hover:bg-accent/40")}>{kind.label}</button>
-            ))}
+            {BOM_CHANGE_KINDS.map((kind) => {
+              const count = summary?.kinds[kind.key] ?? 0;
+              return (
+                <button key={kind.key} type="button" aria-pressed={filters.kinds.includes(kind.key)} data-empty={summary && count === 0 ? "true" : undefined} onClick={() => toggleKind(kind.key)} title={`只看有「${kind.label}」變更的位號（${count} 個）`} className={cn(CHIP, "bom-diff-kind h-8 cursor-pointer px-2 text-xs transition-colors lg:h-7", filters.kinds.includes(kind.key) ? CHIP_TONE[KIND_TONE[kind.key]] : "border-border bg-transparent text-muted-foreground hover:bg-accent/40")}>
+                  {kind.label}{summary && <span className="bom-diff-kind-count">{count.toLocaleString()}</span>}
+                </button>
+              );
+            })}
           </div>
           <Select value={filters.impact} onValueChange={(value) => setFilters((current) => ({ ...current, impact: value as BomChangeImpact | "all" }))}>
             <SelectTrigger aria-label="影響" className="h-9 w-[9rem] text-sm"><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="all">全部影響</SelectItem>{BOM_CHANGE_IMPACTS.filter((impact) => impact.key !== "none").map((impact) => <SelectItem key={impact.key} value={impact.key}>{impact.label}</SelectItem>)}</SelectContent>
           </Select>
-          <button type="button" aria-pressed={filters.trackingLostOnly} onClick={() => setFilters((current) => ({ ...current, trackingLostOnly: !current.trackingLostOnly }))} className={cn(CHIP, "h-9 cursor-pointer px-2 text-xs lg:h-8", filters.trackingLostOnly ? CHIP_TONE.danger : "border-border bg-transparent text-muted-foreground hover:bg-accent/40")}>追蹤未帶入</button>
+          <button type="button" aria-pressed={filters.trackingLostOnly} onClick={() => setFilters((current) => ({ ...current, trackingLostOnly: !current.trackingLostOnly }))} title="只看舊版有追蹤、Note、負責人或 SPEC 附件，但新版找不到對應料件的位號" className={cn(CHIP, "bom-diff-kind h-9 cursor-pointer px-2 text-xs lg:h-8", filters.trackingLostOnly ? CHIP_TONE.danger : lostCount > 0 ? "border-destructive/50 bg-transparent text-destructive hover:bg-destructive/10" : "border-border bg-transparent text-muted-foreground hover:bg-accent/40")}>未帶入{summary && <span className="bom-diff-kind-count">{lostCount.toLocaleString()}</span>}</button>
           {summary && <span className="ml-auto text-xs text-muted-foreground">{visible.length.toLocaleString()} / {entries.length.toLocaleString()} 群組</span>}
         </div>
         {chips.length > 0 && (
@@ -224,8 +244,9 @@ export function BomDiffView({
               <tr><td colSpan={7} className="px-3 py-10 text-center text-sm text-muted-foreground">{BOM_DIFF_EMPTY_TEXT}</td></tr>
             ) : visible.map((entry) => {
               const isOpen = expanded === entry.id;
-              const preview = entry.changes.slice(0, 2).map((change) => `${change.label}：${change.before || "（空白）"} → ${change.after || "（空白）"}`);
-              const extra = entry.changes.length - preview.length;
+              const allPreview = bomDiffEntryPreview(entry);
+              const preview = allPreview.slice(0, 2);
+              const extra = allPreview.length - preview.length;
               return [
                 <tr key={entry.id} className={cn("border-t border-border/60 align-top transition-colors hover:bg-accent/30", isOpen && "bg-accent/20")}>
                   <td className="px-1 py-1.5"><button type="button" aria-expanded={isOpen} aria-label={isOpen ? "收合" : "展開"} onClick={() => setExpanded(isOpen ? null : entry.id)} className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50">{isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</button></td>
@@ -234,10 +255,10 @@ export function BomDiffView({
                   <td className="px-2 py-2"><div className="flex flex-wrap gap-1">{entry.kinds.length === 0 ? <span className={cn(CHIP, CHIP_TONE.neutral)}>未變更</span> : entry.kinds.map((kind) => <span key={kind} className={cn(CHIP, CHIP_TONE[KIND_TONE[kind]])}>{bomChangeKindLabel(kind)}</span>)}</div></td>
                   <td className="px-2 py-2"><span className={cn(CHIP, CHIP_TONE[IMPACT_TONE[entry.impact]])}>{bomChangeImpactLabel(entry.impact)}</span></td>
                   <td className="max-w-[26rem] px-2 py-2 text-xs text-foreground/85">
-                    {entry.kinds.includes("added") ? `新版新增 ${entry.after?.rows.length ?? 0} 筆廠商明細` : entry.kinds.includes("removed") ? `舊版 ${entry.before?.rows.length ?? 0} 筆廠商明細在新版消失` : preview.length === 0 ? (entry.kinds.length === 0 ? "—" : `廠商明細 ${entry.lines.filter((line) => line.kind !== "same").length} 處增減`) : preview.map((text, index) => <span key={index} className="block truncate" title={text}>{text}</span>)}
-                    {extra > 0 && <span className="text-muted-foreground">還有 {extra} 項</span>}
+                    {preview.length === 0 ? "—" : preview.map((text, index) => <span key={index} className="block truncate" title={text}>{text}</span>)}
+                    {extra > 0 && <button type="button" onClick={() => setExpanded(entry.id)} className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline" title="展開看全部變更">還有 {extra} 項</button>}
                   </td>
-                  <td className="px-2 py-2 text-xs">{entry.trackingLost > 0 ? <span className={cn(CHIP, CHIP_TONE.danger)}>未帶入 {entry.trackingLost}</span> : entry.trackingAfter ? <span className={cn(CHIP, CHIP_TONE.warning)}>有追蹤</span> : <span className="text-muted-foreground">—</span>}</td>
+                  <td className="px-2 py-2 text-xs">{entry.trackingLost > 0 ? <button type="button" onClick={() => setExpanded(entry.id)} title="展開看沒有帶到新版的追蹤、Note、負責人或 SPEC 附件" className={cn(CHIP, CHIP_TONE.danger, "cursor-pointer")}>未帶入 {entry.trackingLost}</button> : entry.trackingAfter ? <span className={cn(CHIP, CHIP_TONE.warning)} title="新版這個位號有追蹤、Note、負責人或 SPEC 附件">有追蹤</span> : <span className="text-muted-foreground">—</span>}</td>
                 </tr>,
                 isOpen && <tr key={`${entry.id}:detail`}><td colSpan={7} className="p-0"><EntryDetail entry={entry} /></td></tr>,
               ];

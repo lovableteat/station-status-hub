@@ -95,6 +95,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { useIsCompactLayout } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/components/auth/UserContext";
@@ -155,14 +156,14 @@ import { applyBomNoteSnapshot, applyRealtimeBomRecords, mergeBomWorkspaceRecords
 import type { BomTableColorTheme, BomWorkspaceArchive, BomWorkspaceProject } from "./materialBomStorage";
 import { loadBomWorkspaceArchives, loadBomWorkspaceProjects, saveBomWorkspaceArchive, saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
 import { loadBomWorkspaceRecords, loadBomWorkspaceVersions, saveBomWorkspaceVersion } from "./materialBomStorage";
-import { BomVersionCenter } from "./BomVersionCenter";
+import { BomVersionCenter, type BomDiffRequest } from "./BomVersionCenter";
 import { buildNvBomTableIndex, matchNvBomTableChange, type NvBomTableCandidate } from "./nvBomTableMatch";
 import type { NvBomChange } from "./nvBomCompare";
 import { BomUploadDialog, NEW_BOM_SERIES_TARGET, type BomUploadMeta, type PendingBomUpload } from "./BomUploadDialog";
-import { carryBomTracking } from "./bomDiff";
+import { carryBomTracking, diffBomRecords } from "./bomDiff";
 import {
   BOM_SERIES_NAME_LIMIT, BOM_VERSION_LABEL_LIMIT, BOM_VERSION_NOTE_LIMIT, bomFileBaseName, buildBomSeriesList, createBomSeriesId,
-  createBomVersionWorkspaceId, findBomSeriesByWorkspace, inferBomSeriesForFile, nextBomVersionNumber,
+  createBomVersionWorkspaceId, findBomSeriesByWorkspace, inferBomSeriesForFile, nextBomVersionNumber, readBomDiffLocation,
   type BomSeries, type BomSeriesVersion, type BomWorkspaceVersion,
 } from "./bomVersioning";
 import { createBomSourceUrl, uploadBomSourceFile } from "./materialBomSources";
@@ -3610,7 +3611,8 @@ export function MaterialRequestPage() {
   const [columnWidths, setColumnWidths] = useState(loadColumnWidths);
   const [tableSettingsOpen, setTableSettingsOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [bomManagerOpen, setBomManagerOpen] = useState(false);
+  // A link carrying an open comparison (bomDiff…) reopens BOM 版本管理 on it.
+  const [bomManagerOpen, setBomManagerOpen] = useState(() => typeof window !== "undefined" && readBomDiffLocation(window.location.search) !== null);
   const [nvBomTableLocation, setNvBomTableLocation] = useState<NvBomTableCandidate | null>(null);
   const tableResultsRef = useRef<HTMLDivElement>(null);
   const [circuitChangesOpen, setCircuitChangesOpen] = useState(false);
@@ -3620,6 +3622,10 @@ export function MaterialRequestPage() {
   const [pendingUploads, setPendingUploads] = useState<PendingBomUpload[]>([]);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const uploadTargetSeriesRef = useRef<string | null>(null);
+  const [bomDiffRequest, setBomDiffRequest] = useState<BomDiffRequest | null>(() => {
+    const linked = typeof window !== "undefined" ? readBomDiffLocation(window.location.search) : null;
+    return linked ? { token: 1, ...linked } : null;
+  });
   const [guideOpen, setGuideOpen] = useState(false);
   const [pendingDialogOpen, setPendingDialogOpen] = useState(false);
   const [addedPendingRecordId, setAddedPendingRecordId] = useState<string>();
@@ -4733,6 +4739,9 @@ export function MaterialRequestPage() {
     let orphanedTotal = 0;
     let newSeriesCount = 0;
     let newVersionCount = 0;
+    let trackedTotal = 0;
+    // Every new version of an existing series is compared with the version it replaced; the result toast names each one.
+    const comparisons: Array<{ seriesId: string; seriesName: string; before: string; beforeNumber: string; after: string; afterNumber: string; summary: ReturnType<typeof diffBomRecords>["summary"] }> = [];
     try {
       for (const upload of uploads) {
         assertBomWriteCurrent(writeScope);
@@ -4750,13 +4759,16 @@ export function MaterialRequestPage() {
         const workspaceId = createBomVersionWorkspaceId(seriesName, versionNumber);
         let records = upload.payload.records;
         let carry: BomWorkspaceVersion["carry"];
+        let comparison: ReturnType<typeof diffBomRecords>["summary"] | null = null;
         if (previous) {
           const previousRecords = await loadVersionRecords(previous.workspace.id);
           assertBomWriteCurrent(writeScope);
           const carried = carryBomTracking(previousRecords, upload.payload.records);
           records = carried.records;
-          carry = { matched: carried.matched, orphaned: carried.orphaned.length, manual: carried.manual };
+          carry = { matched: carried.matched, tracked: carried.tracked, orphaned: carried.orphaned.length, manual: carried.manual };
           orphanedTotal += carried.orphaned.length;
+          trackedTotal += carried.tracked;
+          comparison = diffBomRecords(previousRecords, records).summary;
         }
         const stamp = new Date().toISOString();
         const workspace: BomWorkspace = {
@@ -4825,6 +4837,9 @@ export function MaterialRequestPage() {
         }), finalWorkspace];
         if (series) newVersionCount += 1;
         else { createdSeriesIds.add(seriesId); newSeriesCount += 1; }
+        if (previous && comparison) {
+          comparisons.push({ seriesId, seriesName, before: previous.workspace.id, beforeNumber: previous.displayNumber, after: workspaceId, afterNumber: `V${versionNumber}`, summary: comparison });
+        }
         lastWorkspaceId = workspaceId;
         totalRecords += workspace.payload.recordCount;
       }
@@ -4839,20 +4854,32 @@ export function MaterialRequestPage() {
       setExpandedKey(null);
       setPage(1);
       if (orphanedTotal > 0) {
-        report.push(`有追蹤紀錄沒有帶到新版本：${orphanedTotal.toLocaleString()} 筆舊版追蹤找不到對應的位號或料號，請在版本差異的「追蹤未帶入」確認。`);
+        report.push(`有資料沒有帶到新版本：${orphanedTotal.toLocaleString()} 筆舊版追蹤、Note、負責人或 SPEC 附件找不到對應料件，請在差異的「未帶入」查看並補填。`);
       }
       const hasWarnings = report.length > 0;
       const createdTitle = uploads.length === 1 ? "BOM 版本已建立" : `${uploads.length} 個 BOM 版本已建立`;
       const UploadResultIcon = hasWarnings ? TriangleAlert : CircleCheck;
+      // 查看差異 opens the series that left data behind first (the one the warning is about), otherwise the last one.
+      const comparisonResult = comparisons.find((item) => item.summary.trackingLost > 0) ?? comparisons.at(-1) ?? null;
+      const openComparison = comparisonResult ? () => {
+        setBomDiffRequest({ token: Date.now(), seriesId: comparisonResult.seriesId, before: comparisonResult.before, after: comparisonResult.after, lostOnly: comparisonResult.summary.trackingLost > 0 });
+        setBomManagerOpen(true);
+      } : null;
+      // Any batch of more than one file names the series, even when only one of them replaced an older version.
+      const nameSeries = uploads.length > 1;
+      const comparisonLine = (item: (typeof comparisons)[number]) => `${nameSeries ? `${item.seriesName} ` : ""}${item.beforeNumber} → ${item.afterNumber}：新增 ${item.summary.added} · 移除 ${item.summary.removed} · 變更 ${item.summary.changed}${item.summary.trackingLost > 0 ? ` · 未帶入 ${item.summary.trackingLost}` : ""}`;
       toast({
         className: cn("bom-upload-toast", hasWarnings && "bom-upload-toast--warning"),
         title: <span className="bom-upload-toast-heading"><UploadResultIcon aria-hidden="true" />{createdTitle}{hasWarnings && "，有資料待確認"}</span>,
         description: <span className="grid gap-1">
-          <span>{totalRecords.toLocaleString()} 筆廠商料明細 · 新系列 {newSeriesCount} 個 · 新版本 {newVersionCount} 個</span>
+          {comparisons.slice(0, 3).map((item) => <strong key={item.after} data-testid="bom-upload-comparison" className="font-semibold text-foreground">{comparisonLine(item)}</strong>)}
+          {comparisons.length > 3 && <span>另有 {comparisons.length - 3} 個系列的新版本，可在 BOM 管理逐一比對。</span>}
+          <span>{totalRecords.toLocaleString()} 筆廠商料明細 · 新系列 {newSeriesCount} 個 · 新版本 {newVersionCount} 個{newVersionCount > 0 ? ` · 帶入網站資料 ${trackedTotal.toLocaleString()} 筆` : ""}</span>
           {importProject && newSeriesCount > 0 && <span>新系列已歸入「{importProject.projectName}」</span>}
           {report.map((warning, index) => <span key={index}>{warning}</span>)}
         </span>,
-        duration: hasWarnings ? 30_000 : undefined,
+        action: openComparison ? <ToastAction altText={`查看「${comparisonResult!.seriesName}」${comparisonResult!.beforeNumber} 與 ${comparisonResult!.afterNumber} 的差異`} onClick={openComparison} title={`打開 BOM 版本管理，直接比對「${comparisonResult!.seriesName}」${comparisonResult!.beforeNumber} → ${comparisonResult!.afterNumber}`}>{nameSeries ? `查看「${comparisonResult!.seriesName}」差異` : "查看差異"}</ToastAction> : undefined,
+        duration: hasWarnings || openComparison ? 30_000 : undefined,
       });
     } catch (error) {
       if (writeScope && !isBomWriteCurrent(writeScope)) return;
@@ -4895,9 +4922,10 @@ export function MaterialRequestPage() {
       if (carryOnSwitch && previous.workspace.id !== version.workspace.id) {
         const [previousRecords, targetRecords] = await Promise.all([loadVersionRecords(previous.workspace.id), loadVersionRecords(version.workspace.id)]);
         assertBomWriteCurrent(writeScope);
-        const carried = carryBomTracking(previousRecords, targetRecords);
+        // The version that was current holds the newest tracking, so it wins over the target's own older data.
+        const carried = carryBomTracking(previousRecords, targetRecords, { from: "current" });
         await saveBomWorkspace({ ...version.workspace, payload: { ...version.workspace.payload, records: carried.records, recordCount: carried.records.length }, updatedAt: stamp }, () => assertBomWriteCurrent(writeScope));
-        carry = { matched: carried.matched, orphaned: carried.orphaned.length, manual: carried.manual };
+        carry = { matched: carried.matched, tracked: carried.tracked, orphaned: carried.orphaned.length, manual: carried.manual };
       }
       if (!isBomWriteCurrent(writeScope)) return;
       for (const item of series.versions) {
@@ -4917,7 +4945,9 @@ export function MaterialRequestPage() {
       switchActiveBom(version.workspace.id);
       toast({
         title: `${series.name} 已切換到 ${version.displayNumber}`,
-        description: carryOnSwitch && previous.workspace.id !== version.workspace.id ? `這個版本現在是目前版本；${previous.displayNumber} 的追蹤紀錄已依位號與料號帶過來。` : "這個版本現在是目前版本，其他人也會看到相同結果。",
+        description: carryOnSwitch && previous.workspace.id !== version.workspace.id
+          ? `這個版本現在是目前版本；已依位號與料號帶入 ${previous.displayNumber} 的網站資料 ${carry?.tracked ?? 0} 筆${carry && carry.orphaned > 0 ? `，${carry.orphaned} 筆找不到對應料件（可在比對中查看）` : ""}。`
+          : "這個版本現在是目前版本，其他人也會看到相同結果。",
       });
     } catch (error) {
       if (!isBomWriteCurrent(writeScope)) return;
@@ -5447,10 +5477,14 @@ export function MaterialRequestPage() {
     const fallbackWorkspace = createDefaultBomWorkspace();
     const nextWorkspaces = remaining.length > 0 ? remaining : [fallbackWorkspace];
     if (!isBomWriteCurrent(writeScope)) return;
+    // Deleting the version on screen lands on the same board's current version, not on whichever BOM happens to be first.
+    const deletedSeriesId = findBomSeriesByWorkspace(seriesList, activeBomId)?.series.id;
+    const sameSeries = deletedSeriesId ? buildBomSeriesList(remaining).find((series) => series.id === deletedSeriesId) : undefined;
+    const landingId = sameSeries?.current.workspace.id ?? nextWorkspaces[0].id;
 
     setBomWorkspaces(nextWorkspaces);
     if (targetIds.includes(activeBomId)) {
-      switchActiveBom(nextWorkspaces[0].id);
+      switchActiveBom(landingId);
     }
 
     try {
@@ -5469,7 +5503,7 @@ export function MaterialRequestPage() {
           },
         });
       }
-      await reloadBomWorkspaces(nextWorkspaces[0].id);
+      await reloadBomWorkspaces(targetIds.includes(activeBomId) ? landingId : activeBomId);
       if (!isBomWriteCurrent(writeScope)) return;
       toast({
         title: targetWorkspaces.length > 1 ? `已刪除 ${targetWorkspaces.length} 個 BOM 版本` : "BOM 版本已刪除",
@@ -5949,6 +5983,7 @@ export function MaterialRequestPage() {
         onDeleteSeries={requestDeleteBomSeries}
         onOpenPageTracker={openBomPageTrackerDialog}
         onDownloadSource={(version) => void openBomSourceFile(version)}
+        diffRequest={bomDiffRequest}
       />
       <BomUploadDialog open={uploadDialogOpen} uploads={pendingUploads} seriesList={seriesList} activeProjectName={activeProject?.name} busy={isImporting} onChange={setPendingUploads} onConfirm={(meta) => void confirmBomUploads(meta)} onCancel={() => { if (!isImporting) { setUploadDialogOpen(false); setPendingUploads([]); } }} />
       <MaterialRecordDialog key={`${user?.userId}:${activeWorkspace.id}:${editorSession}`} canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded} open={editorOpen && editorContext?.workspaceId === activeWorkspace.id && editorContext.accountId === user?.userId} mode={editorMode} record={editorRecord} initialTab={editorInitialTab} workspaceId={activeWorkspace.id} uploaderName={user?.displayName || user?.username || undefined} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onOpenSpec={(target, download) => void openSpecDocument(target, download)} onSave={handleSaveRecord} onAddAlternate={editorMode === "create" ? undefined : () => {

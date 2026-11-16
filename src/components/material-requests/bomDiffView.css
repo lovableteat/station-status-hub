@@ -117,6 +117,72 @@
   color: hsl(var(--foreground) / 0.85);
 }
 
+/* Summary is a sentence, not buttons: the counts you can click are the filter chips. */
+.bom-diff-summary {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem 0.875rem;
+  color: hsl(var(--foreground) / 0.85);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.bom-diff-summary > span[data-tone="success"] { color: hsl(var(--success)); }
+.bom-diff-summary > span[data-tone="danger"] { color: hsl(var(--destructive)); }
+.bom-diff-summary > span[data-tone="warning"] { color: hsl(var(--warning)); }
+.bom-diff-summary > span { font-weight: 650; white-space: nowrap; }
+.bom-diff-summary > .bom-diff-summary-groups { color: hsl(var(--muted-foreground)); font-weight: 400; }
+
+.bom-diff-kind {
+  gap: 0.375rem;
+}
+
+.bom-diff-kind-count {
+  min-width: 1rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: center;
+}
+
+.bom-diff-kind[data-empty="true"][aria-pressed="false"] {
+  opacity: 0.55;
+}
+
+.bom-diff-lost {
+  margin-top: 0.75rem;
+  border: 1px solid hsl(var(--destructive) / 0.35);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  background: hsl(var(--destructive) / 0.07);
+  font-size: 0.75rem;
+}
+
+.bom-diff-lost-title {
+  margin-bottom: 0.25rem;
+  color: hsl(var(--destructive));
+  font-weight: 700;
+}
+
+.bom-diff-lost li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.125rem 0.5rem;
+  padding-block: 0.125rem;
+}
+
+.bom-diff-lost strong {
+  color: hsl(var(--foreground));
+  font-weight: 650;
+}
+
+.bom-diff-lost span {
+  color: hsl(var(--foreground) / 0.8);
+  overflow-wrap: anywhere;
+}
+
 @media (min-width: 900px) {
   .bom-diff-toolbar {
     grid-template-columns: minmax(0, 1fr) clamp(19rem, 40vw, 28rem);

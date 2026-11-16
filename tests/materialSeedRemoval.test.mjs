@@ -5,6 +5,7 @@ import test from 'node:test';
 import ts from 'typescript';
 import { mergeBomWorkspaceRecords } from '../src/components/material-requests/materialBomNoteSync.ts';
 import { canReuseBomPayloadReference } from '../src/components/material-requests/materialBomPerformance.ts';
+import { buildBomSeriesList, findBomSeriesByWorkspace } from '../src/components/material-requests/bomVersioning.ts';
 
 const source = fs.readFileSync(new URL('../src/components/material-requests/MaterialRequestPage.tsx', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('MaterialRequestPage.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -37,9 +38,10 @@ function localFactory(saved) {
 const row = (id, fields = {}) => ({ id, name: `Synthetic ${id}`, note: 'User note', trackingHistory: [{ id: 'history', note: 'Keep this' }], ...fields });
 const workspace = (id, records = [row('one')]) => ({ id, name: id, payload: { sourceFile: 'Synthetic.xlsx', generatedAt: '2026-01-01T00:00:00.000Z', records, recordCount: records.length }, updatedAt: '2026-01-01T00:00:00.000Z' });
 function pageHandler(name, overrides = {}) {
-  let state = [workspace('existing')], active = 'existing';
+  let state = [workspace('existing')], active = overrides.activeBomId ?? 'existing';
   const writes = [], effects = [];
   const context = {
+    buildBomSeriesList, findBomSeriesByWorkspace, seriesList: buildBomSeriesList(overrides.bomWorkspaces ?? state),
     user: { userId: 'owner' }, bomAccountRef: { current: { accountId: 'owner', generation: 0 } },
     useCallback: callback => callback,
     setBomWorkspaces(next) { state = typeof next === 'function' ? next(state) : next; effects.push('state'); },
@@ -139,6 +141,23 @@ test('deleting one selected QA BOM keeps the other complete BOM unchanged', asyn
   await page.action('existing');
   assert.deepEqual(plain(page.state), [retained]);
   assert.deepEqual(page.writes, [['delete', 'existing']]);
+});
+
+test('deleting the version on screen lands on the same board current version, not on the first BOM in the list', async () => {
+  const version = (number, isCurrent) => ({ seriesId: 'series:qa', seriesName: 'QA 主板', versionNumber: number, label: '', note: '', uploadedAt: '2026-01-0' + number + 'T00:00:00.000Z', uploadedBy: 'QA', isCurrent, currentChangedAt: '2026-01-05T00:00:00.000Z' });
+  const other = workspace('other-board');
+  const v1 = { ...workspace('qa-v1'), version: version(1, false) };
+  const v2 = { ...workspace('qa-v2'), version: version(2, true) };
+  const page = pageHandler('deleteBomWorkspaceById', { bomWorkspaces: [other, v1, v2], activeBomId: 'qa-v1' });
+  await page.action('qa-v1');
+  assert.equal(page.active, 'qa-v2');
+  assert.deepEqual(page.writes, [['delete', 'qa-v1']]);
+  const keep = pageHandler('deleteBomWorkspaceById', { bomWorkspaces: [other, v1, v2], activeBomId: 'qa-v2' });
+  let reloadedWith;
+  keep.context.reloadBomWorkspaces = async (id) => { reloadedWith = id; };
+  await keep.action('qa-v1');
+  assert.equal(keep.active, 'qa-v2', 'deleting another version leaves the screen where it was');
+  assert.equal(reloadedWith, 'qa-v2', 'the reload keeps the version on screen instead of the first BOM');
 });
 
 test('a failed remote read preserves existing UI data and never applies an empty fallback', async () => {

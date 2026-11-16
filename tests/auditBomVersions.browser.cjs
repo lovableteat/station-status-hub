@@ -94,14 +94,16 @@ function startHarness() {
     const versionRows = await table.locator('tr[data-version-id]').allTextContents();
     assert.equal(versionRows.length, 3);
     // 狀態 sits right after 版本 (2026-11-10), so the sticky 操作 column never hides it.
-    assert.match(versionRows[0], /V3.*目前版本.*EVT rev C.*QA_主板_v3\.xlsx.*帶入 11/s, 'V3 carried all eleven tracked lines by content and is current');
+    // Eleven lines matched V2; only the two with website data (R1 tracking, U1 SYMBOL申請中 + 負責人) count as carried.
+    assert.match(versionRows[0], /V3.*目前版本.*EVT rev C.*QA_主板_v3\.xlsx.*帶入 2/s, 'V3 carried the two lines that had website data and is current');
+    assert.match(await table.locator('tr[data-version-id]').first().locator('.bom-version-chip-row[title]').getAttribute('title'), /^11 筆料件對上前一版，其中 2 筆/);
     assert.match(versionRows[1], /V2.*歷史/s);
 
     await page.getByTestId('bom-series-detail').getByRole('button', { name: '比對版本' }).click();
     const summary = page.getByTestId('bom-diff-summary');
     await summary.waitFor({ timeout: 15000 });
     const summaryText = await summary.textContent();
-    for (const expected of ['新增 1', '移除 0', '變更 1', '未變更 8', '追蹤未帶入 0']) assert.ok(summaryText.includes(expected), `${expected} in ${summaryText}`);
+    for (const expected of ['新增 1', '移除 0', '變更 1', '未變更 8', '未帶入 0']) assert.ok(summaryText.includes(expected), `${expected} in ${summaryText}`);
     const diffRows = await page.getByTestId('bom-diff-view').locator('tbody tr').allTextContents();
     assert.ok(diffRows.some((row) => row.includes('D5, D6') && row.includes('新增')), 'added LED position listed');
     assert.ok(diffRows.some((row) => row.includes('R10') && row.includes('Qty：1 → 3')), 'R10 qty change listed');

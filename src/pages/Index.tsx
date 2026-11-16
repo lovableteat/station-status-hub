@@ -162,6 +162,10 @@ const moduleWorkspaceMap: Record<string, WorkspaceId> = {
 const MODULE_QUERY_KEYS = [
   "attention",
   "assetView",
+  "bomDiff",
+  "bomBefore",
+  "bomAfter",
+  "bomDiffLost",
   "comparisonTab",
   "compareSearch",
   "compareStatus",

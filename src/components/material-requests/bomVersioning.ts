@@ -13,7 +13,10 @@ export interface BomVersionSource {
 }
 
 export interface BomVersionCarry {
+  /** Old lines matched to a line of this version. */
   matched: number;
+  /** Matched lines whose website data (tracking, Note, 負責人, SPEC files) was carried. Absent on versions created before 2026-11-17. */
+  tracked?: number;
   orphaned: number;
   manual: number;
 }
@@ -71,7 +74,12 @@ export function normalizeBomVersion(raw: unknown, fallbackUpdatedAt: string): Bo
     ? { name: text(candidate.source.name) || "BOM.xlsx", path: text(candidate.source.path), size: Number(candidate.source.size) || 0, mimeType: text(candidate.source.mimeType) || "application/octet-stream" }
     : undefined;
   const carry = candidate.carry && typeof candidate.carry === "object"
-    ? { matched: Math.max(0, Number(candidate.carry.matched) || 0), orphaned: Math.max(0, Number(candidate.carry.orphaned) || 0), manual: Math.max(0, Number(candidate.carry.manual) || 0) }
+    ? {
+      matched: Math.max(0, Number(candidate.carry.matched) || 0),
+      ...(candidate.carry.tracked !== undefined ? { tracked: Math.max(0, Number(candidate.carry.tracked) || 0) } : {}),
+      orphaned: Math.max(0, Number(candidate.carry.orphaned) || 0),
+      manual: Math.max(0, Number(candidate.carry.manual) || 0),
+    }
     : undefined;
   return {
     seriesId,
@@ -169,6 +177,25 @@ export function findBomSeriesByWorkspace(seriesList: readonly BomSeries[], works
   return null;
 }
 
+/**
+ * Which two versions a 比對 click compares, older on the 舊版 side. The current version
+ * compares with the version right before it (or after it when it is the oldest); any
+ * other version compares with the current one.
+ */
+export function bomVersionComparePair(series: Pick<BomSeries, "versions" | "current">, version: BomSeriesVersion = series.current): { before: BomSeriesVersion; after: BomSeriesVersion } | null {
+  const ordered = series.versions;
+  if (ordered.length < 2) return null;
+  let other: BomSeriesVersion | undefined;
+  if (version === series.current) {
+    const index = ordered.indexOf(version);
+    other = ordered[index - 1] ?? ordered[index + 1];
+  } else {
+    other = series.current;
+  }
+  if (!other || other === version) return null;
+  return ordered.indexOf(other) < ordered.indexOf(version) ? { before: other, after: version } : { before: version, after: other };
+}
+
 export function nextBomVersionNumber(series: Pick<BomSeries, "versions"> | null | undefined) {
   return (series?.versions ?? []).reduce((max, item) => Math.max(max, item.version.versionNumber), 0) + 1;
 }
@@ -237,6 +264,18 @@ export function createBomSeriesId() {
 export function createBomVersionWorkspaceId(seriesName: string, versionNumber: number, token = randomToken(6)) {
   const slug = (bomSeriesSlug(seriesName) || "bom").slice(0, 48);
   return `bom:${slug}:v${versionNumber}:${token}`;
+}
+
+/** The open comparison lives in the URL (bomDiff, bomBefore, bomAfter, bomDiffLost) so a refresh, back or shared link reopens it. */
+export const BOM_DIFF_QUERY_KEYS = ["bomDiff", "bomBefore", "bomAfter", "bomDiffLost"] as const;
+
+export function readBomDiffLocation(search: string): { seriesId: string; before: string; after: string; lostOnly: boolean } | null {
+  const params = new URLSearchParams(search);
+  const seriesId = params.get("bomDiff")?.trim();
+  const before = params.get("bomBefore")?.trim();
+  const after = params.get("bomAfter")?.trim();
+  if (!seriesId || !before || !after || before === after) return null;
+  return { seriesId, before, after, lostOnly: params.get("bomDiffLost") === "1" };
 }
 
 export function formatBomVersionTitle(version: Pick<BomSeriesVersion, "displayNumber" | "version">) {

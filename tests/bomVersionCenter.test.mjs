@@ -10,6 +10,7 @@ const uploadDialog = await read("BomUploadDialog.tsx");
 const page = await read("MaterialRequestPage.tsx");
 const storage = await read("materialBomStorage.ts");
 const guide = await read("MaterialUploadGuideDialog.tsx");
+const indexPage = await readFile(new URL("../src/pages/Index.tsx", import.meta.url), "utf8");
 
 const entry = (overrides = {}) => ({ id: "x", kinds: [], impact: "none", displayRef: "C1", name: "CAP", refAdded: [], refRemoved: [], changes: [], lines: [], trackingLost: 0, trackingAfter: false, searchText: "c1 cap vendor a", ...overrides });
 
@@ -72,7 +73,21 @@ test("uploads are staged and confirmed with an explicit series target instead of
   assert.match(page, /carryBomTracking\(previousRecords, upload\.payload\.records\)/);
   assert.match(page, /isCurrent: false, currentChangedAt: stamp \}, \(\) => assertBomWriteCurrent\(writeScope\)\)/, "the previous current version is demoted in the same write scope");
   assert.match(page, /uploadBomSourceFile\(\{ workspaceId, file: upload\.file \}\)/);
-  assert.match(page, /report\.push\(`有追蹤紀錄沒有帶到新版本/);
+  assert.match(page, /report\.push\(`有資料沒有帶到新版本/);
+  assert.match(uploadDialog, /useEffect\(\(\) => \{ if \(open\) \{ setLabel\(""\); setNote\(""\); \} \}, \[open\]\);/, "a new batch never inherits the previous upload's label and note");
+  assert.match(page, /carry = \{ matched: carried\.matched, tracked: carried\.tracked,/, "the version records how many lines really carried website data");
+  assert.match(page, /<ToastAction altText=\{`查看「\$\{comparisonResult!\.seriesName\}」/, "the upload result offers the comparison directly");
+  assert.match(page, /comparisons\.find\(\(item\) => item\.summary\.trackingLost > 0\) \?\? comparisons\.at\(-1\)/, "in a batch, 查看差異 opens the series the warning is about");
+  assert.match(page, /useState\(\(\) => typeof window !== "undefined" && readBomDiffLocation\(window\.location\.search\) !== null\)/, "a link with an open comparison reopens BOM 版本管理");
+  assert.match(center, /for \(const key of BOM_DIFF_QUERY_KEYS\)/, "the open comparison and 只看未帶入 are mirrored into the URL");
+  assert.match(center, /onLostOnlyChange=\{setDiffLostOnly\}/);
+  assert.match(center, /if \(diffRequest\) consumedDiffRequest\.current = diffRequest\.token;\n    setDiffPair/, "a manual comparison takes over from a link still waiting for its versions");
+  assert.match(page, /const nameSeries = uploads\.length > 1;/, "a batch names the series even when only one of its files replaced a version");
+  assert.match(diffView, /useEffect\(\(\) => \{ onLostOnlyChange\?\.\(filters\.trackingLostOnly\); \}/, "clearing the chip updates the URL through the same state");
+  for (const key of ["bomDiff", "bomBefore", "bomAfter", "bomDiffLost"]) assert.ok(indexPage.includes(`"${key}",`), `${key} is dropped when leaving the module`);
+  assert.match(page, /diffRequest=\{bomDiffRequest\}/);
+  assert.match(page, /carryBomTracking\(previousRecords, targetRecords, \{ from: "current" \}\)/, "switching back keeps the newest tracking");
+  assert.match(page, /const landingId = sameSeries\?\.current\.workspace\.id \?\? nextWorkspaces\[0\]\.id;/, "deleting the version on screen lands on the same board");
   assert.match(guide, /同一塊板再上傳即成為新版本/);
   assert.doesNotMatch(guide, /相同檔名重新上傳會更新原 BOM/);
 });

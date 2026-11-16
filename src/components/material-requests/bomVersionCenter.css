@@ -75,7 +75,16 @@
 .bom-version-label-note { display: flex; max-width: 170px; gap: 8px; overflow: hidden; white-space: nowrap; }
 .bom-version-label-note > strong { flex: none; }
 .bom-version-label-note > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.bom-version-source-file { display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bom-version-source-file { display: block; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Desktop: 操作 stays on screen while the wider columns scroll underneath it. On a phone the column is as wide
+   as the screen, so it scrolls with the row and 版本 stays readable. */
+@media (min-width: 1024px) {
+  .bom-version-table-scroll table :is(thead th, tr[data-version-id] > td):last-child { position: sticky; right: 0; z-index: 1; background-color: hsl(var(--card)); box-shadow: inset 1px 0 hsl(var(--border)); }
+  .bom-version-table-scroll thead th:last-child { z-index: 11; background-color: color-mix(in srgb, hsl(var(--card)), hsl(var(--info)) 16%); }
+  .bom-version-table-scroll tr[data-current="true"] > td:last-child { background-image: linear-gradient(hsl(var(--success) / .11), hsl(var(--success) / .11)); }
+}
+.bom-version-icon-actions { display: inline-flex; flex: none; align-items: center; gap: 2px; margin-inline-start: 2px; padding-inline-start: 6px; border-inline-start: 1px solid hsl(var(--border)); }
+.bom-version-table-scroll table td:last-child .bom-version-icon-actions button { width: 32px; padding-inline: 0; }
 .bom-version-upload, .bom-version-uploaded-at { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 8px; white-space: nowrap; }
 .bom-version-uploaded-at > span:last-child { color: hsl(var(--foreground) / .85); }
 .bom-version-uploader { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
@@ -140,4 +149,5 @@
   .bom-version-center [data-testid="bom-series-detail"] { overflow-y: auto; }
   .bom-version-center .bom-version-table-scroll { flex: 1 0 200px; }
   .bom-version-table-scroll table td:last-child button { height: 44px; min-height: 44px; }
+  .bom-version-table-scroll table td:last-child .bom-version-icon-actions button { width: 44px; }
 }

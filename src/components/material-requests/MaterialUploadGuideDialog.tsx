@@ -67,7 +67,7 @@ export function UploadGuideDialog({ open, onOpenChange }: { open: boolean; onOpe
           {chapter === "versions" && <>
             <p className="material-guide-lead">每次上傳都保存為獨立版本。先選對專案與系列，再確認這次是新板子還是同一塊板的新版。</p>
             <ol className="material-guide-steps"><li><strong>選檔與指定歸屬</strong><p>按「上傳 BOM」，選擇 Excel。在確認視窗指定專案，並選「建立新 BOM 系列」或「作為既有系列的新版本」。同一塊板再上傳即成為新版本。</p></li><li><strong>核對匯入結果</strong><p>檢查位號、用量、MPN、虛擬／實體料號、Schematic_Part、phase out 與零件狀態，並確認主料與替代廠商關係。</p></li><li><strong>到 BOM 管理查版本</strong><p>左側依專案找系列，右側看版本、上傳時間、追蹤帶入及原檔。可檢視、比對版本、下載原檔或匯出差異 Excel；原檔下載依該版是否有保存原檔而定。</p></li></ol>
-            <aside className="material-guide-note"><strong>目前版本與歷史版本</strong><p>料件與追蹤在目前版本維護；歷史版本唯讀，可檢視與比對。上傳新版會依位號與料號帶入既有追蹤，請在差異檢視核對「追蹤未帶入」項目。</p></aside>
+            <aside className="material-guide-note"><strong>目前版本與歷史版本</strong><p>料件與追蹤在目前版本維護；歷史版本唯讀，可檢視與比對。上傳新版會依位號與料號帶入既有追蹤、Note、負責人與 SPEC 附件；完成提示可直接「查看差異」，請核對「未帶入」項目。</p></aside>
             <h4>舊檔仍可匯入</h4><p>Virtual PN／TX 讀為虛擬料號；Part Number／PEGA P/N 讀為實體料號。第二 MPN、Ref_tmp、LV、CIS/Remark 不再要求 CE 填寫，舊資料與來源原值仍保留相容。</p>
           </>}
           {chapter === "find" && <>

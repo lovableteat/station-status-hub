@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  bomRefTokens, buildBomDiffGroups, carryBomTracking, diffBomRecords, matchBomVendorLines, mergeBomTrackingHistories,
+  bomDiffEntryPreview, bomRecordHasTracking, bomRefTokens, buildBomDiffGroups, carryBomTracking, describeBomWebsiteData, diffBomRecords,
+  matchBomVendorLines, mergeBomTrackingHistories,
 } from "../src/components/material-requests/bomDiff.ts";
 
 let counter = 0;
@@ -155,6 +156,7 @@ test("carry-over moves tracking by content, keeps new imported entries first and
   ];
   const carried = carryBomTracking(previous, next);
   assert.equal(carried.matched, 2);
+  assert.equal(carried.tracked, 1, "only C1 had website data; Q1 matched but carried nothing");
   assert.equal(carried.manual, 1);
   assert.deepEqual(carried.orphaned.map((record) => record.refDes), ["R7"]);
   assert.equal(carried.records.length, 4);
@@ -165,6 +167,147 @@ test("carry-over moves tracking by content, keeps new imported entries first and
   assert.equal(c1.specDocument?.name, "spec.pdf");
   assert.equal(carried.records.at(-1)?.id, "manual-123");
   assert.equal(carried.records.find((record) => record.refDes === "Q1")?.trackingStatus, "");
+});
+
+const spec = (name: string) => ({ name, path: `bom/spec/${name}`, mimeType: "application/pdf", size: 1, uploadedAt: "2026-10-01T00:00:00.000Z" });
+
+test("a new upload keeps the website-only data of every matched line: Note, 負責人 and all SPEC files", () => {
+  const previous = row({
+    id: "old-u1", refDes: "U1", note: "共同筆記：等 RD 回覆", requestOwnerId: "user-7", requestOwnerName: "CE 王同學",
+    specDocuments: [spec("a.pdf"), spec("b.step"), spec("c.dwg")], specDocument: spec("a.pdf"),
+  });
+  const next = row({ id: "new-u1", refDes: "U1" });
+  const carried = carryBomTracking([previous], [next]);
+  const u1 = carried.records[0];
+  assert.equal(u1.note, "共同筆記：等 RD 回覆");
+  assert.equal(u1.requestOwnerId, "user-7");
+  assert.equal(u1.requestOwnerName, "CE 王同學");
+  assert.deepEqual(u1.specDocuments!.map((document) => document.name), ["a.pdf", "b.step", "c.dwg"], "every attachment, not only the first");
+  assert.equal(u1.specDocument?.name, "a.pdf");
+  assert.equal(carried.tracked, 1);
+  assert.equal(u1.id, "new-u1", "the row keeps the new workbook identity");
+});
+
+test("lines that only had a Note, a 負責人 or SPEC files are reported when the new version drops them", () => {
+  for (const data of [{ note: "只有筆記" }, { requestOwnerName: "CE 李同學" }, { specDocuments: [spec("only.pdf")] }]) {
+    const old = row({ refDes: "J9", ...data });
+    const result = diffBomRecords([old, row({ refDes: "J1" })], [row({ refDes: "J1" })]);
+    assert.equal(result.summary.trackingLost, 1, JSON.stringify(data));
+    assert.equal(carryBomTracking([old], []).orphaned.length, 1, JSON.stringify(data));
+    assert.ok(describeBomWebsiteData(old).length > 0, JSON.stringify(data));
+  }
+  assert.equal(bomRecordHasTracking(row({ refDes: "J2", remark: "CE 欄位的備註" })), false, "the workbook remark column is not website data");
+  assert.deepEqual(describeBomWebsiteData(row({ trackingStatus: "已發信", requestOwnerName: "王", note: "N", specDocuments: [spec("x.pdf"), spec("y.pdf")] })), ["狀態 已發信", "負責人 王", "Note N", "SPEC 附件 2 個"]);
+});
+
+test("switching back to an older version: the version that was current wins over the target's stale tracking", () => {
+  const v1 = row({ id: "v1-u1", refDes: "U1", trackingStatus: "已發信", trackingNote: "舊進度", trackingHistory: [{ id: "h1", status: "已發信", note: "舊進度", createdAt: "2026-10-01T00:00:00.000Z" }] });
+  const v2 = row({
+    id: "v2-u1", refDes: "U1", trackingStatus: "已完成", trackingNote: "最新進度", requestOwnerName: "CE 王同學",
+    trackingHistory: [{ id: "h1", status: "已發信", note: "舊進度", createdAt: "2026-10-01T00:00:00.000Z" }, { id: "h2", status: "已完成", note: "最新進度", createdAt: "2026-11-01T00:00:00.000Z" }],
+  });
+  const asUpload = carryBomTracking([v2], [v1]).records[0];
+  assert.equal(asUpload.trackingStatus, "已發信", "the upload rule treats the target's own status as freshly imported — wrong for a switch");
+  const switched = carryBomTracking([v2], [v1], { from: "current" }).records[0];
+  assert.equal(switched.trackingStatus, "已完成");
+  assert.equal(switched.trackingNote, "最新進度");
+  assert.equal(switched.requestOwnerName, "CE 王同學");
+  assert.deepEqual(switched.trackingHistory!.map((entry) => entry.id), ["h1", "h2"], "no duplicate entries and the latest stays last");
+  const olderOnly = row({ id: "v1-r1", refDes: "R1", trackingStatus: "處理中", trackingHistory: [{ id: "h-old", status: "處理中", createdAt: "2026-09-01T00:00:00.000Z" }] });
+  const keptOld = carryBomTracking([row({ id: "v2-r1", refDes: "R1" })], [olderOnly], { from: "current" }).records[0];
+  assert.equal(keptOld.trackingStatus, "處理中", "when the current version has no tracking at all, the target keeps its own");
+  const noteOnly = carryBomTracking([row({ id: "v2-r1n", refDes: "R1", note: "只有筆記" })], [olderOnly], { from: "current" }).records[0];
+  assert.equal(noteOnly.trackingStatus, "處理中", "a Note alone does not clear the target's status");
+  assert.equal(noteOnly.note, "只有筆記");
+});
+
+test("switching back never brings back a Note, 負責人, SPEC file or 分類 that the current version cleared", () => {
+  const target = row({ id: "v1-c1", refDes: "C1", note: "舊筆記", requestOwnerId: "user-1", requestOwnerName: "舊負責人", specDocuments: [spec("old.pdf")], specDocument: spec("old.pdf"), pendingCategory: "ic" });
+  const cleared = row({ id: "v2-c1", refDes: "C1", note: "", trackingStatus: "已發信" });
+  const switched = carryBomTracking([cleared], [target], { from: "current" }).records[0];
+  assert.equal(switched.note, "");
+  assert.equal(switched.requestOwnerId, undefined);
+  assert.equal(switched.requestOwnerName, undefined);
+  assert.equal(switched.specDocuments, undefined);
+  assert.equal(switched.specDocument, undefined);
+  assert.equal(switched.pendingCategory, undefined, "分類 back to automatic stays automatic");
+  const renamed = carryBomTracking([row({ id: "v2-c1b", refDes: "C1", requestOwnerName: "新負責人" })], [target], { from: "current" }).records[0];
+  assert.equal(renamed.requestOwnerName, "新負責人");
+  assert.equal(renamed.requestOwnerId, undefined, "a 負責人 typed by name does not keep the old account id");
+});
+
+test("switching back and forth keeps history in date order and the status of the newest entry", () => {
+  const h1 = { id: "h1", status: "已發信", createdAt: "2026-10-01T00:00:00.000Z" };
+  const h2 = { id: "h2", status: "已完成", createdAt: "2026-11-01T00:00:00.000Z" };
+  // V2 reached 已完成; V1 was made current without carrying, then V2 is made current again carrying from V1.
+  const v2 = row({ id: "v2-u1", refDes: "U1", trackingStatus: "已完成", trackingHistory: [h1, h2] });
+  const v1 = row({ id: "v1-u1", refDes: "U1", trackingStatus: "已發信", trackingHistory: [h1] });
+  const back = carryBomTracking([v1], [v2], { from: "current" }).records[0];
+  assert.deepEqual(back.trackingHistory!.map((entry) => entry.id), ["h1", "h2"]);
+  assert.equal(back.trackingStatus, "已完成", "the status follows the newest entry instead of going back");
+  const undated = { id: "h0", status: "未處理", createdAt: "" };
+  const withUndated = carryBomTracking([v1], [row({ id: "v2-u1b", refDes: "U1", trackingHistory: [undated, h1, h2] })], { from: "current" }).records[0];
+  assert.deepEqual(withUndated.trackingHistory!.map((entry) => entry.id), ["h0", "h1", "h2"]);
+  assert.equal(withUndated.trackingHistory![0].createdAt, "", "an undated entry is never given a date");
+});
+
+test("switching back: a ticket cleared alongside the target's newer entries stays cleared", () => {
+  const h1 = { id: "h1", status: "已發信", createdAt: "2026-10-01T00:00:00.000Z", requestTicket: "REQ-1" };
+  const h2 = { id: "h2", status: "已完成", createdAt: "2026-11-01T00:00:00.000Z", requestTicket: "", requestUrl: "" };
+  const current = row({ id: "v1-u2", refDes: "U2", trackingStatus: "已發信", requestTicket: "REQ-1", requestUrl: "https://old.example/req", trackingHistory: [h1] });
+  const target = row({ id: "v2-u2", refDes: "U2", trackingStatus: "已完成", requestTicket: "", requestUrl: "", trackingHistory: [h1, h2] });
+  const switched = carryBomTracking([current], [target], { from: "current" }).records[0];
+  assert.equal(switched.trackingStatus, "已完成");
+  assert.equal(switched.requestTicket, "");
+  assert.equal(switched.requestUrl, "");
+});
+
+test("switching back: progress the current version keeps only on the record is not hidden behind the target's history", () => {
+  const current = row({ id: "v2-u3", refDes: "U3", trackingStatus: "需申請", requestTicket: "REQ-9" });
+  const target = row({ id: "v1-u3", refDes: "U3", trackingStatus: "已完成", trackingHistory: [{ id: "t1", status: "已完成", createdAt: "2026-09-01T00:00:00.000Z" }] });
+  const switched = carryBomTracking([current], [target], { from: "current" }).records[0];
+  assert.equal(switched.trackingStatus, "需申請");
+  const last = switched.trackingHistory!.at(-1)!;
+  assert.equal(last.status, "需申請", "the latest entry, which the page shows, is the current version's progress");
+  assert.equal(last.requestTicket, "REQ-9");
+  assert.equal(last.createdAt, "", "kept as an undated legacy entry, no date invented");
+  assert.deepEqual(switched.trackingHistory!.map((entry) => entry.id), ["t1", "legacy-tracking-status"]);
+  const collide = carryBomTracking([current], [row({ id: "v1-u3b", refDes: "U3", trackingHistory: [{ id: "legacy-tracking-status", status: "處理中", createdAt: "" }] })], { from: "current" }).records[0];
+  assert.deepEqual(collide.trackingHistory!.map((entry) => entry.id), ["legacy-tracking-status", "legacy-tracking-status:v2-u3"], "the target's own legacy entry is kept too");
+  // A carries to B, B is left without carrying back, then A carries to B again: the same legacy entry is not stored twice.
+  const once = carryBomTracking([current], [target], { from: "current" }).records[0];
+  const again = carryBomTracking([current], [once], { from: "current" }).records[0];
+  assert.deepEqual(again.trackingHistory!.map((entry) => entry.id), ["t1", "legacy-tracking-status"]);
+  assert.equal(again.trackingStatus, "需申請");
+  let repeated = target;
+  for (let round = 0; round < 10; round += 1) repeated = carryBomTracking([current], [repeated], { from: "current" }).records[0];
+  assert.equal(repeated.trackingHistory!.length, 2, "ten round trips keep one legacy entry");
+});
+
+test("switching back keeps the workbook remark when the target has none, like an upload", () => {
+  const switched = carryBomTracking([row({ id: "v2-r", refDes: "R5", remark: "CE 備註" })], [row({ id: "v1-r", refDes: "R5", remark: "" })], { from: "current" }).records[0];
+  assert.equal(switched.remark, "CE 備註");
+  const own = carryBomTracking([row({ id: "v2-r2", refDes: "R5", remark: "CE 備註" })], [row({ id: "v1-r2", refDes: "R5", remark: "舊版自己的" })], { from: "current" }).records[0];
+  assert.equal(own.remark, "舊版自己的");
+});
+
+test("a line that only has a 待處理 分類 counts as carried and is reported when it is dropped", () => {
+  const categorised = row({ refDes: "J7", pendingCategory: "connector" });
+  assert.equal(carryBomTracking([categorised], [row({ refDes: "J7" })]).tracked, 1);
+  assert.equal(carryBomTracking([categorised], [row({ refDes: "J7" })]).records[0].pendingCategory, "connector");
+  assert.equal(carryBomTracking([categorised], []).orphaned.length, 1);
+  assert.deepEqual(describeBomWebsiteData(categorised), ["待處理分類 CONNECTOR"]);
+});
+
+test("the 變更內容 preview names the vendor lines that came and went instead of counting them", () => {
+  const before = [row({ refDes: "U1", manufacturer: "Vendor A", manufacturerPartNumber: "MPN-8", partNumber: "000-8" })];
+  const after = [row({ refDes: "U1", manufacturer: "Vendor C", manufacturerPartNumber: "MPN-8B", partNumber: "000-8B" })];
+  const entry = diffBomRecords(before, after).entries[0];
+  assert.deepEqual(bomDiffEntryPreview(entry), ["移除廠商：Vendor A / MPN-8", "新增廠商：Vendor C / MPN-8B"]);
+  const qty = diffBomRecords([row({ refDes: "R1", qty: "1" })], [row({ refDes: "R1", qty: "3" })]).entries[0];
+  assert.deepEqual(bomDiffEntryPreview(qty), ["Qty：1 → 3"]);
+  const added = diffBomRecords([], [row({ refDes: "D5" })]).entries[0];
+  assert.deepEqual(bomDiffEntryPreview(added), ["新版新增 1 筆廠商明細"]);
 });
 
 test("history merge keeps previous manual entries and refreshes imported ones", () => {

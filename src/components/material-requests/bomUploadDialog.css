@@ -32,6 +32,34 @@
   opacity: 1;
 }
 
+/* The upload result can run to several lines plus 查看差異: never clamp it, and put the action under the text. */
+.bom-upload-toast[data-ui="toast"] {
+  flex-wrap: wrap;
+  row-gap: 0.625rem;
+}
+
+.bom-upload-toast[data-ui="toast"] > div.grid {
+  flex: 1 1 100%;
+}
+
+.bom-upload-toast[data-ui="toast"] > div.grid > div {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+
+.bom-upload-toast[data-ui="toast"] > button:not([toast-close]) {
+  border-color: hsl(var(--bom-upload-toast-tone) / 0.6);
+  background: hsl(var(--bom-upload-toast-tone) / 0.16);
+  color: hsl(var(--foreground));
+  font-weight: 650;
+}
+
+.bom-upload-toast[data-ui="toast"] > button:not([toast-close]):hover {
+  background: hsl(var(--bom-upload-toast-tone) / 0.28);
+}
+
 .bom-upload-toast .bom-upload-toast-heading {
   display: flex;
   align-items: flex-start;

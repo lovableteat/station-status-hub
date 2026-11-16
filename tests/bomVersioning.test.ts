@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  bomSeriesStem, buildBomSeriesList, createBomVersionWorkspaceId, deriveLegacyBomVersion, findBomSeriesByWorkspace,
-  inferBomSeriesForFile, nextBomVersionNumber, normalizeBomVersion, resolveCurrentBomVersion,
+  BOM_DIFF_QUERY_KEYS, bomSeriesStem, bomVersionComparePair, buildBomSeriesList, createBomVersionWorkspaceId, deriveLegacyBomVersion, findBomSeriesByWorkspace,
+  inferBomSeriesForFile, nextBomVersionNumber, normalizeBomVersion, readBomDiffLocation, resolveCurrentBomVersion,
 } from "../src/components/material-requests/bomVersioning.ts";
 
 const workspace = (id: string, overrides: Record<string, unknown> = {}) => ({
@@ -68,6 +68,36 @@ test("version metadata is validated and clamped when read back", () => {
   assert.equal(parsed.uploadedAt, "2026-10-29T00:00:00.000Z");
   assert.deepEqual(parsed.source, { name: "BOM.xlsx", path: "p/x.xlsx", size: 0, mimeType: "application/octet-stream" });
   assert.deepEqual(parsed.carry, { matched: 4, orphaned: 0, manual: 0 });
+  assert.deepEqual(normalizeBomVersion({ seriesId: "s", versionNumber: 2, carry: { matched: 9, tracked: "3", orphaned: 1 } }, "x")!.carry, { matched: 9, tracked: 3, orphaned: 1, manual: 0 });
+});
+
+test("an open comparison round-trips through the URL and ignores incomplete links", () => {
+  assert.deepEqual(readBomDiffLocation("?module=material&bomDiff=series%3Aqa&bomBefore=bom%3Av2&bomAfter=bom%3Av3&bomDiffLost=1"), { seriesId: "series:qa", before: "bom:v2", after: "bom:v3", lostOnly: true });
+  assert.deepEqual(readBomDiffLocation("?bomDiff=s&bomBefore=a&bomAfter=b"), { seriesId: "s", before: "a", after: "b", lostOnly: false });
+  for (const search of ["", "?bomDiff=s&bomBefore=a", "?bomBefore=a&bomAfter=b", "?bomDiff=s&bomBefore=a&bomAfter=a"]) assert.equal(readBomDiffLocation(search), null, search);
+  assert.deepEqual([...BOM_DIFF_QUERY_KEYS], ["bomDiff", "bomBefore", "bomAfter", "bomDiffLost"]);
+});
+
+test("a 比對 click always puts the older version on the 舊版 side", () => {
+  const list = buildBomSeriesList([
+    workspace("bom:s:v1", { version: version({ versionNumber: 1 }) }),
+    workspace("bom:s:v2", { version: version({ versionNumber: 2, isCurrent: true, currentChangedAt: "2026-10-09T00:00:00.000Z" }) }),
+    workspace("bom:s:v3", { version: version({ versionNumber: 3 }) }),
+  ]);
+  const series = list[0];
+  const [v1, v2, v3] = series.versions;
+  assert.equal(series.current, v2, "V2 was made current again after V3 was uploaded");
+  const ids = (pair: ReturnType<typeof bomVersionComparePair>) => pair && [pair.before.displayNumber, pair.after.displayNumber];
+  assert.deepEqual(ids(bomVersionComparePair(series)), ["V1", "V2"], "the current version compares with the one right before it");
+  assert.deepEqual(ids(bomVersionComparePair(series, v1)), ["V1", "V2"]);
+  assert.deepEqual(ids(bomVersionComparePair(series, v3)), ["V2", "V3"], "a newer non-current version sits on the 新版 side");
+  const oldestCurrent = buildBomSeriesList([
+    workspace("bom:t:v1", { version: version({ seriesId: "series:t", versionNumber: 1, isCurrent: true, currentChangedAt: "2026-10-09T00:00:00.000Z" }) }),
+    workspace("bom:t:v2", { version: version({ seriesId: "series:t", versionNumber: 2 }) }),
+  ])[0];
+  assert.deepEqual(ids(bomVersionComparePair(oldestCurrent)), ["V1", "V2"], "the oldest current version compares with the next one");
+  assert.equal(bomVersionComparePair(buildBomSeriesList([workspace("bom:solo")])[0]), null);
+  assert.ok(v3);
 });
 
 test("file stems ignore version and date suffixes and keep CJK names apart", () => {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FileSpreadsheet, Loader2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,8 @@ export function BomUploadDialog({
 }) {
   const [label, setLabel] = useState("");
   const [note, setNote] = useState("");
+  // The dialog stays mounted: every new batch starts with an empty label and note, never the previous upload's.
+  useEffect(() => { if (open) { setLabel(""); setNote(""); } }, [open]);
   const targets = useMemo(() => seriesList.filter((series) => !series.archive), [seriesList]);
   const problems = uploads.map((upload) => (upload.target === NEW_BOM_SERIES_TARGET && !upload.seriesName.trim() ? "請填寫新系列名稱" : ""));
   const canConfirm = uploads.length > 0 && !busy && problems.every((problem) => !problem);
@@ -61,7 +63,7 @@ export function BomUploadDialog({
         <DialogHeader className="pr-10">
           <DialogTitle className="flex items-center gap-2 text-xl"><FileSpreadsheet className="size-5 shrink-0 text-primary" aria-hidden="true" />確認上傳 BOM</DialogTitle>
           <DialogDescription>
-            新板子建立新系列{activeProjectName ? `，歸入「${activeProjectName}」` : ""}。同一塊板選既有系列，保留舊版並依位號與料號帶入 RD 追蹤。
+            新板子建立新系列{activeProjectName ? `，歸入「${activeProjectName}」` : ""}。同一塊板選既有系列，保留舊版並依位號與料號帶入追蹤、Note、負責人與 SPEC 附件。
           </DialogDescription>
         </DialogHeader>
 
@@ -97,7 +99,7 @@ export function BomUploadDialog({
                   ) : targetSeries ? (
                     <p className="self-end pb-2 text-xs text-foreground/80">
                       <strong className="text-primary">{targetSeries.current.displayNumber} → V{nextBomVersionNumber(targetSeries)}</strong>
-                      {` · 依 ${targetSeries.current.workspace.payload.recordCount.toLocaleString()} 筆舊版明細比對並帶入追蹤。`}
+                      {` · 依 ${targetSeries.current.workspace.payload.recordCount.toLocaleString()} 筆舊版明細比對並帶入網站資料；建立後可直接看差異。`}
                     </p>
                   ) : null}
                 </div>

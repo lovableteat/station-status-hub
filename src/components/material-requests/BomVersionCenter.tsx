@@ -1,6 +1,6 @@
 import { recoverableLazy } from "@/components/common/recoverableLazy";
 import { Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronDown, CircleAlert, CircleCheck, Download, FileArchive, GitCompareArrows, Layers3, LoaderCircle, Pencil, Search, Upload, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, CircleAlert, CircleCheck, Download, FileArchive, FileText, GitCompareArrows, Layers3, LoaderCircle, Pencil, Search, Trash2, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,12 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 
 import { BomDiffView } from "./BomDiffView";
 import { diffBomRecords, type BomDiffEntry, type BomDiffResult } from "./bomDiff";
 import { exportBomDiffExcel } from "./bomDiffExport";
 import {
-  BOM_SERIES_NAME_LIMIT, BOM_VERSION_LABEL_LIMIT, BOM_VERSION_NOTE_LIMIT, findBomSeriesByWorkspace, formatBomVersionTitle,
+  BOM_DIFF_QUERY_KEYS, BOM_SERIES_NAME_LIMIT, BOM_VERSION_LABEL_LIMIT, BOM_VERSION_NOTE_LIMIT, bomVersionComparePair, findBomSeriesByWorkspace, formatBomVersionTitle,
   type BomSeries, type BomSeriesVersion,
 } from "./bomVersioning";
 import { CHIP, CHIP_TONE, formatBomRelativeTime, formatBomTimestamp } from "./bomVersionPresentation";
@@ -83,6 +84,17 @@ export interface BomVersionCenterProps {
   onDeleteSeries: (series: BomSeries) => void;
   onOpenPageTracker: (workspaceId: string) => void;
   onDownloadSource: (version: BomSeriesVersion) => void;
+  /** Opens straight into a comparison (the 查看差異 action after an upload). A new token opens it again. */
+  diffRequest?: BomDiffRequest | null;
+}
+
+export interface BomDiffRequest {
+  token: number;
+  seriesId: string;
+  before: string;
+  after: string;
+  /** Start with 只看未帶入 when the upload left website data behind. */
+  lostOnly?: boolean;
 }
 
 function useCompact() {
@@ -127,6 +139,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const {
     open, onOpenChange, canEdit, ready, busy = false, activeBomId, activeProjectId, activeProjectName, historyAccountId, projects, projectNames, seriesList, exportedBy,
     loadRecords, currentBomName, matchCurrentBom, onLocateCurrentBom, onView, onSetCurrent, onUploadVersion, onUploadNew, onAssignProject, onRenameSeries, onUpdateVersion, onSetArchived, onDeleteVersion, onDeleteSeries, onOpenPageTracker, onDownloadSource,
+    diffRequest,
   } = props;
   const compact = useCompact();
   const [query, setQuery] = useState("");
@@ -186,6 +199,23 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     recordsCache.current.clear();
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setCollapsedProjects([]); }, [query]);
+  // Runs after the reset above in the same commit, so an upload's 查看差異 lands directly on its comparison.
+  const consumedDiffRequest = useRef<number | null>(null);
+  const [diffAttempt, setDiffAttempt] = useState(0);
+  const [diffViewSeed, setDiffViewSeed] = useState<{ token: number; lostOnly: boolean }>({ token: 0, lostOnly: false });
+  useEffect(() => {
+    if (!open || !diffRequest || consumedDiffRequest.current === diffRequest.token) return;
+    const series = seriesList.find((item) => item.id === diffRequest.seriesId);
+    if (!series?.versions.some((item) => item.workspace.id === diffRequest.before) || !series.versions.some((item) => item.workspace.id === diffRequest.after)) return;
+    consumedDiffRequest.current = diffRequest.token;
+    setSelectedSeriesId(series.id);
+    // Keep a finished result for the same pair; a failed one is retried through diffAttempt.
+    setDiffLoad((current) => (current?.error ? null : current));
+    setDiffAttempt((current) => current + 1);
+    setDiffPair({ before: diffRequest.before, after: diffRequest.after });
+    setDiffViewSeed({ token: diffRequest.token, lostOnly: Boolean(diffRequest.lostOnly) });
+    setMode("diff");
+  }, [open, diffRequest, seriesList]);
 
   const groups = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -207,8 +237,11 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
 
   const openDiff = (series: BomSeries, before: BomSeriesVersion, after: BomSeriesVersion) => {
     setSelectedSeriesId(series.id);
-    if (diffLoad?.error) setDiffLoad(null);
+    if (diffLoad?.error) { setDiffLoad(null); setDiffAttempt((current) => current + 1); }
+    // A link that is still waiting (e.g. to versions that no longer exist) gives way to what the user picked.
+    if (diffRequest) consumedDiffRequest.current = diffRequest.token;
     setDiffPair({ before: before.workspace.id, after: after.workspace.id });
+    setDiffViewSeed((current) => (current.lostOnly ? { ...current, lostOnly: false } : current));
     setMode("diff");
   };
 
@@ -229,7 +262,37 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         if (current) setDiffLoad({ key: diffKey, error: error instanceof Error ? error.message : "載入版本料件失敗，請稍後再試。" });
       });
     return () => { current = false; };
-  }, [open, mode, diffKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, mode, diffKey, diffAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Mirror the open comparison and its 只看未帶入 condition into the URL; leaving the comparison or closing the window clears them.
+  const [diffLostOnly, setDiffLostOnly] = useState(false);
+  const urlTouched = useRef(false);
+  const showingDiff = open && mode === "diff" && Boolean(diffSeries && diffBefore && diffAfter);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (open) urlTouched.current = true;
+    else if (!urlTouched.current) return;
+    // A request (an upload's 查看差異 or a shared link) is still waiting for its versions to load: keep its URL as is.
+    // Closing the window clears it either way, so a link to versions that no longer exist cannot reopen it again.
+    if (open && diffRequest && consumedDiffRequest.current !== diffRequest.token) return;
+    if (!open) {
+      urlTouched.current = false;
+      // Closing drops a request that never found its versions, so reopening the window works normally.
+      if (diffRequest) consumedDiffRequest.current = diffRequest.token;
+    }
+    const url = new URL(window.location.href);
+    const values: Record<(typeof BOM_DIFF_QUERY_KEYS)[number], string> = {
+      bomDiff: showingDiff ? diffSeries!.id : "",
+      bomBefore: showingDiff ? diffBefore!.workspace.id : "",
+      bomAfter: showingDiff ? diffAfter!.workspace.id : "",
+      bomDiffLost: showingDiff && diffLostOnly ? "1" : "",
+    };
+    for (const key of BOM_DIFF_QUERY_KEYS) {
+      if (values[key]) url.searchParams.set(key, values[key]);
+      else url.searchParams.delete(key);
+    }
+    if (url.href !== window.location.href) replaceWorkspaceHistory(url);
+  }, [open, showingDiff, diffSeries?.id, diffBefore?.workspace.id, diffAfter?.workspace.id, diffLostOnly, diffRequest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runAction = async (kind: VersionAction, action: () => Promise<void>, success: string) => {
     setPendingAction(kind);
@@ -337,10 +400,9 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
       <div className="bom-series-actions flex flex-wrap items-center gap-1.5">
         <Button type="button" size="sm" disabled={!canEdit || !ready || busy} aria-busy={busy || undefined} onClick={() => onUploadVersion(selectedSeries)} title={`將新版 Excel 加入「${selectedSeries.name}」，保留既有版本與追蹤`} className="bom-version-action-upload h-9"><Upload aria-hidden="true" className="h-4 w-4" />上傳此系列新版</Button>
         <div className="bom-version-compare-actions" role="group" aria-label="BOM 比對工具">
-        <Button type="button" variant="outline" size="sm" disabled={selectedSeries.versions.length < 2} title={selectedSeries.versions.length < 2 ? "需要兩個以上版本才能比對" : "比對目前版本與前一版"} onClick={() => {
-          const current = selectedSeries.current;
-          const previous = [...selectedSeries.versions].reverse().find((item) => item !== current && item.version.versionNumber <= current.version.versionNumber) ?? selectedSeries.versions.find((item) => item !== current)!;
-          openDiff(selectedSeries, previous, current);
+        <Button type="button" variant="outline" size="sm" disabled={selectedSeries.versions.length < 2} title={selectedSeries.versions.length < 2 ? "需要兩個以上版本才能比對" : "比對目前版本與前一版，列出新增、移除與改料"} onClick={() => {
+          const pair = bomVersionComparePair(selectedSeries);
+          if (pair) openDiff(selectedSeries, pair.before, pair.after);
         }} className="bom-version-action-compare h-9"><GitCompareArrows aria-hidden="true" className="h-4 w-4" />比對版本</Button>
         {nvCompareButton}
         </div>
@@ -368,10 +430,12 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
             {[...selectedSeries.versions].reverse().map((item) => {
               const isActive = item.workspace.id === activeBomId;
               const carry = item.version.carry;
-              const otherVersions = selectedSeries.versions.filter((candidate) => candidate !== item);
-              const compareTarget = item.isCurrent
-                ? [...otherVersions].reverse()[0]
-                : selectedSeries.current;
+              const comparePair = bomVersionComparePair(selectedSeries, item);
+              const compareOther = comparePair && (comparePair.before === item ? comparePair.after : comparePair.before);
+              const carriedCount = carry?.tracked ?? carry?.matched ?? 0;
+              const carryTitle = carry ? (carry.tracked === undefined
+                ? `${carry.matched} 筆料件對上前一版（這個版本建立時尚未分開統計有帶入資料的筆數）`
+                : `${carry.matched} 筆料件對上前一版，其中 ${carry.tracked} 筆的追蹤、Note、負責人或 SPEC 附件已帶入`) + (carry.orphaned > 0 ? `；${carry.orphaned} 筆舊版資料找不到對應料件，可在比對中查看` : "") : "";
               return [
                 <tr key={item.workspace.id} data-version-id={item.workspace.id} data-current={item.isCurrent} className="border-t border-border/60 align-top">
                   <td className="px-2 py-2 whitespace-nowrap"><span className={cn("inline-flex h-9 min-w-14 items-center justify-center rounded-md border px-2 font-mono text-base font-bold tabular-nums", item.isCurrent ? "border-primary bg-primary text-primary-foreground" : "border-primary/40 bg-primary/10 text-foreground")}>{item.displayNumber}</span></td>
@@ -394,22 +458,24 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
                   <td className="px-2 py-2 text-xs"><span className="bom-version-upload"><UploadTimestamp value={item.version.uploadedAt} />{item.version.uploadedBy && <span className="bom-version-uploader text-muted-foreground" title={item.version.uploadedBy}>{item.version.uploadedBy}</span>}</span></td>
                   <td className="px-2 py-2 text-xs">
                     {carry ? (
-                      <span className="bom-version-chip-row flex gap-1">
-                        <span className={cn(CHIP, CHIP_TONE.success)}>帶入 {carry.matched}</span>
+                      <span className="bom-version-chip-row flex gap-1" title={carryTitle}>
+                        <span className={cn(CHIP, carry.tracked === undefined ? CHIP_TONE.neutral : CHIP_TONE.success)}>{carry.tracked === undefined ? "對上" : "帶入"} {carriedCount}</span>
                         {carry.orphaned > 0 && <span className={cn(CHIP, CHIP_TONE.danger)}>未帶入 {carry.orphaned}</span>}
-                        {carry.manual > 0 && <span className={cn(CHIP, CHIP_TONE.neutral)}>手動 {carry.manual}</span>}
+                        {carry.manual > 0 && <span className={cn(CHIP, CHIP_TONE.neutral)} title="網站上手動新增、新版 Excel 沒有的料件，已保留到這一版">手動 {carry.manual}</span>}
                       </span>
                     ) : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-2 py-1.5">
                     <div className="bom-version-row-actions flex items-center gap-1">
-                      {!isActive && <Button type="button" variant="secondary" size="sm" onClick={() => onView(item.workspace.id)} className="h-8 px-2 text-xs lg:h-7">檢視</Button>}
-                      {!item.isCurrent && <Button type="button" variant="outline" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onSetCurrent(item, selectedSeries)} className="h-8 px-2 text-xs lg:h-7">設為目前版本</Button>}
-                      {compareTarget && <Button type="button" variant="ghost" size="sm" onClick={() => (item.isCurrent ? openDiff(selectedSeries, compareTarget, item) : openDiff(selectedSeries, item, compareTarget))} className="h-8 px-2 text-xs lg:h-7">比對</Button>}
-                      <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onOpenPageTracker(item.workspace.id)} className="h-8 px-2 text-xs lg:h-7">頁數</Button>
-                      {item.version.source && <Button type="button" variant="ghost" size="sm" onClick={() => onDownloadSource(item)} title={`下載 ${item.version.source.name}`} className="h-8 px-2 text-xs lg:h-7"><Download className="mr-1 h-3.5 w-3.5" />原檔</Button>}
-                      {canEdit && <Button type="button" variant="ghost" size="sm" disabled={!ready || pending} onClick={() => setEditingVersionId(editingVersionId === item.workspace.id ? null : item.workspace.id)} className="h-8 px-2 text-xs lg:h-7">編輯說明</Button>}
-                      <Button type="button" variant="ghost" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onDeleteVersion(item, selectedSeries)} className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive lg:h-7">刪除</Button>
+                      {!isActive && <Button type="button" variant="secondary" size="sm" onClick={() => onView(item.workspace.id)} title={item.isCurrent ? "回到目前版本的料號表" : `在料號表唯讀查看 ${item.displayNumber}`} className="h-8 px-2 text-xs lg:h-7">檢視</Button>}
+                      {!item.isCurrent && <Button type="button" variant="outline" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onSetCurrent(item, selectedSeries)} title={`讓所有人改用 ${item.displayNumber} 維護料件與追蹤`} className="h-8 px-2 text-xs lg:h-7">設為目前版本</Button>}
+                      {comparePair && compareOther && <Button type="button" variant="ghost" size="sm" onClick={() => openDiff(selectedSeries, comparePair.before, comparePair.after)} title={`比對 ${comparePair.before.displayNumber}（舊）與 ${comparePair.after.displayNumber}（新）`} className="h-8 px-2 text-xs lg:h-7">比對 {compareOther.displayNumber}</Button>}
+                      <span className="bom-version-icon-actions">
+                        <Button type="button" variant="ghost" size="sm" disabled={!canEdit} onClick={() => onOpenPageTracker(item.workspace.id)} aria-label="頁數" title={`記錄 ${item.displayNumber} 每一頁的建料進度`} className="h-8 w-8 p-0 lg:h-7 lg:w-7"><FileText className="h-3.5 w-3.5" aria-hidden="true" /></Button>
+                        {item.version.source && <Button type="button" variant="ghost" size="sm" onClick={() => onDownloadSource(item)} aria-label="原檔" title={`下載上傳時的原始 Excel：${item.version.source.name}`} className="h-8 w-8 p-0 lg:h-7 lg:w-7"><Download className="h-3.5 w-3.5" aria-hidden="true" /></Button>}
+                        {canEdit && <Button type="button" variant="ghost" size="sm" disabled={!ready || pending} aria-pressed={editingVersionId === item.workspace.id} onClick={() => setEditingVersionId(editingVersionId === item.workspace.id ? null : item.workspace.id)} aria-label="編輯說明" title={`修改 ${item.displayNumber} 的版本標籤與說明`} className="h-8 w-8 p-0 lg:h-7 lg:w-7"><Pencil className="h-3.5 w-3.5" aria-hidden="true" /></Button>}
+                        <Button type="button" variant="ghost" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onDeleteVersion(item, selectedSeries)} aria-label="刪除" title={`永久刪除 ${item.displayNumber}（會先確認）`} className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive lg:h-7 lg:w-7"><Trash2 className="h-3.5 w-3.5" aria-hidden="true" /></Button>
+                      </span>
                     </div>
                   </td>
                 </tr>,
@@ -423,7 +489,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
           </tbody>
         </table>
       </div>
-      <p className="bom-version-footnote text-xs text-muted-foreground"><strong>歷史版本唯讀</strong><span>料件與追蹤在目前版本維護。上傳新版時帶入既有追蹤，未帶入項目可在差異檢視查看。</span><span className="bom-version-scroll-hint">← 左右捲動查看完整欄位 →</span></p>
+      <p className="bom-version-footnote text-xs text-muted-foreground"><strong>歷史版本唯讀</strong><span>料件與追蹤在目前版本維護。上傳新版時帶入追蹤、Note、負責人與 SPEC 附件，未帶入的可在比對中查看。</span><span className="bom-version-scroll-hint">← 左右捲動查看完整欄位 →</span></p>
     </section>
   );
 
@@ -452,6 +518,9 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         </Suspense>}
         {mode === "nv" ? null : mode === "diff" && diffSeries && diffBefore && diffAfter ? (
           <BomDiffView
+            key={`diff:${diffViewSeed.token}`}
+            initialLostOnly={diffViewSeed.lostOnly}
+            onLostOnlyChange={setDiffLostOnly}
             series={diffSeries}
             before={diffBefore}
             after={diffAfter}
