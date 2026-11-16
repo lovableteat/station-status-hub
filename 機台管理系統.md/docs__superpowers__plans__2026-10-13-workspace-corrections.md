@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-13-workspace-corrections.md`；程式參考基準：`b5713d01c0ecf5596d13511bf9b95801be692f58`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-13-workspace-corrections.md`；程式參考基準：`4374cfbd1b541b40f9638eafe4b404a80c6d0208`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 工作平台修正 Implementation Plan
 

@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/specs/2026-07-27-pcb-designer-pro-workspace-redesign.md`；程式參考基準：`b5713d01c0ecf5596d13511bf9b95801be692f58`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/specs/2026-07-27-pcb-designer-pro-workspace-redesign.md`；程式參考基準：`4374cfbd1b541b40f9638eafe4b404a80c6d0208`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # PCB Designer 專業工作區重設計
 
