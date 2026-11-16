@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/apple-design-ui-audit.md`；程式參考基準：`b29c8f56cb9ee15c7ee81231e820a942b9898ff8`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/apple-design-ui-audit.md`；程式參考基準：`ec671fbba4ae202ddd9b2ddb91c5317929916e61`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Apple 深色介面一致性檢查
 
