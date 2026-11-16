@@ -195,6 +195,10 @@ const MODULE_QUERY_KEYS = [
   "librarySearch",
   "librarySigned",
   "openIssue",
+  "pcbQ",
+  "pcbStatus",
+  "pcbOwner",
+  "pcbSort",
   "sort",
   "station",
   "status",
@@ -592,6 +596,12 @@ const Index = () => {
       : target === "user-management" ? activeAdminModule
       : target === "file-uploads" ? "test-plan"
       : target === "ai-chat" || target === "comparison" ? target : undefined;
+    // Choosing the workspace that is already open changes nothing on screen, so it must not push an entry that
+    // drops that page's filters from the URL while the page keeps showing them.
+    if (target === activeWorkspace) {
+      setSidebarOpen(false);
+      return;
+    }
     navigateWorkspace(target, module);
   };
 

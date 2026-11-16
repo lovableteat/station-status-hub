@@ -89,3 +89,12 @@ test("comparison presence and filter audit use the public workspace label", asyn
   assert.match(administration, /comparison:\s*"比對系統"/);
   assert.match(audit, /ComparisonWorkspace\.tsx/);
 });
+
+test("choosing the workspace that is already open keeps its URL filters instead of pushing an entry that drops them", () => {
+  const start = index.indexOf("const handleWorkspaceChange = ");
+  const handler = index.slice(start, index.indexOf("const handleStationNavigation", start));
+  assert.match(handler, /if \(target === activeWorkspace\) \{\s*setSidebarOpen\(false\);\s*return;\s*\}\s*navigateWorkspace\(target, module\);/);
+  for (const key of ["pcbQ", "pcbStatus", "pcbOwner", "pcbSort", "bomDiff", "bomBefore", "bomAfter", "bomDiffLost"]) {
+    assert.ok(index.includes(`"${key}",`), `${key} is a module query key, dropped when leaving the module`);
+  }
+});

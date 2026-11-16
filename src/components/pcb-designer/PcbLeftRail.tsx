@@ -1,4 +1,5 @@
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 import {
   Box,
   ChevronDown,
@@ -37,8 +38,10 @@ import {
   buildBoardList,
   fullTimeLabel,
   isBoardFamilyOpen,
+  readBoardListLocation,
   relativeTimeLabel,
   statusChangeLabel,
+  writeBoardListLocation,
   type BoardFamily,
   type BoardSort,
 } from "./core/boardList.ts";
@@ -147,11 +150,41 @@ export function PcbLeftRail({
   onRecoverCloudModels,
   canRecoverCloudModels,
 }: PcbLeftRailProps) {
-  const [query, setQuery] = useState("");
+  // The board list filters start from the URL (pcbQ, pcbStatus, pcbOwner, pcbSort) and are written back to it below.
+  const [linkedFilters] = useState(() => readBoardListLocation(typeof window === "undefined" ? "" : window.location.search));
+  const [query, setQuery] = useState(activeTab === "projects" ? linkedFilters.query : "");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | PcbProject["status"]>("all");
-  const [ownerFilter, setOwnerFilter] = useState("all");
-  const [sort, setSort] = useState<BoardSort>("updated");
+  const [statusFilter, setStatusFilter] = useState<"all" | PcbProject["status"]>(linkedFilters.status);
+  const [ownerFilter, setOwnerFilter] = useState(linkedFilters.owner);
+  const [sort, setSort] = useState<BoardSort>(linkedFilters.sort);
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+  // The search box is shared by the three tabs: any tab change clears it, whether it came from the tab buttons,
+  // the phone action bar or the template center, so a 元件庫 search never lands in the board list or its link.
+  // Done during render so the first mount keeps a pcbQ from the URL.
+  const [queryTab, setQueryTab] = useState(activeTab);
+  if (queryTab !== activeTab) {
+    setQueryTab(activeTab);
+    setQuery("");
+  }
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    // The search box is shared by the three tabs; only a board search belongs to the board list link.
+    writeBoardListLocation(url, { query: activeTab === "projects" ? query : "", status: statusFilter, owner: ownerFilter, sort });
+    if (url.href !== window.location.href) replaceWorkspaceHistory(url);
+  }, [activeTab, ownerFilter, query, sort, statusFilter]);
+  useEffect(() => {
+    const restore = () => {
+      const next = readBoardListLocation(window.location.search);
+      setStatusFilter(next.status);
+      setOwnerFilter(next.owner);
+      setSort(next.sort);
+      if (activeTabRef.current === "projects") setQuery(next.query);
+    };
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
   const [sourceFilter, setSourceFilter] = useState("all");
   const [templateSourceFilter, setTemplateSourceFilter] = useState("all");
   /** Families whose version list the user opened or closed explicitly; the choice survives switching boards. */
@@ -328,10 +361,7 @@ export function PcbLeftRail({
             role="tab"
             aria-selected={activeTab === tab}
             title={tabTitles[tab]}
-            onClick={() => {
-              onActiveTabChange(tab);
-              setQuery("");
-            }}
+            onClick={() => onActiveTabChange(tab)}
           >
             {tabLabels[tab]}
           </button>
@@ -459,6 +489,8 @@ export function PcbLeftRail({
               >
                 <option value="all">全部負責人</option>
                 {ownerOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+                {/* A shared link can name an owner no board has any more: keep it selectable so the field shows what is applied. */}
+                {ownerFilter !== "all" && !ownerOptions.includes(ownerFilter) && <option value={ownerFilter}>{ownerFilter}</option>}
               </select>
             </label>
           </div>

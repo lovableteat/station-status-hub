@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { BUILT_IN_COMPONENTS, BUILT_IN_TEMPLATES, createBlankProject } from "../../src/components/pcb-designer/defaults.ts";
 import {
+  DEFAULT_BOARD_LIST_FILTERS,
+  PCB_BOARD_QUERY_KEYS,
   UNASSIGNED_OWNER,
   boardOwnerOptions,
   buildBoardList,
+  readBoardListLocation,
   relativeTimeLabel,
+  writeBoardListLocation,
   statusChangeLabel,
   statusChangeRecord,
 } from "../../src/components/pcb-designer/core/boardList.ts";
@@ -52,6 +56,19 @@ test("filters apply to versions: a family shows when any version matches, led by
   assert.equal(buildBoardList(projects, { ...filters, query: "林工程" }, null)[0].families[0].lead.id, "a2", "search includes the last editor");
   assert.deepEqual(buildBoardList(projects, { ...filters, query: "不存在" }, null), []);
   assert.deepEqual(boardOwnerOptions(projects), ["王工程師", UNASSIGNED_OWNER]);
+});
+
+test("board list filters round-trip through the URL, keep defaults out and reject unknown values", () => {
+  const url = new URL("https://example.test/?module=pcb-designer&workspace=x");
+  writeBoardListLocation(url, { query: "主板 v2", status: "approved", owner: "王工程師", sort: "name" });
+  assert.equal(url.searchParams.get("module"), "pcb-designer", "other parameters stay");
+  assert.deepEqual(readBoardListLocation(url.search), { query: "主板 v2", status: "approved", owner: "王工程師", sort: "name" });
+  writeBoardListLocation(url, DEFAULT_BOARD_LIST_FILTERS);
+  for (const key of PCB_BOARD_QUERY_KEYS) assert.equal(url.searchParams.has(key), false, `${key} cleared`);
+  assert.deepEqual(readBoardListLocation("?pcbStatus=hacked&pcbSort=size&pcbOwner=%20"), DEFAULT_BOARD_LIST_FILTERS);
+  assert.equal(readBoardListLocation(`?pcbOwner=${"名".repeat(80)}`).owner.length, 60);
+  writeBoardListLocation(url, { ...DEFAULT_BOARD_LIST_FILTERS, query: "   " });
+  assert.equal(url.searchParams.has("pcbQ"), false, "a blank search is not a filter");
 });
 
 test("relative time reads in Traditional Chinese and falls back to a date after a week", () => {

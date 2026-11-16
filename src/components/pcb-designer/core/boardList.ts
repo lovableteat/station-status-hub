@@ -14,6 +14,37 @@ export interface BoardListFilters {
   sort: BoardSort;
 }
 
+export const DEFAULT_BOARD_LIST_FILTERS: BoardListFilters = { query: "", status: "all", owner: "all", sort: "updated" };
+
+/** The board list filters live in the URL so a refresh, back or shared link shows the same list. */
+export const PCB_BOARD_QUERY_KEYS = ["pcbQ", "pcbStatus", "pcbOwner", "pcbSort"] as const;
+
+export function readBoardListLocation(search: string): BoardListFilters {
+  const params = new URLSearchParams(search);
+  const status = params.get("pcbStatus");
+  const owner = params.get("pcbOwner")?.trim().slice(0, 60);
+  return {
+    query: (params.get("pcbQ") ?? "").slice(0, 120),
+    status: status === "draft" || status === "review" || status === "approved" ? status : "all",
+    owner: owner || "all",
+    sort: params.get("pcbSort") === "name" ? "name" : "updated",
+  };
+}
+
+/** Writes the filters into `url`, leaving defaults out so a plain list keeps a clean link. */
+export function writeBoardListLocation(url: URL, filters: BoardListFilters): void {
+  const values: Record<(typeof PCB_BOARD_QUERY_KEYS)[number], string> = {
+    pcbQ: filters.query.trim() ? filters.query : "",
+    pcbStatus: filters.status === "all" ? "" : filters.status,
+    pcbOwner: filters.owner === "all" ? "" : filters.owner,
+    pcbSort: filters.sort === "updated" ? "" : filters.sort,
+  };
+  for (const key of PCB_BOARD_QUERY_KEYS) {
+    if (values[key]) url.searchParams.set(key, values[key]);
+    else url.searchParams.delete(key);
+  }
+}
+
 export interface BoardFamily {
   /** boardFamilyId, or the board id when the board has no family. */
   id: string;
