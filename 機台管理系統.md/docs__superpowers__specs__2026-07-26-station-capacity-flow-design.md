@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/specs/2026-07-26-station-capacity-flow-design.md`；程式參考基準：`b646e773ec63909292fae68f696429f2b650bd80`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/specs/2026-07-26-station-capacity-flow-design.md`；程式參考基準：`b5713d01c0ecf5596d13511bf9b95801be692f58`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Station Capacity Flow Design
 
