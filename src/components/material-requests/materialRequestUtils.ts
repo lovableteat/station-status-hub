@@ -1230,10 +1230,10 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
  * A CE file can carry the vendor under the "Manufacturer Part Number" header and the MPN under
  * "Manufacturer" (Baseboard V2, 2026-11-17: every row). Read literally, no line of a part still
  * being applied for pairs with the previous version, so its application and Note are lost.
- * Decided for the whole sheet from what the values look like: an MPN has digits, a maker's name
- * has none. Returns the number of rows swapped back (0 when the columns are the right way round).
+ * Decided for the whole set from what the values look like: an MPN has digits, a maker's name
+ * has none. True only when clearly swapped (at least 5 such rows and far more than normal ones).
  */
-function repairSwappedVendorColumns(records: MaterialWorkbookRecord[]) {
+export function hasSwappedVendorColumns(records: ReadonlyArray<Pick<MaterialWorkbookRecord, "manufacturer" | "manufacturerPartNumber">>) {
   const hasDigit = (value: string) => /\d/.test(value);
   let swapped = 0;
   let normal = 0;
@@ -1244,7 +1244,17 @@ function repairSwappedVendorColumns(records: MaterialWorkbookRecord[]) {
     if (hasDigit(maker) && !hasDigit(mpn)) swapped += 1;
     else if (hasDigit(mpn) && !hasDigit(maker)) normal += 1;
   }
-  if (swapped < 5 || swapped <= normal * 4) return 0;
+  return swapped >= 5 && swapped > normal * 4;
+}
+
+/** The same rows with Manufacturer and Manufacturer Part Number put back where they belong. */
+export function swapVendorColumns<T extends Pick<MaterialWorkbookRecord, "manufacturer" | "manufacturerPartNumber">>(records: readonly T[]): T[] {
+  return records.map((record) => ({ ...record, manufacturer: record.manufacturerPartNumber, manufacturerPartNumber: record.manufacturer }));
+}
+
+/** Parse-time repair; returns the number of rows swapped back (0 when the columns are the right way round). */
+function repairSwappedVendorColumns(records: MaterialWorkbookRecord[]) {
+  if (!hasSwappedVendorColumns(records)) return 0;
   for (const record of records) {
     const maker = record.manufacturer;
     record.manufacturer = record.manufacturerPartNumber;

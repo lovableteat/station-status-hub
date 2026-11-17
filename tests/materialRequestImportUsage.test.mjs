@@ -471,3 +471,33 @@ test("a TEMP- number from PLM is shown as typed but the part still needs its app
   assert.equal(byRef.J1.needsApplication, true);
   assert.equal(byRef.J2.needsApplication, false);
 });
+
+// 2026-11-18: Baseboard V2 was stored with 廠商 and 廠商料號 swapped. 設為目前版本 V2 repairs those rows in place and then
+// carries V1's applications and Notes, so no extra version is needed.
+test("a stored version with swapped vendor columns is put right and then receives the other version's applications", async () => {
+  const { hasSwappedVendorColumns, swapVendorColumns } = await import("../src/components/material-requests/materialRequestUtils.ts");
+  const { carryBomTracking } = await import("../src/components/material-requests/bomDiff.ts");
+  const base = { sectionName: "", assemblyName: "", level: 2, name: "PART", qty: 1, manufacturerPartNumberAlt: "", sourcingStatus: "", refGroup: "", lv: "", remark: "", partName: "", partSpec: "", schematicPart: "", pcbFootprint: "" };
+  const row = (id, refDes, manufacturer, manufacturerPartNumber, extra = {}) => ({ ...base, id, refDes, manufacturer, manufacturerPartNumber, partNumber: "", ...extra });
+  const v1 = [
+    row("a", "PL30", "CYNTEC", "CMMB051H-4R7MS", { trackingStatus: "已完成", trackingHistory: [{ id: "tracking-a", status: "已完成", createdAt: "2026-11-03T00:00:00Z" }], requestOwnerName: "John Yang", note: "0903-" }),
+    row("b", "PR28", "RALEC", "RST026041FBTH", { note: "1022-*ZY" }),
+    row("c", "PQ21", "INFINEON", "ISC031N08NM6ATMA1"),
+    row("d", "PR7", "TFT", "CSF1216S0M50F-T3"),
+    row("e", "PR706", "TFT", "KUQ12101001JA-T5"),
+  ];
+  // V2 as stored: the same parts, columns swapped on every row.
+  const stored = v1.map((record, index) => row(`v2-${index}`, record.refDes, record.manufacturerPartNumber, record.manufacturer));
+  assert.equal(hasSwappedVendorColumns(stored), true);
+  assert.equal(hasSwappedVendorColumns(v1), false);
+  const repaired = swapVendorColumns(stored);
+  assert.deepEqual(repaired.map(record => record.manufacturer), ["CYNTEC", "RALEC", "INFINEON", "TFT", "TFT"]);
+  const carried = carryBomTracking(v1, repaired, { from: "current" });
+  assert.equal(carried.orphaned.length, 0);
+  assert.equal(carried.records[0].trackingStatus, "已完成");
+  assert.equal(carried.records[0].requestOwnerName, "John Yang");
+  assert.equal(carried.records[0].note, "0903-");
+  assert.equal(carried.records[1].note, "1022-*ZY");
+  // Read literally (as before), nothing paired.
+  assert.equal(carryBomTracking(v1, stored, { from: "current" }).orphaned.length, 2);
+});

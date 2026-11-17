@@ -127,6 +127,8 @@ import {
   isPreferredInternalPartNumber,
   normalizeMaterialSearchText,
   hasMaterialPartNumber,
+  hasSwappedVendorColumns,
+  swapVendorColumns,
   isMeManufacturedRecord,
   ME_APPLICATION_EXEMPTION_LABEL,
   parseMaterialWorkbookFile,
@@ -3670,6 +3672,8 @@ export function MaterialRequestPage() {
   const [circuitChangesOpen, setCircuitChangesOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ title: string; description: string; workspaceIds: string[] } | null>(null);
   const [pendingCurrent, setPendingCurrent] = useState<{ version: BomSeriesVersion; series: BomSeries } | null>(null);
+  // Rows of the version about to become current whose 廠商／廠商料號 were read swapped (uploaded before 9dcd9627).
+  const [pendingCurrentSwapped, setPendingCurrentSwapped] = useState<{ workspaceId: string; rows: number } | null>(null);
   const [carryOnSwitch, setCarryOnSwitch] = useState(true);
   const [pendingUploads, setPendingUploads] = useState<PendingBomUpload[]>([]);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -5050,6 +5054,10 @@ export function MaterialRequestPage() {
     if (!canEditModuleAccess || version.isCurrent) return;
     setCarryOnSwitch(true);
     setPendingCurrent({ version, series });
+    setPendingCurrentSwapped(null);
+    void loadVersionRecords(version.workspace.id)
+      .then((records) => { if (hasSwappedVendorColumns(records)) setPendingCurrentSwapped({ workspaceId: version.workspace.id, rows: records.length }); })
+      .catch(() => undefined);
   };
 
   const applyCurrentBomVersion = async () => {
@@ -5067,13 +5075,23 @@ export function MaterialRequestPage() {
     const stamp = new Date().toISOString();
     try {
       let carry = version.version.carry;
-      if (carryOnSwitch && previous.workspace.id !== version.workspace.id) {
-        const [previousRecords, targetRecords] = await Promise.all([loadVersionRecords(previous.workspace.id), loadVersionRecords(version.workspace.id)]);
+      let repairedRows = 0;
+      const carrying = carryOnSwitch && previous.workspace.id !== version.workspace.id;
+      const loadedTarget = await loadVersionRecords(version.workspace.id);
+      assertBomWriteCurrent(writeScope);
+      // A version uploaded with 廠商 and 廠商料號 swapped (read literally before 9dcd9627) is put right in place first, so
+      // its parts pair with the other version by vendor and MPN; nothing else in the rows changes.
+      const targetRecords = hasSwappedVendorColumns(loadedTarget) ? swapVendorColumns(loadedTarget) : loadedTarget;
+      if (targetRecords !== loadedTarget) repairedRows = targetRecords.length;
+      if (carrying) {
+        const previousRecords = await loadVersionRecords(previous.workspace.id);
         assertBomWriteCurrent(writeScope);
         // The version that was current holds the newest tracking, so it wins over the target's own older data.
         const carried = carryBomTracking(previousRecords, targetRecords, { from: "current" });
         await saveBomWorkspace({ ...version.workspace, payload: { ...version.workspace.payload, records: carried.records, recordCount: carried.records.length }, updatedAt: stamp }, () => assertBomWriteCurrent(writeScope));
         carry = { matched: carried.matched, tracked: carried.tracked, orphaned: carried.orphaned.length, manual: carried.manual };
+      } else if (repairedRows > 0) {
+        await saveBomWorkspace({ ...version.workspace, payload: { ...version.workspace.payload, records: targetRecords, recordCount: targetRecords.length }, updatedAt: stamp }, () => assertBomWriteCurrent(writeScope));
       }
       if (!isBomWriteCurrent(writeScope)) return;
       for (const item of series.versions) {
@@ -5085,7 +5103,7 @@ export function MaterialRequestPage() {
       void logMaterialWorkspaceAction({
         action: "version.current",
         actor: user,
-        metadata: { seriesId: series.id, seriesName: series.name, versionNumber: version.version.versionNumber, previousWorkspaceId: previous.workspace.id, carried: carryOnSwitch },
+        metadata: { seriesId: series.id, seriesName: series.name, versionNumber: version.version.versionNumber, previousWorkspaceId: previous.workspace.id, carried: carryOnSwitch, repairedVendorColumns: repairedRows },
         workspaceId: version.workspace.id,
       });
       await reloadBomWorkspaces(version.workspace.id);
@@ -5093,9 +5111,9 @@ export function MaterialRequestPage() {
       switchActiveBom(version.workspace.id);
       toast({
         title: `${series.name} 已切換到 ${version.displayNumber}`,
-        description: carryOnSwitch && previous.workspace.id !== version.workspace.id
+        description: `${repairedRows > 0 ? `已把填反的廠商與廠商料號兩欄換回來（${repairedRows.toLocaleString()} 列）。` : ""}${carrying
           ? `這個版本現在是目前版本；已依位號與料號帶入 ${previous.displayNumber} 的網站資料 ${carry?.tracked ?? 0} 筆${carry && carry.orphaned > 0 ? `，${carry.orphaned} 筆找不到對應料件（可在比對中查看）` : ""}。`
-          : "這個版本現在是目前版本，其他人也會看到相同結果。",
+          : "這個版本現在是目前版本，其他人也會看到相同結果。"}`,
       });
     } catch (error) {
       if (!isBomWriteCurrent(writeScope)) return;
@@ -6307,6 +6325,11 @@ export function MaterialRequestPage() {
             <Checkbox checked={carryOnSwitch} onCheckedChange={(value) => setCarryOnSwitch(value === true)} aria-label="帶入網站資料" />
             把 {pendingCurrent?.series.current.displayNumber} 的追蹤、Note、負責人與 SPEC 附件依位號與料號帶到 {pendingCurrent?.version.displayNumber}
           </label>
+          {pendingCurrentSwapped && pendingCurrentSwapped.workspaceId === pendingCurrent?.version.workspace.id && (
+            <p data-testid="bom-current-swapped" className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground">
+              {pendingCurrent?.version.displayNumber} 的原檔把廠商與廠商料號兩欄填反了（{pendingCurrentSwapped.rows.toLocaleString()} 列），切換時會一併換回來，申請與 Note 才對得上。
+            </p>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction onClick={() => void applyCurrentBomVersion()}>設為目前版本</AlertDialogAction>
