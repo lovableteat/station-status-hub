@@ -43,7 +43,7 @@ export async function reviewBomRowsWithAi(
   model: NvBomModel,
   { onProgress, signal, onlyBatches }: { onProgress?: (done: number, total: number) => void; signal: AbortSignal; onlyBatches?: readonly number[] },
 ): Promise<BomAiReviewResult> {
-  const byRow = new Map(records.map((record) => [record.sourceRow, record] as const));
+  signal.throwIfAborted();
   const totalBatches = countAiReviewBatches(records.length);
   const queue = (onlyBatches ?? Array.from({ length: totalBatches }, (_, index) => index)).filter((index) => index >= 0 && index < totalBatches);
   const issues: BomUploadIssue[] = [];
@@ -59,10 +59,14 @@ export async function reviewBomRowsWithAi(
   }, signal);
   const run = async (index: number) => {
     const batch = records.slice(index * AI_REVIEW_BATCH_ROWS, (index + 1) * AI_REVIEW_BATCH_ROWS);
+    // Only rows of this batch: a row number from elsewhere is a misread, and a retry can never list a finding twice.
+    const byRow = new Map(batch.map((record) => [record.sourceRow, record] as const));
     let answer: Record<string, unknown> | null = null;
     for (let attempt = 0; attempt < 2 && !answer; attempt += 1) {
       try {
-        answer = await ask(batch);
+        const reply = await ask(batch);
+        if (!reply || typeof reply !== "object" || !Array.isArray((reply as { issues?: unknown }).issues)) throw new Error("AI 沒有回傳可讀取的結果，請重試。");
+        answer = reply;
       } catch (error) {
         signal.throwIfAborted();
         if (attempt === 0) { await wait(RETRY_WAIT_MS, signal); continue; }

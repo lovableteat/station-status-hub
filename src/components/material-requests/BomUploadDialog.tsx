@@ -52,13 +52,13 @@ const reviewCacheKey = (upload: PendingBomUpload) => [upload.file.name, upload.f
 const byRow = (left: BomUploadIssue, right: BomUploadIssue) => (left.row ?? 0) - (right.row ?? 0);
 
 /** The findings of one file, worst first: row, Ref Des, part, column and reason, rule and AI alike. */
-function UploadChecks({ checks, rows, review, onStart, onRetry }: { checks: BomUploadIssue[]; rows: number; review?: ReviewState; onStart: () => void; onRetry: () => void }) {
+function UploadChecks({ checks, rows, stagedRows, review, onStart, onRetry }: { checks: BomUploadIssue[]; rows: number; stagedRows: number; review?: ReviewState; onStart: () => void; onRetry: () => void }) {
   const aiIssues = review?.state === "done" ? review.issues : [];
   const issues = [...checks, ...aiIssues].sort((left, right) => (left.level === right.level ? 0 : left.level === "error" ? -1 : 1) || byRow(left, right));
   const errors = issues.filter((issue) => issue.level === "error").length;
   const failed = review?.state === "done" ? review.failedBatches.length : 0;
-  const status = !review ? "AI 檢查準備中…"
-    : review.state === "waiting" ? `檔案有 ${rows.toLocaleString()} 列，AI 檢查要送 ${countAiReviewBatches(rows)} 次請求，按右邊按鈕才開始`
+  const status = !review ? "AI 檢查排隊中（一次檢查一個檔案）…"
+    : review.state === "waiting" ? `${stagedRows > rows ? `這次共選了 ${stagedRows.toLocaleString()} 列；` : ""}這個檔案 ${rows.toLocaleString()} 列，AI 檢查要送 ${countAiReviewBatches(rows)} 次請求，按右邊按鈕才開始`
       : review.state === "running" ? `AI 檢查中（${review.done} / ${review.total || "?"} 批）…`
         : review.state === "done" ? failed === 0
           ? `AI（${review.modelLabel}）找到 ${review.issues.length} 筆`
@@ -126,13 +126,18 @@ export function BomUploadDialog({
   const problems = uploads.map((upload) => (upload.target === NEW_BOM_SERIES_TARGET && !upload.seriesName.trim() ? "請填寫新系列名稱" : ""));
   const canConfirm = uploads.length > 0 && !busy && problems.every((problem) => !problem);
   const update = (key: string, patch: Partial<PendingBomUpload>) => onChange(uploads.map((upload) => (upload.key === key ? { ...upload, ...patch } : upload)));
-  // Each staged file is reviewed by AI as soon as it is shown (a large one on request); closing the window stops what is
-  // still running. A retry after some batches failed sends only those and keeps what the others found.
+  // Each staged file is reviewed by AI as soon as it is shown, one file at a time so several files never send a burst of
+  // requests together. When the files staged together exceed AI_REVIEW_AUTO_ROWS, each waits for its own button.
+  // Closing the window stops what is still running. A retry after some batches failed sends only those and keeps what
+  // the others found.
   const [reviews, setReviews] = useState<Record<string, ReviewState>>({});
   const reviewsRef = useRef(reviews);
   reviewsRef.current = reviews;
   const [reviewRequests, setReviewRequests] = useState<Record<string, number>>({});
+  const [queueTick, setQueueTick] = useState(0);
   const started = useRef(new Map<string, AbortController>());
+  const active = useRef<AbortController | null>(null);
+  const stagedRows = uploads.reduce((sum, upload) => sum + upload.payload.records.length, 0);
   useEffect(() => {
     if (!open || !reviewUpload) return;
     for (const upload of uploads) {
@@ -141,37 +146,47 @@ export function BomUploadDialog({
       if (started.current.has(runKey)) continue;
       const cacheKey = reviewCacheKey(upload);
       const cached = attempt === 0 ? reviewCache.get(cacheKey) : undefined;
-      if (attempt === 0 && (cached || upload.payload.records.length > AI_REVIEW_AUTO_ROWS)) {
+      if (attempt === 0 && (cached || stagedRows > AI_REVIEW_AUTO_ROWS)) {
         started.current.set(runKey, new AbortController());
         setReviews((current) => ({ ...current, [upload.key]: cached ? { state: "done", ...cached } : { state: "waiting" } }));
         continue;
       }
+      // One review at a time: the next file starts when this one finishes (queueTick).
+      if (active.current) continue;
       const prior = reviewsRef.current[upload.key];
       const previous = prior?.state === "done" && prior.failedBatches.length > 0 ? prior : undefined;
       const controller = new AbortController();
       started.current.set(runKey, controller);
+      active.current = controller;
+      const live = () => !controller.signal.aborted;
       setReviews((current) => ({ ...current, [upload.key]: { state: "running", done: 0, total: 0 } }));
-      reviewUpload(upload.payload.records, (done, total) => setReviews((current) => ({ ...current, [upload.key]: { state: "running", done, total } })), controller.signal, previous?.failedBatches)
+      reviewUpload(upload.payload.records, (done, total) => { if (live()) setReviews((current) => ({ ...current, [upload.key]: { state: "running", done, total } })); }, controller.signal, previous?.failedBatches)
         .then((result) => {
-          if (controller.signal.aborted) return;
+          if (!live()) return;
           if (!result) { setReviews((current) => ({ ...current, [upload.key]: { state: "none" } })); return; }
           const merged: ReviewDone = previous ? { ...result, totalBatches: previous.totalBatches, issues: [...previous.issues, ...result.issues].sort(byRow) } : result;
           if (merged.failedBatches.length === 0) reviewCache.set(cacheKey, merged);
           setReviews((current) => ({ ...current, [upload.key]: { state: "done", ...merged } }));
         })
         .catch((error) => {
-          if (controller.signal.aborted) return;
+          if (!live()) return;
           const message = error instanceof Error ? error.message : "請稍後再試";
           // A failure before any batch ran (the model list could not be read) leaves the earlier findings in place.
           setReviews((current) => ({ ...current, [upload.key]: previous ? { ...previous, failure: message } : { state: "error", message } }));
+        })
+        .finally(() => {
+          if (active.current !== controller) return;
+          active.current = null;
+          setQueueTick((tick) => tick + 1);
         });
     }
-  }, [open, uploads, reviewUpload, reviewRequests]);
+  }, [open, uploads, reviewUpload, reviewRequests, queueTick, stagedRows]);
   const requestReview = (key: string) => setReviewRequests((current) => ({ ...current, [key]: (current[key] ?? 0) + 1 }));
   useEffect(() => {
     if (open) return;
     for (const controller of started.current.values()) controller.abort();
     started.current.clear();
+    active.current = null;
     setReviews({});
     setReviewRequests({});
   }, [open]);
@@ -230,7 +245,7 @@ export function BomUploadDialog({
                     {upload.importNotes.map((item) => <li key={item} className="flex gap-1.5"><span className={cn(CHIP, "flex-none", CHIP_TONE.warning)}>注意</span><span className="min-w-0">{item}</span></li>)}
                   </ul>
                 )}
-                <UploadChecks checks={upload.checks ?? []} rows={upload.payload.records.length} review={reviewUpload ? reviews[upload.key] : { state: "none" }} onStart={() => requestReview(upload.key)} onRetry={() => requestReview(upload.key)} />
+                <UploadChecks checks={upload.checks ?? []} rows={upload.payload.records.length} stagedRows={stagedRows} review={reviewUpload ? reviews[upload.key] : { state: "none" }} onStart={() => requestReview(upload.key)} onRetry={() => requestReview(upload.key)} />
               </div>
             );
           })}

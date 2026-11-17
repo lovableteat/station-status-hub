@@ -934,6 +934,8 @@ export interface BomFillForwardResult {
   filled: number;
   /** Parts added by hand on the previous version while it was current, appended to the target. */
   manual: number;
+  /** Rows of the previous version updated while it was current that have no matching part in the target. */
+  unmatched: number;
 }
 
 /** "manual-<ms>-<random>": when a hand-added row was created. */
@@ -994,10 +996,13 @@ export function fillForwardBomTracking(previous: readonly MaterialWorkbookRecord
   }
   const targetIds = new Set(target.map((record) => record.id));
   const manual = previous.filter((record) => record.id.startsWith(MANUAL_RECORD_PREFIX) && !usedPrevious.has(record) && !targetIds.has(record.id) && madeSince(manualCreatedAt(record)));
+  const unmatched = previous.filter((record) => !usedPrevious.has(record) && !manual.includes(record) && !targetIds.has(record.id)
+    && (record.trackingHistory ?? []).some((entry) => !isImportedEntry(entry) && Number.isFinite(sinceTime) && (entryTime(entry) ?? -Infinity) > sinceTime)).length;
   return {
     records: [...target.map((record) => replacements.get(record) ?? record), ...manual.map((record) => ({ ...record }))],
     filled: replacements.size,
     manual: manual.length,
+    unmatched,
   };
 }
 
@@ -1043,7 +1048,9 @@ export function linkBomVersions(
   return others.map((version, index) => {
     const toCurrent = new Map<MaterialWorkbookRecord, string>();
     for (const pair of pairBomLines(version.records, current).pairs) toCurrent.set(pair.before, pair.after.id);
-    const toNewer = index === 0 ? undefined : new Map(pairBomLines(version.records, others[index - 1].records).pairs.map((pair) => [pair.before, pair.after] as const));
+    // The chain never crosses the version on screen: for the newest older version, the next newer one is the screen.
+    const next = index === 0 ? undefined : others[index - 1];
+    const toNewer = !next || Boolean(next.newer) !== Boolean(version.newer) ? undefined : new Map(pairBomLines(version.records, next.records).pairs.map((pair) => [pair.before, pair.after] as const));
     return { workspaceId: version.workspaceId, label: version.label, records: version.records, toCurrent, ...(toNewer ? { toNewer } : {}), ...(version.newer ? { newer: true } : {}) };
   });
 }
@@ -1083,6 +1090,8 @@ export function classifyRetainedApplications(
       const newer = link.toNewer?.get(record);
       if (newer && (isWebsiteApplication(newer) || newer.id === record.id)) continue;
       if (manualPending && currentById.has(record.id)) continue;
+      // Hand-added on V2 and deleted (or changed) on V3: V3 is the later word on it, so it is not listed from V2.
+      if (manualPending && link.toNewer && !newer) continue;
       const partnerId = link.toCurrent.get(record);
       const partner = partnerId ? currentById.get(partnerId) : undefined;
       if (partner && (isTrackedMaterialApplication(partner) || !application)) continue;
@@ -1139,6 +1148,8 @@ export interface BomPartChange {
   replaces: string[];
   /** 換料: parts that took positions this one lost. */
   replacedBy: string[];
+  /** The MPN the old version wrote for this same part (same 實體料號, or the maker written longer / shorter), when it differs. */
+  previousMpn?: string;
   searchText: string;
 }
 
@@ -1156,9 +1167,17 @@ const bareMpn = (value: unknown) => {
   const text = upper(value);
   return !text || PART_PLACEHOLDER.test(text) ? "" : text.replace(/[\s\-_/.]+/g, "");
 };
+/** The maker as one name: case, spaces and punctuation ignored; "N/A" is no maker. */
+const makerKey = (value: unknown) => {
+  const text = upper(value);
+  return !text || PART_PLACEHOLDER.test(text) ? "" : text.replace(/[^0-9A-Z\u4e00-\u9fff]+/g, "");
+};
+/** "MURATA" and "MURATA ELECTRONICS" are one maker; "TI" and "ONSEMI" are not. */
+const sameMaker = (left: string, right: string) => !left || !right || left.startsWith(right) || right.startsWith(left);
 const partKey = (record: MaterialWorkbookRecord) => {
   const mpn = bareMpn(record.manufacturerPartNumber);
-  if (mpn) return `mpn:${mpn}`;
+  // The maker is part of the part: LM358DR from TI and from ONSEMI are two parts (a second source swapped in).
+  if (mpn) return `mpn:${mpn}|${makerKey(record.manufacturer)}`;
   const part = upper(record.partNumber);
   if (part && !PART_PLACEHOLDER.test(part)) return `pn:${part}`;
   return `name:${upper(record.name)}|${upper(record.manufacturer)}`;
@@ -1214,33 +1233,41 @@ export function buildBomPartChanges(before: readonly MaterialWorkbookRecord[], a
     };
     changes.push(change);
   }
-  // The same 實體料號 (one vendor, one MPN) under an MPN written differently (a typo fixed, a suffix added) is one part,
-  // not one removed and one added: merged, and dropped when its positions did not change either.
-  const byPartNumber = new Map<string, { removed: BomPartChange[]; added: BomPartChange[] }>();
-  for (const change of changes) {
-    const part = upper(change.partNumber);
-    if (change.kind === "moved" || !part || PART_PLACEHOLDER.test(part) || part.startsWith("TEMP-")) continue;
-    const slot = byPartNumber.get(part) ?? { removed: [], added: [] };
-    slot[change.kind].push(change);
-    byPartNumber.set(part, slot);
-  }
-  const merged = new Map<BomPartChange, BomPartChange | null>();
-  for (const { removed, added } of byPartNumber.values()) {
-    if (removed.length !== 1 || added.length !== 1) continue;
-    const [gone, come] = [removed[0], added[0]];
-    const refAdded = come.afterRefs.filter((ref) => !gone.beforeRefs.includes(ref));
-    const refRemoved = gone.beforeRefs.filter((ref) => !come.afterRefs.includes(ref));
-    merged.set(gone, null);
-    if (refAdded.length === 0 && refRemoved.length === 0) { merged.set(come, null); unchanged += 1; continue; }
-    merged.set(come, { ...come, kind: "moved", beforeRefs: gone.beforeRefs, refAdded, refRemoved, hadWebsiteData: false });
-  }
-  if (merged.size > 0) {
+  // One part written two ways is not one removed and one added: merged, and dropped when its positions did not change
+  // either. (a) The same 實體料號 (one vendor, one MPN) under an MPN rewritten (a typo fixed, a suffix added); (b) the same
+  // MPN under the maker written longer or shorter ("MURATA" / "MURATA ELECTRONICS"). Only one-to-one pairs are merged.
+  const mergeOneToOne = (keyOf: (change: BomPartChange) => string, fits: (gone: BomPartChange, come: BomPartChange) => boolean) => {
+    const slots = new Map<string, { removed: BomPartChange[]; added: BomPartChange[] }>();
+    for (const change of changes) {
+      const key = change.kind === "moved" ? "" : keyOf(change);
+      if (!key) continue;
+      const slot = slots.get(key) ?? { removed: [], added: [] };
+      slot[change.kind as "removed" | "added"].push(change);
+      slots.set(key, slot);
+    }
+    const merged = new Map<BomPartChange, BomPartChange | null>();
+    for (const { removed, added } of slots.values()) {
+      if (removed.length !== 1 || added.length !== 1 || !fits(removed[0], added[0])) continue;
+      const [gone, come] = [removed[0], added[0]];
+      const refAdded = come.afterRefs.filter((ref) => !gone.beforeRefs.includes(ref));
+      const refRemoved = gone.beforeRefs.filter((ref) => !come.afterRefs.includes(ref));
+      merged.set(gone, null);
+      if (refAdded.length === 0 && refRemoved.length === 0) { merged.set(come, null); unchanged += 1; continue; }
+      const previousMpn = bareMpn(gone.mpn) !== bareMpn(come.mpn) && gone.mpn ? gone.mpn : undefined;
+      merged.set(come, { ...come, kind: "moved", beforeRefs: gone.beforeRefs, refAdded, refRemoved, hadWebsiteData: false, ...(previousMpn ? { previousMpn } : {}) });
+    }
+    if (merged.size === 0) return;
     const kept = changes.flatMap((change) => { const next = merged.has(change) ? merged.get(change) : change; return next ? [next] : []; });
     changes.length = 0;
     changes.push(...kept);
-  }
+  };
+  mergeOneToOne((change) => {
+    const part = upper(change.partNumber);
+    return !part || PART_PLACEHOLDER.test(part) || part.startsWith("TEMP-") ? "" : part;
+  }, () => true);
+  mergeOneToOne((change) => bareMpn(change.mpn), (gone, come) => sameMaker(makerKey(gone.manufacturer), makerKey(come.manufacturer)));
   for (const change of changes) {
-    change.searchText = normalizeBomText([change.name, change.manufacturer, change.mpn, change.partNumber, ...change.beforeRefs, ...change.afterRefs].join(" ")).toLowerCase();
+    change.searchText = normalizeBomText([change.name, change.manufacturer, change.mpn, change.previousMpn ?? "", change.partNumber, ...change.beforeRefs, ...change.afterRefs].join(" ")).toLowerCase();
   }
   // 換料: a position one part lost and another gained names both, so a replaced part reads as a replacement.
   const label = (change: BomPartChange) => [change.manufacturer, change.mpn].filter(Boolean).join(" / ") || change.partNumber || change.name;

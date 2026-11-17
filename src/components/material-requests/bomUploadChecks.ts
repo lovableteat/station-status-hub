@@ -39,10 +39,12 @@ const hasDigit = (value: string) => /\d/.test(value);
 const describePart = (record: MaterialWorkbookRecord) => [text(record.manufacturer), text(record.manufacturerPartNumber)].filter(Boolean).join(" / ") || text(record.name) || "（未填）";
 const refsOf = (record: MaterialWorkbookRecord) => bomRefTokens(record.refDes);
 const digitCount = (value: string) => value.replace(/\D/g, "").length;
-/** Blank-ish values that are not a maker's name: "N/A", "TBD", "-". */
-const PLACEHOLDER = /^(?:N\/?A|NONE|TBD|TBC|NULL|[-—–_/.]+|無|空白)$/i;
+/** Blank-ish values that are not a maker's name or a part: "N/A", "TBD", "-", and not-fitted rows ("NC", "DNI", "DNP"). */
+const PLACEHOLDER = /^(?:N\/?A|NONE|TBD|TBC|NULL|NC|N\/?C|DNI|DNP|DNF|NI|NIL|OPEN|GENERIC|[-—–_/.]+|無|空白|不上件)$/i;
 /** "R1-R10", "C5~C9": one position the website cannot split. "J1-1" (a pin of J1) is not a range. */
 const RANGE = /~|^([A-Z]+)\d+-\1\d+$/i;
+/** The same written with spaces, "R10 - R15", which splits into two positions and a dash. */
+const SPACED_RANGE = /([A-Z]+)\d+\s+[-~～]\s*\1\d+|([A-Z]+)\d+\s*[-~～]\s+\2\d+/i;
 
 /** Rule checks; each finding names the row, the column and the concrete reason. */
 export function checkBomUploadRows(records: readonly MaterialWorkbookRecord[]): BomUploadIssue[] {
@@ -65,14 +67,17 @@ export function checkBomUploadRows(records: readonly MaterialWorkbookRecord[]): 
     const neighbour = /^\d{1,4}$/.test(mpn)
       ? [records[index - 1], records[index + 1]].find((other) => other && text(other.manufacturer) === maker && bomRefTokens(other.refDes).join("|") === refs.join("|") && /[A-Z]/i.test(text(other.manufacturerPartNumber)))
       : undefined;
+    // "RC0402FR-0710KL" under 廠商 with "YAGEO" under 廠商料號. A name with a digit or two (O2MICRO, 3M) is a name.
+    const makerLooksLikeMpn = Boolean(maker && !/\s/.test(maker) && maker.length >= 6 && (digitCount(maker) >= 3 || (digitCount(maker) >= 2 && /-/.test(maker)))
+      && mpn && !hasDigit(mpn) && !PLACEHOLDER.test(mpn));
     if (neighbour) {
       add(record, "Manufacturer Part Number", `廠商料號只有「${mpn}」，旁邊同位號同廠商的一列是「${text(neighbour.manufacturerPartNumber)}」；看起來原本是「${text(neighbour.manufacturerPartNumber)},${mpn}」被逗號拆成兩列，請合併成一列`, "error");
-    } else if (mpn && !hasDigit(mpn) && makers.has(mpn.toUpperCase())) {
+    } else if (makerLooksLikeMpn) {
+      // One finding for one mistake: the two columns are swapped.
+      add(record, "Manufacturer", `廠商欄填的是「${maker}」，廠商料號欄填的是「${mpn}」；看起來兩欄填反了`, "error");
+    } else if (mpn && !hasDigit(mpn) && !PLACEHOLDER.test(mpn) && mpn.toUpperCase() !== maker.toUpperCase() && makers.has(mpn.toUpperCase())) {
+      // A row whose MPN repeats its own maker ("NC / NC", "GENERIC / GENERIC") is a not-fitted or generic line, not a swap.
       add(record, "Manufacturer Part Number", `廠商料號欄填的是「${mpn}」，這是廠商名稱；廠商料號與廠商兩欄可能填反`, "error");
-    }
-    // "RC0402FR-0710KL" under 廠商 with "YAGEO" under 廠商料號. A name with a digit or two (O2MICRO, 3M) is a name.
-    if (maker && !/\s/.test(maker) && maker.length >= 6 && (digitCount(maker) >= 3 || (digitCount(maker) >= 2 && /-/.test(maker))) && mpn && !hasDigit(mpn) && !PLACEHOLDER.test(mpn)) {
-      add(record, "Manufacturer", `廠商欄填的是「${maker}」，看起來是廠商料號`, "error");
     }
     if (physical && virtual && physical.toUpperCase() === virtual.toUpperCase()) {
       add(record, "虛擬料號", `虛擬料號和實體料號都是「${physical}」；實體料號不能當虛擬料號填，查無虛擬料號就留白`, "error");
@@ -83,10 +88,11 @@ export function checkBomUploadRows(records: readonly MaterialWorkbookRecord[]): 
     if (record.level >= 2 && refs.length === 0 && !text(record.refGroup) && (mpn || physical)) {
       add(record, "Ref Des", "料件列沒有位號");
     }
-    const range = refs.find((ref) => RANGE.test(ref));
+    const range = refs.find((ref) => RANGE.test(ref)) ?? SPACED_RANGE.exec(text(record.refDes))?.[0];
     if (range) add(record, "Ref Des", `位號「${range}」是範圍寫法，網站會當成一個位號；請逐一列出`);
     const qty = Number(String(record.qty ?? "").replace(/,/g, ""));
-    if (refs.length > 1 && Number.isFinite(qty) && qty > 0 && Math.round(qty) !== refs.length && record.level >= 2) {
+    // A range already explains a count that does not match; it is reported once, as the range.
+    if (!range && refs.length > 1 && Number.isFinite(qty) && qty > 0 && Math.round(qty) !== refs.length && record.level >= 2) {
       add(record, "Qty", `數量是 ${qty}，但位號有 ${refs.length} 個`);
     }
     const key = [refs.join("|"), maker.toUpperCase(), mpn.toUpperCase(), physical.toUpperCase()].join("¦");

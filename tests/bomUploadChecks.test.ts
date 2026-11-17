@@ -57,3 +57,19 @@ test("a maker column holding an MPN is caught, and only real ranges are reported
   assert.ok(issues.some((issue) => issue.column === "Manufacturer" && issue.reason.includes("RC0402FR-0710KL") && issue.level === "error"));
   assert.deepEqual(issues.filter((issue) => issue.reason.includes("範圍寫法")).map((issue) => issue.refDes), ["C5~C9", "R20-R25"]);
 });
+
+// Re-check 2026-11-18: not-fitted rows, one finding per swap, spaced ranges.
+test("not-fitted and generic rows are not flagged, a swap is one finding, and a spaced range is a range rather than a count", () => {
+  const quiet = checkBomUploadRows([
+    row({ refDes: "R7", manufacturer: "NC", manufacturerPartNumber: "NC" }),
+    row({ refDes: "R8", manufacturer: "DNI", manufacturerPartNumber: "DNI" }),
+    row({ refDes: "H1", manufacturer: "GENERIC", manufacturerPartNumber: "GENERIC" }),
+  ]);
+  assert.deepEqual(quiet.map((issue) => issue.reason), []);
+  const swapped = checkBomUploadRows([row({ refDes: "R1", manufacturer: "RC0402FR-0710KL", manufacturerPartNumber: "YAGEO" }), row({ refDes: "R2" })]);
+  assert.equal(swapped.length, 1, swapped.map((issue) => issue.reason).join(" | "));
+  assert.match(swapped[0].reason, /兩欄填反/);
+  const spaced = checkBomUploadRows([row({ refDes: "R10 - R15", qty: 6 })]);
+  assert.deepEqual(spaced.map((issue) => issue.column), ["Ref Des"]);
+  assert.match(spaced[0].reason, /R10 - R15/);
+});

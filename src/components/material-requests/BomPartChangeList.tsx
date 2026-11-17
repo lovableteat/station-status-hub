@@ -26,13 +26,14 @@ function Refs({ refs, limit = 10 }: { refs: string[]; limit?: number }) {
 function Placement({ change, beforeLabel, afterLabel }: { change: BomPartChange; beforeLabel: string; afterLabel: string }) {
   const replaces = change.replaces.length > 0 && <span className="block text-muted-foreground">換料：取代 {change.replaces.slice(0, 3).join("、")}{change.replaces.length > 3 ? ` 等 ${change.replaces.length} 顆` : ""}</span>;
   const replacedBy = change.replacedBy.length > 0 && <span className="block text-muted-foreground">換料：改用 {change.replacedBy.slice(0, 3).join("、")}{change.replacedBy.length > 3 ? ` 等 ${change.replacedBy.length} 顆` : ""}</span>;
+  const previous = change.previousMpn && <span className="block text-muted-foreground">{beforeLabel} 寫成 <span className="font-mono">{change.previousMpn}</span></span>;
   if (change.kind === "added") return <span>{afterLabel} 新增在 <Refs refs={change.afterRefs} />{replaces}</span>;
   if (change.kind === "removed") return <span>{beforeLabel} 原本在 <Refs refs={change.beforeRefs} />，{afterLabel} 已沒有{replacedBy}</span>;
   return (
     <span className="grid gap-0.5">
       {change.refAdded.length > 0 && <span><b className="text-success">加上</b> <Refs refs={change.refAdded} /></span>}
       {change.refRemoved.length > 0 && <span><b className="text-destructive">拿掉</b> <Refs refs={change.refRemoved} /></span>}
-      {replaces}{replacedBy}
+      {replaces}{replacedBy}{previous}
     </span>
   );
 }

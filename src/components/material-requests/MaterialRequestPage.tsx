@@ -4886,6 +4886,7 @@ export function MaterialRequestPage() {
   const reviewBomUpload: BomUploadReview = async (records, onProgress, signal, onlyBatches) => {
     const { pickBomReviewModel, reviewBomRowsWithAi } = await import("./bomUploadAiReview");
     const model = await pickBomReviewModel();
+    signal.throwIfAborted();
     if (!model) return null;
     const result = await reviewBomRowsWithAi(records, model, { onProgress, signal, onlyBatches });
     return { modelLabel: model.label, ...result };
@@ -5097,10 +5098,11 @@ export function MaterialRequestPage() {
     const previous = series.current;
     const stamp = new Date().toISOString();
     try {
-      let carry = version.version.carry;
+      const carry = version.version.carry;
       let repairedRows = 0;
       let carriedRows = 0;
       let carriedManual = 0;
+      let unmatchedRows = 0;
       const goingForward = version.version.versionNumber > previous.version.versionNumber;
       const carrying = carryOnSwitch && goingForward && previous.workspace.id !== version.workspace.id;
       const loadedTarget = await loadVersionRecords(version.workspace.id);
@@ -5116,9 +5118,9 @@ export function MaterialRequestPage() {
         // replaced (new tracking entries are added, blank fields filled, hand-added parts from that time appended).
         const filled = fillForwardBomTracking(previousRecords, targetRecords, previous.version.currentChangedAt);
         await saveBomWorkspace({ ...version.workspace, payload: { ...version.workspace.payload, records: filled.records, recordCount: filled.records.length }, updatedAt: stamp }, () => assertBomWriteCurrent(writeScope));
-        if (carry) carry = { ...carry, orphaned: diffBomRecords(previousRecords, filled.records).summary.trackingLost };
         carriedRows = filled.filled;
         carriedManual = filled.manual;
+        unmatchedRows = filled.unmatched;
       } else if (repairedRows > 0) {
         await saveBomWorkspace({ ...version.workspace, payload: { ...version.workspace.payload, records: targetRecords, recordCount: targetRecords.length }, updatedAt: stamp }, () => assertBomWriteCurrent(writeScope));
       }
@@ -5141,9 +5143,11 @@ export function MaterialRequestPage() {
       toast({
         title: `${series.name} 已切換到 ${version.displayNumber}`,
         description: `${repairedRows > 0 ? `已把填反的廠商與廠商料號兩欄換回來（${repairedRows.toLocaleString()} 列）。` : ""}${carrying
-          ? carriedRows + carriedManual === 0
-            ? `這個版本現在是目前版本；${previous.displayNumber} 當目前版本這段期間沒有新的更新，這一版維持原本的資料。`
-            : `這個版本現在是目前版本；已把 ${previous.displayNumber} 的更新補到 ${carriedRows.toLocaleString()} 筆料${carriedManual > 0 ? `，並加入 ${carriedManual.toLocaleString()} 筆手動新增的料` : ""}，這一版原本填的都沒有被蓋掉。`
+          ? `${carriedRows + carriedManual === 0
+            ? `這個版本現在是目前版本；${previous.displayNumber} 當目前版本這段期間沒有可以補到這一版的更新，這一版維持原本的資料。`
+            : `這個版本現在是目前版本；已把 ${previous.displayNumber} 的更新補到 ${carriedRows.toLocaleString()} 筆料${carriedManual > 0 ? `，並加入 ${carriedManual.toLocaleString()} 筆手動新增的料` : ""}，這一版原本填的都沒有被蓋掉。`}${unmatchedRows > 0
+            ? `另有 ${unmatchedRows.toLocaleString()} 筆 ${previous.displayNumber} 的更新在這一版找不到同一顆料，申請會列在待處理料最下面的「${previous.displayNumber} 的料」。`
+            : ""}`
           : goingForward ? "這個版本現在是目前版本，其他人也會看到相同結果。" : `這個版本現在是目前版本，維持原本的樣子，沒有帶入 ${previous.displayNumber} 的資料。`}`,
       });
     } catch (error) {

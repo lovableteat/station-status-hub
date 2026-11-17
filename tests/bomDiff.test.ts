@@ -656,3 +656,45 @@ test("parts view: an MPN written with or without dashes is one part, and the sam
   assert.deepEqual([moved.mpn, moved.refAdded, moved.refRemoved, moved.replaces, moved.replacedBy], ["VCHA042A-1R0MS6", ["L2"], [], [], []]);
   assert.equal(result.unchanged, 3);
 });
+
+// Re-check 2026-11-18.
+test("parts view: the same MPN from another maker is a swap, the maker written longer is the same part, and a rewritten MPN stays visible", async () => {
+  const { buildBomPartChanges } = await import("../src/components/material-requests/bomDiff.ts");
+  const result = buildBomPartChanges(
+    [
+      row({ id: "b1", refDes: "U1", manufacturer: "TI", manufacturerPartNumber: "LM358DR", partNumber: "" }),
+      row({ id: "b2", refDes: "C1", manufacturer: "MURATA", manufacturerPartNumber: "GRM155R71C104KA88D", partNumber: "" }),
+      row({ id: "b3", refDes: "L1", manufacturer: "CYNTEC", manufacturerPartNumber: "VCHA042A-1R0", partNumber: "1022-CY-01" }),
+    ],
+    [
+      row({ id: "a1", refDes: "U1", manufacturer: "ONSEMI", manufacturerPartNumber: "LM358DR", partNumber: "" }),
+      row({ id: "a2", refDes: "C1", manufacturer: "Murata Electronics", manufacturerPartNumber: "GRM155R71C104KA88D", partNumber: "" }),
+      row({ id: "a3", refDes: "L1, L2", manufacturer: "CYNTEC", manufacturerPartNumber: "VCHA042A-1R0MS6", partNumber: "1022-CY-01" }),
+    ],
+  );
+  assert.deepEqual(result.counts, { added: 1, removed: 1, moved: 1 }, result.changes.map((change) => `${change.kind}:${change.manufacturer}/${change.mpn}`).join(" | "));
+  assert.deepEqual(result.changes.find((change) => change.kind === "added")?.replaces, ["TI / LM358DR"]);
+  const moved = result.changes.find((change) => change.kind === "moved")!;
+  assert.equal(moved.previousMpn, "VCHA042A-1R0");
+  assert.ok(moved.searchText.includes("vcha042a-1r0 "), "the old MPN is searchable");
+  assert.equal(result.unchanged, 1);
+});
+
+test("a part added by hand on V2 and deleted on V3 is not listed on V1, and the chain never links across the version on screen", () => {
+  const manualId = `manual-${Date.parse("2026-11-15T00:00:00Z")}-bbb222`;
+  const manual = row({ id: manualId, refDes: "J9", name: "手動新增連接器", partNumber: "", manufacturerPartNumber: "CONN-9" });
+  const base = [row({ id: "u1", refDes: "U1", partNumber: "" })];
+  const onV1 = findRetainedApplications(base, [
+    { workspaceId: "bom:v3", label: "V3", records: base, newer: true },
+    { workspaceId: "bom:v2", label: "V2", records: [...base, manual], newer: true },
+  ]);
+  assert.deepEqual(onV1.retained, []);
+  // Viewing V2 with [V3, V1]: a V1 application V2 lacks is V1's (offered for 帶入 from the previous version), not V3's.
+  const status = { trackingStatus: "料號申請中", trackingHistory: [{ id: "t-u7", status: "料號申請中", createdAt: "2026-11-05T00:00:00Z", createdBy: "RD" }] };
+  const v1 = [row({ id: "v1-u7", refDes: "U7", partNumber: "", manufacturerPartNumber: "TPS-7", ...status })];
+  const v3 = [row({ id: "v3-u7", refDes: "U7", partNumber: "", manufacturerPartNumber: "TPS-7", ...status })];
+  const v2 = [row({ id: "v2-u7", refDes: "U7", partNumber: "", manufacturerPartNumber: "TPS-7" })];
+  const onV2 = findRetainedApplications(v2, [{ workspaceId: "bom:v3", label: "V3", records: v3, newer: true }, { workspaceId: "bom:v1", label: "V1", records: v1 }], "bom:v1");
+  assert.equal(onV2.recarry, 1, "V1's application is offered for 帶入");
+  assert.deepEqual(onV2.retained.map((item) => item.fromLabel), ["V3"]);
+});
