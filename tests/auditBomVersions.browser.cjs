@@ -12,7 +12,8 @@ const { chromium } = qa('playwright');
 const XLSX = require('xlsx');
 const ExcelJS = require('exceljs');
 
-const PORT = 8096;
+// Windows reserves port ranges for Hyper-V now and then: MATERIAL_QA_PORT moves the harness and this test together.
+const PORT = Number(process.env.MATERIAL_QA_PORT || 8096);
 const HEADERS = ['Level', 'Name', 'Qty', 'Ref Des', 'Manufacturer Part Number', 'Manufacturer', 'Sourcing Status', '虛擬料號', '實體料號', 'Part Name', 'Part Spec', 'Schematic_Part', 'PCB_Footprint', 'phase out', '零件狀態'];
 const line = (name, qty, ref, mpn, maker, virtual, part, extra = {}) => [2, name, qty, ref, mpn, maker, 'Approved', virtual, part, 'QA 公司料名', '10K 1% 0402', 'C', 'c0402', extra.phaseOut ?? '', extra.usage ?? ''];
 const heading = (level, name) => [level, name, ...Array(13).fill('')];

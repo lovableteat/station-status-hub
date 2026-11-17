@@ -436,3 +436,38 @@ test("every vendor row without a 實體料號 or 虛擬料號 needs an applicati
   assert.equal(dataset.groups.length, 1);
   assert.equal(dataset.groups[0].requiresApplication, false, "料號待補 still means the location has no number at all");
 });
+
+// 2026-11-17 Baseboard V2: CE filled the vendor under "Manufacturer Part Number" and the MPN under "Manufacturer" on
+// every row. Read literally, no line still being applied for paired with V1 and its application vanished.
+test("vendor and MPN filled the wrong way round under the right headers are read back the right way, with a note", async () => {
+  const swapped = (ref, maker, mpn, extra = {}) => exampleRow({ "Ref Des": ref, "Manufacturer Part Number": maker, "Manufacturer": mpn, "實體料號": "", "虛擬料號": "", ...extra });
+  const payload = await importTemplateRows([
+    swapped("JMP1,JMP2", "AMPHENOL", "GP420-50215"),
+    swapped("PL30", "CYNTEC", "CMMB051H-4R7MS"),
+    swapped("PR11", "TAI", "RMS04FT0"),
+    swapped("PR11", "RALEC", "RST020000FBTH"),
+    swapped("PQ21", "INFINEON", "ISC031N08NM6ATMA1"),
+    swapped("X8", "TXC", "7M25070100"),
+  ]);
+  assert.deepEqual(payload.records.map(record => [record.manufacturer, record.manufacturerPartNumber]).slice(0, 2), [["AMPHENOL", "GP420-50215"], ["CYNTEC", "CMMB051H-4R7MS"]]);
+  assert.ok(payload.importNotes.some(note => note.includes("已依內容把兩欄換回來（6 列）")), payload.importNotes.join(" / "));
+  // A file the right way round is left alone, even with a maker whose name has a digit.
+  const normal = await importTemplateRows([
+    exampleRow({ "Ref Des": "C1", "Manufacturer": "3M", "Manufacturer Part Number": "SJ-5302" }),
+    exampleRow({ "Ref Des": "C2", "Manufacturer": "YAGEO", "Manufacturer Part Number": "CC0402KRX7R9BB561" }),
+  ]);
+  assert.deepEqual(normal.records.map(record => record.manufacturer), ["3M", "YAGEO"]);
+  assert.ok(!normal.importNotes.some(note => note.includes("換回來")));
+});
+
+test("a TEMP- number from PLM is shown as typed but the part still needs its application", async () => {
+  const payload = await importTemplateRows([
+    exampleRow({ "Ref Des": "J1", "實體料號": "TEMP-000000002868694", "虛擬料號": "" }),
+    exampleRow({ "Ref Des": "J2", "實體料號": "000-REAL-001", "虛擬料號": "" }),
+  ]);
+  const dataset = buildMaterialDataset(payload);
+  const byRef = Object.fromEntries(dataset.records.map(record => [record.refDes, record]));
+  assert.equal(byRef.J1.partNumber, "TEMP-000000002868694");
+  assert.equal(byRef.J1.needsApplication, true);
+  assert.equal(byRef.J2.needsApplication, false);
+});

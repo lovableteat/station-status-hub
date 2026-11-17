@@ -267,8 +267,14 @@ export function isMeManufacturedRecord(record: Pick<MaterialWorkbookRecord, 'ref
   return refs.length > 0 && refs.every(ref => ref.toUpperCase() === 'ME');
 }
 
+/** PLM hands out TEMP-… numbers while an application is still running; they are shown as typed but are not a part number yet. */
+export function isTemporaryPartNumber(value: unknown) {
+  return /^TEMP-/i.test(normalizeText(value));
+}
+
 export function hasMaterialPartNumber(record: Pick<MaterialWorkbookRecord, 'partNumber' | 'virtualAlternative'>): boolean {
-  return !!(normalizeText(record.partNumber) || normalizeText(record.virtualAlternative));
+  const real = (value: unknown) => normalizeText(value) && !isTemporaryPartNumber(value);
+  return !!(real(record.partNumber) || real(record.virtualAlternative));
 }
 
 export function getSymbolAvailability(value: unknown): SymbolAvailability {
@@ -1060,7 +1066,7 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
 
   const useBlueGroupRows = blueGroupRows.size > 0;
   // Rows that look like parts are never dropped silently; what was reinterpreted or skipped is reported.
-  const notes = { deeperLevel: [] as string[], headingAsPart: [] as string[], skippedWithoutName: [] as string[] };
+  const notes = { deeperLevel: [] as string[], headingAsPart: [] as string[], skippedWithoutName: [] as string[], swappedVendorColumns: 0 };
   const comparable = (value: unknown) => normalizeText(value).replace(/\s+/g, "").toUpperCase();
   // The row after index that has a name, i.e. the next row the loop below does not skip.
   const nextNamedRow = (index: number) => {
@@ -1210,12 +1216,41 @@ function extractSheetRecords(xlsx: XlsxModule, sheetName: string, worksheet: Wor
     });
   }
 
+  notes.swappedVendorColumns = repairSwappedVendorColumns(records);
+
   return {
     sheetName,
     score: records.length + fields.size * 250,
     records,
     notes,
   };
+}
+
+/**
+ * A CE file can carry the vendor under the "Manufacturer Part Number" header and the MPN under
+ * "Manufacturer" (Baseboard V2, 2026-11-17: every row). Read literally, no line of a part still
+ * being applied for pairs with the previous version, so its application and Note are lost.
+ * Decided for the whole sheet from what the values look like: an MPN has digits, a maker's name
+ * has none. Returns the number of rows swapped back (0 when the columns are the right way round).
+ */
+function repairSwappedVendorColumns(records: MaterialWorkbookRecord[]) {
+  const hasDigit = (value: string) => /\d/.test(value);
+  let swapped = 0;
+  let normal = 0;
+  for (const record of records) {
+    const maker = normalizeText(record.manufacturer);
+    const mpn = normalizeText(record.manufacturerPartNumber);
+    if (!maker || !mpn) continue;
+    if (hasDigit(maker) && !hasDigit(mpn)) swapped += 1;
+    else if (hasDigit(mpn) && !hasDigit(maker)) normal += 1;
+  }
+  if (swapped < 5 || swapped <= normal * 4) return 0;
+  for (const record of records) {
+    const maker = record.manufacturer;
+    record.manufacturer = record.manufacturerPartNumber;
+    record.manufacturerPartNumber = maker;
+  }
+  return records.length;
 }
 
 /** Parsed workbook plus plain-language notes on rows that were reinterpreted or left out; the notes are not stored. */
@@ -1240,7 +1275,7 @@ export async function parseMaterialWorkbookFile(file: File): Promise<ParsedMater
     sheetName: string;
     score: number;
     records: MaterialWorkbookRecord[];
-    notes: { deeperLevel: string[]; headingAsPart: string[]; skippedWithoutName: string[] };
+    notes: { deeperLevel: string[]; headingAsPart: string[]; skippedWithoutName: string[]; swappedVendorColumns: number };
   }>;
 
   const bestMatch = candidates.sort((left, right) => right.score - left.score)[0];
@@ -1250,7 +1285,8 @@ export async function parseMaterialWorkbookFile(file: File): Promise<ParsedMater
   }
 
   const importNotes: string[] = [];
-  const { deeperLevel, headingAsPart, skippedWithoutName } = bestMatch.notes;
+  const { deeperLevel, headingAsPart, skippedWithoutName, swappedVendorColumns } = bestMatch.notes;
+  if (swappedVendorColumns) importNotes.push(`檔案的「Manufacturer」欄填的是廠商料號、「Manufacturer Part Number」欄填的是廠商名稱，已依內容把兩欄換回來（${swappedVendorColumns.toLocaleString()} 列）；請通知 CE 修正原檔`);
   if (headingAsPart.length) importNotes.push(`${headingAsPart.length} 列的 Level 是 0／1，但有自己的位號與 MPN／料號，已當作料件匯入（例如 ${examples(headingAsPart)}）`);
   if (deeperLevel.length) importNotes.push(`${deeperLevel.length} 列的 Level 是 3 以上（多階 BOM 的子料），已當作料件匯入（例如 ${examples(deeperLevel)}）`);
   if (skippedWithoutName.length) importNotes.push(`${skippedWithoutName.length} 列有位號但沒有料名、MPN 或料號（例如 ${examples(skippedWithoutName)}），沒有匯入`);
