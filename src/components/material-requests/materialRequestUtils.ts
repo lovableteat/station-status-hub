@@ -56,6 +56,11 @@ export interface MaterialWorkbookRecord {
   note?: string;
   /** 待處理料 category chosen by hand when the Ref Des prefix misleads; absent means "by Ref Des". */
   pendingCategory?: "connector" | "ic" | "rlc" | "other";
+  /**
+   * Screen-only, never stored: an application made on an earlier version whose vendor line this version no longer
+   * holds (gone) or never received (uncarried), listed read-only in 待處理料 and 每週申請進度.
+   */
+  retainedFrom?: { workspaceId: string; label: string; reason: "gone" | "uncarried" };
 }
 
 export type SymbolAvailability = "present" | "missing" | "unknown";

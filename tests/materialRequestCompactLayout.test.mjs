@@ -303,7 +303,8 @@ test("更新 on a table row or mobile list opens the existing record editor", ()
   const dialog = slice("function MaterialRecordDialog(", "type MaterialColumnVisibility");
   assert.match(dialog, /data-testid="material-add-alternate"/);
   assert.match(dialog, /先儲存或取消目前的修改，再新增替代料/);
-  assert.match(source, /onAddAlternate=\{editorMode === "create" \? undefined : \(\) => \{/);
+  // An earlier version's application opened from 舊版申請 is read-only: no alternate can be added to it.
+  assert.match(source, /onAddAlternate=\{editorMode === "create" \|\| editorRetained \? undefined : \(\) => \{/);
 });
 
 test("匯出報表 and 上傳說明 carry their own colours and 上傳說明 blinks", () => {
@@ -314,7 +315,8 @@ test("匯出報表 and 上傳說明 carry their own colours and 上傳說明 bli
 
 test("待處理料 categories can be changed by hand and survive saves of other fields", () => {
   const dialog = slice("function PendingMaterialsDialog(", "const MATERIAL_CE_EDITOR_FIELDS = [");
-  assert.match(dialog, /<PendingCategoryPicker group=\{group\} record=\{record\} disabled=\{!canEdit\} onChange=\{\(next\) => onSetCategory\(group, next\)\} \/>/);
+  // A retained line (舊版申請) belongs to an earlier version and keeps its category as it was.
+  assert.match(dialog, /<PendingCategoryPicker group=\{group\} record=\{record\} disabled=\{!canEdit \|\| Boolean\(retained\)\} onChange=\{\(next\) => onSetCategory\(group, next\)\} \/>/);
   assert.match(source, /data-testid="pending-category-picker"/);
   assert.match(source, /<SelectItem value="auto">依位號自動/);
   assert.match(source, /onSetCategory=\{setPendingCategory\}/);

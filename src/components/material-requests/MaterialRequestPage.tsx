@@ -161,7 +161,7 @@ import { BomVersionCenter, type BomDiffLocateTarget, type BomDiffRequest } from 
 import { buildNvBomTableIndex, matchNvBomTableChange, type NvBomTableCandidate } from "./nvBomTableMatch";
 import type { NvBomChange } from "./nvBomCompare";
 import { BomUploadDialog, NEW_BOM_SERIES_TARGET, type BomUploadMeta, type PendingBomUpload } from "./BomUploadDialog";
-import { carryBomTracking, diffBomRecords, recarryBomTracking } from "./bomDiff";
+import { carryBomTracking, classifyRetainedApplications, diffBomRecords, linkBomVersions, recarryBomTracking } from "./bomDiff";
 import {
   BOM_SERIES_NAME_LIMIT, BOM_VERSION_LABEL_LIMIT, BOM_VERSION_NOTE_LIMIT, bomFileBaseName, buildBomSeriesList, createBomSeriesId,
   bomVersionComparePair, createBomVersionWorkspaceId, findBomSeriesByWorkspace, inferBomSeriesForFile, nextBomVersionNumber, readBomDiffLocation, readBomLocateLocation, writeBomLocateLocation,
@@ -2152,6 +2152,9 @@ export function PendingMaterialsDialog({
   canEditNote = false,
   onSaveNote,
   groups,
+  retainedGroups = [],
+  onOpenRetained,
+  otherVersions,
   open,
   addedRecordId,
   restoreView = false,
@@ -2174,6 +2177,11 @@ export function PendingMaterialsDialog({
   canEditNote?: boolean;
   onSaveNote: SaveMaterialNote;
   groups: MaterialGroup[];
+  /** Applications made on earlier versions that this version does not hold; listed read-only under 舊版申請. */
+  retainedGroups?: MaterialGroup[];
+  onOpenRetained?: (record: MaterialRecord) => void;
+  /** Reading the board's other versions: still loading, the ones that could not be read, and lines 帶入舊版資料 fills. */
+  otherVersions?: { loading: boolean; failed: string[]; onRetry: () => void; recarry: number; recarryFrom?: string; onRecarry?: () => void };
   open: boolean;
   addedRecordId?: string;
   /** Reopened after editing one of its items: keep the tab, search and scroll position. */
@@ -2201,25 +2209,32 @@ export function PendingMaterialsDialog({
   const [timingNow, setTimingNow] = useState(Date.now);
   const ownerDirectory = useMaterialRequestOwners(open, accountId);
   const [directoryOpen, setDirectoryOpen] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<PendingMaterialCategory | "all" | "marked" | "completed">("all");
+  const [activeCategory, setActiveCategory] = useState<PendingMaterialCategory | "all" | "marked" | "completed" | "retained">("all");
   // Default: locations with no number on any vendor row (one line each). The switch adds every vendor
   // row that has neither a 實體料號 nor a 虛擬料號, even beside vendors that already have one.
   const [includeAlternates, setIncludeAlternates] = useState(false);
   const locationApplications = useMemo(() => buildPendingApplications(groups), [groups]);
   const vendorApplications = useMemo(() => buildPendingApplications(groups, { includeAlternates: true }), [groups]);
-  const applications = includeAlternates ? vendorApplications : locationApplications;
+  // Every row of a retained group is a recorded application, so both views list the same lines.
+  const retainedApplications = useMemo(() => buildPendingApplications(retainedGroups), [retainedGroups]);
+  const currentApplications = includeAlternates ? vendorApplications : locationApplications;
+  const applications = useMemo(() => [...currentApplications, ...retainedApplications], [currentApplications, retainedApplications]);
   const markedCount = applications.filter(application => markedGroupKeys.has(application.group.key)).length;
   const { categories, completedCount } = useMemo(() => {
-    const pending: typeof applications = [], completed: typeof applications = [];
-    for (const application of applications) {
+    const pending: typeof currentApplications = [], completed: typeof currentApplications = [];
+    for (const application of currentApplications) {
       const bucket = getTrackingWorkflowStatus(application.record) === "已完成" ? completed : pending;
       bucket.push(application);
     }
     return {
-      categories: [...groupPendingMaterials(pending), { key: "completed" as const, label: "已完成", hint: "", priority: false, groups: completed }],
+      categories: [
+        ...groupPendingMaterials(pending),
+        { key: "completed" as const, label: "已完成", hint: "", priority: false, groups: completed },
+        ...(retainedApplications.length > 0 ? [{ key: "retained" as const, label: "舊版申請", hint: "其他版本的申請，這一版沒有（料已換掉或無法自動帶入）；紀錄留在原版本，唯讀", priority: false, groups: retainedApplications }] : []),
+      ],
       completedCount: completed.length,
     };
-  }, [applications]);
+  }, [currentApplications, retainedApplications]);
   const mailGroups = useMemo(() => {
     const listed = new Set(applications.map((application) => application.group.key));
     return groups
@@ -2271,14 +2286,17 @@ export function PendingMaterialsDialog({
   }, [open]);
   const priorityCount = categories.reduce((sum, category) => sum + (category.priority ? category.groups.length : 0), 0);
   const staleThreshold = timingNow - STALE_PENDING_MS;
-  const isStale = (group: MaterialGroup, record: MaterialRecord) => getTrackingWorkflowStatus(record) !== "已完成" && getPendingGroupUpdatedAt(group, recordMeta) < staleThreshold;
+  const isStale = (group: MaterialGroup, record: MaterialRecord) => !record.retainedFrom && getTrackingWorkflowStatus(record) !== "已完成" && getPendingGroupUpdatedAt(group, recordMeta) < staleThreshold;
   const staleCount = applications.filter((application) => isStale(application.group, application.record)).length;
-  const listedLocations = new Set(applications.map((application) => application.group.key)).size;
-  const description = `共 ${applications.length.toLocaleString()} 筆申請追蹤（${listedLocations.toLocaleString()} 組位號） · 待處理 ${(applications.length - completedCount).toLocaleString()} 筆 · 已完成 ${completedCount.toLocaleString()} 筆（保留紀錄） · 優先 ${priorityCount.toLocaleString()} 筆 · ${staleCount.toLocaleString()} 筆逾 3 天未更新`;
+  const listedLocations = new Set(applications.map((application) => application.displayRef)).size;
+  const description = `共 ${applications.length.toLocaleString()} 筆申請追蹤（${listedLocations.toLocaleString()} 組位號） · 待處理 ${(currentApplications.length - completedCount).toLocaleString()} 筆 · 已完成 ${completedCount.toLocaleString()} 筆（保留紀錄）${retainedApplications.length > 0 ? ` · 舊版申請 ${retainedApplications.length.toLocaleString()} 筆` : ""} · 優先 ${priorityCount.toLocaleString()} 筆 · ${staleCount.toLocaleString()} 筆逾 3 天未更新`;
   const exportRows = visibleCategories.flatMap(category => category.groups.map(application => {
-    const materialCategory = category.key === "completed"
-      ? PENDING_MATERIAL_CATEGORIES.find(item => item.key === resolvePendingMaterialCategory(application).category)?.label
-      : category.label;
+    const retained = application.record.retainedFrom;
+    const materialCategory = retained
+      ? `舊版申請（${retained.label}，${retained.reason === "gone" ? "這一版已沒有這顆料" : "沒帶入這一版"}）`
+      : category.key === "completed"
+        ? PENDING_MATERIAL_CATEGORIES.find(item => item.key === resolvePendingMaterialCategory(application).category)?.label
+        : category.label;
     return { category: materialCategory ?? category.label, displayRef: application.displayRef, record: toWorkbookRecord(application.record) };
   }));
   const exportVisible = async () => {
@@ -2300,7 +2318,7 @@ export function PendingMaterialsDialog({
         </DialogHeader>
 
         <div className="pending-materials-actions flex flex-wrap justify-end gap-2">
-          {onOpenSpecFill && <Button type="button" variant="outline" data-testid="pending-spec-fill-button" disabled={!applications.length} onClick={() => onOpenSpecFill(applications.map(application => application.record))} className="pending-action--spec-fill h-10 px-4 text-sm"><ScanText className="mr-1.5 h-4 w-4" />AI 依照片填表</Button>}
+          {onOpenSpecFill && <Button type="button" variant="outline" data-testid="pending-spec-fill-button" disabled={!currentApplications.length} onClick={() => onOpenSpecFill(currentApplications.map(application => application.record))} className="pending-action--spec-fill h-10 px-4 text-sm"><ScanText className="mr-1.5 h-4 w-4" />AI 依照片填表</Button>}
           {onOpenWeeklyProgress && <Button type="button" variant="outline" data-testid="pending-weekly-button" onClick={() => onOpenWeeklyProgress(includeAlternates)} className="pending-action--weekly h-10 px-4 text-sm"><FileSpreadsheet className="mr-1.5 h-4 w-4" />每週申請進度</Button>}
           <Button type="button" variant="outline" data-testid="pending-export-button" disabled={exporting || !exportRows.length} onClick={() => void exportVisible()} className="pending-action--export h-10 px-4 text-sm"><Download className="mr-1.5 h-4 w-4" />{exporting ? "匯出中…" : `匯出表格（${exportRows.length}）`}</Button>
           <Button type="button" data-testid="pending-mail-button" disabled={mailGroups.length === 0} onClick={() => setMailOpen(true)} className="pending-action--mail h-10 px-4 text-sm font-bold" title="把未完成的待處理料依廠商整理成信件內容並匯出 HTML"><FileCode2 className="mr-1.5 h-4 w-4" />信件生成</Button>
@@ -2329,11 +2347,22 @@ export function PendingMaterialsDialog({
             className={cn("h-10 gap-2 px-3 text-sm font-bold", includeAlternates ? "border-warning bg-warning/15 text-warning hover:bg-warning/25 hover:text-warning" : "border-border bg-secondary/60 text-foreground hover:bg-accent")}
           >
             <span className={cn("flex h-4 w-4 flex-none items-center justify-center rounded border", includeAlternates ? "border-warning bg-warning text-warning-foreground" : "border-muted-foreground")} aria-hidden="true">{includeAlternates ? <Check className="h-3 w-3" /> : null}</span>
-            含缺料號的替代廠商 <span className="text-xs font-normal">勾選後 <strong className="font-mono">{vendorApplications.length.toLocaleString()}</strong> 筆</span>
+            含缺料號的替代廠商 <span className="text-xs font-normal">勾選後 <strong className="font-mono">{(vendorApplications.length + retainedApplications.length).toLocaleString()}</strong> 筆</span>
           </Button>
         </div>
         <p id="pending-alternates-help" className="sr-only">例：同一位號 A 廠已有料號、B 廠還沒有；勾選後也會列出 B 廠。數字是整份 BOM 的勾選後總筆數（分類／搜尋前），不是新增筆數。</p>
         {(exportError || ownerDirectory.error) && <p role="alert" className="text-sm text-destructive">{exportError || ownerDirectory.error}</p>}
+        {otherVersions && (otherVersions.loading || otherVersions.failed.length > 0 || otherVersions.recarry > 0) && (
+          <div data-testid="pending-other-versions" className="pending-other-versions" role="status">
+            {otherVersions.loading && <span className="pending-other-versions-line"><Loader2 aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin" />正在讀取這塊板其他版本的申請…</span>}
+            {!otherVersions.loading && otherVersions.failed.length > 0 && (
+              <span className="pending-other-versions-line text-destructive">{otherVersions.failed.join("、")} 的申請讀取失敗，「舊版申請」可能不完整。<Button type="button" variant="outline" size="sm" onClick={otherVersions.onRetry} className="h-8 px-3 text-xs">重試</Button></span>
+            )}
+            {!otherVersions.loading && otherVersions.recarry > 0 && (
+              <span className="pending-other-versions-line">{otherVersions.recarryFrom ?? "前一版"} 有 {otherVersions.recarry.toLocaleString()} 筆申請在這一版有同一顆料，但沒帶過來。{otherVersions.onRecarry && canEdit ? <Button type="button" size="sm" onClick={otherVersions.onRecarry} title="打開 BOM 版本管理的比對，按「帶入舊版資料」把申請補到這一版的同一顆料" className="h-8 px-3 text-xs">到比對帶入</Button> : <span className="text-muted-foreground">請有編輯權限的同事到 BOM 版本管理的比對按「帶入舊版資料」。</span>}</span>
+            )}
+          </div>
+        )}
         <PendingMailDialog groups={mailGroups} open={mailOpen} workspaceName={workspaceName} exportedBy={exportedBy} onOpenChange={setMailOpen} />
         <SupplierDirectoryDialog open={directoryOpen} onOpenChange={setDirectoryOpen} />
 
@@ -2383,23 +2412,24 @@ export function PendingMaterialsDialog({
             </div>,
             ...category.groups.map((application) => {
               const { group, record } = application;
+              const retained = record.retainedFrom;
               const trackingStatus = record.trackingStatus?.trim() || "";
               const timing = getMaterialApplicationTiming(record, timingNow);
               const stale = isStale(group, record);
               const marked = markedGroupKeys.has(group.key);
               return (
-                <div key={application.key} data-testid="pending-application" data-pending-record-id={record.id} className={cn("pending-material-row rounded-lg border bg-background/40 px-2.5 py-1.5 hover:bg-accent/40", stale ? "border-destructive/40" : "border-border")}>
-                  <Button type="button" variant="ghost" size="icon" data-testid="pending-mark-toggle" disabled={!marksReady} aria-pressed={marked} aria-label={`${marked ? '取消特別標記' : '特別標記'} ${group.displayRef}`} title="個人標記只對目前帳號可見" onClick={() => onToggleMarked(group.key)} className={cn("pending-row-mark relative h-9 w-8", marked ? "bg-warning/15 text-warning hover:text-warning" : "text-muted-foreground hover:text-warning")}><Star className={cn("h-4 w-4", marked && "fill-current")} aria-hidden="true" />{stale && <span className="material-blink absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />}</Button>
+                <div key={application.key} data-testid="pending-application" data-pending-record-id={record.id} data-retained={retained ? retained.reason : undefined} className={cn("pending-material-row rounded-lg border bg-background/40 px-2.5 py-1.5 hover:bg-accent/40", stale ? "border-destructive/40" : retained ? "border-dashed border-warning/40" : "border-border")}>
+                  <Button type="button" variant="ghost" size="icon" data-testid="pending-mark-toggle" disabled={!marksReady || Boolean(retained)} aria-pressed={marked} aria-label={`${marked ? '取消特別標記' : '特別標記'} ${group.displayRef}`} title={retained ? "舊版申請屬於其他版本，不能特別標記" : "個人標記只對目前帳號可見"} onClick={() => onToggleMarked(group.key)} className={cn("pending-row-mark relative h-9 w-8", marked ? "bg-warning/15 text-warning hover:text-warning" : "text-muted-foreground hover:text-warning")}><Star className={cn("h-4 w-4", marked && "fill-current")} aria-hidden="true" />{stale && <span className="material-blink absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />}</Button>
                   <span className="pending-row-reference min-w-0 truncate font-mono text-sm font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
-                  <PendingCategoryPicker group={group} record={record} disabled={!canEdit} onChange={(next) => onSetCategory(group, next)} />
-                  <span className="pending-row-name min-w-0 text-sm text-foreground" title={application.name}>{application.name || "未命名料件"}</span>
+                  <PendingCategoryPicker group={group} record={record} disabled={!canEdit || Boolean(retained)} onChange={(next) => onSetCategory(group, next)} />
+                  <span className="pending-row-name min-w-0 text-sm text-foreground" title={application.name}>{application.name || "未命名料件"}{retained && <span data-testid="pending-retained-badge" className="pending-retained-note" title={retained.reason === "gone" ? `${retained.label} 的申請；這一版的 BOM 已沒有這顆料（位號、廠商或 MPN 換了），紀錄留在 ${retained.label}，這裡唯讀` : `${retained.label} 的申請；這一版有這顆料，但無法自動帶入（這一版那列已有自己的資料，或申請來自更早的版本），請在料號表更新這一版那列`}>{retained.label} 申請 · {retained.reason === "gone" ? "這一版已沒有這顆料" : "沒帶入這一版"}</span>}</span>
                   <div className="pending-row-mpn min-w-0 font-mono text-sm text-foreground/85">
                     {record.manufacturerPartNumber?.trim() ? <button type="button" data-testid="pending-mpn-copy" className="group/mpn flex min-h-9 w-full min-w-0 items-center gap-1 rounded px-0.5 text-left hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`複製廠商料號 ${record.manufacturerPartNumber}`} title={`複製完整廠商料號：${record.manufacturerPartNumber}`} onClick={() => onCopy(record.manufacturerPartNumber)}>
                       <span className="min-w-0 select-text truncate">{record.manufacturerPartNumber}</span><Copy className="h-3 w-3 shrink-0 text-primary opacity-70 group-hover/mpn:opacity-100" aria-hidden="true" />
                     </button> : <span className="text-muted-foreground">未填 MPN</span>}
                   </div>
                   <span className="pending-row-manufacturer min-w-0 truncate text-xs font-semibold" title={record.manufacturer}>{record.manufacturer || "未填廠商"}</span>
-                  <MaterialRequestOwnerPicker record={record} owners={ownerDirectory.owners} disabled={!canEdit} onChange={owner => onSetOwner(record, owner)} />
+                  <MaterialRequestOwnerPicker record={record} owners={ownerDirectory.owners} disabled={!canEdit || Boolean(retained)} onChange={owner => onSetOwner(record, owner)} />
                   <div className="pending-row-timing">
                     <span data-testid="pending-application-elapsed" className="pending-application-elapsed" title={describeMaterialApplicationTiming(timing, timingNow)}>
                       <span className="block text-[10px] text-muted-foreground">申請耗時</span>
@@ -2409,13 +2439,19 @@ export function PendingMaterialsDialog({
                   </div>
                   <div className="pending-row-status">
                     <span data-testid="pending-status-segment" aria-label={`目前狀態：${trackingStatus || '未處理'}`} className={cn("pending-status-indicator inline-flex h-10 min-w-0 flex-col items-center justify-center rounded-md border px-1 text-xs font-semibold", materialTrackingStatusTone(trackingStatus))}><span className="block w-full truncate" title={trackingStatus || "未處理"}>{trackingStatus || "未處理"}</span>{getMaterialTrackingStatusMeaning(trackingStatus) && <span className="block w-full truncate text-[10px] font-normal" title={getMaterialTrackingStatusMeaning(trackingStatus)}>{getMaterialTrackingStatusMeaning(trackingStatus)}</span>}</span>
-                    <Button type="button" data-testid="pending-tracking-control" size="sm" onClick={() => onOpenTracking(record)} className="pending-tracking-button h-10 w-full rounded-md px-1 text-xs font-semibold" aria-label={`編輯 ${group.displayRef}，目前${trackingStatus || '未處理'}`}>
-                      <span data-testid="pending-update-segment">編輯</span>
-                    </Button>
+                    {retained ? (
+                      <Button type="button" data-testid="pending-tracking-control" size="sm" variant="outline" onClick={() => onOpenRetained?.(record)} className="pending-tracking-button h-10 w-full rounded-md px-1 text-xs font-semibold" aria-label={`查看 ${group.displayRef} 在 ${retained.label} 的申請紀錄（唯讀）`} title={`打開 ${retained.label} 這筆申請的追蹤紀錄，唯讀`}>
+                        <span data-testid="pending-update-segment">查看紀錄</span>
+                      </Button>
+                    ) : (
+                      <Button type="button" data-testid="pending-tracking-control" size="sm" onClick={() => onOpenTracking(record)} className="pending-tracking-button h-10 w-full rounded-md px-1 text-xs font-semibold" aria-label={`編輯 ${group.displayRef}，目前${trackingStatus || '未處理'}`}>
+                        <span data-testid="pending-update-segment">編輯</span>
+                      </Button>
+                    )}
                   </div>
                   <div className="pending-row-note" data-testid="pending-note-cell">
                     <span className="pending-note-label text-xs font-semibold text-muted-foreground">Note</span>
-                    <MaterialNoteCell key={record.id} disabled={!canEditNote} onSave={onSaveNote} record={record} />
+                    <MaterialNoteCell key={record.id} disabled={!canEditNote || Boolean(retained)} onSave={onSaveNote} record={record} />
                   </div>
                 </div>
               );
@@ -3655,6 +3691,9 @@ export function MaterialRequestPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<EditorMode>("view");
   const [editorRecord, setEditorRecord] = useState<MaterialWorkbookRecord>(createRecordTemplate());
+  // Another version's application opened from 舊版申請: read-only, never saved into the version on screen. It follows
+  // the record shown (its id has its own prefix), so it cannot outlive it into 新增料件 or another record.
+  const editorRetained = editorRecord.id.startsWith("retained:");
   const [editorInitialTab, setEditorInitialTab] = useState<MaterialEditorTab>("details");
   const [editorSession, setEditorSession] = useState(0);
   const [editorContext, setEditorContext] = useState<{ workspaceId: string; accountId?: string; recordMeta?: BomRecordSyncMeta } | null>(null);
@@ -4544,7 +4583,67 @@ export function MaterialRequestPage() {
     [dataset.groups]
   );
   const pendingMaterialGroups = useMemo(() => dataset.groups.filter((group) => group.records.some((record) => record.needsApplication || isTrackedMaterialApplication(record))), [dataset.groups]);
-  const weeklyPendingRecords = useMemo(() => buildPendingApplications(pendingMaterialGroups, { includeAlternates: weeklyIncludeAlternates }).map(application => application.record), [pendingMaterialGroups, weeklyIncludeAlternates]);
+  // Applications made on earlier versions of this board that the version on screen does not hold (a new Excel dropped
+  // that vendor line, or an upload did not carry it). They stay in 待處理料, 每週申請進度 and both exports, read-only,
+  // from the version they were made on (AGENTS.md: 申請過的料件…待處理料、每週進度與匯出都須保留).
+  // Other versions of this board: the older ones, and on the current version also any newer one (after 設為目前版本
+  // switched back). Newest first, so a line carried through several versions is listed once, from its latest copy.
+  const otherVersions = useMemo(() => {
+    if (!activeVersionInfo) return [];
+    const versions = activeVersionInfo.series.versions;
+    const index = versions.findIndex((item) => item.workspace.id === activeVersionInfo.version.workspace.id);
+    const others = activeVersionInfo.version.isCurrent ? versions.filter((_, position) => position !== index) : versions.slice(0, Math.max(0, index));
+    return [...others].reverse();
+  }, [activeVersionInfo]);
+  const otherVersionsKey = otherVersions.map((item) => `${item.workspace.id}@${item.workspace.updatedAt}`).join("|");
+  const previousWorkspaceId = activeVersionInfo?.version.version.previousWorkspaceId;
+  const otherRecordsCache = useRef(new Map<string, { updatedAt: string; records: MaterialWorkbookRecord[] }>());
+  const [otherVersionsAttempt, setOtherVersionsAttempt] = useState(0);
+  const [otherVersionRecords, setOtherVersionRecords] = useState<{ forWorkspaceId: string; key: string; versions: Array<{ workspaceId: string; label: string; records: MaterialWorkbookRecord[] }>; failed: string[] } | null>(null);
+  useEffect(() => {
+    if (otherVersions.length === 0) { setOtherVersionRecords(null); return; }
+    let cancelled = false;
+    const forWorkspaceId = activeWorkspace.id;
+    // One version that cannot be read (deleted meanwhile, offline) does not hide the others; the dialog names it and offers 重試.
+    void Promise.allSettled(otherVersions.map(async (item) => {
+      const cached = otherRecordsCache.current.get(item.workspace.id);
+      const records = cached && cached.updatedAt === item.workspace.updatedAt ? cached.records : await loadBomWorkspaceRecords(item.workspace.id);
+      otherRecordsCache.current.set(item.workspace.id, { updatedAt: item.workspace.updatedAt, records });
+      return { workspaceId: item.workspace.id, label: item.displayNumber, records };
+    })).then((results) => {
+      if (cancelled) return;
+      const versions = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+      const failed = results.flatMap((result, position) => (result.status === "rejected" ? [otherVersions[position].displayNumber] : []));
+      setOtherVersionRecords({ forWorkspaceId, key: otherVersionsKey, versions, failed });
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- otherVersionsKey stands for otherVersions
+  }, [activeWorkspace.id, otherVersionsKey, otherVersionsAttempt]);
+  const otherVersionsReady = Boolean(otherVersionRecords && otherVersionRecords.forWorkspaceId === activeWorkspace.id && otherVersionRecords.key === otherVersionsKey);
+  // Pairing is the expensive part and depends only on the rows' identity; a status, owner or Note change reuses it.
+  const currentRowShape = useMemo(() => basePayload.records.map((record) => [record.id, record.refDes, record.refGroup, record.manufacturer, record.manufacturerPartNumber, record.partNumber, record.virtualAlternative ?? "", record.name].join("\u0001")).join("\u0002"), [basePayload.records]);
+  const otherVersionLinks = useMemo(() => (
+    otherVersionsReady && isFullDatasetLoaded && otherVersionRecords ? linkBomVersions(basePayload.records, otherVersionRecords.versions) : []
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- currentRowShape stands for the rows' identity
+  ), [otherVersionsReady, isFullDatasetLoaded, otherVersionRecords, currentRowShape]);
+  const retained = useMemo(() => (
+    otherVersionLinks.length > 0 ? classifyRetainedApplications(otherVersionLinks, new Map(basePayload.records.map((record) => [record.id, record] as const)), previousWorkspaceId) : { retained: [], recarry: 0 }
+  ), [otherVersionLinks, basePayload.records, previousWorkspaceId]);
+  const retainedPendingGroups = useMemo(() => {
+    const bySource = new Map<string, MaterialWorkbookRecord[]>();
+    for (const item of retained.retained) bySource.set(item.fromWorkspaceId, [...(bySource.get(item.fromWorkspaceId) ?? []), item.record]);
+    return [...bySource].flatMap(([workspaceId, records]) => buildMaterialDataset({ sourceFile: "", sheetName: "", generatedAt: "", recordCount: records.length, records }).groups
+      .map((group) => ({ ...group, key: `retained:${workspaceId}:${group.key}` })));
+  }, [retained]);
+  const previousVersionLabel = activeVersionInfo?.series.versions.find((item) => item.workspace.id === previousWorkspaceId)?.displayNumber;
+  const openRecarryComparison = activeVersionInfo && previousWorkspaceId && activeVersionInfo.series.versions.some((item) => item.workspace.id === previousWorkspaceId)
+    ? () => {
+      setPendingDialogOpen(false);
+      setBomDiffRequest({ token: Date.now(), seriesId: activeVersionInfo.series.id, before: previousWorkspaceId, after: activeWorkspace.id, lostOnly: true });
+      setBomManagerOpen(true);
+    }
+    : undefined;
+  const weeklyPendingRecords = useMemo(() => buildPendingApplications([...pendingMaterialGroups, ...retainedPendingGroups], { includeAlternates: weeklyIncludeAlternates }).map(application => application.record), [pendingMaterialGroups, retainedPendingGroups, weeklyIncludeAlternates]);
   const discouragedMaterialRows = useMemo(() => collectDiscouragedMaterialRows(dataset.records), [dataset.records]);
   const excludedDiscouragedCount = useMemo(() => countExcludedDiscouragedRows(dataset.records), [dataset.records]);
   const discouragedMaterialCount = discouragedMaterialRows.length;
@@ -4594,7 +4693,7 @@ export function MaterialRequestPage() {
     }
   };
   const requiredApplicationCount = useMemo(() => displayGroups.filter(group => group.locations.some(location => !location.primaryRecord.applicationExempt && !hasMaterialPartNumber(location.primaryRecord))).length, [displayGroups]);
-  const pendingApplicationCount = useMemo(() => buildPendingApplications(pendingMaterialGroups).length, [pendingMaterialGroups]);
+  const pendingApplicationCount = useMemo(() => buildPendingApplications([...pendingMaterialGroups, ...retainedPendingGroups]).length, [pendingMaterialGroups, retainedPendingGroups]);
   const pendingGroupCount = useMemo(
     () => dataset.groups.filter((group) => group.pendingCount > 0).length,
     [dataset.groups]
@@ -5193,6 +5292,16 @@ export function MaterialRequestPage() {
     setEditorOpen(true);
   };
 
+  // Its tracking history, read-only: the row belongs to the earlier version it was made on.
+  const openRetainedRecord = (record: MaterialRecord) => {
+    setEditorRecord(toWorkbookRecord(record));
+    setEditorContext({ workspaceId: activeWorkspace.id, accountId: user?.userId, recordMeta: undefined });
+    setEditorInitialTab("tracking");
+    setEditorSession((current) => current + 1);
+    setEditorMode("view");
+    setEditorOpen(true);
+  };
+
   const openSpecDocument = async (record: Pick<MaterialWorkbookRecord, "specDocument">, download = false) => {
     if (!record.specDocument) return;
     try {
@@ -5419,6 +5528,7 @@ export function MaterialRequestPage() {
   };
 
   const handleSaveRecord = async (record: MaterialWorkbookRecord, addToPending: boolean) => {
+    if (editorRetained || record.id.startsWith("retained:")) return;
     if (!isValidBomUsage(record.qty)) {
       toast({ title: "Qty 是單一產品用量，不能為負數", variant: "destructive" });
       throw new Error("Qty 是單一產品用量，不能為負數");
@@ -6068,6 +6178,16 @@ export function MaterialRequestPage() {
         canEditNote={canEditNote}
         onSaveNote={rowActions.saveNote}
         groups={pendingMaterialGroups}
+        retainedGroups={retainedPendingGroups}
+        onOpenRetained={(record) => { setPendingDialogOpen(false); setReturnToPending(true); openRetainedRecord(record); }}
+        otherVersions={otherVersions.length === 0 ? undefined : {
+          loading: !otherVersionsReady,
+          failed: otherVersionRecords?.failed ?? [],
+          onRetry: () => setOtherVersionsAttempt((current) => current + 1),
+          recarry: retained.recarry,
+          recarryFrom: previousVersionLabel,
+          onRecarry: openRecarryComparison,
+        }}
         open={pendingDialogOpen}
         addedRecordId={addedPendingRecordId}
         restoreView={pendingRestoreView}
@@ -6092,7 +6212,7 @@ export function MaterialRequestPage() {
         workspaceName={activeWorkspace.name}
         exportedBy={user?.displayName || user?.username || "未知使用者"}
         open={weeklyProgressOpen}
-        ready={isFullDatasetLoaded && !isWorkspaceLoading}
+        ready={isFullDatasetLoaded && !isWorkspaceLoading && (otherVersions.length === 0 || otherVersionsReady)}
         onOpenChange={open => { setWeeklyProgressOpen(open); if (!open) { setPendingRestoreView(true); setPendingDialogOpen(true); } }}
       />}
       {specFillContext && specFillContext.accountId === user?.userId && specFillContext.workspaceId === activeWorkspace.id && canViewModuleAccess && <Suspense fallback={specFillOpen ? <div role="status" className="fixed inset-0 z-50 grid place-items-center bg-background/90">正在開啟依照片填表…</div> : null}><MaterialSpecFillDialog
@@ -6149,7 +6269,7 @@ export function MaterialRequestPage() {
         diffRequest={bomDiffRequest}
       />
       <BomUploadDialog open={uploadDialogOpen} uploads={pendingUploads} seriesList={seriesList} activeProjectName={activeProject?.name} busy={isImporting} onChange={setPendingUploads} onConfirm={(meta) => void confirmBomUploads(meta)} onCancel={() => { if (!isImporting) { setUploadDialogOpen(false); setPendingUploads([]); } }} />
-      <MaterialRecordDialog key={`${user?.userId}:${activeWorkspace.id}:${editorSession}`} canEdit={canEdit && isCollaborativeReady && isFullDatasetLoaded} open={editorOpen && editorContext?.workspaceId === activeWorkspace.id && editorContext.accountId === user?.userId} mode={editorMode} record={editorRecord} initialTab={editorInitialTab} workspaceId={activeWorkspace.id} uploaderName={user?.displayName || user?.username || undefined} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onOpenSpec={(target, download) => void openSpecDocument(target, download)} onSave={handleSaveRecord} onAddAlternate={editorMode === "create" ? undefined : () => {
+      <MaterialRecordDialog key={`${user?.userId}:${activeWorkspace.id}:${editorSession}`} canEdit={!editorRetained && canEdit && isCollaborativeReady && isFullDatasetLoaded} open={editorOpen && editorContext?.workspaceId === activeWorkspace.id && editorContext.accountId === user?.userId} mode={editorMode} record={editorRecord} initialTab={editorInitialTab} workspaceId={activeWorkspace.id} uploaderName={user?.displayName || user?.username || undefined} onOpenChange={setEditorOpen} onModeChange={setEditorMode} onOpenSpec={(target, download) => void openSpecDocument(target, download)} onSave={handleSaveRecord} onAddAlternate={editorMode === "create" || editorRetained ? undefined : () => {
         const group = dataset.groups.find((candidate) => candidate.records.some((item) => item.id === editorRecord.id));
         if (group) openCreate(group);
       }} />

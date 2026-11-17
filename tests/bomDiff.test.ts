@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   bomDiffEntryPreview, bomRecordHasTracking, bomRecordHasWebsiteData, bomRefTokens, buildBomDiffGroups, carryBomTracking, describeBomWebsiteData, diffBomRecords,
-  matchBomVendorLines, mergeBomTrackingHistories, recarryBomTracking,
+  findRetainedApplications, matchBomVendorLines, mergeBomTrackingHistories, normalizeBomText, recarryBomTracking,
 } from "../src/components/material-requests/bomDiff.ts";
 
 let counter = 0;
@@ -474,4 +474,87 @@ test("switching back never lets a part found elsewhere wipe the target row's own
   assert.equal(carried.records[0].note, "keep me");
   assert.equal(carried.records[0].requestOwnerName, "B");
   assert.equal(carried.records[0].specDocuments?.length, 1);
+});
+
+// 2026-11-17 Baseboard root cause: V1's applications sat on alternate vendor rows (RALEC, TFT, ROHM…) that the new
+// Excel no longer has. The carry correctly finds no partner, and the applications vanished from V2's 待處理料, 週報 and
+// 匯出 because only rows of the version on screen were listed. They must stay listed, read-only, from V1.
+test("applications on vendor lines the new BOM dropped stay listed, once, from the newest version that had them", () => {
+  const status = (id: string, value: string) => ({ trackingStatus: value, trackingHistory: [{ id, status: value, createdAt: "2026-11-05T00:00:00Z", createdBy: "RD" }] });
+  const v1 = [
+    row({ id: "pr11-tai", refDes: "PR11, PR12", manufacturer: "TAI", manufacturerPartNumber: "RMS04FT0", partNumber: "1022-0DK80AK" }),
+    row({ id: "pr11-ralec", refDes: "PR11, PR12", manufacturer: "RALEC", manufacturerPartNumber: "RST020000FBTH", partNumber: "", ...status("tracking-ralec", "已發信") }),
+    row({ id: "pl30", refDes: "PL30", manufacturer: "CYNTEC", manufacturerPartNumber: "CMMB051H-4R7MS", partNumber: "", ...status("tracking-pl30", "料號申請中") }),
+    row({ id: "pr7", refDes: "PR7", manufacturer: "TFT", manufacturerPartNumber: "CSF1216S0M50F-T3", partNumber: "", note: "只有 Note，不是申請" }),
+  ];
+  // V2 as uploaded before the fix: RALEC dropped, PL30 kept but its application not carried.
+  const v2 = [
+    row({ id: "v2-pr11", refDes: "PR11, PR12", manufacturer: "TAI", manufacturerPartNumber: "RMS04FT0", partNumber: "" }),
+    row({ id: "v2-pl30", refDes: "PL30", manufacturer: "CYNTEC", manufacturerPartNumber: "CMMB051H-4R7MS", partNumber: "" }),
+    row({ id: "v2-pr7", refDes: "PR7", manufacturer: "TFT", manufacturerPartNumber: "CSF1216S0M50F-T3", partNumber: "" }),
+  ];
+  // V1 is not V2's recorded previous version here, so PL30 cannot be filled by 帶入舊版資料 and is listed.
+  const { retained } = findRetainedApplications(v2, [{ workspaceId: "bom:v1", label: "V1", records: v1 }]);
+  assert.deepEqual(retained.map((item) => [item.sourceRecordId, item.reason]), [["pr11-ralec", "gone"], ["pl30", "uncarried"]]);
+  // When V1 is the version V2 was uploaded over, PL30 is filled by 帶入舊版資料 instead: counted, never listed twice.
+  const fromPrevious = findRetainedApplications(v2, [{ workspaceId: "bom:v1", label: "V1", records: v1 }], "bom:v1");
+  assert.deepEqual(fromPrevious.retained.map((item) => item.sourceRecordId), ["pr11-ralec"]);
+  assert.equal(fromPrevious.recarry, 1);
+  assert.equal(retained[0].record.id, "retained:bom:v1:pr11-ralec", "never the id of a row on screen");
+  assert.equal(retained[0].record.trackingStatus, "已發信");
+  assert.equal(retained[0].fromLabel, "V1");
+
+  // Once PL30's application is carried, only the dropped RALEC line remains.
+  const carried = carryBomTracking(v1, v2).records;
+  assert.deepEqual(findRetainedApplications(carried, [{ workspaceId: "bom:v1", label: "V1", records: v1 }]).retained.map((item) => item.sourceRecordId), ["pr11-ralec"]);
+
+  // V3 drops PL30 too: PL30 comes from V2's copy (newest), RALEC still from V1, nothing twice.
+  const v2WithData = carried.map((record) => record.id === "v2-pl30" ? { ...record, trackingHistory: [...(record.trackingHistory ?? []), { id: "tracking-pl30-v2", status: "文件已收齊", createdAt: "2026-11-12T00:00:00Z" }], trackingStatus: "文件已收齊" } : record);
+  const v3 = [row({ id: "v3-pr11", refDes: "PR11, PR12", manufacturer: "TAI", manufacturerPartNumber: "RMS04FT0", partNumber: "1022-0DK80AK" })];
+  const chain = findRetainedApplications(v3, [{ workspaceId: "bom:v2", label: "V2", records: v2WithData }, { workspaceId: "bom:v1", label: "V1", records: v1 }]).retained;
+  assert.deepEqual(chain.map((item) => [item.fromLabel, item.sourceRecordId, item.record.trackingStatus]), [["V2", "v2-pl30", "文件已收齊"], ["V1", "pr11-ralec", "已發信"]]);
+});
+
+test("invisible characters and look-alike dashes pair the same part, and the comparison still shows the text changed", () => {
+  const diff = diffBomRecords([row({ id: "x1", refDes: "R9", manufacturerPartNumber: "RC0402FR‐-0710KL" })], [row({ id: "x2", refDes: "R9", manufacturerPartNumber: "RC0402FR-0710KL" })]);
+  assert.equal(diff.summary.removed + diff.summary.added, 0, "the line pairs");
+  assert.ok(diff.entries[0].changes.some((change) => change.field === "manufacturerPartNumber"), "the dash that changed is still reported");
+  assert.equal(normalizeBomText("LM5066­H1PWPR"), "LM5066­H1PWPR", "display text is not rewritten");
+  const carried = carryBomTracking(
+    [row({ id: "a", refDes: "U5", partNumber: "", manufacturerPartNumber: "TPS−54A", ...applying("t-u5") })],
+    [row({ id: "b", refDes: "U5", partNumber: "", manufacturerPartNumber: "TPS-54A" })],
+  );
+  assert.equal(carried.records[0].trackingStatus, "料號申請中");
+});
+
+// Review of the 舊版申請 change: a line carried through several versions is listed once, and an application whose copy in
+// the next version still holds it never comes back from the older version.
+test("an application carried V1 → V2 and dropped in V3 is listed once, from V2, even when V2 filled its 實體料號 or renumbered it", () => {
+  const status = (id: string, value: string) => ({ trackingStatus: value, trackingHistory: [{ id, status: value, createdAt: "2026-11-05T00:00:00Z", createdBy: "RD" }] });
+  const v1 = [row({ id: "v1-tft", refDes: "PR22", manufacturer: "TFT", manufacturerPartNumber: "CSF1216S0M50F-T3", partNumber: "", ...status("tracking-tft", "料號申請中") })];
+  const v2 = carryBomTracking(v1, [row({ id: "v2-tft", refDes: "PR122", manufacturer: "TFT", manufacturerPartNumber: "CSF1216S0M50F-T3", partNumber: "1022-TFT-NEW" })]).records;
+  assert.equal(v2[0].trackingStatus, "料號申請中");
+  const v3 = [row({ id: "v3-tai", refDes: "PR122", manufacturer: "TAI", manufacturerPartNumber: "RMS10JT330", partNumber: "" })];
+  const { retained } = findRetainedApplications(v3, [{ workspaceId: "bom:v2", label: "V2", records: v2 }, { workspaceId: "bom:v1", label: "V1", records: v1 }]);
+  assert.deepEqual(retained.map((item) => [item.fromLabel, item.sourceRecordId]), [["V2", "v2-tft"]]);
+});
+
+test("an application already on screen is not listed again from an older version that pairs it elsewhere", () => {
+  const status = (id: string, value: string) => ({ trackingStatus: value, trackingHistory: [{ id, status: value, createdAt: "2026-11-05T00:00:00Z", createdBy: "RD" }] });
+  const v1 = [row({ id: "v1", refDes: "PR22", manufacturer: "TFT", manufacturerPartNumber: "CSF1216S0M50F-T3", partNumber: "", ...status("tracking-a", "料號申請中") })];
+  const v2 = carryBomTracking(v1, [row({ id: "v2", refDes: "PR22", manufacturer: "TFT", manufacturerPartNumber: "CSF1216S0M50F-T3", partNumber: "" })]).records;
+  const v3 = carryBomTracking(v2, [row({ id: "v3", refDes: "PR122", manufacturer: "TFT", manufacturerPartNumber: "CSF1216S0M50F-T3", partNumber: "" })]).records;
+  assert.equal(v3[0].trackingStatus, "料號申請中");
+  assert.deepEqual(findRetainedApplications(v3, [{ workspaceId: "bom:v2", label: "V2", records: v2 }, { workspaceId: "bom:v1", label: "V1", records: v1 }]).retained, []);
+});
+
+test("rows without Ref Des keep their name in the identity, and an Excel-typed status alone is not a website application", () => {
+  const status = (id: string, value: string) => ({ trackingStatus: value, trackingHistory: [{ id, status: value, createdAt: "2026-11-05T00:00:00Z", createdBy: "RD" }] });
+  const v1 = [
+    row({ id: "screw", refDes: "", refGroup: "", name: "SCR PAN M2", manufacturer: "", manufacturerPartNumber: "", partNumber: "", ...status("tracking-s", "已發信") }),
+    row({ id: "stand", refDes: "", refGroup: "", name: "STANDOFF M3", manufacturer: "", manufacturerPartNumber: "", partNumber: "", ...status("tracking-t", "已發信") }),
+    row({ id: "excel", refDes: "U77", manufacturerPartNumber: "TPS-EXCEL", partNumber: "", trackingStatus: "需申請", trackingHistory: [{ id: "imported-tracking-S-7", status: "需申請", note: "CE", createdAt: "" }] }),
+  ];
+  const { retained } = findRetainedApplications([], [{ workspaceId: "bom:v1", label: "V1", records: v1 }]);
+  assert.deepEqual(retained.map((item) => item.sourceRecordId), ["screw", "stand"]);
 });

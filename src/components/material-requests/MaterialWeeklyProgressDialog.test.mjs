@@ -62,9 +62,12 @@ test("empty filters keep the table headings and cannot export; an incomplete BOM
 test("the page uses the shared pending selection and preserves the alternate-vendor switch", async () => {
   const page = await readFile("src/components/material-requests/MaterialRequestPage.tsx", "utf8");
   assert.match(page, /<MaterialWeeklyProgressDialog[\s\S]{0,150}records=\{weeklyPendingRecords\}/);
-  assert.match(page, /buildPendingApplications\(pendingMaterialGroups, \{ includeAlternates: weeklyIncludeAlternates \}\)\.map\(application => application\.record\)/);
+  // 2026-11-17: applications from earlier versions that this version no longer holds are part of the same selection.
+  assert.match(page, /buildPendingApplications\(\[\.\.\.pendingMaterialGroups, \.\.\.retainedPendingGroups\], \{ includeAlternates: weeklyIncludeAlternates \}\)\.map\(application => application\.record\)/);
+  assert.match(page, /groups=\{pendingMaterialGroups\}\s+retainedGroups=\{retainedPendingGroups\}/);
   assert.match(page, /onOpenWeeklyProgress=\{includeAlternates => \{ setWeeklyIncludeAlternates\(includeAlternates\); setPendingDialogOpen\(false\); setWeeklyProgressOpen\(true\); \}\}/);
-  assert.match(page, /ready=\{isFullDatasetLoaded && !isWorkspaceLoading\}/);
+  // The report waits for the board's other versions too, so 舊版申請 is in it before anything is exported.
+  assert.match(page, /ready=\{isFullDatasetLoaded && !isWorkspaceLoading && \(otherVersions\.length === 0 \|\| otherVersionsReady\)\}/);
 });
 
 test("ready materials are excluded while CIS, SYMBOL and the selected alternate-vendor scope flow into every report surface", async () => {

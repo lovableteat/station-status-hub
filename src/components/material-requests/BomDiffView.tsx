@@ -11,6 +11,7 @@ import {
   type BomChangeImpact, type BomChangeKind, type BomDiffEntry, type BomDiffResult, type BomVendorLineChange,
 } from "./bomDiff";
 import type { BomSeries, BomSeriesVersion } from "./bomVersioning";
+import { isTrackedMaterialApplication } from "./materialTrackingStatus";
 import { formatBomVersionTitle } from "./bomVersioning";
 import { CHIP, CHIP_TONE, formatBomTimestamp } from "./bomVersionPresentation";
 import { BOM_DIFF_EMPTY_TEXT, EMPTY_BOM_DIFF_FILTERS, filterBomDiffEntries, isHiddenAsUnchanged, type BomDiffFilters } from "./bomDiffFilters";
@@ -73,6 +74,11 @@ function LineItem({ line }: { line: BomVendorLineChange }) {
 
 function EntryDetail({ entry, compact, onLocate, locateFills }: { entry: BomDiffEntry; compact: boolean; onLocate?: (entry: BomDiffEntry) => void; locateFills: boolean }) {
   const lost = entry.lines.filter(isLostLine);
+  // Why a lost line found no partner, in the user's terms: the position is gone, or it now holds other vendors.
+  const vendorsNow = (entry.after?.rows ?? []).map((row) => [bomDiffFieldValue(row, "manufacturer"), bomDiffFieldValue(row, "manufacturerPartNumber")].filter(Boolean).join(" / ")).filter(Boolean);
+  const goneReason = !entry.after
+    ? "新版已沒有這些位號"
+    : vendorsNow.length > 0 ? `新版這個位號是 ${vendorsNow.slice(0, 3).join("、")}${vendorsNow.length > 3 ? ` 等 ${vendorsNow.length} 家` : ""}，沒有這家廠商的這顆料` : "新版這個位號沒有廠商資料";
   const vendorOnly = entry.changes.length === 0 && entry.lines.some((line) => line.kind === "added" || line.kind === "removed");
   // Only parts that still exist in the new version can be shown in its material table.
   const locate = onLocate && entry.lines.some((line) => line.after || line.movedRecord)
@@ -131,7 +137,7 @@ function EntryDetail({ entry, compact, onLocate, locateFills }: { entry: BomDiff
                   <span>{describeBomWebsiteData(line.before!).join(" · ")}</span>
                   <span className="bom-diff-lost-where">{line.notCarried
                     ? line.movedTo ? <>新版的 <span title={line.movedTo} className="bom-diff-lost-ref">{line.movedTo}</span> 有同一顆料，可用「帶入舊版資料」補回</> : "新版有同一顆料，可用「帶入舊版資料」補回"
-                    : "新版找不到同一顆料，請在新版對應料件重新填寫"}</span>
+                    : `${goneReason}${isTrackedMaterialApplication(line.before!) ? "。申請紀錄仍列在新版待處理料的「舊版申請」，唯讀" : "，請在新版對應料件重新填寫"}`}</span>
                 </li>
               ))}
             </ul>

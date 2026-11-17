@@ -8,6 +8,7 @@
  */
 import { getMaterialSpecDocuments } from "./materialAttachments.ts";
 import { getLatestTrackingEntry, type MaterialTrackingHistoryEntry, type MaterialWorkbookRecord } from "./materialRequestUtils.ts";
+import { isTrackedMaterialApplication } from "./materialTrackingStatus.ts";
 
 export type BomDiffField =
   | "name" | "qty" | "refDes" | "manufacturer" | "manufacturerPartNumber" | "sourcingStatus"
@@ -142,13 +143,21 @@ export function normalizeBomText(value: unknown) {
   return String(value ?? "").normalize("NFKC").replace(/\u3000/g, " ").replace(/\s+/g, " ").trim();
 }
 
-const upper = (value: unknown) => normalizeBomText(value).toUpperCase();
+/**
+ * Text for matching keys only (never for what the comparison shows): invisible characters pasted from PLM exports
+ * (zero-width space, soft hyphen, BOM) and look-alike dashes would make the same MPN or Ref Des look like another one.
+ */
+function foldBomKeyText(value: unknown) {
+  return normalizeBomText(String(value ?? "").replace(/[\u00ad\u200b-\u200f\u2060-\u2064\ufeff]/g, "").replace(/[\u2010-\u2015\u2212\ufe58\ufe63]/g, "-"));
+}
+
+const upper = (value: unknown) => foldBomKeyText(value).toUpperCase();
 
 /** Ref Des tokens, uppercase, de-duplicated and numerically sorted; mirrors splitRefDesignators. */
 export function bomRefTokens(...values: unknown[]) {
   const tokens = new Set<string>();
   for (const value of values) {
-    for (const token of normalizeBomText(value).split(/[\s,，、;；]+/)) {
+    for (const token of foldBomKeyText(value).split(/[\s,，、;；]+/)) {
       const trimmed = token.trim().toUpperCase();
       if (trimmed && trimmed !== "-") tokens.add(trimmed);
     }
@@ -917,4 +926,108 @@ export function recarryBomTracking(previous: readonly MaterialWorkbookRecord[], 
     filled: [...replacements.values()],
     remaining: diffBomRecords(previous, records).summary.trackingLost,
   };
+}
+
+export interface BomRetainedApplication {
+  /** The other version's row under an id of its own, so it never collides with a row of the version on screen. */
+  record: MaterialWorkbookRecord;
+  /** The row's id in the version it comes from. */
+  sourceRecordId: string;
+  fromWorkspaceId: string;
+  /** "V1" */
+  fromLabel: string;
+  /** gone: this version has no such part (position, vendor or MPN changed); uncarried: the part is here but the application cannot be brought over automatically. */
+  reason: "gone" | "uncarried";
+}
+
+export interface BomVersionLink {
+  workspaceId: string;
+  label: string;
+  records: readonly MaterialWorkbookRecord[];
+  /** Each application row's partner on screen, by id. */
+  toCurrent: ReadonlyMap<MaterialWorkbookRecord, string>;
+  /** Each row's partner in the next newer version of the chain; absent for the newest one, whose next version is the one on screen. */
+  toNewer?: ReadonlyMap<MaterialWorkbookRecord, MaterialWorkbookRecord>;
+}
+
+/** An application entered on the website (an editor update, a status set by hand, 需申請), not only status text read from an Excel. */
+const isWebsiteApplication = (record: MaterialWorkbookRecord) => isTrackedMaterialApplication(record) && bomRecordHasWebsiteData(record);
+
+/**
+ * The structural half of findRetainedApplications, kept apart so the page can reuse it while only statuses change:
+ * which row on screen (by id) each row of the other versions pairs with, and which row of the next newer version.
+ * `others` is newest first.
+ */
+export function linkBomVersions(
+  current: readonly MaterialWorkbookRecord[],
+  others: ReadonlyArray<{ workspaceId: string; label: string; records: readonly MaterialWorkbookRecord[] }>,
+): BomVersionLink[] {
+  return others.map((version, index) => {
+    const toCurrent = new Map<MaterialWorkbookRecord, string>();
+    for (const pair of pairBomLines(version.records, current).pairs) toCurrent.set(pair.before, pair.after.id);
+    const toNewer = index === 0 ? undefined : new Map(pairBomLines(version.records, others[index - 1].records).pairs.map((pair) => [pair.before, pair.after] as const));
+    return { workspaceId: version.workspaceId, label: version.label, records: version.records, toCurrent, ...(toNewer ? { toNewer } : {}) };
+  });
+}
+
+export interface BomRetainedResult {
+  retained: BomRetainedApplication[];
+  /** Applications whose part is on screen without them, that 帶入舊版資料 from the previous version fills; not listed twice. */
+  recarry: number;
+}
+
+/**
+ * Applications made on other versions of the board that the version on screen does not hold. An application belongs to
+ * the board's process even when a new Excel drops that vendor line (AGENTS.md: 申請過的料件…待處理料、每週進度與匯出都須保留),
+ * so 待處理料, 每週申請進度 and their exports keep showing it, read-only, from the version it was made on.
+ * - A row whose copy in the next newer version still holds the application is that copy's history: skipped.
+ * - A row whose partner on screen holds an application is already listed there: skipped.
+ * - A row whose partner on screen lacks it and that 帶入舊版資料 can fill (from the previous version) is only counted,
+ *   so the same vendor line is never listed twice; the page offers the fill instead.
+ * - Everything else is listed once (gone, or uncarried when it cannot be filled automatically).
+ */
+export function classifyRetainedApplications(
+  links: readonly BomVersionLink[],
+  currentById: ReadonlyMap<string, MaterialWorkbookRecord>,
+  previousWorkspaceId?: string,
+): BomRetainedResult {
+  const seen = new Set<string>();
+  const retained: BomRetainedApplication[] = [];
+  let recarry = 0;
+  for (const link of links) {
+    for (const record of link.records) {
+      if (!isWebsiteApplication(record)) continue;
+      const newer = link.toNewer?.get(record);
+      if (newer && isWebsiteApplication(newer)) continue;
+      const partnerId = link.toCurrent.get(record);
+      const partner = partnerId ? currentById.get(partnerId) : undefined;
+      if (partner && isTrackedMaterialApplication(partner)) continue;
+      if (partner && link.workspaceId === previousWorkspaceId && needsRecarry(record, partner)) {
+        recarry += 1;
+        continue;
+      }
+      const refs = bomRefTokens(record.refDes).join("|") || bomRefTokens(record.refGroup).join("|") || `name:${upper(record.name)}`;
+      const identity = [refs, upper(record.manufacturer), upper(record.manufacturerPartNumber)].join("¦");
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      const reason = partner ? "uncarried" as const : "gone" as const;
+      retained.push({
+        record: { ...record, id: `retained:${link.workspaceId}:${record.id}`, retainedFrom: { workspaceId: link.workspaceId, label: link.label, reason } },
+        sourceRecordId: record.id,
+        fromWorkspaceId: link.workspaceId,
+        fromLabel: link.label,
+        reason,
+      });
+    }
+  }
+  return { retained, recarry };
+}
+
+/** linkBomVersions and classifyRetainedApplications in one call. */
+export function findRetainedApplications(
+  current: readonly MaterialWorkbookRecord[],
+  others: ReadonlyArray<{ workspaceId: string; label: string; records: readonly MaterialWorkbookRecord[] }>,
+  previousWorkspaceId?: string,
+): BomRetainedResult {
+  return classifyRetainedApplications(linkBomVersions(current, others), new Map(current.map((record) => [record.id, record] as const)), previousWorkspaceId);
 }

@@ -163,6 +163,39 @@ function startHarness() {
     assert.match(await fix.locator('tr[data-current="true"]').textContent(), /對上 6.*未帶入 1/);
     await repair.close();
 
+    // The real Baseboard loss: V1's application sat on a vendor line the new BOM dropped (U9). It stays in V2's
+    // 待處理料, 每週申請進度 and exports, read-only, under 舊版申請, and the comparison says where it went.
+    const keep = await browser.newContext({ viewport: { width: 1480, height: 900 }, reducedMotion: 'reduce' });
+    const kept = await keep.newPage();
+    kept.on('pageerror', (error) => { throw error; });
+    await kept.goto(`http://127.0.0.1:${PORT}/`);
+    await kept.getByRole('button', { name: /BOM 管理/ }).click();
+    await kept.getByTestId('bom-version-orphaned').first().click();
+    await kept.getByTestId('bom-diff-summary').waitFor({ timeout: 15000 });
+    await kept.getByTestId('bom-diff-view').locator('tbody tr[data-diff-entry]').filter({ hasText: 'U9' }).getByRole('button', { name: '展開' }).click();
+    assert.match(await kept.getByTestId('bom-diff-lost-data').textContent(), /新版已沒有這些位號。申請紀錄仍列在新版待處理料的「舊版申請」/);
+    await kept.keyboard.press('Escape');
+    await kept.getByTestId('bom-version-center').waitFor({ state: 'detached' });
+    // V1 loads after the page; the count then includes its retained application (3 on V2 + U9).
+    await kept.waitForFunction(() => [...document.querySelectorAll('button')].some((button) => /^待處理料\s*4$/.test(button.textContent.trim())), null, { timeout: 15000 });
+    await kept.getByRole('button', { name: /^待處理料/ }).click();
+    const pendingDialog = kept.getByTestId('pending-materials-dialog');
+    await pendingDialog.getByRole('tab', { name: /舊版申請/ }).click();
+    const retainedRow = pendingDialog.locator('[data-retained="gone"]');
+    assert.equal(await retainedRow.count(), 1);
+    assert.match(await retainedRow.textContent(), /U9.*V1 申請 · 這一版已沒有這顆料.*處理中/);
+    await retainedRow.getByRole('button', { name: /查看 U9 在 V1 的申請紀錄/ }).click();
+    const recordDialog = kept.getByRole('dialog').filter({ hasText: '料件詳細資訊' });
+    await recordDialog.waitFor();
+    assert.match(await recordDialog.textContent(), /唯讀[\s\S]*QA 追蹤[:：]等待申請/);
+    assert.equal(await kept.getByRole('button', { name: /^儲存資料與追蹤/ }).count(), 0, 'an earlier version\'s application is never saved into V2');
+    await recordDialog.getByRole('button', { name: '關閉', exact: true }).click();
+    await pendingDialog.waitFor();
+    await pendingDialog.getByTestId('pending-weekly-button').click();
+    await kept.getByTestId('weekly-retained-note').first().waitFor({ timeout: 15000 });
+    assert.match(await kept.getByTestId('weekly-retained-note').first().textContent(), /V1 申請 · 這一版已沒有這顆料/);
+    await keep.close();
+
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
     const small = await phone.newPage();
     await small.goto(`http://127.0.0.1:${PORT}/`);
