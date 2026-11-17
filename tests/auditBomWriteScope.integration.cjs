@@ -28,7 +28,7 @@ function execute(name,h,overrides={}){
   replaceBomWorkspace:effect('optimistic'),toast:effect('toast'),console,
   React,CircleCheck:'svg',TriangleAlert:'svg',cn:(...classes)=>classes.filter(Boolean).join(' '),
   parseMaterialWorkbookFile:async()=>({recordCount:1,records:[record],sheetName:'Sheet',importNotes:[]}),
-  seriesList:[],uploadTargetSeriesRef:{current:null},inferBomSeriesForFile:()=>null,bomFileBaseName:n=>n,NEW_BOM_SERIES_TARGET:'__new-series__',
+  seriesList:[],uploadTargetSeriesRef:{current:null},checkBomUploadRows:()=>[],inferBomSeriesForFile:()=>null,bomFileBaseName:n=>n,NEW_BOM_SERIES_TARGET:'__new-series__',
   pendingUploads:[upload('A-private.xlsx'),upload('second.xlsx')],buildBomSeriesList:()=>[],nextBomVersionNumber:()=>1,createBomSeriesId:()=>'series:new',createBomVersionWorkspaceId:(name,n)=>`bom:${name}:v${n}`,
   carryBomTracking:(_,next)=>({records:next,matched:0,orphaned:[],manual:0}),loadVersionRecords:async()=>[],
   BOM_SERIES_NAME_LIMIT:120,BOM_VERSION_LABEL_LIMIT:60,BOM_VERSION_NOTE_LIMIT:500,
