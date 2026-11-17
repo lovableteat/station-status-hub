@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-07-26-account-aware-presence.md`；程式參考基準：`43c3423c5dcaf7787cf5e33ead5f93c5e96e4906`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-07-26-account-aware-presence.md`；程式參考基準：`3a505bf3dd058ed3e81b5427b0a4b6c3f365df1f`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Account-aware Presence Implementation Plan
 
