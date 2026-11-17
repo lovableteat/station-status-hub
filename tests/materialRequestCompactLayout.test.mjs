@@ -334,7 +334,7 @@ test("the 實體料號 filter checks only the 實體料號", () => {
 
 test("an import shows what it did not turn into parts", () => {
   assert.match(source, /const \{ importNotes, \.\.\.payload \} = await parseMaterialWorkbookFile\(file\);/, "the notes are never stored with the BOM");
-  assert.match(source, /importNotes,\s*target: inferred\?\.id \?\? NEW_BOM_SERIES_TARGET,/, "the notes travel with the staged upload");
+  assert.match(source, /importNotes,\s*checks: checkBomUploadRows\(payload\.records\),\s*target: inferred\?\.id \?\? NEW_BOM_SERIES_TARGET,/, "the notes and the column checks travel with the staged upload");
   assert.match(uploadDialog, /upload\.importNotes\.map\(/, "the confirmation dialog lists them before anything is written");
   assert.match(source, /hasWarnings && "，有資料待確認"/, "the upload result distinguishes completion with warnings");
   assert.match(source, /report\.map\(\(warning, index\)/, "the upload result lists the warnings");

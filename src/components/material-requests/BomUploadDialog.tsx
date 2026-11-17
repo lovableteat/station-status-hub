@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileSpreadsheet, Loader2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,8 @@ import { cn } from "@/lib/utils";
 
 import { BOM_SERIES_NAME_LIMIT, BOM_VERSION_LABEL_LIMIT, BOM_VERSION_NOTE_LIMIT, nextBomVersionNumber, type BomSeries } from "./bomVersioning";
 import { CHIP, CHIP_TONE } from "./bomVersionPresentation";
-import type { MaterialWorkbookPayload } from "./materialRequestUtils";
+import type { MaterialWorkbookPayload, MaterialWorkbookRecord } from "./materialRequestUtils";
+import { AI_REVIEW_AUTO_ROWS, countAiReviewBatches, type BomAiReviewResult, type BomUploadIssue } from "./bomUploadChecks";
 import "./bomUploadDialog.css";
 
 export const NEW_BOM_SERIES_TARGET = "__new-series__";
@@ -21,9 +22,76 @@ export interface PendingBomUpload {
   file: File;
   payload: MaterialWorkbookPayload;
   importNotes: string[];
+  /** Rule checks on the columns, found while the file was read. */
+  checks: BomUploadIssue[];
   /** NEW_BOM_SERIES_TARGET or the id of an existing series. */
   target: string;
   seriesName: string;
+}
+
+/** The AI review of one staged file: null result means no AI service is set up in API 管理. onlyBatches retries those batches. */
+export type BomUploadReview = (
+  records: readonly MaterialWorkbookRecord[],
+  onProgress: (done: number, total: number) => void,
+  signal: AbortSignal,
+  onlyBatches?: readonly number[],
+) => Promise<({ modelLabel: string } & BomAiReviewResult) | null>;
+
+type ReviewDone = { modelLabel: string } & BomAiReviewResult;
+type ReviewState =
+  /** A large file: the AI review waits for 「AI 檢查全部」 so dozens of requests are never sent unasked. */
+  | { state: "waiting" }
+  | { state: "running"; done: number; total: number }
+  | ({ state: "done" } & ReviewDone)
+  | { state: "none" }
+  | { state: "error"; message: string };
+
+/** Finished reviews by file, so closing the window and staging the same file again does not pay for the requests twice. */
+const reviewCache = new Map<string, ReviewDone>();
+const reviewCacheKey = (upload: PendingBomUpload) => [upload.file.name, upload.file.size, upload.file.lastModified, upload.payload.recordCount].join("\u0001");
+const byRow = (left: BomUploadIssue, right: BomUploadIssue) => (left.row ?? 0) - (right.row ?? 0);
+
+/** The findings of one file, worst first: row, Ref Des, part, column and reason, rule and AI alike. */
+function UploadChecks({ checks, rows, review, onStart, onRetry }: { checks: BomUploadIssue[]; rows: number; review?: ReviewState; onStart: () => void; onRetry: () => void }) {
+  const aiIssues = review?.state === "done" ? review.issues : [];
+  const issues = [...checks, ...aiIssues].sort((left, right) => (left.level === right.level ? 0 : left.level === "error" ? -1 : 1) || byRow(left, right));
+  const errors = issues.filter((issue) => issue.level === "error").length;
+  const failed = review?.state === "done" ? review.failedBatches.length : 0;
+  const status = !review ? "AI 檢查準備中…"
+    : review.state === "waiting" ? `檔案有 ${rows.toLocaleString()} 列，AI 檢查要送 ${countAiReviewBatches(rows)} 次請求，按右邊按鈕才開始`
+      : review.state === "running" ? `AI 檢查中（${review.done} / ${review.total || "?"} 批）…`
+        : review.state === "done" ? failed === 0
+          ? `AI（${review.modelLabel}）找到 ${review.issues.length} 筆`
+          : `AI（${review.modelLabel}）找到 ${review.issues.length} 筆；${failed} / ${review.totalBatches} 批沒有完成（${review.failure ?? "請稍後再試"}）`
+          : review.state === "none" ? "沒有可用的 AI 服務（可在 API 管理設定），只做了規則檢查"
+            : `AI 檢查失敗：${review.message}`;
+  return (
+    <div data-testid="bom-upload-checks" className="mt-2 rounded-lg border border-border bg-background/40 p-2 text-xs">
+      <p className="flex flex-wrap items-center gap-2">
+        <strong className={cn("font-semibold", issues.length === 0 ? "text-success" : errors > 0 ? "text-destructive" : "text-warning")}>
+          欄位檢查：{issues.length === 0
+            ? review?.state === "none" || (review?.state === "done" && failed === 0) ? "沒有發現問題" : "規則檢查沒有發現問題"
+            : `${issues.length} 筆問題${errors > 0 ? `（${errors} 筆建議修正）` : ""}`}
+        </strong>
+        <span className="text-muted-foreground">規則 {checks.length} 筆 · {status}</span>
+        {review?.state === "running" && <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden="true" />}
+        {review?.state === "waiting" && <Button type="button" variant="outline" size="sm" onClick={onStart} title={`把 ${rows.toLocaleString()} 列分 ${countAiReviewBatches(rows)} 批送給 API 管理設定的 AI 檢查欄位`} className="h-7 px-2 text-xs">AI 檢查全部 {rows.toLocaleString()} 列</Button>}
+        {review?.state === "error" && <Button type="button" variant="outline" size="sm" onClick={onRetry} title="重新送出 AI 欄位檢查" className="h-7 px-2 text-xs">重試 AI 檢查</Button>}
+        {failed > 0 && <Button type="button" variant="outline" size="sm" onClick={onRetry} title="只重送沒有完成的批次，已找到的問題會保留" className="h-7 px-2 text-xs">重試沒完成的 {failed} 批</Button>}
+      </p>
+      {issues.length > 0 && (
+        <ul data-testid="bom-upload-issues" className="mt-2 max-h-56 space-y-1 overflow-auto pr-1">
+          {issues.map((issue, index) => (
+            <li key={`${issue.source}:${issue.row}:${issue.column}:${index}`} className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 rounded-md border border-border/60 px-2 py-1">
+              <span className={cn(CHIP, "row-span-2 self-start", issue.level === "error" ? CHIP_TONE.danger : CHIP_TONE.warning)} title={issue.level === "error" ? "幾乎確定填錯，建議改好原檔再上傳；不會擋上傳" : "可能有問題，請對照原檔確認；不會擋上傳"}>{issue.level === "error" ? "建議修正" : "請檢查"}{issue.source === "ai" ? " · AI" : ""}</span>
+              <span className="min-w-0 truncate text-foreground" title={`第 ${issue.row ?? "?"} 列 · ${issue.refDes} · ${issue.part}`}>第 {issue.row ?? "?"} 列 · <span className="font-mono">{issue.refDes || "（無位號）"}</span> · {issue.part}</span>
+              <span className="min-w-0 text-foreground/85"><b className="font-semibold">{issue.column}</b>：{issue.reason}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 export interface BomUploadMeta {
@@ -37,8 +105,10 @@ export interface BomUploadMeta {
  * version of an existing one. Nothing is overwritten by file name any more.
  */
 export function BomUploadDialog({
-  open, uploads, seriesList, activeProjectName, busy, onChange, onConfirm, onCancel,
+  open, uploads, seriesList, activeProjectName, busy, onChange, onConfirm, onCancel, reviewUpload,
 }: {
+  /** Runs the AI column review of a staged file automatically; absent in tests. */
+  reviewUpload?: BomUploadReview;
   open: boolean;
   uploads: PendingBomUpload[];
   seriesList: BomSeries[];
@@ -56,6 +126,58 @@ export function BomUploadDialog({
   const problems = uploads.map((upload) => (upload.target === NEW_BOM_SERIES_TARGET && !upload.seriesName.trim() ? "請填寫新系列名稱" : ""));
   const canConfirm = uploads.length > 0 && !busy && problems.every((problem) => !problem);
   const update = (key: string, patch: Partial<PendingBomUpload>) => onChange(uploads.map((upload) => (upload.key === key ? { ...upload, ...patch } : upload)));
+  // Each staged file is reviewed by AI as soon as it is shown (a large one on request); closing the window stops what is
+  // still running. A retry after some batches failed sends only those and keeps what the others found.
+  const [reviews, setReviews] = useState<Record<string, ReviewState>>({});
+  const reviewsRef = useRef(reviews);
+  reviewsRef.current = reviews;
+  const [reviewRequests, setReviewRequests] = useState<Record<string, number>>({});
+  const started = useRef(new Map<string, AbortController>());
+  useEffect(() => {
+    if (!open || !reviewUpload) return;
+    for (const upload of uploads) {
+      const attempt = reviewRequests[upload.key] ?? 0;
+      const runKey = `${upload.key}#${attempt}`;
+      if (started.current.has(runKey)) continue;
+      const cacheKey = reviewCacheKey(upload);
+      const cached = attempt === 0 ? reviewCache.get(cacheKey) : undefined;
+      if (attempt === 0 && (cached || upload.payload.records.length > AI_REVIEW_AUTO_ROWS)) {
+        started.current.set(runKey, new AbortController());
+        setReviews((current) => ({ ...current, [upload.key]: cached ? { state: "done", ...cached } : { state: "waiting" } }));
+        continue;
+      }
+      const prior = reviewsRef.current[upload.key];
+      const previous = prior?.state === "done" && prior.failedBatches.length > 0 ? prior : undefined;
+      const controller = new AbortController();
+      started.current.set(runKey, controller);
+      setReviews((current) => ({ ...current, [upload.key]: { state: "running", done: 0, total: 0 } }));
+      reviewUpload(upload.payload.records, (done, total) => setReviews((current) => ({ ...current, [upload.key]: { state: "running", done, total } })), controller.signal, previous?.failedBatches)
+        .then((result) => {
+          if (controller.signal.aborted) return;
+          if (!result) { setReviews((current) => ({ ...current, [upload.key]: { state: "none" } })); return; }
+          const merged: ReviewDone = previous ? { ...result, totalBatches: previous.totalBatches, issues: [...previous.issues, ...result.issues].sort(byRow) } : result;
+          if (merged.failedBatches.length === 0) reviewCache.set(cacheKey, merged);
+          setReviews((current) => ({ ...current, [upload.key]: { state: "done", ...merged } }));
+        })
+        .catch((error) => {
+          if (controller.signal.aborted) return;
+          const message = error instanceof Error ? error.message : "請稍後再試";
+          // A failure before any batch ran (the model list could not be read) leaves the earlier findings in place.
+          setReviews((current) => ({ ...current, [upload.key]: previous ? { ...previous, failure: message } : { state: "error", message } }));
+        });
+    }
+  }, [open, uploads, reviewUpload, reviewRequests]);
+  const requestReview = (key: string) => setReviewRequests((current) => ({ ...current, [key]: (current[key] ?? 0) + 1 }));
+  useEffect(() => {
+    if (open) return;
+    for (const controller of started.current.values()) controller.abort();
+    started.current.clear();
+    setReviews({});
+    setReviewRequests({});
+  }, [open]);
+  useEffect(() => () => {
+    for (const controller of started.current.values()) controller.abort();
+  }, []);
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next && !busy) onCancel(); }}>
@@ -108,6 +230,7 @@ export function BomUploadDialog({
                     {upload.importNotes.map((item) => <li key={item} className="flex gap-1.5"><span className={cn(CHIP, "flex-none", CHIP_TONE.warning)}>注意</span><span className="min-w-0">{item}</span></li>)}
                   </ul>
                 )}
+                <UploadChecks checks={upload.checks ?? []} rows={upload.payload.records.length} review={reviewUpload ? reviews[upload.key] : { state: "none" }} onStart={() => requestReview(upload.key)} onRetry={() => requestReview(upload.key)} />
               </div>
             );
           })}

@@ -60,7 +60,7 @@ export interface MaterialWorkbookRecord {
    * Screen-only, never stored: an application made on an earlier version whose vendor line this version no longer
    * holds (gone) or never received (uncarried), listed read-only in 待處理料 and 每週申請進度.
    */
-  retainedFrom?: { workspaceId: string; label: string; reason: "gone" | "uncarried" };
+  retainedFrom?: { workspaceId: string; label: string; reason: "gone" | "uncarried" | "manual"; newer?: boolean };
 }
 
 export type SymbolAvailability = "present" | "missing" | "unknown";

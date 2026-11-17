@@ -96,6 +96,10 @@ if (new URLSearchParams(window.location.search).has('qaRecarry')) {
   previousRecords[2] = { ...previousRecords[2], trackingStatus: '料號申請中', requestOwnerName: 'CE 王同學', trackingHistory: [{ id: 'tracking-qa-pr1', status: '料號申請中', note: 'QA：V1 申請中', createdAt: '2026-11-01T00:00:00.000Z', createdBy: 'QA' }] };
   previousRecords[4] = { ...previousRecords[4], note: 'QA：V1 的 Note' };
 }
+// ?qaManualV2: a part added by hand on V2 (no number yet) that V1 does not have; back on V1 it shows under 「V2 的料」.
+if (new URLSearchParams(window.location.search).has('qaManualV2')) {
+  records.push(makeRecord('J9', 60, { id: 'manual-qa-j9', name: 'CONN 手動新增 J9', manufacturer: 'QA Vendor M', manufacturerPartNumber: 'QA-MANUAL-J9', partNumber: '', virtualAlternative: '', isGroupStart: true }));
+}
 const seriesId = 'series:qa';
 const stamp = (daysAgo) => new Date(Date.now() - daysAgo * 86400000).toISOString();
 const workspace = {

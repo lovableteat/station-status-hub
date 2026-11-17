@@ -11,6 +11,8 @@ import {
   type BomChangeImpact, type BomChangeKind, type BomDiffEntry, type BomDiffResult, type BomVendorLineChange,
 } from "./bomDiff";
 import type { BomSeries, BomSeriesVersion } from "./bomVersioning";
+import type { BomPartChangeResult } from "./bomDiff";
+import { BomPartChangeList } from "./BomPartChangeList";
 import { isTrackedMaterialApplication } from "./materialTrackingStatus";
 import { formatBomVersionTitle } from "./bomVersioning";
 import { CHIP, CHIP_TONE, formatBomTimestamp } from "./bomVersionPresentation";
@@ -137,7 +139,7 @@ function EntryDetail({ entry, compact, onLocate, locateFills }: { entry: BomDiff
                   <span>{describeBomWebsiteData(line.before!).join(" · ")}</span>
                   <span className="bom-diff-lost-where">{line.notCarried
                     ? line.movedTo ? <>新版的 <span title={line.movedTo} className="bom-diff-lost-ref">{line.movedTo}</span> 有同一顆料，可用「帶入舊版資料」補回</> : "新版有同一顆料，可用「帶入舊版資料」補回"
-                    : `${goneReason}${isTrackedMaterialApplication(line.before!) ? "。申請紀錄仍列在新版待處理料的「舊版申請」，唯讀" : "，請在新版對應料件重新填寫"}`}</span>
+                    : `${goneReason}${isTrackedMaterialApplication(line.before!) ? "。申請紀錄仍列在新版待處理料最下面、依版本分組，唯讀" : "，請在新版對應料件重新填寫"}`}</span>
                 </li>
               ))}
             </ul>
@@ -156,8 +158,10 @@ function KindChips({ entry }: { entry: BomDiffEntry }) {
 }
 
 export function BomDiffView({
-  series, before, after, result, loading, error, onPickBefore, onPickAfter, onSwap, onBack, onExport, exporting, initialLostOnly = false, initialView, onLostOnlyChange, compact = false, onLocate, locateFills = false, recarry,
+  series, before, after, result, loading, error, onPickBefore, onPickAfter, onSwap, onBack, onExport, exporting, initialLostOnly = false, initialView, onLostOnlyChange, compact = false, onLocate, locateFills = false, recarry, parts = null,
 }: {
+  /** The same comparison from the parts (新增／移除／位置變更); shown first. */
+  parts?: BomPartChangeResult | null;
   /**
    * 帶入舊版資料, offered when the old side is the version the new one was uploaded over: `run` fills the old
    * website data into the new version's matching rows; `blocked` says why it cannot (not current, no permission).
@@ -191,6 +195,9 @@ export function BomDiffView({
   const [filters, setFilters] = useState<BomDiffFilters>(() => initialView?.filters ?? ({ ...EMPTY_BOM_DIFF_FILTERS, trackingLostOnly: initialLostOnly }));
   useEffect(() => { onLostOnlyChange?.(filters.trackingLostOnly); }, [filters.trackingLostOnly, onLostOnlyChange]);
   const [expanded, setExpanded] = useState<string | null>(() => initialView?.expandedId ?? null);
+  // 依料號 is the plain answer to "what changed"; 依位號明細 keeps every field change and the 未帶入 / 補填 tools,
+  // and is where 未帶入 and 返回比對 land.
+  const [view, setView] = useState<"parts" | "locations">(() => (initialLostOnly || initialView ? "locations" : "parts"));
   const deferredQuery = useDeferredValue(filters.query);
   const entries = useMemo(() => result?.entries ?? [], [result]);
   const visible = useMemo(() => filterBomDiffEntries(entries, { ...filters, query: deferredQuery }), [entries, filters, deferredQuery]);
@@ -285,6 +292,20 @@ export function BomDiffView({
         {loading ? "正在載入兩個版本的料件並比對…" : summary ? `比對完成：新增 ${summary.added}、移除 ${summary.removed}、變更 ${summary.changed}、未變更 ${summary.unchanged}、未帶入 ${summary.trackingLost}` : ""}
       </p>
 
+      <div data-testid="bom-diff-view-switch" role="tablist" aria-label="比對方式" className="flex w-fit gap-1 rounded-lg border border-border bg-background/40 p-1">
+        {([["parts", "依料號", "每顆料新增、移除或換了哪些位置"], ["locations", "依位號明細", "每個位號的欄位變更、未帶入的資料與補填"]] as const).map(([key, label, hint]) => (
+          <button key={key} type="button" role="tab" aria-selected={view === key} onClick={() => setView(key)} title={hint}
+            className={cn("h-9 rounded-md px-4 text-sm font-semibold transition-colors", view === key ? "bg-primary text-primary-foreground" : "text-foreground/80 hover:bg-accent")}>
+            {label}{key === "locations" && lostCount > 0 && <span className="ml-1.5 rounded-full bg-destructive/20 px-1.5 font-mono text-xs text-destructive">未帶入 {lostCount}</span>}
+          </button>
+        ))}
+      </div>
+
+      {view === "parts" ? (
+        loading ? <p className="px-1 py-3"><span data-testid="bom-diff-loading" className="bom-diff-table-state"><LoaderCircle className="bom-diff-spinner h-4 w-4 shrink-0" aria-hidden="true" />正在載入兩個版本的料件並比對…</span></p>
+          : error ? <p className="px-1 py-3"><span className="bom-diff-table-state bom-diff-error" role="alert"><CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />{error}</span></p>
+            : parts ? <BomPartChangeList parts={parts} compact={compact} beforeLabel={before.displayNumber} afterLabel={after.displayNumber} /> : null
+      ) : (<>
       {/* Persistent filter bar: directly above the results, order 搜尋 → 變更類型 → 影響 → 追蹤. */}
       <div data-testid="bom-diff-filters" className="bom-diff-filters flex flex-col gap-2 rounded-xl border border-border bg-background/40 p-2">
         <div className="bom-diff-filter-row flex flex-wrap items-center gap-2">
@@ -400,6 +421,7 @@ export function BomDiffView({
           </table>
         </div>
       )}
+      </>)}
     </section>
   );
 }

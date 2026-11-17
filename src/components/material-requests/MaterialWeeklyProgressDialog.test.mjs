@@ -63,7 +63,7 @@ test("the page uses the shared pending selection and preserves the alternate-ven
   const page = await readFile("src/components/material-requests/MaterialRequestPage.tsx", "utf8");
   assert.match(page, /<MaterialWeeklyProgressDialog[\s\S]{0,150}records=\{weeklyPendingRecords\}/);
   // 2026-11-17: applications from earlier versions that this version no longer holds are part of the same selection.
-  assert.match(page, /buildPendingApplications\(\[\.\.\.pendingMaterialGroups, \.\.\.retainedPendingGroups\], \{ includeAlternates: weeklyIncludeAlternates \}\)\.map\(application => application\.record\)/);
+  assert.match(page, /\[\.\.\.buildPendingApplications\(pendingMaterialGroups, \{ includeAlternates: weeklyIncludeAlternates \}\), \.\.\.buildPendingApplications\(retainedPendingGroups, \{ includeAlternates: true \}\)\]\.map\(application => application\.record\)/);
   assert.match(page, /groups=\{pendingMaterialGroups\}\s+retainedGroups=\{retainedPendingGroups\}/);
   assert.match(page, /onOpenWeeklyProgress=\{includeAlternates => \{ setWeeklyIncludeAlternates\(includeAlternates\); setPendingDialogOpen\(false\); setWeeklyProgressOpen\(true\); \}\}/);
   // The report waits for the board's other versions too, so 舊版申請 is in it before anything is exported.

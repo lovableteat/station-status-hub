@@ -86,7 +86,12 @@ test("uploads are staged and confirmed with an explicit series target instead of
   assert.match(diffView, /useEffect\(\(\) => \{ onLostOnlyChange\?\.\(filters\.trackingLostOnly\); \}/, "clearing the chip updates the URL through the same state");
   for (const key of ["bomDiff", "bomBefore", "bomAfter", "bomDiffLost"]) assert.ok(indexPage.includes(`"${key}",`), `${key} is dropped when leaving the module`);
   assert.match(page, /diffRequest=\{bomDiffRequest\}/);
-  assert.match(page, /carryBomTracking\(previousRecords, targetRecords, \{ from: "current" \}\)/, "switching back keeps the newest tracking");
+  // 2026-11-18 (user): going back to an older version never brings the newer version's data along; going forward is
+  // opt-in and adds what was entered on the version being left while it was current, never replacing the target's values.
+  assert.match(page, /const carrying = carryOnSwitch && goingForward && previous\.workspace\.id !== version\.workspace\.id;/, "going back never carries");
+  assert.match(page, /const filled = fillForwardBomTracking\(previousRecords, targetRecords, previous\.version\.currentChangedAt\);/, "going forward adds the updates made since the version being left became current");
+  assert.match(page, /carried: carrying, carriedRows, carriedManual,/, "the log records what was actually carried");
+  assert.match(page, /setCarryOnSwitch\(false\);/, "carrying is never pre-ticked");
   assert.match(page, /const landingId = sameSeries\?\.current\.workspace\.id \?\? nextWorkspaces\[0\]\.id;/, "deleting the version on screen lands on the same board");
   assert.match(guide, /同一塊板再上傳即成為新版本/);
   assert.doesNotMatch(guide, /相同檔名重新上傳會更新原 BOM/);
@@ -99,7 +104,9 @@ test("historical versions are read-only on the page and announced with a way bac
   assert.match(page, /data-testid="material-historical-banner"/);
   assert.match(page, /回到目前版本 \{activeVersionInfo\.series\.current\.displayNumber\}/);
   assert.match(page, /目前版本不能直接刪除/);
-  assert.match(page, /把 \{pendingCurrent\?\.series\.current\.displayNumber\} 的追蹤、Note、負責人與 SPEC 附件依位號與料號帶到/, "switching names everything it carries, like an upload");
+  assert.match(page, /也把 \{pendingCurrent\.series\.current\.displayNumber\} 當目前版本這段期間的更新補到/, "going forward names everything it can fill");
+  assert.match(page, /已填的不會被蓋掉/, "going forward says nothing on the target is replaced");
+  assert.match(page, /會維持原本的樣子，不會帶入/, "going back says the older version stays as it was");
   const banner = page.slice(page.indexOf('data-testid="material-historical-banner"'), page.indexOf("{remoteSyncFailed && ("));
   assert.match(banner, /setBomDiffRequest\(\{ token: Date\.now\(\), seriesId: activeVersionInfo\.series\.id,/, "the banner's 比對 opens that comparison, not the version list");
   assert.match(banner, />比對 \{activeVersionInfo\.series\.current\.displayNumber\}</);

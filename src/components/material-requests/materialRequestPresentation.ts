@@ -1,5 +1,26 @@
 import { isTrackedMaterialApplication } from "./materialTrackingStatus.ts";
 
+export type RetainedReason = "gone" | "uncarried" | "manual";
+
+/** Why a line from another version is listed, in the words used on its row, in exports and in the weekly report. */
+export function describeRetainedReason(reason: RetainedReason, newer = false) {
+  // A later version's application never flows back into an earlier one, so it is not "not carried": this version lacks it.
+  return reason === "manual" ? "這一版沒有" : reason === "gone" ? "這一版沒有這顆料" : newer ? "這一版沒有這筆申請" : "沒帶入這一版";
+}
+
+/** "V2 手動新增 · 這一版沒有", "V1 申請 · 這一版沒有這顆料": where a line from another version comes from. */
+export function describeRetainedSource(from: { label: string; reason: RetainedReason; newer?: boolean }, separator = " · ") {
+  return `${from.label} ${from.reason === "manual" ? "手動新增" : "申請"}${separator}${describeRetainedReason(from.reason, from.newer)}`;
+}
+
+/** The longer explanation behind describeRetainedSource, for the row's hover text. */
+export function explainRetainedSource(from: { label: string; reason: RetainedReason; newer?: boolean }) {
+  if (from.reason === "manual") return `${from.label} 手動新增的料，這一版的 BOM 沒有；要在這一版申請，請到料號表新增`;
+  if (from.reason === "gone") return `${from.label} 的申請；這一版的 BOM 沒有這顆料（位號、廠商或 MPN 換了），紀錄留在 ${from.label}，這裡唯讀`;
+  if (from.newer) return `${from.label} 的申請；這一版也有這顆料，但這筆申請是在 ${from.label} 做的，紀錄留在 ${from.label}，這裡唯讀`;
+  return `${from.label} 的申請；這一版有這顆料，但無法自動帶入（這一版那列已有自己的資料，或申請來自更早的版本），請在料號表更新這一版那列`;
+}
+
 export interface CompactValueSummary {
   fullText: string;
   isTruncated: boolean;

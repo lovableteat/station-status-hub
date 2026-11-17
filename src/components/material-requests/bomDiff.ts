@@ -7,7 +7,7 @@
  * with runtime side effects, so the module also runs under `node --test`.
  */
 import { getMaterialSpecDocuments } from "./materialAttachments.ts";
-import { getLatestTrackingEntry, type MaterialTrackingHistoryEntry, type MaterialWorkbookRecord } from "./materialRequestUtils.ts";
+import { getLatestTrackingEntry, hasMaterialPartNumber, type MaterialTrackingHistoryEntry, type MaterialWorkbookRecord } from "./materialRequestUtils.ts";
 import { isTrackedMaterialApplication } from "./materialTrackingStatus.ts";
 
 export type BomDiffField =
@@ -928,6 +928,79 @@ export function recarryBomTracking(previous: readonly MaterialWorkbookRecord[], 
   };
 }
 
+export interface BomFillForwardResult {
+  records: MaterialWorkbookRecord[];
+  /** Rows of the target that received something: new tracking entries, a blank field filled, SPEC files. */
+  filled: number;
+  /** Parts added by hand on the previous version while it was current, appended to the target. */
+  manual: number;
+}
+
+/** "manual-<ms>-<random>": when a hand-added row was created. */
+const manualCreatedAt = (record: MaterialWorkbookRecord) => {
+  const match = /^manual-(\d{10,})-/.exec(record.id);
+  return match ? Number(match[1]) : null;
+};
+
+/**
+ * Going forward again (V1 → V2, 2026-11-18): with 補入 ticked, what was entered on V1 while it was current reaches V2
+ * without replacing anything V2 holds. `since` is when V1 became current.
+ * - A V2 row with no website data at all receives the line, the same as 帶入舊版資料.
+ * - Otherwise tracking entries V2 lacks that are dated after `since` are added in time order (the status follows,
+ *   since they are now the latest); a blank Note, 負責人 or 分類 is filled; SPEC files are added. V2's own values stay.
+ * - Parts added by hand on V1 after `since` are appended. Older hand-added parts missing from V2 were deleted there and
+ *   stay deleted.
+ */
+export function fillForwardBomTracking(previous: readonly MaterialWorkbookRecord[], target: readonly MaterialWorkbookRecord[], since?: string): BomFillForwardResult {
+  const sinceTime = Date.parse(since ?? "");
+  const madeSince = (time: number | null) => !Number.isFinite(sinceTime) || (time !== null && time > sinceTime);
+  const { pairs, usedPrevious } = pairBomLines(previous, target);
+  const replacements = new Map<MaterialWorkbookRecord, MaterialWorkbookRecord>();
+  for (const pair of pairs) {
+    if (needsRecarry(pair.before, pair.after)) {
+      replacements.set(pair.after, carryLine(pair.before, pair.after));
+      continue;
+    }
+    if (!bomRecordHasWebsiteData(pair.before)) continue;
+    const own = pair.after.trackingHistory ?? [];
+    const ownIds = new Set(own.map((entry) => entry.id));
+    const added = (pair.before.trackingHistory ?? [])
+      .filter((entry) => !ownIds.has(entry.id) && !isImportedEntry(entry) && madeSince(entryTime(entry)))
+      .map((entry, index) => ({ entry, index, time: entryTime(entry) ?? -Infinity }))
+      .sort((left, right) => left.time - right.time || left.index - right.index)
+      .map((item) => item.entry);
+    const fields = carryWebsiteFields(pair.after, pair.before);
+    const applicationRequired = pair.after.applicationRequired ?? pair.before.applicationRequired;
+    const fieldsChanged = fields.note !== (pair.after.note ?? "")
+      || (fields.requestOwnerId ?? "") !== (pair.after.requestOwnerId ?? "")
+      || (fields.requestOwnerName ?? "") !== (pair.after.requestOwnerName ?? "")
+      || fields.pendingCategory !== pair.after.pendingCategory
+      || (fields.specDocuments?.length ?? 0) !== getMaterialSpecDocuments(pair.after).length
+      || applicationRequired !== pair.after.applicationRequired;
+    if (added.length === 0 && !fieldsChanged) continue;
+    const latest = latestEntry(added);
+    replacements.set(pair.after, {
+      ...pair.after,
+      ...fields,
+      ...(typeof applicationRequired === "boolean" ? { applicationRequired } : {}),
+      ...(latest ? {
+        trackingHistory: [...own, ...added],
+        trackingStatus: normalizeBomText(latest.status) || pair.after.trackingStatus || "",
+        trackingNote: filled(latest.note) || pair.after.trackingNote || "",
+        requestTicket: filled(latest.requestTicket) || pair.after.requestTicket || "",
+        requestUrl: filled(latest.requestUrl) || pair.after.requestUrl || "",
+      } : {}),
+    });
+  }
+  const targetIds = new Set(target.map((record) => record.id));
+  const manual = previous.filter((record) => record.id.startsWith(MANUAL_RECORD_PREFIX) && !usedPrevious.has(record) && !targetIds.has(record.id) && madeSince(manualCreatedAt(record)));
+  return {
+    records: [...target.map((record) => replacements.get(record) ?? record), ...manual.map((record) => ({ ...record }))],
+    filled: replacements.size,
+    manual: manual.length,
+  };
+}
+
 export interface BomRetainedApplication {
   /** The other version's row under an id of its own, so it never collides with a row of the version on screen. */
   record: MaterialWorkbookRecord;
@@ -936,8 +1009,11 @@ export interface BomRetainedApplication {
   fromWorkspaceId: string;
   /** "V1" */
   fromLabel: string;
-  /** gone: this version has no such part (position, vendor or MPN changed); uncarried: the part is here but the application cannot be brought over automatically. */
-  reason: "gone" | "uncarried";
+  /**
+   * gone: this version has no such part (position, vendor or MPN changed); uncarried: the part is here but the application
+   * cannot be brought over automatically; manual: a part added by hand on that version that this version does not have.
+   */
+  reason: "gone" | "uncarried" | "manual";
 }
 
 export interface BomVersionLink {
@@ -948,6 +1024,8 @@ export interface BomVersionLink {
   toCurrent: ReadonlyMap<MaterialWorkbookRecord, string>;
   /** Each row's partner in the next newer version of the chain; absent for the newest one, whose next version is the one on screen. */
   toNewer?: ReadonlyMap<MaterialWorkbookRecord, MaterialWorkbookRecord>;
+  /** A later version than the one on screen. Only those list parts added by hand: one missing from a newer version was deleted there. */
+  newer?: boolean;
 }
 
 /** An application entered on the website (an editor update, a status set by hand, 需申請), not only status text read from an Excel. */
@@ -960,13 +1038,13 @@ const isWebsiteApplication = (record: MaterialWorkbookRecord) => isTrackedMateri
  */
 export function linkBomVersions(
   current: readonly MaterialWorkbookRecord[],
-  others: ReadonlyArray<{ workspaceId: string; label: string; records: readonly MaterialWorkbookRecord[] }>,
+  others: ReadonlyArray<{ workspaceId: string; label: string; records: readonly MaterialWorkbookRecord[]; newer?: boolean }>,
 ): BomVersionLink[] {
   return others.map((version, index) => {
     const toCurrent = new Map<MaterialWorkbookRecord, string>();
     for (const pair of pairBomLines(version.records, current).pairs) toCurrent.set(pair.before, pair.after.id);
     const toNewer = index === 0 ? undefined : new Map(pairBomLines(version.records, others[index - 1].records).pairs.map((pair) => [pair.before, pair.after] as const));
-    return { workspaceId: version.workspaceId, label: version.label, records: version.records, toCurrent, ...(toNewer ? { toNewer } : {}) };
+    return { workspaceId: version.workspaceId, label: version.label, records: version.records, toCurrent, ...(toNewer ? { toNewer } : {}), ...(version.newer ? { newer: true } : {}) };
   });
 }
 
@@ -996,23 +1074,30 @@ export function classifyRetainedApplications(
   let recarry = 0;
   for (const link of links) {
     for (const record of link.records) {
-      if (!isWebsiteApplication(record)) continue;
+      const application = isWebsiteApplication(record);
+      // A part added by hand on a later version (新增料件／新增替代料) that still needs a number belongs to the list too:
+      // back on V1 to check something, what was added on V2 shows. One on an earlier version that this one lacks was
+      // deleted here on purpose (or not carried) and is not brought back.
+      const manualPending = Boolean(link.newer) && record.id.startsWith(MANUAL_RECORD_PREFIX) && !hasMaterialPartNumber(record);
+      if (!application && !manualPending) continue;
       const newer = link.toNewer?.get(record);
-      if (newer && isWebsiteApplication(newer)) continue;
+      if (newer && (isWebsiteApplication(newer) || newer.id === record.id)) continue;
+      if (manualPending && currentById.has(record.id)) continue;
       const partnerId = link.toCurrent.get(record);
       const partner = partnerId ? currentById.get(partnerId) : undefined;
-      if (partner && isTrackedMaterialApplication(partner)) continue;
+      if (partner && (isTrackedMaterialApplication(partner) || !application)) continue;
       if (partner && link.workspaceId === previousWorkspaceId && needsRecarry(record, partner)) {
         recarry += 1;
         continue;
       }
       const refs = bomRefTokens(record.refDes).join("|") || bomRefTokens(record.refGroup).join("|") || `name:${upper(record.name)}`;
-      const identity = [refs, upper(record.manufacturer), upper(record.manufacturerPartNumber)].join("¦");
+      // Two hand-added rows can share a position and part until they are filled in: they are told apart by id.
+      const identity = [refs, upper(record.manufacturer), upper(record.manufacturerPartNumber), record.id.startsWith(MANUAL_RECORD_PREFIX) ? record.id : ""].join("¦");
       if (seen.has(identity)) continue;
       seen.add(identity);
-      const reason = partner ? "uncarried" as const : "gone" as const;
+      const reason = !application ? "manual" as const : partner ? "uncarried" as const : "gone" as const;
       retained.push({
-        record: { ...record, id: `retained:${link.workspaceId}:${record.id}`, retainedFrom: { workspaceId: link.workspaceId, label: link.label, reason } },
+        record: { ...record, id: `retained:${link.workspaceId}:${record.id}`, retainedFrom: { workspaceId: link.workspaceId, label: link.label, reason, ...(link.newer ? { newer: true } : {}) } },
         sourceRecordId: record.id,
         fromWorkspaceId: link.workspaceId,
         fromLabel: link.label,
@@ -1026,8 +1111,155 @@ export function classifyRetainedApplications(
 /** linkBomVersions and classifyRetainedApplications in one call. */
 export function findRetainedApplications(
   current: readonly MaterialWorkbookRecord[],
-  others: ReadonlyArray<{ workspaceId: string; label: string; records: readonly MaterialWorkbookRecord[] }>,
+  others: ReadonlyArray<{ workspaceId: string; label: string; records: readonly MaterialWorkbookRecord[]; newer?: boolean }>,
   previousWorkspaceId?: string,
 ): BomRetainedResult {
   return classifyRetainedApplications(linkBomVersions(current, others), new Map(current.map((record) => [record.id, record] as const)), previousWorkspaceId);
+}
+
+export type BomPartChangeKind = "added" | "removed" | "moved";
+
+/** One part (a vendor's MPN, else its 實體料號, else its name) and where it sits in each version. */
+export interface BomPartChange {
+  key: string;
+  kind: BomPartChangeKind;
+  name: string;
+  manufacturer: string;
+  mpn: string;
+  partNumber: string;
+  beforeRefs: string[];
+  afterRefs: string[];
+  /** Positions the part takes in the new version that it did not have (上料). */
+  refAdded: string[];
+  /** Positions the part left (下料). */
+  refRemoved: string[];
+  /** The old rows had website data (tracking, Note, 負責人, SPEC files) and the part is gone. */
+  hadWebsiteData: boolean;
+  /** 換料: parts this one took positions from (it gained positions they lost), "廠商 / MPN". */
+  replaces: string[];
+  /** 換料: parts that took positions this one lost. */
+  replacedBy: string[];
+  searchText: string;
+}
+
+export interface BomPartChangeResult {
+  changes: BomPartChange[];
+  /** Parts present in both versions at exactly the same positions. */
+  unchanged: number;
+  counts: Record<BomPartChangeKind, number>;
+}
+
+/** "N/A", "TBD", "-": an empty cell written out, not a part number. */
+const PART_PLACEHOLDER = /^(?:N\/?A|NONE|TBD|TBC|NULL|[-—–_/.]+|無)$/i;
+/** The MPN as one part: "RC0402FR-0710KL" and "RC0402FR0710KL" are the same part written two ways. */
+const bareMpn = (value: unknown) => {
+  const text = upper(value);
+  return !text || PART_PLACEHOLDER.test(text) ? "" : text.replace(/[\s\-_/.]+/g, "");
+};
+const partKey = (record: MaterialWorkbookRecord) => {
+  const mpn = bareMpn(record.manufacturerPartNumber);
+  if (mpn) return `mpn:${mpn}`;
+  const part = upper(record.partNumber);
+  if (part && !PART_PLACEHOLDER.test(part)) return `pn:${part}`;
+  return `name:${upper(record.name)}|${upper(record.manufacturer)}`;
+};
+
+/**
+ * The comparison seen from the parts: a part only in the new version is 新增, only in the old version 移除, and a
+ * part in both whose positions differ is 位置變更 (which positions it gained and lost). A part replaced at a position
+ * shows as the old part losing that position and the new part gaining it. Rows are never paired by row number.
+ */
+export function buildBomPartChanges(before: readonly MaterialWorkbookRecord[], after: readonly MaterialWorkbookRecord[]): BomPartChangeResult {
+  type Side = { refs: Set<string>; records: MaterialWorkbookRecord[] };
+  const collect = (records: readonly MaterialWorkbookRecord[]) => {
+    const parts = new Map<string, Side>();
+    for (const record of records) {
+      const key = partKey(record);
+      const side = parts.get(key) ?? { refs: new Set<string>(), records: [] };
+      const own = bomRefTokens(record.refDes);
+      for (const ref of own.length > 0 ? own : bomRefTokens(record.refGroup)) side.refs.add(ref);
+      side.records.push(record);
+      parts.set(key, side);
+    }
+    return parts;
+  };
+  const sorted = (refs: Set<string> | undefined) => [...(refs ?? [])].sort(collator.compare);
+  const first = (records: readonly MaterialWorkbookRecord[], field: "name" | "manufacturer" | "manufacturerPartNumber" | "partNumber") =>
+    records.map((record) => normalizeBomText(record[field])).find(Boolean) ?? "";
+  const old = collect(before);
+  const now = collect(after);
+  const changes: BomPartChange[] = [];
+  let unchanged = 0;
+  for (const key of new Set([...old.keys(), ...now.keys()])) {
+    const a = old.get(key);
+    const b = now.get(key);
+    const beforeRefs = sorted(a?.refs);
+    const afterRefs = sorted(b?.refs);
+    const refAdded = afterRefs.filter((ref) => !a?.refs.has(ref));
+    const refRemoved = beforeRefs.filter((ref) => !b?.refs.has(ref));
+    const kind: BomPartChangeKind | null = !a ? "added" : !b ? "removed" : refAdded.length > 0 || refRemoved.length > 0 ? "moved" : null;
+    if (!kind) { unchanged += 1; continue; }
+    const records = [...(b?.records ?? []), ...(a?.records ?? [])];
+    const change: BomPartChange = {
+      key, kind,
+      name: first(records, "name"),
+      manufacturer: first(records, "manufacturer"),
+      mpn: first(records, "manufacturerPartNumber"),
+      partNumber: first(records, "partNumber"),
+      beforeRefs, afterRefs, refAdded, refRemoved,
+      hadWebsiteData: kind === "removed" && (a?.records ?? []).some(bomRecordHasWebsiteData),
+      replaces: [],
+      replacedBy: [],
+      searchText: "",
+    };
+    changes.push(change);
+  }
+  // The same 實體料號 (one vendor, one MPN) under an MPN written differently (a typo fixed, a suffix added) is one part,
+  // not one removed and one added: merged, and dropped when its positions did not change either.
+  const byPartNumber = new Map<string, { removed: BomPartChange[]; added: BomPartChange[] }>();
+  for (const change of changes) {
+    const part = upper(change.partNumber);
+    if (change.kind === "moved" || !part || PART_PLACEHOLDER.test(part) || part.startsWith("TEMP-")) continue;
+    const slot = byPartNumber.get(part) ?? { removed: [], added: [] };
+    slot[change.kind].push(change);
+    byPartNumber.set(part, slot);
+  }
+  const merged = new Map<BomPartChange, BomPartChange | null>();
+  for (const { removed, added } of byPartNumber.values()) {
+    if (removed.length !== 1 || added.length !== 1) continue;
+    const [gone, come] = [removed[0], added[0]];
+    const refAdded = come.afterRefs.filter((ref) => !gone.beforeRefs.includes(ref));
+    const refRemoved = gone.beforeRefs.filter((ref) => !come.afterRefs.includes(ref));
+    merged.set(gone, null);
+    if (refAdded.length === 0 && refRemoved.length === 0) { merged.set(come, null); unchanged += 1; continue; }
+    merged.set(come, { ...come, kind: "moved", beforeRefs: gone.beforeRefs, refAdded, refRemoved, hadWebsiteData: false });
+  }
+  if (merged.size > 0) {
+    const kept = changes.flatMap((change) => { const next = merged.has(change) ? merged.get(change) : change; return next ? [next] : []; });
+    changes.length = 0;
+    changes.push(...kept);
+  }
+  for (const change of changes) {
+    change.searchText = normalizeBomText([change.name, change.manufacturer, change.mpn, change.partNumber, ...change.beforeRefs, ...change.afterRefs].join(" ")).toLowerCase();
+  }
+  // 換料: a position one part lost and another gained names both, so a replaced part reads as a replacement.
+  const label = (change: BomPartChange) => [change.manufacturer, change.mpn].filter(Boolean).join(" / ") || change.partNumber || change.name;
+  const lostAt = new Map<string, BomPartChange[]>();
+  for (const change of changes) for (const ref of change.refRemoved) lostAt.set(ref, [...(lostAt.get(ref) ?? []), change]);
+  for (const change of changes) {
+    for (const ref of change.refAdded) {
+      for (const other of lostAt.get(ref) ?? []) {
+        if (other === change) continue;
+        if (!change.replaces.includes(label(other))) change.replaces.push(label(other));
+        if (!other.replacedBy.includes(label(change))) other.replacedBy.push(label(change));
+      }
+    }
+  }
+  const rank: Record<BomPartChangeKind, number> = { removed: 0, added: 1, moved: 2 };
+  changes.sort((left, right) => rank[left.kind] - rank[right.kind]
+    || collator.compare((left.afterRefs[0] ?? left.beforeRefs[0] ?? "~"), (right.afterRefs[0] ?? right.beforeRefs[0] ?? "~"))
+    || collator.compare(left.mpn, right.mpn));
+  const counts = { added: 0, removed: 0, moved: 0 } as Record<BomPartChangeKind, number>;
+  for (const change of changes) counts[change.kind] += 1;
+  return { changes, unchanged, counts };
 }

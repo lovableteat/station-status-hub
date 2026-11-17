@@ -90,7 +90,8 @@ function describeNvBomProviderError(status: number, payload: unknown, retryAfter
   return failure;
 }
 
-async function ask(model: NvBomModel, instruction: string, input: unknown, signal: AbortSignal) {
+/** One JSON request to a model configured in API 管理 (also used by the BOM upload review). */
+export async function askNvBomModel(model: NvBomModel, instruction: string, input: unknown, signal: AbortSignal) {
   signal.throwIfAborted();
   const { read, metadata } = normalizeApiKeyPermissions(model.record.permissions);
   if (model.availability?.state === "unavailable") throw new Error(model.availability.message);
@@ -148,7 +149,7 @@ export async function resolveNvBomMappings({ sources, model, signal }: {
     if (!rows.length) throw new Error(`「${sheet.name}」找不到可供 AI 辨識的表頭，請選擇正確工作表或手動指定欄位。`);
     input[side] = { rows };
   }
-  const answer = await ask(model, headerInstruction, input, signal);
+  const answer = await askNvBomModel(model, headerInstruction, input, signal);
   const resolved: Partial<Record<NvBomSide, NvBomMapping>> = {};
   for (const side of ["before", "after"] as const) {
     const sheet = sources[side];
@@ -194,7 +195,7 @@ export async function runNvBomComparison({ comparison, model, signal, onProgress
     signal.throwIfAborted();
     const batch = diff.changes.slice(start, start + 24);
     onProgress(`AI 核對差異 ${start + 1}–${Math.min(start + 24, diff.changes.length)}／${diff.changes.length}…`);
-    const answer = await ask(model, changeInstruction, { items: batch.map(({ id, kind, before, after, changedFields }) => {
+    const answer = await askNvBomModel(model, changeInstruction, { items: batch.map(({ id, kind, before, after, changedFields }) => {
       const entry = interpreted.get(id);
       return { id, kind, before: sourceFields(before), after: sourceFields(after), changedFields,
         changeType: entry && NV_BOM_INTERPRETATION_LABELS[entry.kind], scope: entry && NV_BOM_SCOPE_LABELS[entry.scope], summary: entry?.summary };

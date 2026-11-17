@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { replaceWorkspaceHistory } from "@/lib/workspaceHistory";
 
 import { BomDiffView, type BomDiffViewState } from "./BomDiffView";
-import { diffBomRecords, type BomDiffEntry, type BomDiffResult } from "./bomDiff";
+import { buildBomPartChanges, diffBomRecords, type BomDiffEntry, type BomDiffResult, type BomPartChangeResult } from "./bomDiff";
 import { exportBomDiffExcel } from "./bomDiffExport";
 import {
   BOM_DIFF_QUERY_KEYS, BOM_SERIES_NAME_LIMIT, BOM_VERSION_LABEL_LIMIT, BOM_VERSION_NOTE_LIMIT, bomVersionComparePair, findBomSeriesByWorkspace, formatBomVersionTitle,
@@ -37,7 +37,7 @@ const ACTION_LABELS = {
   version: "正在儲存版本說明…",
 };
 type VersionAction = keyof typeof ACTION_LABELS;
-type DiffLoad = { key: string; result: BomDiffResult; error?: never } | { key: string; result?: never; error: string };
+type DiffLoad = { key: string; result: BomDiffResult; parts: BomPartChangeResult; error?: never } | { key: string; result?: never; parts?: never; error: string };
 
 function VersionActivity({ children }: { children: string }) {
   return <p role="status" className="bom-version-activity"><LoaderCircle className="bom-version-spinner" aria-hidden="true" />{children}</p>;
@@ -326,7 +326,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     let current = true;
     Promise.all([cachedRecords(diffBefore), cachedRecords(diffAfter)])
       .then(([beforeRecords, afterRecords]) => {
-        if (current) setDiffLoad({ key: diffKey, result: diffBomRecords(beforeRecords, afterRecords) });
+        if (current) setDiffLoad({ key: diffKey, result: diffBomRecords(beforeRecords, afterRecords), parts: buildBomPartChanges(beforeRecords, afterRecords) });
       })
       .catch((error) => {
         if (current) setDiffLoad({ key: diffKey, error: error instanceof Error ? error.message : "載入版本料件失敗，請稍後再試。" });
@@ -672,6 +672,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
             before={diffBefore}
             after={diffAfter}
             result={diffResult}
+            parts={currentDiff?.parts ?? null}
             loading={!currentDiff}
             error={currentDiff?.error ?? null}
             exporting={exporting}

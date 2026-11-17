@@ -1,6 +1,7 @@
 import type { MaterialProgressRow, MaterialProgressWeek } from "./materialWeeklyProgress";
 import { MATERIAL_WEEKLY_SIMPLIFIED_STATUSES, summarizeMaterialWeeklyProgress, taipeiProgressDate } from "./materialWeeklyProgress";
 import { downloadBlob } from "./materialRequestExport";
+import { describeRetainedSource } from "./materialRequestPresentation";
 
 export interface MaterialWeeklyExportOptions {
   rows: MaterialProgressRow[];
@@ -34,7 +35,7 @@ export async function createMaterialWeeklyWorkbook(options: MaterialWeeklyExport
   };
   const matrix = prepare("各料每週進度", ["Ref Des", "Name", "Qty", "Manufacturer Part Number", "Manufacturer", "虛擬料號", "實體料號", "負責人（目前）", "目前狀態", "無日期紀錄數", ...[...weeks].reverse().map(week => `${week.label}${week.isCurrent ? "（本週）" : ""}`), "Note"], [30, 48, 10, 34, 26, 28, 28, 24, 28, 18, ...weeks.map(() => 30), 50]);
   // An earlier version's application that this version no longer holds says so beside its name.
-  const partName = (record: (typeof rows)[number]["record"]) => record.retainedFrom ? `${record.name}（${record.retainedFrom.label} 申請，${record.retainedFrom.reason === "gone" ? "這一版已沒有這顆料" : "沒帶入這一版"}）` : record.name;
+  const partName = (record: (typeof rows)[number]["record"]) => record.retainedFrom ? `${record.name}（${describeRetainedSource(record.retainedFrom, "，")}）` : record.name;
   for (const row of rows) matrix.addRow([row.record.refDes, partName(row.record), row.record.qty, row.record.manufacturerPartNumber, row.record.manufacturer, row.record.virtualAlternative || "", row.record.partNumber || "", row.record.requestOwnerName || "未指定", row.currentStatus, row.undatedCount, ...[...row.cells].reverse().map(cell => cell.status), row.record.note || ""]);
   const summaries = summarizeMaterialWeeklyProgress(rows, weeks);
   const statuses = summaries[0] ? Object.keys(summaries[0].counts) : [];

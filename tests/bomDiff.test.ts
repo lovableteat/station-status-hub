@@ -558,3 +558,101 @@ test("rows without Ref Des keep their name in the identity, and an Excel-typed s
   const { retained } = findRetainedApplications([], [{ workspaceId: "bom:v1", label: "V1", records: v1 }]);
   assert.deepEqual(retained.map((item) => item.sourceRecordId), ["screw", "stand"]);
 });
+
+// 2026-11-18: the user wants the comparison from the parts — what a part gained, lost or where it moved.
+test("parts view: added, removed and moved parts with the positions they gained and lost", async () => {
+  const { buildBomPartChanges } = await import("../src/components/material-requests/bomDiff.ts");
+  const before = [
+    row({ id: "b1", refDes: "PL30, PL32, PL36", manufacturer: "CYNTEC", manufacturerPartNumber: "CMMB051H-4R7MS" }),
+    row({ id: "b2", refDes: "PR11", manufacturer: "RALEC", manufacturerPartNumber: "RST020000FBTH", note: "申請中" }),
+    row({ id: "b3", refDes: "U5", manufacturer: "TI", manufacturerPartNumber: "LM5066H1PWPR" }),
+    row({ id: "b4", refDes: "C1", manufacturer: "MURATA", manufacturerPartNumber: "GRM155" }),
+  ];
+  const after = [
+    row({ id: "a1", refDes: "PL30, PL32, PL38", manufacturer: "CYNTEC", manufacturerPartNumber: "CMMB051H-4R7MS" }),
+    row({ id: "a3", refDes: "U5", manufacturer: "TI", manufacturerPartNumber: "LM5066H1A0PWPR" }),
+    row({ id: "a4", refDes: "C1", manufacturer: "MURATA", manufacturerPartNumber: "GRM155" }),
+  ];
+  const result = buildBomPartChanges(before, after);
+  assert.deepEqual(result.counts, { added: 1, removed: 2, moved: 1 });
+  assert.equal(result.unchanged, 1);
+  const moved = result.changes.find((change) => change.kind === "moved")!;
+  assert.deepEqual([moved.mpn, moved.refAdded, moved.refRemoved], ["CMMB051H-4R7MS", ["PL38"], ["PL36"]]);
+  const ralec = result.changes.find((change) => change.mpn === "RST020000FBTH")!;
+  assert.equal(ralec.kind, "removed");
+  assert.equal(ralec.hadWebsiteData, true);
+  assert.deepEqual(result.changes.find((change) => change.kind === "added")?.afterRefs, ["U5"]);
+  const added = result.changes.find((change) => change.kind === "added")!;
+  assert.deepEqual(added.replaces, ["TI / LM5066H1PWPR"], "a part replaced at U5 names the part it replaced");
+  assert.deepEqual(result.changes.find((change) => change.mpn === "LM5066H1PWPR")?.replacedBy, ["TI / LM5066H1A0PWPR"]);
+});
+
+// Review 2026-11-18: going forward again (V1 → V2) brings what was entered on V1 while it was current, without
+// replacing V2's own values; old hand-added parts V2 deleted stay deleted.
+test("going forward adds V1's updates made since it became current, fills blanks only, and appends parts added by hand in that time", async () => {
+  const { fillForwardBomTracking } = await import("../src/components/material-requests/bomDiff.ts");
+  const since = "2026-11-14T00:00:00.000Z";
+  const old = { id: "t-old", status: "已發信", createdAt: "2026-11-10T00:00:00.000Z", createdBy: "RD" };
+  const lost = { id: "t-lost", status: "未回應再次發信", createdAt: "2026-11-12T00:00:00.000Z", createdBy: "RD" };
+  const fresh = { id: "t-fresh", status: "文件已收齊", note: "廠商已回", createdAt: "2026-11-16T00:00:00.000Z", createdBy: "RD" };
+  const v1 = [
+    row({ id: "v1-u5", refDes: "U5", partNumber: "", manufacturerPartNumber: "TPS-1", trackingStatus: "文件已收齊", trackingHistory: [old, lost, fresh], note: "V1 note", requestOwnerName: "Amy" }),
+    row({ id: "v1-u6", refDes: "U6", partNumber: "", manufacturerPartNumber: "TPS-2", ...applying("t-u6") }),
+    row({ id: `manual-${Date.parse("2026-11-15T00:00:00Z")}-abc123`, refDes: "X9", name: "V1 檢查時手動新增", partNumber: "", manufacturerPartNumber: "NEW-1" }),
+    row({ id: `manual-${Date.parse("2026-11-01T00:00:00Z")}-def456`, refDes: "X8", name: "V2 刪掉的手動料", partNumber: "", manufacturerPartNumber: "OLD-1" }),
+  ];
+  const v2 = [
+    row({ id: "v2-u5", refDes: "U5", partNumber: "", manufacturerPartNumber: "TPS-1", trackingStatus: "已發信", trackingHistory: [old], note: "V2 note" }),
+    row({ id: "v2-u6", refDes: "U6", partNumber: "", manufacturerPartNumber: "TPS-2" }),
+  ];
+  const result = fillForwardBomTracking(v1, v2, since);
+  const u5 = result.records.find((record) => record.id === "v2-u5")!;
+  assert.deepEqual(u5.trackingHistory?.map((entry) => entry.id), ["t-old", "t-fresh"], "only entries made since V1 became current are added");
+  assert.equal(u5.trackingStatus, "文件已收齊", "the status follows the newest entry");
+  assert.equal(u5.note, "V2 note", "V2's own Note is not replaced");
+  assert.equal(u5.requestOwnerName, "Amy", "a blank 負責人 is filled");
+  assert.equal(result.records.find((record) => record.id === "v2-u6")?.trackingStatus, "料號申請中", "a row with nothing receives the line");
+  assert.equal(result.filled, 2);
+  assert.equal(result.manual, 1);
+  assert.deepEqual(result.records.map((record) => record.id).filter((id) => id.startsWith("manual-")), [v1[2].id]);
+  // Running it again adds nothing new.
+  const again = fillForwardBomTracking(v1, result.records, since);
+  assert.equal(again.manual, 0);
+  assert.deepEqual(again.records.find((record) => record.id === "v2-u5")?.trackingHistory?.map((entry) => entry.id), ["t-old", "t-fresh"]);
+});
+
+test("parts added by hand are listed only from newer versions; one an older version has and this one lacks was deleted here", () => {
+  const manualId = `manual-${Date.parse("2026-11-15T00:00:00Z")}-aaa111`;
+  const manual = row({ id: manualId, refDes: "J9", name: "手動新增連接器", partNumber: "", manufacturerPartNumber: "CONN-9" });
+  const base = [row({ id: "u1", refDes: "U1", partNumber: "" })];
+  // On V1, V2's hand-added part shows.
+  const onV1 = findRetainedApplications(base, [{ workspaceId: "bom:v2", label: "V2", records: [...base, manual], newer: true }]);
+  assert.deepEqual(onV1.retained.map((item) => [item.fromLabel, item.reason, item.sourceRecordId]), [["V2", "manual", manualId]]);
+  // On V2 after deleting it, V1's copy does not bring it back.
+  const onV2 = findRetainedApplications(base, [{ workspaceId: "bom:v1", label: "V1", records: [...base, manual] }]);
+  assert.deepEqual(onV2.retained, []);
+  // Two hand-added rows at one position with the same text are both listed.
+  const twin = { ...(manual as Record<string, unknown>), id: `${manualId}-twin` } as never;
+  assert.equal(findRetainedApplications(base, [{ workspaceId: "bom:v2", label: "V2", records: [manual, twin], newer: true }]).retained.length, 2);
+});
+
+test("parts view: an MPN written with or without dashes is one part, and the same 實體料號 under a rewritten MPN is not a swap", async () => {
+  const { buildBomPartChanges } = await import("../src/components/material-requests/bomDiff.ts");
+  const before = [
+    row({ id: "b1", refDes: "R9", manufacturer: "YAGEO", manufacturerPartNumber: "RC0402FR-0710KL", partNumber: "0402-0001" }),
+    row({ id: "b2", refDes: "U7", manufacturer: "TI", manufacturerPartNumber: "TPS5430DDA", partNumber: "1022-TI-01" }),
+    row({ id: "b3", refDes: "L1", manufacturer: "CYNTEC", manufacturerPartNumber: "VCHA042A-1R0", partNumber: "1022-CY-01" }),
+    row({ id: "b4", refDes: "TP1", manufacturer: "", manufacturerPartNumber: "N/A", partNumber: "1022-TP-01" }),
+  ];
+  const after = [
+    row({ id: "a1", refDes: "R9", manufacturer: "YAGEO", manufacturerPartNumber: "RC0402FR0710KL", partNumber: "0402-0001" }),
+    row({ id: "a2", refDes: "U7", manufacturer: "TI", manufacturerPartNumber: "TPS5430DDAR", partNumber: "1022-TI-01" }),
+    row({ id: "a3", refDes: "L1, L2", manufacturer: "CYNTEC", manufacturerPartNumber: "VCHA042A-1R0MS6", partNumber: "1022-CY-01" }),
+    row({ id: "a4", refDes: "TP1", manufacturer: "", manufacturerPartNumber: "-", partNumber: "1022-TP-01" }),
+  ];
+  const result = buildBomPartChanges(before, after);
+  assert.deepEqual(result.counts, { added: 0, removed: 0, moved: 1 }, result.changes.map((change) => `${change.kind}:${change.mpn}`).join(" | "));
+  const moved = result.changes[0];
+  assert.deepEqual([moved.mpn, moved.refAdded, moved.refRemoved, moved.replaces, moved.replacedBy], ["VCHA042A-1R0MS6", ["L2"], [], [], []]);
+  assert.equal(result.unchanged, 3);
+});
