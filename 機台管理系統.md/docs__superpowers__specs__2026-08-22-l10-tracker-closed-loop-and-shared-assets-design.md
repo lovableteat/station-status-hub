@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/specs/2026-08-22-l10-tracker-closed-loop-and-shared-assets-design.md`；程式參考基準：`028777b9e0503e9888a7202692154cb4c162297e`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/specs/2026-08-22-l10-tracker-closed-loop-and-shared-assets-design.md`；程式參考基準：`9dcd96279f1debd5e6e6bd350cd607e0d2d8e103`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # L10 追蹤、問題閉環、儀表板導覽與通用資產設計
 
