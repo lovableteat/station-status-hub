@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-07-23-shared-prompt-hover-position.md`；程式參考基準：`9dcd96279f1debd5e6e6bd350cd607e0d2d8e103`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-07-23-shared-prompt-hover-position.md`；程式參考基準：`43c3423c5dcaf7787cf5e33ead5f93c5e96e4906`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Shared Prompt Hover Position
 
