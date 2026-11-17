@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-28-material-copy-tracking-clarity.md`；程式參考基準：`3a505bf3dd058ed3e81b5427b0a4b6c3f365df1f`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-28-material-copy-tracking-clarity.md`；程式參考基準：`cf74b364e54b26cf19aaa37dbdada29826f904fd`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 虛擬料號複製、追蹤辨識與待處理料標記
 
