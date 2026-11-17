@@ -263,8 +263,8 @@ export type PendingMaterialCategory = "connector" | "ic" | "rlc" | "other";
 /** Categories for the 待處理料 dialog, in handling priority: connectors and ICs first, passives next. */
 export const PENDING_MATERIAL_CATEGORIES: ReadonlyArray<{ key: PendingMaterialCategory; label: string; hint: string; priority: boolean }> = [
   { key: "connector", label: "CONNECTOR", hint: "J 開頭", priority: true },
-  { key: "ic", label: "IC", hint: "U 開頭", priority: true },
-  { key: "rlc", label: "RLC 被動元件", hint: "R／L／C 開頭：電阻、電感、電容", priority: false },
+  { key: "ic", label: "IC", hint: "U、PU 開頭", priority: true },
+  { key: "rlc", label: "RLC 被動元件", hint: "R／L／C、PR／PL／PC 開頭：電阻、電感、電容", priority: false },
   { key: "other", label: "其他", hint: "其餘位號", priority: false },
 ];
 
@@ -274,6 +274,10 @@ export function getPendingMaterialCategory(refDes: string): PendingMaterialCateg
   if (prefix.startsWith("J")) return "connector";
   if (prefix.startsWith("U")) return "ic";
   if (/^[RLC]/.test(prefix)) return "rlc";
+  // Power sections put a P in front: PU power IC, PR／PL／PC power resistor, inductor and capacitor (Baseboard).
+  // PJ (power jumper), PQ and PD stay with 其他, like J-less jumpers, Q and D.
+  if (prefix === "PU") return "ic";
+  if (prefix === "PR" || prefix === "PL" || prefix === "PC") return "rlc";
   return "other";
 }
 

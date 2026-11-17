@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, ChevronDown, ChevronRight, CircleAlert, Download, LoaderCircle, LocateFixed, Search, X } from "lucide-react";
+import { ArrowLeftRight, ChevronDown, ChevronRight, CircleAlert, Download, History, LoaderCircle, LocateFixed, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,13 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 
 import {
-  BOM_CHANGE_IMPACTS, BOM_CHANGE_KINDS, bomChangeImpactLabel, bomChangeKindLabel, bomDiffEntryPreview, bomDiffFieldValue, bomRecordHasTracking, describeBomWebsiteData,
+  BOM_CHANGE_IMPACTS, BOM_CHANGE_KINDS, bomChangeImpactLabel, bomChangeKindLabel, bomDiffEntryPreview, bomDiffFieldValue, describeBomWebsiteData, isLostLine,
   type BomChangeImpact, type BomChangeKind, type BomDiffEntry, type BomDiffResult, type BomVendorLineChange,
 } from "./bomDiff";
 import type { BomSeries, BomSeriesVersion } from "./bomVersioning";
 import { formatBomVersionTitle } from "./bomVersioning";
 import { CHIP, CHIP_TONE, formatBomTimestamp } from "./bomVersionPresentation";
-import { BOM_DIFF_EMPTY_TEXT, EMPTY_BOM_DIFF_FILTERS, filterBomDiffEntries, type BomDiffFilters } from "./bomDiffFilters";
+import { BOM_DIFF_EMPTY_TEXT, EMPTY_BOM_DIFF_FILTERS, filterBomDiffEntries, isHiddenAsUnchanged, type BomDiffFilters } from "./bomDiffFilters";
 import "./bomDiffView.css";
 
 /** Filters and the open part, kept when 返回比對 brings the user back from the material table. */
@@ -31,7 +31,15 @@ function lineTone(line: BomVendorLineChange) {
   return line.kind === "added" ? "success" : line.kind === "removed" ? "danger" : line.kind === "changed" ? "warning" : "neutral";
 }
 function lineLabel(line: BomVendorLineChange) {
+  if (line.kind === "removed" && line.movedTo) return "移到其他位號";
+  if (line.kind === "added" && line.movedFrom) return "從其他位號移來";
   return line.kind === "added" ? "新增廠商" : line.kind === "removed" ? "移除廠商" : line.kind === "changed" ? "廠商欄位變更" : "相同";
+}
+/** Where a moved part went or came from; Ref Des lists can be long, so they go in the title. */
+function lineTitle(line: BomVendorLineChange) {
+  if (line.kind === "removed" && line.movedTo) return `同一顆料在新版的 ${line.movedTo}，舊版資料依料號跟著它`;
+  if (line.kind === "added" && line.movedFrom) return `同一顆料在舊版的 ${line.movedFrom}`;
+  return undefined;
 }
 const lineUsage = (record: NonNullable<BomVendorLineChange["after"]>) => [bomDiffFieldValue(record, "phaseOutStatus"), bomDiffFieldValue(record, "partUsageStatus")].filter(Boolean).join(" · ");
 
@@ -40,7 +48,7 @@ function LineRow({ line }: { line: BomVendorLineChange }) {
   if (!record) return null;
   return (
     <tr className="text-xs text-foreground/85">
-      <td className="px-2 py-1"><span className={cn(CHIP, CHIP_TONE[lineTone(line)])}>{lineLabel(line)}</span></td>
+      <td className="px-2 py-1"><span className={cn(CHIP, CHIP_TONE[lineTone(line)])} title={lineTitle(line)}>{lineLabel(line)}</span></td>
       <td className="px-2 py-1">{bomDiffFieldValue(record, "manufacturer") || "—"}</td>
       <td className="px-2 py-1 font-mono">{bomDiffFieldValue(record, "manufacturerPartNumber") || "—"}</td>
       <td className="px-2 py-1 font-mono">{bomDiffFieldValue(record, "partNumber") || "—"}</td>
@@ -57,17 +65,17 @@ function LineItem({ line }: { line: BomVendorLineChange }) {
   const details = [bomDiffFieldValue(record, "partNumber"), bomDiffFieldValue(record, "sourcingStatus"), lineUsage(record)].filter(Boolean).join(" · ");
   return (
     <li className="bom-diff-line-item">
-      <span className={cn(CHIP, "flex-none", CHIP_TONE[lineTone(line)])}>{lineLabel(line)}</span>
+      <span className={cn(CHIP, "flex-none", CHIP_TONE[lineTone(line)])} title={lineTitle(line)}>{lineLabel(line)}</span>
       <span className="min-w-0"><strong>{[bomDiffFieldValue(record, "manufacturer"), bomDiffFieldValue(record, "manufacturerPartNumber")].filter(Boolean).join(" / ") || "（未填廠商）"}</strong>{details && <span>{details}</span>}</span>
     </li>
   );
 }
 
 function EntryDetail({ entry, compact, onLocate, locateFills }: { entry: BomDiffEntry; compact: boolean; onLocate?: (entry: BomDiffEntry) => void; locateFills: boolean }) {
-  const lost = entry.lines.filter((line) => line.kind === "removed" && line.before && bomRecordHasTracking(line.before));
+  const lost = entry.lines.filter(isLostLine);
   const vendorOnly = entry.changes.length === 0 && entry.lines.some((line) => line.kind === "added" || line.kind === "removed");
   // Only parts that still exist in the new version can be shown in its material table.
-  const locate = onLocate && entry.lines.some((line) => line.after)
+  const locate = onLocate && entry.lines.some((line) => line.after || line.movedRecord)
     ? (fill: boolean) => (
       // The label stays short: a group can hold dozens of reference designators; they are in the title and the row above.
       <Button type="button" size="sm" variant={fill ? "default" : "outline"} onClick={() => onLocate(entry)} title={`關閉版本管理，在料號表顯示新版的 ${entry.displayRef}${fill ? "，補填沒有帶過來的資料" : ""}`} className="bom-diff-locate">
@@ -115,12 +123,15 @@ function EntryDetail({ entry, compact, onLocate, locateFills }: { entry: BomDiff
         )}
         {lost.length > 0 && (
           <div data-testid="bom-diff-lost-data" className="bom-diff-lost">
-            <p className="bom-diff-lost-title">舊版資料沒有帶到新版（請在新版對應料件重新填寫）</p>
+            <p className="bom-diff-lost-title">舊版資料沒有帶到新版</p>
             <ul>
               {lost.map((line, index) => (
                 <li key={index}>
                   <strong>{[bomDiffFieldValue(line.before, "manufacturer"), bomDiffFieldValue(line.before, "manufacturerPartNumber")].filter(Boolean).join(" / ") || bomDiffFieldValue(line.before, "partNumber") || "（未填廠商）"}</strong>
                   <span>{describeBomWebsiteData(line.before!).join(" · ")}</span>
+                  <span className="bom-diff-lost-where">{line.notCarried
+                    ? line.movedTo ? <>新版的 <span title={line.movedTo} className="bom-diff-lost-ref">{line.movedTo}</span> 有同一顆料，可用「帶入舊版資料」補回</> : "新版有同一顆料，可用「帶入舊版資料」補回"
+                    : "新版找不到同一顆料，請在新版對應料件重新填寫"}</span>
                 </li>
               ))}
             </ul>
@@ -139,8 +150,11 @@ function KindChips({ entry }: { entry: BomDiffEntry }) {
 }
 
 export function BomDiffView({
-  series, before, after, result, loading, error, onPickBefore, onPickAfter, onSwap, onBack, onExport, exporting, initialLostOnly = false, initialView, onLostOnlyChange, compact = false, onLocate, locateFills = false,
+  series, before, after, result, loading, error, onPickBefore, onPickAfter, onSwap, onBack, onExport, exporting, initialLostOnly = false, initialView, onLostOnlyChange, compact = false, onLocate, locateFills = false, onRecarry, recarrying = false,
 }: {
+  /** 帶入舊版資料: fills old website data into the new version's matching rows; absent when the new side cannot be edited. */
+  onRecarry?: () => void;
+  recarrying?: boolean;
   /** Opened from an upload that left website data behind: start on 只看未帶入. */
   initialLostOnly?: boolean;
   /** 返回比對: start with the filters and open part the user left with. */
@@ -172,7 +186,8 @@ export function BomDiffView({
   const deferredQuery = useDeferredValue(filters.query);
   const entries = useMemo(() => result?.entries ?? [], [result]);
   const visible = useMemo(() => filterBomDiffEntries(entries, { ...filters, query: deferredQuery }), [entries, filters, deferredQuery]);
-  const unchangedCount = result?.summary.unchanged ?? 0;
+  // The chip says how many positions it hides; positions with old data missing in the new version always show.
+  const unchangedCount = useMemo(() => entries.filter(isHiddenAsUnchanged).length, [entries]);
   const toggleKind = (kind: BomChangeKind) => setFilters((current) => ({ ...current, kinds: current.kinds.includes(kind) ? current.kinds.filter((item) => item !== kind) : [...current.kinds, kind] }));
 
   const chips: Array<{ key: string; label: string; clear: () => void }> = [];
@@ -185,6 +200,7 @@ export function BomDiffView({
 
   const summary = loading || error ? null : result?.summary;
   const lostCount = summary?.trackingLost ?? 0;
+  const recarryCount = summary?.recarry ?? 0;
   const exportButton = (
     <Button type="button" variant="outline" size="sm" disabled={!summary || exporting || visible.length === 0} aria-busy={exporting || undefined} onClick={() => onExport(visible)} title="匯出目前篩選結果的差異 Excel（含摘要、明細、新增與移除料件）" className="bom-diff-export h-9 shrink-0 gap-1.5 text-sm lg:h-8">
       {exporting ? <LoaderCircle className="bom-diff-spinner h-4 w-4" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}
@@ -242,6 +258,20 @@ export function BomDiffView({
         {exportButton}
       </div>
 
+      {/* An upload that missed data whose part is still in the new version: say so once and offer the fix, apart from the filters. */}
+      {recarryCount > 0 && (
+        <div data-testid="bom-diff-recarry" className="bom-diff-recarry" role="status">
+          <History aria-hidden="true" className="bom-diff-recarry-icon" />
+          <p><strong>{recarryCount.toLocaleString()} 筆舊版資料在新版找得到同一顆料，但沒有帶過去。</strong><span>{onRecarry ? "帶入後會補到新版那顆料；新版已經填過的不會被覆蓋。" : `${after.displayNumber} 不是目前版本，或你沒有編輯權限，無法帶入。`}</span></p>
+          {onRecarry && (
+            <Button type="button" size="sm" disabled={recarrying} aria-busy={recarrying || undefined} onClick={onRecarry} title={`把 ${before.displayNumber} 的追蹤、Note、負責人與 SPEC 附件補到 ${after.displayNumber} 的同一顆料`} className="bom-diff-recarry-action h-9 shrink-0 gap-1.5">
+              {recarrying ? <LoaderCircle className="bom-diff-spinner h-4 w-4" aria-hidden="true" /> : <History className="h-4 w-4" aria-hidden="true" />}
+              {recarrying ? "帶入中…" : `帶入舊版資料 ${recarryCount.toLocaleString()} 筆`}
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Screen readers hear the outcome once; on screen the counts live in the filter chips. */}
       <p role="status" data-testid={summary ? "bom-diff-summary" : undefined} className="sr-only">
         {loading ? "正在載入兩個版本的料件並比對…" : summary ? `比對完成：新增 ${summary.added}、移除 ${summary.removed}、變更 ${summary.changed}、未變更 ${summary.unchanged}、未帶入 ${summary.trackingLost}` : ""}
@@ -269,7 +299,7 @@ export function BomDiffView({
               <SelectTrigger aria-label="影響" className="h-9 w-[9rem] text-sm"><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="all">全部影響</SelectItem>{BOM_CHANGE_IMPACTS.filter((impact) => impact.key !== "none").map((impact) => <SelectItem key={impact.key} value={impact.key}>{impact.label}</SelectItem>)}</SelectContent>
             </Select>
-            <button type="button" aria-pressed={filters.trackingLostOnly} onClick={() => setFilters((current) => ({ ...current, trackingLostOnly: !current.trackingLostOnly }))} title="只看舊版有追蹤、Note、負責人或 SPEC 附件，但新版找不到對應料件的位號" className={cn(CHIP, "bom-diff-kind h-9 cursor-pointer px-2 text-xs lg:h-8", filters.trackingLostOnly ? CHIP_TONE.danger : lostCount > 0 ? "border-destructive/50 bg-transparent text-destructive hover:bg-destructive/10" : "border-border bg-transparent text-muted-foreground hover:bg-accent/40")}>未帶入{summary && <span className="bom-diff-kind-count">{lostCount.toLocaleString()}</span>}</button>
+            <button type="button" aria-pressed={filters.trackingLostOnly} onClick={() => setFilters((current) => ({ ...current, trackingLostOnly: !current.trackingLostOnly }))} title="只看舊版有追蹤、Note、負責人或 SPEC 附件，但新版沒有這些資料的位號" className={cn(CHIP, "bom-diff-kind h-9 cursor-pointer px-2 text-xs lg:h-8", filters.trackingLostOnly ? CHIP_TONE.danger : lostCount > 0 ? "border-destructive/50 bg-transparent text-destructive hover:bg-destructive/10" : "border-border bg-transparent text-muted-foreground hover:bg-accent/40")}>未帶入{summary && <span className="bom-diff-kind-count">{lostCount.toLocaleString()}</span>}</button>
             {summary && <span data-testid="bom-diff-count" className="bom-diff-count" title={`符合目前篩選的位號 / 兩版合計位號（舊版 ${summary.beforeGroups.toLocaleString()} 個、新版 ${summary.afterGroups.toLocaleString()} 個）。全部：新增 ${summary.added}、移除 ${summary.removed}、變更 ${summary.changed}、未變更 ${summary.unchanged}`}>{visible.length.toLocaleString()} / {entries.length.toLocaleString()} 個位號</span>}
           </div>
         </div>

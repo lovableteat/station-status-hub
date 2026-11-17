@@ -60,7 +60,7 @@ export async function logMaterialWorkspaceAction({
   metadata,
   workspaceId,
 }: {
-  action: "delete" | "import" | "page_tracker.update" | "version.current";
+  action: "delete" | "import" | "page_tracker.update" | "version.current" | "version.recarry";
   actor: AuditActor | null;
   metadata?: Record<string, unknown>;
   workspaceId?: string | null;

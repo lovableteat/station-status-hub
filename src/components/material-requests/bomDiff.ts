@@ -88,6 +88,14 @@ export interface BomVendorLineChange {
   before?: MaterialWorkbookRecord;
   after?: MaterialWorkbookRecord;
   changes: BomFieldChange[];
+  /** A removed line whose vendor part sits at another location of the new version (its Ref Des there). */
+  movedTo?: string;
+  /** That part's row in the new version. */
+  movedRecord?: MaterialWorkbookRecord;
+  /** An added line that is a part moved from another location of the old version (its Ref Des there). */
+  movedFrom?: string;
+  /** The old line has website data that its counterpart in the new version does not have. */
+  notCarried?: boolean;
 }
 
 export interface BomDiffEntry {
@@ -119,6 +127,8 @@ export interface BomDiffSummary {
   unchanged: number;
   kinds: Record<BomChangeKind, number>;
   trackingLost: number;
+  /** Lost lines whose part is in the new version: 帶入舊版資料 can fill these in one go. */
+  recarry: number;
 }
 
 export interface BomDiffResult {
@@ -246,19 +256,25 @@ interface LineMatch {
 const lineKeys = (record: MaterialWorkbookRecord) => {
   const part = upper(record.partNumber);
   const mpn = upper(record.manufacturerPartNumber);
+  // The same MPN typed with or without its dashes, dots or spaces (RC0402FR-0710KL / RC0402FR0710KL).
+  const bare = mpn.replace(/[^0-9A-Z]/g, "");
   return {
     part: part ? `part:${part}` : "",
     vendorMpn: mpn ? `vendor:${upper(record.manufacturer)}|${mpn}` : "",
     mpn: mpn ? `mpn:${mpn}` : "",
+    bareMpn: bare ? `bare:${bare}` : "",
   };
 };
 
-/** Pairs vendor lines of two groups by 實體料號, then 廠商+MPN, then MPN. */
+/** Strongest vendor identity first: 實體料號, 廠商+MPN, MPN, then the MPN without punctuation. */
+const LINE_KEY_LEVELS = ["part", "vendorMpn", "mpn", "bareMpn"] as const;
+
+/** Pairs vendor lines of two groups by 實體料號, then 廠商+MPN, then MPN, then the MPN without punctuation. */
 export function matchBomVendorLines(before: readonly MaterialWorkbookRecord[], after: readonly MaterialWorkbookRecord[]): LineMatch[] {
   const matches: LineMatch[] = [];
   const usedBefore = new Set<MaterialWorkbookRecord>();
   const usedAfter = new Set<MaterialWorkbookRecord>();
-  for (const level of ["part", "vendorMpn", "mpn"] as const) {
+  for (const level of LINE_KEY_LEVELS) {
     const index = new Map<string, MaterialWorkbookRecord[]>();
     for (const record of before) {
       if (usedBefore.has(record)) continue;
@@ -282,6 +298,82 @@ export function matchBomVendorLines(before: readonly MaterialWorkbookRecord[], a
   for (const record of before) if (!usedBefore.has(record)) matches.push({ before: record });
   for (const record of after) if (!usedAfter.has(record)) matches.push({ after: record });
   return matches;
+}
+
+/** A vendor line with the Ref Des of the location it sits in. */
+export interface BomLocatedLine {
+  record: MaterialWorkbookRecord;
+  tokens: readonly string[];
+}
+
+/**
+ * Second look for old lines that the location match left without a partner: the same vendor part
+ * anywhere in the new version. Locations get renumbered, split, merged or lose their Ref Des on a
+ * vendor row between two Excel files; an application in progress belongs to the part, so it should
+ * follow it. Strongest identity first; among equal candidates the one sharing the most Ref Des wins,
+ * then the earliest row. Each new line takes at most one old line.
+ */
+export function matchBomMovedLines(previous: readonly BomLocatedLine[], next: readonly BomLocatedLine[]) {
+  const pairs: Array<{ before: BomLocatedLine; after: BomLocatedLine }> = [];
+  const usedBefore = new Set<MaterialWorkbookRecord>();
+  const usedAfter = new Set<MaterialWorkbookRecord>();
+  const overlap = (left: readonly string[], right: readonly string[]) => {
+    const tokens = new Set(left);
+    return right.reduce((count, token) => count + (tokens.has(token) ? 1 : 0), 0);
+  };
+  for (const level of LINE_KEY_LEVELS) {
+    const index = new Map<string, BomLocatedLine[]>();
+    for (const line of next) {
+      if (usedAfter.has(line.record)) continue;
+      const key = lineKeys(line.record)[level];
+      if (!key) continue;
+      const list = index.get(key);
+      if (list) list.push(line);
+      else index.set(key, [line]);
+    }
+    for (const line of previous) {
+      if (usedBefore.has(line.record)) continue;
+      const key = lineKeys(line.record)[level];
+      if (!key) continue;
+      let best: BomLocatedLine | undefined;
+      let bestOverlap = -1;
+      for (const candidate of index.get(key) ?? []) {
+        if (usedAfter.has(candidate.record)) continue;
+        const score = overlap(line.tokens, candidate.tokens);
+        if (score > bestOverlap) { best = candidate; bestOverlap = score; }
+      }
+      if (!best) continue;
+      pairs.push({ before: line, after: best });
+      usedBefore.add(line.record);
+      usedAfter.add(best.record);
+    }
+  }
+  return pairs;
+}
+
+const isImportedTrackingEntry = (entry: MaterialTrackingHistoryEntry) => entry.id.startsWith(IMPORTED_TRACKING_PREFIX);
+
+/**
+ * True when the row holds something entered on the website (not text read from the uploaded Excel):
+ * an update in the tracking history, a status set before history existed, 需申請, the 負責人 or
+ * 分類 picked in 待處理料, the website Note, or SPEC attachments.
+ */
+export function bomRecordHasWebsiteData(record: MaterialWorkbookRecord) {
+  const history = record.trackingHistory ?? [];
+  const ownEntries = history.some((entry) => !isImportedTrackingEntry(entry));
+  const status = normalizeBomText(record.trackingStatus);
+  const importedStatus = normalizeBomText([...history].reverse().find(isImportedTrackingEntry)?.status);
+  const statusWithoutHistory = !ownEntries && Boolean(status) && status !== "未處理" && status !== "無狀態" && status !== importedStatus;
+  return Boolean(
+    ownEntries
+    || statusWithoutHistory
+    || record.applicationRequired === true
+    || normalizeBomText(record.requestOwnerName)
+    || normalizeBomText(record.requestOwnerId)
+    || normalizeBomText(record.note)
+    || Boolean(record.pendingCategory)
+    || getMaterialSpecDocuments(record).length > 0,
+  );
 }
 
 export function bomDiffFieldValue(record: MaterialWorkbookRecord | undefined, field: BomDiffField): string {
@@ -461,6 +553,7 @@ export function diffBomRecords(before: readonly MaterialWorkbookRecord[], after:
   const beforeGroups = buildBomDiffGroups(before);
   const afterGroups = buildBomDiffGroups(after);
   const entries = matchGroups(beforeGroups, afterGroups).map(buildEntry);
+  markMovedAndUncarriedLines(entries, before, after);
   entries.sort((left, right) => collator.compare(left.displayRef, right.displayRef) || collator.compare(left.id, right.id));
   const kinds = Object.fromEntries(BOM_CHANGE_KINDS.map((kind) => [kind.key, 0])) as Record<BomChangeKind, number>;
   let added = 0;
@@ -468,6 +561,7 @@ export function diffBomRecords(before: readonly MaterialWorkbookRecord[], after:
   let changed = 0;
   let unchanged = 0;
   let trackingLost = 0;
+  let recarry = 0;
   for (const entry of entries) {
     for (const kind of entry.kinds) kinds[kind] += 1;
     if (entry.kinds.includes("added")) added += 1;
@@ -475,6 +569,7 @@ export function diffBomRecords(before: readonly MaterialWorkbookRecord[], after:
     else if (entry.kinds.length > 0) changed += 1;
     else unchanged += 1;
     trackingLost += entry.trackingLost;
+    recarry += entry.lines.filter((line) => line.notCarried).length;
   }
   return {
     entries,
@@ -489,8 +584,55 @@ export function diffBomRecords(before: readonly MaterialWorkbookRecord[], after:
       unchanged,
       kinds,
       trackingLost,
+      recarry,
     },
   };
+}
+
+/**
+ * Applies the same second look as the carry-over to a comparison: an old line with website data
+ * whose part moved to another location is not lost (its new location is named), and a pair whose
+ * new line lacks the old line's website data (an upload that missed it) is counted as 未帶入.
+ */
+function markMovedAndUncarriedLines(entries: BomDiffEntry[], before: readonly MaterialWorkbookRecord[], after: readonly MaterialWorkbookRecord[]) {
+  const beforeIndex = new Map(before.map((record, index) => [record, index]));
+  const afterIndex = new Map(after.map((record, index) => [record, index]));
+  const removed: Array<BomLocatedLine & { line: BomVendorLineChange }> = [];
+  const added: Array<BomLocatedLine & { line: BomVendorLineChange; entry: BomDiffEntry }> = [];
+  for (const entry of entries) {
+    for (const line of entry.lines) {
+      if (line.kind === "removed" && line.before && bomRecordHasTracking(line.before)) removed.push({ record: line.before, tokens: entry.before?.tokens ?? [], line });
+      if (line.kind === "added" && line.after) added.push({ record: line.after, tokens: entry.after?.tokens ?? [], line, entry });
+    }
+  }
+  // Row order, as the carry-over walks them, so both pick the same partner on a tie.
+  removed.sort((left, right) => (beforeIndex.get(left.record) ?? 0) - (beforeIndex.get(right.record) ?? 0));
+  added.sort((left, right) => (afterIndex.get(left.record) ?? 0) - (afterIndex.get(right.record) ?? 0));
+  const removedByRecord = new Map(removed.map((item) => [item.record, item]));
+  const addedByRecord = new Map(added.map((item) => [item.record, item]));
+  const fromEntry = new Map<MaterialWorkbookRecord, BomDiffEntry>();
+  for (const entry of entries) for (const line of entry.lines) if (line.before) fromEntry.set(line.before, entry);
+  for (const pair of matchBomMovedLines(removed, added)) {
+    const old = removedByRecord.get(pair.before.record)!;
+    const target = addedByRecord.get(pair.after.record)!;
+    old.line.movedTo = target.entry.displayRef;
+    old.line.movedRecord = pair.after.record;
+    target.line.movedFrom = fromEntry.get(pair.before.record)?.displayRef ?? "";
+    if (bomRecordHasWebsiteData(pair.before.record) && !bomRecordHasWebsiteData(pair.after.record)) old.line.notCarried = true;
+  }
+  for (const entry of entries) {
+    for (const line of entry.lines) {
+      if ((line.kind === "same" || line.kind === "changed") && line.before && line.after
+        && bomRecordHasWebsiteData(line.before) && !bomRecordHasWebsiteData(line.after)) line.notCarried = true;
+    }
+    entry.trackingLost = entry.lines.filter((line) => isLostLine(line)).length;
+  }
+}
+
+/** Old website data that the new version does not hold: no counterpart at all, or a counterpart that never received it. */
+export function isLostLine(line: BomVendorLineChange) {
+  if (line.notCarried) return true;
+  return line.kind === "removed" && !line.movedTo && Boolean(line.before && bomRecordHasTracking(line.before));
 }
 
 /**
@@ -634,6 +776,8 @@ export interface BomCarryResult {
   matched: number;
   /** Matched old lines that had website data (tracking, Note, 負責人, SPEC files) carried over. */
   tracked: number;
+  /** Of those, lines found by vendor part at another location (renumbered or regrouped). */
+  moved: number;
   orphaned: MaterialWorkbookRecord[];
   manual: number;
 }
@@ -645,19 +789,50 @@ export interface BomCarryResult {
  * counterpart are reported, not dropped. `from: "current"` is the switch back to an
  * older version, where the version that was current wins over the target's own data.
  */
-export function carryBomTracking(previous: readonly MaterialWorkbookRecord[], next: readonly MaterialWorkbookRecord[], options: { from?: "upload" | "current" } = {}): BomCarryResult {
-  const carryOne = options.from === "current" ? carryLineFromCurrent : carryLine;
-  const carried = new Map<MaterialWorkbookRecord, MaterialWorkbookRecord>();
-  const matchedPrevious = new Set<MaterialWorkbookRecord>();
-  let tracked = 0;
-  for (const match of matchGroups(buildBomDiffGroups(previous), buildBomDiffGroups(next))) {
+/**
+ * Old and new lines that are the same part: by location and vendor first, then old lines with
+ * website data that found no partner are looked up by vendor part anywhere in the new version.
+ * Shared by the upload carry-over and 帶入舊版資料, and the same rule the comparison uses.
+ */
+export function pairBomLines(previous: readonly MaterialWorkbookRecord[], next: readonly MaterialWorkbookRecord[]) {
+  const pairs: Array<{ before: MaterialWorkbookRecord; after: MaterialWorkbookRecord; moved: boolean }> = [];
+  const usedPrevious = new Set<MaterialWorkbookRecord>();
+  const usedNext = new Set<MaterialWorkbookRecord>();
+  const previousGroups = buildBomDiffGroups(previous);
+  const nextGroups = buildBomDiffGroups(next);
+  for (const match of matchGroups(previousGroups, nextGroups)) {
     if (!match.before || !match.after) continue;
     for (const line of matchBomVendorLines(match.before.rows, match.after.rows)) {
       if (!line.before || !line.after) continue;
-      carried.set(line.after, carryOne(line.before, line.after));
-      matchedPrevious.add(line.before);
-      if (bomRecordHasTracking(line.before)) tracked += 1;
+      pairs.push({ before: line.before, after: line.after, moved: false });
+      usedPrevious.add(line.before);
+      usedNext.add(line.after);
     }
+  }
+  const tokensOf = (groups: BomDiffGroup[]) => new Map(groups.flatMap((group) => group.rows.map((row) => [row, group.tokens] as const)));
+  const previousTokens = tokensOf(previousGroups);
+  const nextTokens = tokensOf(nextGroups);
+  const moved = matchBomMovedLines(
+    previous.filter((record) => !usedPrevious.has(record) && bomRecordHasTracking(record)).map((record) => ({ record, tokens: previousTokens.get(record) ?? [] })),
+    next.filter((record) => !usedNext.has(record)).map((record) => ({ record, tokens: nextTokens.get(record) ?? [] })),
+  );
+  for (const pair of moved) {
+    pairs.push({ before: pair.before.record, after: pair.after.record, moved: true });
+    usedPrevious.add(pair.before.record);
+  }
+  return { pairs, usedPrevious };
+}
+
+export function carryBomTracking(previous: readonly MaterialWorkbookRecord[], next: readonly MaterialWorkbookRecord[], options: { from?: "upload" | "current" } = {}): BomCarryResult {
+  const carryOne = options.from === "current" ? carryLineFromCurrent : carryLine;
+  const carried = new Map<MaterialWorkbookRecord, MaterialWorkbookRecord>();
+  const { pairs, usedPrevious: matchedPrevious } = pairBomLines(previous, next);
+  let tracked = 0;
+  let moved = 0;
+  for (const pair of pairs) {
+    carried.set(pair.after, carryOne(pair.before, pair.after));
+    if (bomRecordHasTracking(pair.before)) tracked += 1;
+    if (pair.moved) moved += 1;
   }
   const nextIds = new Set(next.map((record) => record.id));
   const manualRecords = previous.filter((record) => record.id.startsWith(MANUAL_RECORD_PREFIX) && !matchedPrevious.has(record) && !nextIds.has(record.id));
@@ -666,7 +841,38 @@ export function carryBomTracking(previous: readonly MaterialWorkbookRecord[], ne
     records: [...next.map((record) => carried.get(record) ?? record), ...manualRecords.map((record) => ({ ...record }))],
     matched: matchedPrevious.size,
     tracked,
+    moved,
     orphaned,
     manual: manualRecords.length,
+  };
+}
+
+export interface BomRecarryResult {
+  /** The version's rows with the filled ones replaced, in their order. */
+  records: MaterialWorkbookRecord[];
+  /** Only the rows that received old website data, to write back one by one. */
+  filled: MaterialWorkbookRecord[];
+  /** Old lines with website data that still have no counterpart in this version. */
+  remaining: number;
+}
+
+/**
+ * 帶入舊版資料: fills website data that an earlier upload left behind (an older matching rule, or
+ * a part that moved to another location). Only rows that have no website data of their own are
+ * filled, so anything entered on this version since stays as it is; running it twice changes nothing.
+ * Manual rows are never re-added: one missing here was deleted on purpose.
+ */
+export function recarryBomTracking(previous: readonly MaterialWorkbookRecord[], current: readonly MaterialWorkbookRecord[]): BomRecarryResult {
+  const { pairs } = pairBomLines(previous, current);
+  const replacements = new Map<MaterialWorkbookRecord, MaterialWorkbookRecord>();
+  for (const pair of pairs) {
+    if (!bomRecordHasWebsiteData(pair.before) || bomRecordHasWebsiteData(pair.after)) continue;
+    replacements.set(pair.after, carryLine(pair.before, pair.after));
+  }
+  const records = current.map((record) => replacements.get(record) ?? record);
+  return {
+    records,
+    filled: [...replacements.values()],
+    remaining: diffBomRecords(previous, records).summary.trackingLost,
   };
 }

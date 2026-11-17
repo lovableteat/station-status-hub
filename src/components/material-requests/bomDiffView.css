@@ -196,6 +196,70 @@
   overflow-wrap: anywhere;
 }
 
+/* Where the old data can go: one line under each lost part; a long Ref Des list stays on one line. */
+.bom-diff-lost .bom-diff-lost-where {
+  flex-basis: 100%;
+  color: hsl(var(--muted-foreground));
+}
+
+.bom-diff-lost .bom-diff-lost-ref {
+  display: inline-block;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  color: hsl(var(--foreground));
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* 帶入舊版資料: a status line with its one action, above the filter bar and apart from it. */
+.bom-diff-recarry {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid hsl(var(--warning) / 0.45);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: hsl(var(--warning) / 0.08);
+  font-size: 0.8125rem;
+}
+
+.bom-diff-recarry-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: none;
+  color: hsl(var(--warning));
+}
+
+.bom-diff-recarry p {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 0.125rem 0.5rem;
+}
+
+.bom-diff-recarry strong {
+  color: hsl(var(--foreground));
+  font-weight: 650;
+}
+
+.bom-diff-recarry span {
+  color: hsl(var(--muted-foreground));
+}
+
+@media (max-width: 1023px) {
+  .bom-diff-recarry {
+    flex-wrap: wrap;
+  }
+
+  .bom-diff-recarry-action {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+
 @media (min-width: 900px) {
   .bom-diff-toolbar {
     grid-template-columns: minmax(0, 1fr) clamp(22rem, 46vw, 40rem);

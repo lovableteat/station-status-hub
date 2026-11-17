@@ -156,12 +156,12 @@ import {
 import { applyBomNoteSnapshot, applyRealtimeBomRecords, mergeBomWorkspaceRecords } from "./materialBomNoteSync";
 import type { BomTableColorTheme, BomWorkspaceArchive, BomWorkspaceProject } from "./materialBomStorage";
 import { loadBomWorkspaceArchives, loadBomWorkspaceProjects, saveBomWorkspaceArchive, saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
-import { loadBomWorkspaceRecords, loadBomWorkspaceVersions, saveBomWorkspaceVersion } from "./materialBomStorage";
+import { loadBomWorkspaceForWrite, loadBomWorkspaceRecords, loadBomWorkspaceVersions, saveBomWorkspaceVersion } from "./materialBomStorage";
 import { BomVersionCenter, type BomDiffLocateTarget, type BomDiffRequest } from "./BomVersionCenter";
 import { buildNvBomTableIndex, matchNvBomTableChange, type NvBomTableCandidate } from "./nvBomTableMatch";
 import type { NvBomChange } from "./nvBomCompare";
 import { BomUploadDialog, NEW_BOM_SERIES_TARGET, type BomUploadMeta, type PendingBomUpload } from "./BomUploadDialog";
-import { carryBomTracking, diffBomRecords } from "./bomDiff";
+import { carryBomTracking, diffBomRecords, recarryBomTracking } from "./bomDiff";
 import {
   BOM_SERIES_NAME_LIMIT, BOM_VERSION_LABEL_LIMIT, BOM_VERSION_NOTE_LIMIT, bomFileBaseName, buildBomSeriesList, createBomSeriesId,
   bomVersionComparePair, createBomVersionWorkspaceId, findBomSeriesByWorkspace, inferBomSeriesForFile, nextBomVersionNumber, readBomDiffLocation, readBomLocateLocation, writeBomLocateLocation,
@@ -5005,6 +5005,56 @@ export function MaterialRequestPage() {
     }
   };
 
+  // 帶入舊版資料: an earlier upload missed website data whose part is still in the current version (an older
+  // matching rule, or a part that moved to another location). Only rows without data of their own are written.
+  const recarryBomVersion = async ({ series, before, after }: { series: BomSeries; before: BomSeriesVersion; after: BomSeriesVersion }) => {
+    const writeScope = captureBomWrite();
+    if (!canEditModuleAccess) throw new Error("沒有編輯權限，無法帶入。");
+    if (!isCollaborativeReady) throw new Error("共用資料尚未連線，請稍後再帶入。");
+    if (!after.isCurrent) throw new Error(`${after.displayNumber} 不是目前版本，只能帶入目前版本。`);
+    const onScreen = after.workspace.id === activeWorkspace.id && isFullDatasetLoaded;
+    const [previousRecords, target] = await Promise.all([
+      loadVersionRecords(before.workspace.id),
+      onScreen ? Promise.resolve(activeWorkspace) : loadBomWorkspaceForWrite(after.workspace),
+    ]);
+    assertBomWriteCurrent(writeScope);
+    const result = recarryBomTracking(previousRecords, target.payload.records);
+    if (result.filled.length > 0) {
+      let failed = 0;
+      if (onScreen) {
+        failed = (await saveRecordsToActiveBom(result.filled)).failed;
+      } else {
+        let saving: BomWorkspace = { ...target, payload: { ...target.payload, records: result.records, recordCount: result.records.length } };
+        for (const [index, record] of result.filled.entries()) {
+          try {
+            const recordMeta = await saveBomWorkspaceRecord(saving, record, () => assertBomWriteCurrent(writeScope));
+            saving = { ...saving, recordMeta: { ...saving.recordMeta, [record.id]: recordMeta } };
+          } catch (error) {
+            if (!isBomWriteCurrent(writeScope) || index === 0) throw error;
+            failed += 1;
+          }
+        }
+      }
+      assertBomWriteCurrent(writeScope);
+      if (failed > 0) throw new Error(`已帶入 ${result.filled.length - failed} 筆，${failed} 筆有人同時在改，沒有寫入。請重新打開比對再帶入一次。`);
+    }
+    const carry = after.version.carry;
+    if (carry && (result.filled.length > 0 || carry.orphaned !== result.remaining)) {
+      await saveBomWorkspaceVersion(after.workspace.id, {
+        ...after.version, seriesId: series.id, seriesName: series.name,
+        carry: { ...carry, tracked: (carry.tracked ?? 0) + result.filled.length, orphaned: result.remaining },
+      }, () => assertBomWriteCurrent(writeScope));
+    }
+    void logMaterialWorkspaceAction({
+      action: "version.recarry",
+      actor: user,
+      metadata: { seriesId: series.id, seriesName: series.name, fromWorkspaceId: before.workspace.id, filled: result.filled.length, remaining: result.remaining },
+      workspaceId: after.workspace.id,
+    });
+    if (!onScreen || carry) await reloadBomWorkspaces(activeBomId).catch(() => undefined);
+    return { filled: result.filled.length, remaining: result.remaining };
+  };
+
   const assignBomSeriesProject = async (series: BomSeries, projectId: string | null) => {
     for (const item of series.versions) await assignBomProject(item.workspace.id, projectId);
   };
@@ -6051,6 +6101,7 @@ export function MaterialRequestPage() {
         matchCurrentBom={matchCurrentBom}
         onLocateCurrentBom={locateCurrentBom}
         onLocateDiffEntry={locateBomDiffEntry}
+        onRecarry={canEditModuleAccess ? recarryBomVersion : undefined}
         onView={(id) => { switchActiveBom(id); setBomManagerOpen(false); }}
         onSetCurrent={requestSetCurrentBomVersion}
         onUploadVersion={(series) => { uploadTargetSeriesRef.current = series.id; fileInputRef.current?.click(); }}

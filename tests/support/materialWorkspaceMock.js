@@ -91,6 +91,11 @@ const previousRecords = [
   makeRecord('R1_C0P1', 4), makeRecord('LB48', 5),
   makeRecord('U9', 9, { name: 'IC removed in V2', manufacturerPartNumber: 'QA-MPN-U9', partNumber: '000-PHYSICAL-U9', trackingStatus: '處理中', trackingHistory: [{ id: 'tracking-qa-u9', status: '處理中', note: 'QA 追蹤：等待申請', createdAt: '2026-10-01T00:00:00.000Z', createdBy: 'QA' }] }),
 ];
+// ?qaRecarry: an older upload left V1's website data on PR1 and R1_C0P1 behind, although V2 has the same parts.
+if (new URLSearchParams(window.location.search).has('qaRecarry')) {
+  previousRecords[2] = { ...previousRecords[2], trackingStatus: '料號申請中', requestOwnerName: 'CE 王同學', trackingHistory: [{ id: 'tracking-qa-pr1', status: '料號申請中', note: 'QA：V1 申請中', createdAt: '2026-11-01T00:00:00.000Z', createdBy: 'QA' }] };
+  previousRecords[4] = { ...previousRecords[4], note: 'QA：V1 的 Note' };
+}
 const seriesId = 'series:qa';
 const stamp = (daysAgo) => new Date(Date.now() - daysAgo * 86400000).toISOString();
 const workspace = {
@@ -178,6 +183,7 @@ export const loadBomWorkspaceProjects = async () => new Map([...store.values()].
 export const loadBomWorkspaceVersions = async () => new Map([...store.values()].flatMap(item => (item.version ? [[item.id, item.version]] : [])));
 export const loadPageTrackerMap = async () => new Map([...store.values()].flatMap(item => (item.pageTracker ? [[item.id, item.pageTracker]] : [])));
 export const loadTableColorThemeMap = async () => new Map([...store.values()].flatMap(item => (item.tableColorTheme ? [[item.id, item.tableColorTheme]] : [])));
+export const loadBomWorkspaceForWrite = async (target) => { await new Promise(resolve => setTimeout(resolve, 120)); if (!fullRecords.has(target.id)) throw new Error('QA：找不到這個版本'); const rows = structuredClone(fullRecords.get(target.id)); return { ...target, payload: { ...target.payload, records: rows, recordCount: rows.length }, recordMeta: structuredClone(store.get(target.id)?.recordMeta ?? {}) }; };
 export const loadBomWorkspaceRecords = async (workspaceId) => { await new Promise(resolve => setTimeout(resolve, 120)); if (!fullRecords.has(workspaceId)) throw new Error('QA：找不到這個版本'); return structuredClone(fullRecords.get(workspaceId)); };
 export const loadBomWorkspaceRecordChanges = async (current) => {
   const change = { workspaceIds: [current.id], records: [] };

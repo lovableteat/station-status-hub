@@ -139,6 +139,29 @@ function startHarness() {
     assert.match(await switcher.textContent(), /V2/);
     await context.close();
 
+    // 2026-11-17 Baseboard: an older upload left V1's applications behind although V2 has the same parts.
+    // 未帶入 opens the comparison on 只看未帶入, positions that only lost data stay visible, and 帶入舊版資料 fills them once.
+    const repair = await browser.newContext({ viewport: { width: 1480, height: 900 }, reducedMotion: 'reduce' });
+    const fix = await repair.newPage();
+    fix.on('pageerror', (error) => { throw error; });
+    await fix.goto(`http://127.0.0.1:${PORT}/?qaRecarry`);
+    await fix.getByRole('button', { name: /BOM 管理/ }).click();
+    await fix.getByTestId('bom-version-orphaned').first().click();
+    await fix.getByTestId('bom-diff-summary').waitFor({ timeout: 15000 });
+    const recarryBanner = fix.getByTestId('bom-diff-recarry');
+    assert.match(await recarryBanner.textContent(), /2 筆舊版資料在新版找得到同一顆料/);
+    assert.equal(await fix.getByTestId('bom-diff-view').locator('tbody tr[data-diff-entry]').count(), 3, 'PR1 and R1_C0P1 have no field change but lost data, and U9 is gone');
+    await recarryBanner.getByRole('button', { name: '帶入舊版資料 2 筆' }).click();
+    assert.match(await fix.getByTestId('bom-version-feedback').textContent(), /帶入 V2 2 筆；另有 1 筆在新版找不到同一顆料/);
+    await recarryBanner.waitFor({ state: 'detached' });
+    // The comparison runs again from the saved rows.
+    await fix.getByTestId('bom-diff-summary').waitFor({ timeout: 15000 });
+    assert.equal(await recarryBanner.count(), 0, 'nothing left to carry once it is filled');
+    assert.match(await fix.getByRole('button', { name: /^未帶入/ }).first().textContent(), /未帶入\s*1/);
+    await fix.getByRole('button', { name: '← 返回系列' }).click();
+    assert.match(await fix.locator('tr[data-current="true"]').textContent(), /帶入 2.*未帶入 1/);
+    await repair.close();
+
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
     const small = await phone.newPage();
     await small.goto(`http://127.0.0.1:${PORT}/`);

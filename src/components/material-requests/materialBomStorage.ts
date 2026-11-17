@@ -1507,6 +1507,21 @@ export async function loadBomWorkspaceRecords(workspaceId: string): Promise<Mate
   return [...rows].sort((left, right) => left.order_index - right.order_index).map((row) => row.data);
 }
 
+/**
+ * Every row of a BOM that is not on screen, with each row's revision, so a few rows can be written
+ * back with saveBomWorkspaceRecord without overwriting an edit someone made in the meantime.
+ */
+export async function loadBomWorkspaceForWrite(workspace: BomWorkspace): Promise<BomWorkspace> {
+  const rows = await loadRemoteRecordRowsForWorkspace(workspace.id, workspace.payload.recordCount ?? 0, { loadAllRecords: true });
+  const sorted = [...rows].sort((left, right) => left.order_index - right.order_index);
+  const records = sorted.map((row) => row.data);
+  return {
+    ...workspace,
+    payload: { ...workspace.payload, records, recordCount: records.length },
+    recordMeta: Object.fromEntries(sorted.map((row) => [row.record_id, { updatedAt: row.updated_at }])),
+  };
+}
+
 /** Recover missed events using row revisions, fetching full data only for changed records. */
 export async function loadBomWorkspaceRecordChanges(workspace: BomWorkspace): Promise<BomWorkspaceChange> {
   const change: BomWorkspaceChange = { workspaceIds: [workspace.id], records: [] };

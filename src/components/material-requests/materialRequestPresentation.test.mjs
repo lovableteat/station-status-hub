@@ -192,6 +192,10 @@ test("pending materials are classified by reference prefix with connectors and I
   assert.equal(presentation.getPendingMaterialCategory("u839"), "ic");
   for (const ref of ["R7063", "LB37", "C1", "RN5", "L2"]) assert.equal(presentation.getPendingMaterialCategory(ref), "rlc");
   for (const ref of ["D138", "FB1", "Q3", "", "123"]) assert.equal(presentation.getPendingMaterialCategory(ref), "other");
+  // Baseboard power section (2026-11-17): PU／PR／PL／PC were all filed under 其他.
+  assert.equal(presentation.getPendingMaterialCategory("PU1, PU2, PU3"), "ic");
+  for (const ref of ["PR11, PR12", "PL30, PL32", "PC845"]) assert.equal(presentation.getPendingMaterialCategory(ref), "rlc");
+  for (const ref of ["PQ21", "PJ1", "PD3", "PCB1", "PAD2"]) assert.equal(presentation.getPendingMaterialCategory(ref), "other");
   const groups = presentation.groupPendingMaterials([
     { displayRef: "R1" }, { displayRef: "U1" }, { displayRef: "J1" }, { displayRef: "D1" }, { displayRef: "C1" },
   ]);

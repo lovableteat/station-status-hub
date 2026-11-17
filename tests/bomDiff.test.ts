@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  bomDiffEntryPreview, bomRecordHasTracking, bomRefTokens, buildBomDiffGroups, carryBomTracking, describeBomWebsiteData, diffBomRecords,
-  matchBomVendorLines, mergeBomTrackingHistories,
+  bomDiffEntryPreview, bomRecordHasTracking, bomRecordHasWebsiteData, bomRefTokens, buildBomDiffGroups, carryBomTracking, describeBomWebsiteData, diffBomRecords,
+  matchBomVendorLines, mergeBomTrackingHistories, recarryBomTracking,
 } from "../src/components/material-requests/bomDiff.ts";
 
 let counter = 0;
@@ -145,7 +145,7 @@ test("independent required selections carry to matching revisions and are not si
 test("carry-over moves tracking by content, keeps new imported entries first and reports orphans", () => {
   const previous = [
     row({ id: "old-1", refDes: "C1", trackingStatus: "處理中", requestTicket: "REQ-1", trackingHistory: [{ id: "tracking-a", status: "處理中", note: "RD 手動", createdAt: "2026-10-01T00:00:00.000Z" }], specDocument: { name: "spec.pdf", path: "x/spec.pdf", mimeType: "application/pdf", size: 1, uploadedAt: "2026-10-01T00:00:00.000Z" } }),
-    row({ id: "old-2", refDes: "R7", trackingStatus: "已完成", trackingHistory: [{ id: "tracking-b", status: "已完成", createdAt: "2026-10-02T00:00:00.000Z" }] }),
+    row({ id: "old-2", refDes: "R7", partNumber: "000-007", manufacturerPartNumber: "MPN-R7", trackingStatus: "已完成", trackingHistory: [{ id: "tracking-b", status: "已完成", createdAt: "2026-10-02T00:00:00.000Z" }] }),
     row({ id: "manual-123", refDes: "X1", name: "RD 手動新增" }),
     row({ id: "old-4", refDes: "Q1" }),
   ];
@@ -324,4 +324,99 @@ test("two 7,000-row versions compare in well under a second", () => {
   const result = diffBomRecords(make(0), make(1));
   assert.ok(performance.now() - started < 1000);
   assert.equal(result.summary.added + result.summary.removed + result.summary.changed + result.summary.unchanged, result.entries.length);
+});
+
+// 2026-11-17 Baseboard: V2 left 64 of 68 tracked lines behind. Alternate vendor rows that the old Excel grouped
+// under a short Ref_tmp, renumbered locations and MPNs typed without their dashes no longer lose their tracking.
+const applying = (id: string, status = "料號申請中") => ({ trackingStatus: status, trackingHistory: [{ id, status, createdAt: "2026-11-01T00:00:00.000Z", createdBy: "RD" }] });
+
+test("an alternate vendor row grouped under a short Ref_tmp in the old file keeps its application in the new file", () => {
+  const previous = [
+    row({ id: "v1-main", refDes: "PL30, PL32", refGroup: "PL30, PL32", partNumber: "000-100", manufacturerPartNumber: "MAIN-1", manufacturer: "CYNTEC" }),
+    // Old CE file: the alternate row had no Ref Des of its own, only the Ref_tmp code (the first position).
+    row({ id: "v1-alt", refDes: "", refGroup: "PL30", partNumber: "", manufacturerPartNumber: "CMMB051H-4R7MS", manufacturer: "CYNTEC", ...applying("tracking-pl30") }),
+  ];
+  const next = [
+    row({ id: "v2-main", refDes: "PL30, PL32", refGroup: "PL30, PL32", partNumber: "000-100", manufacturerPartNumber: "MAIN-1", manufacturer: "CYNTEC" }),
+    row({ id: "v2-alt", refDes: "PL30, PL32", refGroup: "PL30, PL32", partNumber: "", manufacturerPartNumber: "CMMB051H-4R7MS", manufacturer: "CYNTEC" }),
+  ];
+  const carried = carryBomTracking(previous, next);
+  assert.equal(carried.orphaned.length, 0);
+  assert.equal(carried.moved, 1);
+  assert.equal(carried.tracked, 1);
+  assert.equal(carried.records.find((record) => record.id === "v2-alt")?.trackingStatus, "料號申請中");
+  const diff = diffBomRecords(previous, carried.records);
+  assert.equal(diff.summary.trackingLost, 0, "the comparison agrees with the carry-over");
+  const moved = diff.entries.flatMap((entry) => entry.lines).find((line) => line.movedTo);
+  assert.equal(moved?.movedTo, "PL30, PL32");
+});
+
+test("a renumbered location and an MPN typed without dashes still carry the application", () => {
+  const previous = [
+    row({ id: "j5", refDes: "J5", name: "CONN", partNumber: "", manufacturerPartNumber: "GP420-50215", manufacturer: "AMPHENOL", ...applying("tracking-j5", "已發信") }),
+    row({ id: "r1", refDes: "R1", name: "RES", partNumber: "", manufacturerPartNumber: "RC0402FR-0710KL", manufacturer: "YAGEO", ...applying("tracking-r1") }),
+  ];
+  const next = [
+    row({ id: "j7", refDes: "J7", name: "CONN", partNumber: "", manufacturerPartNumber: "GP420-50215", manufacturer: "Amphenol Corp." }),
+    row({ id: "r1n", refDes: "R1", name: "RES", partNumber: "", manufacturerPartNumber: "RC0402FR0710KL", manufacturer: "YAGEO" }),
+  ];
+  const carried = carryBomTracking(previous, next);
+  assert.deepEqual(carried.orphaned.map((record) => record.id), []);
+  assert.equal(carried.records.find((record) => record.id === "j7")?.trackingStatus, "已發信");
+  assert.equal(carried.records.find((record) => record.id === "r1n")?.trackingStatus, "料號申請中");
+});
+
+test("a moved part prefers the new location that shares a Ref Des, and an old line no part matches is still reported", () => {
+  const previous = [
+    row({ id: "c1", refDes: "C1, C2", partNumber: "", manufacturerPartNumber: "CAP-X", ...applying("tracking-c1") }),
+    row({ id: "gone", refDes: "U9", partNumber: "", manufacturerPartNumber: "ONLY-OLD", ...applying("tracking-u9") }),
+  ];
+  const next = [
+    row({ id: "far", refDes: "C80", partNumber: "", manufacturerPartNumber: "CAP-X" }),
+    row({ id: "near", refDes: "C2, C3", partNumber: "", manufacturerPartNumber: "CAP-X" }),
+  ];
+  const carried = carryBomTracking(previous, next);
+  assert.equal(carried.records.find((record) => record.id === "near")?.trackingStatus, "料號申請中");
+  assert.ok(!carried.records.find((record) => record.id === "far")?.trackingStatus, "the other location of the same part gets nothing");
+  assert.deepEqual(carried.orphaned.map((record) => record.id), ["gone"]);
+  assert.equal(diffBomRecords(previous, carried.records).summary.trackingLost, 1);
+});
+
+test("帶入舊版資料 fills only rows an earlier upload left without website data, and running it again changes nothing", () => {
+  const previous = [
+    row({ id: "a", refDes: "U1", partNumber: "", manufacturerPartNumber: "IC-1", ...applying("tracking-a"), requestOwnerName: "王工程師" }),
+    row({ id: "b", refDes: "U2", partNumber: "", manufacturerPartNumber: "IC-2", ...applying("tracking-b") }),
+    row({ id: "c", refDes: "U3", partNumber: "", manufacturerPartNumber: "IC-3", note: "舊 Note" }),
+    row({ id: "d", refDes: "U4", partNumber: "", manufacturerPartNumber: "IC-GONE", ...applying("tracking-d") }),
+    row({ id: "manual-1", refDes: "U5", partNumber: "", manufacturerPartNumber: "IC-MANUAL", ...applying("tracking-m") }),
+  ];
+  // As an older upload stored it: nothing carried, and U3 edited on the new version since.
+  const current = [
+    row({ id: "a2", refDes: "U1", partNumber: "", manufacturerPartNumber: "IC-1" }),
+    row({ id: "b2", refDes: "U2, U12", partNumber: "", manufacturerPartNumber: "IC-2", trackingHistory: [{ id: "imported-tracking-S-3", status: "新增追蹤", note: "CE 匯入", createdAt: "2026-11-17T00:00:00.000Z" }], trackingStatus: "新增追蹤" }),
+    row({ id: "c2", refDes: "U3", partNumber: "", manufacturerPartNumber: "IC-3", note: "新版已改的 Note" }),
+  ];
+  const before = diffBomRecords(previous, current).summary;
+  assert.equal(before.recarry, 2, "U1 and U2 have their part in the new version but not their data");
+  assert.equal(before.trackingLost, 4, "U1, U2 not carried; U4 and the manual row have no counterpart");
+  const result = recarryBomTracking(previous, current);
+  assert.deepEqual(result.filled.map((record) => record.id).sort(), ["a2", "b2"]);
+  const a2 = result.records.find((record) => record.id === "a2")!;
+  assert.equal(a2.trackingStatus, "料號申請中");
+  assert.equal(a2.requestOwnerName, "王工程師");
+  const b2 = result.records.find((record) => record.id === "b2")!;
+  assert.deepEqual(b2.trackingHistory!.map((entry) => entry.id), ["imported-tracking-S-3", "tracking-b"], "the new file's own imported note stays first");
+  assert.equal(result.records.find((record) => record.id === "c2")?.note, "新版已改的 Note", "data entered on the new version is never overwritten");
+  assert.equal(result.records.length, 3, "a manual row deleted from the new version is not brought back");
+  assert.equal(result.remaining, 2);
+  assert.equal(recarryBomTracking(previous, result.records).filled.length, 0);
+});
+
+test("text read from the old Excel alone is not website data and is not reported as not carried", () => {
+  const imported = row({ id: "imp", refDes: "Q1", trackingStatus: "不建議使用", trackingHistory: [{ id: "imported-tracking-S-9", status: "不建議使用", createdAt: "2026-10-01T00:00:00.000Z" }] });
+  assert.equal(bomRecordHasTracking(imported), true);
+  assert.equal(bomRecordHasWebsiteData(imported), false);
+  assert.equal(bomRecordHasWebsiteData(row({ refDes: "Q1", trackingStatus: "已發信" })), true, "a status set before history existed is website data");
+  assert.equal(bomRecordHasWebsiteData(row({ refDes: "Q1", trackingStatus: "未處理" })), false);
+  assert.equal(diffBomRecords([imported], [row({ id: "imp2", refDes: "Q1" })]).summary.trackingLost, 0);
 });

@@ -139,6 +139,8 @@ export interface BomVersionCenterProps {
   diffRequest?: BomDiffRequest | null;
   /** Shows a compared part in the material table so what did not carry over can be filled in; false when it cannot be found. */
   onLocateDiffEntry?: (target: BomDiffLocateTarget) => boolean;
+  /** 帶入舊版資料: fills the older version's website data into the current version's matching rows. */
+  onRecarry?: (target: { series: BomSeries; before: BomSeriesVersion; after: BomSeriesVersion }) => Promise<{ filled: number; remaining: number }>;
 }
 
 export interface BomDiffLocateTarget {
@@ -201,7 +203,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const {
     open, onOpenChange, canEdit, ready, busy = false, activeBomId, activeProjectId, activeProjectName, historyAccountId, projects, projectNames, seriesList, exportedBy,
     loadRecords, currentBomName, matchCurrentBom, onLocateCurrentBom, onView, onSetCurrent, onUploadVersion, onUploadNew, onAssignProject, onRenameSeries, onUpdateVersion, onSetArchived, onDeleteVersion, onDeleteSeries, onOpenPageTracker, onDownloadSource,
-    diffRequest, onLocateDiffEntry,
+    diffRequest, onLocateDiffEntry, onRecarry,
   } = props;
   const [tableScrollRef, tableOverflows] = useOverflowX<HTMLDivElement>();
   const compact = useCompact();
@@ -220,6 +222,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const [diffPair, setDiffPair] = useState<{ before: string; after: string } | null>(null);
   const [diffLoad, setDiffLoad] = useState<DiffLoad | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [recarrying, setRecarrying] = useState(false);
   const [editingVersionId, setEditingVersionId] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
@@ -300,13 +303,15 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     return promise;
   };
 
-  const openDiff = (series: BomSeries, before: BomSeriesVersion, after: BomSeriesVersion) => {
+  const openDiff = (series: BomSeries, before: BomSeriesVersion, after: BomSeriesVersion, options: { lostOnly?: boolean } = {}) => {
     setSelectedSeriesId(series.id);
     if (diffLoad?.error) { setDiffLoad(null); setDiffAttempt((current) => current + 1); }
     // A link that is still waiting (e.g. to versions that no longer exist) gives way to what the user picked.
     if (diffRequest) consumedDiffRequest.current = diffRequest.token;
     setDiffPair({ before: before.workspace.id, after: after.workspace.id });
-    setDiffViewSeed((current) => (current.lostOnly || current.view ? { token: current.token, lostOnly: false } : current));
+    // 未帶入 in the version table opens straight on 只看未帶入; a fresh token remounts the view with it.
+    if (options.lostOnly) setDiffViewSeed((current) => ({ token: current.token + 1, lostOnly: true }));
+    else setDiffViewSeed((current) => (current.lostOnly || current.view ? { token: current.token, lostOnly: false } : current));
     setMode("diff");
   };
 
@@ -364,7 +369,8 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   // 補填 only where something can be filled in: the current version, by someone who may edit.
   const canFillDiff = canLocateDiff && Boolean(diffAfter?.isCurrent) && canEdit;
   const locateDiffEntry = (entry: BomDiffEntry, view: BomDiffViewState) => {
-    const record = entry.lines.find((line) => line.after)?.after;
+    // A part that moved to another location is shown where it now sits.
+    const record = entry.lines.find((line) => line.after)?.after ?? entry.lines.find((line) => line.movedRecord)?.movedRecord;
     if (!record || !onLocateDiffEntry || !diffSeries || !diffBefore || !diffAfter) return;
     const located = onLocateDiffEntry({ workspaceId: diffAfter.workspace.id, record, returnTo: { seriesId: diffSeries.id, before: diffBefore.workspace.id, after: diffAfter.workspace.id, lostOnly: view.filters.trackingLostOnly, view } });
     if (!located) return;
@@ -384,6 +390,27 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
       return false;
     } finally {
       setPendingAction(null);
+    }
+  };
+
+  const canRecarry = Boolean(onRecarry && canFillDiff && ready);
+  const recarry = async () => {
+    if (!onRecarry || !diffSeries || !diffBefore || !diffAfter) return;
+    setRecarrying(true);
+    setFeedback(null);
+    try {
+      const { filled, remaining } = await onRecarry({ series: diffSeries, before: diffBefore, after: diffAfter });
+      // Compare again from the saved rows, even when the version's timestamp did not move.
+      recordsCache.current.clear();
+      setDiffLoad(null);
+      setDiffAttempt((current) => current + 1);
+      setFeedback({ view: "diff", tone: "ok", text: filled > 0
+        ? `已把 ${diffBefore.displayNumber} 的資料帶入 ${diffAfter.displayNumber} ${filled.toLocaleString()} 筆${remaining > 0 ? `；另有 ${remaining.toLocaleString()} 筆在新版找不到同一顆料，請到料號表補填` : ""}`
+        : "沒有需要帶入的資料：新版的同一顆料都已經有自己的資料" });
+    } catch (error) {
+      setFeedback({ view: "diff", tone: "error", text: error instanceof Error ? error.message : "帶入失敗，資料沒有變更，請稍後再試。" });
+    } finally {
+      setRecarrying(false);
     }
   };
 
@@ -509,7 +536,9 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
           const carryChips = carry ? (
             <span className="bom-version-chip-row flex gap-1" title={carryTitle}>
               <span className={cn(CHIP, carry.tracked === undefined ? CHIP_TONE.neutral : CHIP_TONE.success)}>{carry.tracked === undefined ? "對上" : "帶入"} {carriedCount}</span>
-              {carry.orphaned > 0 && <span className={cn(CHIP, CHIP_TONE.danger)}>未帶入 {carry.orphaned}</span>}
+              {carry.orphaned > 0 && (comparePair
+                ? <button type="button" data-testid="bom-version-orphaned" onClick={() => openDiff(selectedSeries, comparePair.before, comparePair.after, { lostOnly: true })} title={`打開 ${comparePair.before.displayNumber} → ${comparePair.after.displayNumber} 比對，只看沒有帶到新版的資料`} className={cn(CHIP, CHIP_TONE.danger, "cursor-pointer hover:bg-destructive/25")}>未帶入 {carry.orphaned}</button>
+                : <span className={cn(CHIP, CHIP_TONE.danger)}>未帶入 {carry.orphaned}</span>)}
               {carry.manual > 0 && <span className={cn(CHIP, CHIP_TONE.neutral)} title="網站上手動新增、新版 Excel 沒有的料件，已保留到這一版">手動 {carry.manual}</span>}
             </span>
           ) : null;
@@ -642,6 +671,8 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
             compact={compact}
             onLocate={canLocateDiff ? locateDiffEntry : undefined}
             locateFills={canFillDiff}
+            onRecarry={canRecarry ? () => void recarry() : undefined}
+            recarrying={recarrying}
           />
         ) : (
           <div className="bom-version-columns grid min-h-0 min-w-0 flex-1">
