@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/audits/2026-10-13-comparison-feedback.md`；程式參考基準：`a2aecd395a11b614a9bd0302f5921af15d2daae4`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/audits/2026-10-13-comparison-feedback.md`；程式參考基準：`c7dbaf8fa52063c1c4822db07b57414efe1692bb`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # AutoCheck 意見收集驗證紀錄
 
