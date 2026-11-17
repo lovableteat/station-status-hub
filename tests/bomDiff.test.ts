@@ -420,3 +420,58 @@ test("text read from the old Excel alone is not website data and is not reported
   assert.equal(bomRecordHasWebsiteData(row({ refDes: "Q1", trackingStatus: "未處理" })), false);
   assert.equal(diffBomRecords([imported], [row({ id: "imp2", refDes: "Q1" })]).summary.trackingLost, 0);
 });
+
+// Review of the first Baseboard fix: the board-wide search must not carry data to a different part.
+const own = (id: string, status: string) => ({ id, status, note: "", createdAt: "2026-11-01T00:00:00Z", createdBy: "RD" });
+
+test("across the board, dots stay part of the MPN and placeholders are never searched", () => {
+  const tvs = carryBomTracking(
+    [row({ id: "d10", refDes: "D10", partNumber: "", manufacturerPartNumber: "SMBJ5.0A", manufacturer: "Littelfuse", trackingStatus: "料號申請中", trackingHistory: [own("t-d10", "料號申請中")] })],
+    [row({ id: "pd3", refDes: "PD3", partNumber: "", manufacturerPartNumber: "SMBJ50A", manufacturer: "Littelfuse" })],
+  );
+  assert.equal(tvs.moved, 0, "SMBJ5.0A and SMBJ50A are different diodes");
+  assert.equal(tvs.orphaned.length, 1);
+  const dash = carryBomTracking(
+    [row({ id: "r10", refDes: "R10", partNumber: "", manufacturerPartNumber: "-", manufacturer: "", note: "等廠商", requestOwnerName: "A" })],
+    [row({ id: "j5", refDes: "J5", name: "CONN", partNumber: "", manufacturerPartNumber: "-", manufacturer: "" })],
+  );
+  assert.equal(dash.moved, 0);
+  assert.equal(dash.records[0].note ?? "", "");
+});
+
+test("without the vendor only an MPN that appears once on each side moves", () => {
+  const previous = [
+    row({ id: "a", refDes: "C11", partNumber: "", manufacturerPartNumber: "GRM155R71C104KA88D", manufacturer: "Murata", ...applying("t-a") }),
+    row({ id: "b", refDes: "C12", partNumber: "", manufacturerPartNumber: "GRM155R71C104KA88D", manufacturer: "Murata", ...applying("t-b") }),
+  ];
+  const next = [row({ id: "n", refDes: "C80", partNumber: "", manufacturerPartNumber: "GRM155R71C104KA88D", manufacturer: "MURATA ELECTRONICS" })];
+  assert.equal(carryBomTracking(previous, next).moved, 0, "two old rows want the one new row: nothing is guessed");
+});
+
+test("text read from the old Excel never takes the partner of a row with a website application", () => {
+  const imported = { id: "imported-tracking-S-1", status: "處理中", note: "舊 Excel", createdAt: "" };
+  const previous = [
+    row({ id: "c5", refDes: "C5", partNumber: "", manufacturerPartNumber: "GRM1-0402", manufacturer: "Murata", trackingHistory: [imported], trackingStatus: "處理中" }),
+    row({ id: "c9", refDes: "C9", partNumber: "", manufacturerPartNumber: "GRM1-0402", manufacturer: "Murata", trackingHistory: [own("t-c9", "料號申請中")], trackingStatus: "料號申請中" }),
+  ];
+  const carried = carryBomTracking(previous, [row({ id: "pc105", refDes: "PC105", partNumber: "", manufacturerPartNumber: "GRM1-0402", manufacturer: "Murata" })]);
+  assert.equal(carried.records[0].trackingStatus, "料號申請中");
+  assert.deepEqual(carried.orphaned.map((record) => record.id), ["c5"]);
+});
+
+test("a status the new Excel brings itself is not offered for 帶入 again and again", () => {
+  const previous = [row({ id: "u1", refDes: "U1", partNumber: "", manufacturerPartNumber: "TPS1-A", trackingStatus: "已發信", trackingHistory: [] })];
+  const imported = { id: "imported-tracking-S-3", status: "處理中", note: "等回覆", createdAt: "" };
+  const current = carryBomTracking(previous, [row({ id: "u1n", refDes: "U1", partNumber: "", manufacturerPartNumber: "TPS1-A", trackingStatus: "處理中", trackingHistory: [imported], trackingNote: "等回覆" })]).records;
+  assert.equal(diffBomRecords(previous, current).summary.recarry, 0);
+  assert.equal(recarryBomTracking(previous, current).filled.length, 0);
+});
+
+test("switching back never lets a part found elsewhere wipe the target row's own Note, 負責人 or SPEC", () => {
+  const current = [row({ id: "cur", refDes: "R50", partNumber: "", manufacturerPartNumber: "ERJ-2RKF1001X", manufacturer: "Panasonic", note: "目前版本的 Note", trackingHistory: [own("t-cur", "已發信")] })];
+  const target = [row({ id: "tgt", refDes: "R12", partNumber: "", manufacturerPartNumber: "ERJ-2RKF1001X", manufacturer: "Panasonic", note: "keep me", requestOwnerName: "B", specDocuments: [spec("a.pdf")] })];
+  const carried = carryBomTracking(current, target, { from: "current" });
+  assert.equal(carried.records[0].note, "keep me");
+  assert.equal(carried.records[0].requestOwnerName, "B");
+  assert.equal(carried.records[0].specDocuments?.length, 1);
+});

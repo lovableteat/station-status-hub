@@ -159,7 +159,8 @@ function startHarness() {
     assert.equal(await recarryBanner.count(), 0, 'nothing left to carry once it is filled');
     assert.match(await fix.getByRole('button', { name: /^未帶入/ }).first().textContent(), /未帶入\s*1/);
     await fix.getByRole('button', { name: '← 返回系列' }).click();
-    assert.match(await fix.locator('tr[data-current="true"]').textContent(), /帶入 2.*未帶入 1/);
+    // The QA V2 predates separate counts (「對上 6」): that number stays, only 未帶入 is recounted.
+    assert.match(await fix.locator('tr[data-current="true"]').textContent(), /對上 6.*未帶入 1/);
     await repair.close();
 
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });

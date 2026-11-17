@@ -5012,6 +5012,8 @@ export function MaterialRequestPage() {
     if (!canEditModuleAccess) throw new Error("沒有編輯權限，無法帶入。");
     if (!isCollaborativeReady) throw new Error("共用資料尚未連線，請稍後再帶入。");
     if (!after.isCurrent) throw new Error(`${after.displayNumber} 不是目前版本，只能帶入目前版本。`);
+    // Only from the version this one was uploaded over: an older one could bring back what was cleared since.
+    if (after.version.previousWorkspaceId !== before.workspace.id) throw new Error(`只能從 ${after.displayNumber} 的前一版帶入。`);
     const onScreen = after.workspace.id === activeWorkspace.id && isFullDatasetLoaded;
     const [previousRecords, target] = await Promise.all([
       loadVersionRecords(before.workspace.id),
@@ -5019,40 +5021,70 @@ export function MaterialRequestPage() {
     ]);
     assertBomWriteCurrent(writeScope);
     const result = recarryBomTracking(previousRecords, target.payload.records);
+    let saved = 0;
+    let failed = 0;
+    let firstError: unknown = null;
     if (result.filled.length > 0) {
-      let failed = 0;
       if (onScreen) {
-        failed = (await saveRecordsToActiveBom(result.filled)).failed;
+        try {
+          ({ failed } = await saveRecordsToActiveBom(result.filled));
+        } catch (error) {
+          if (!isBomWriteCurrent(writeScope)) throw error;
+          failed = result.filled.length;
+          firstError = error;
+        }
       } else {
         let saving: BomWorkspace = { ...target, payload: { ...target.payload, records: result.records, recordCount: result.records.length } };
-        for (const [index, record] of result.filled.entries()) {
+        const previousById = new Map(target.payload.records.map((record) => [record.id, record] as const));
+        for (const record of result.filled) {
           try {
             const recordMeta = await saveBomWorkspaceRecord(saving, record, () => assertBomWriteCurrent(writeScope));
+            void logMaterialRecordChange({
+              action: "update",
+              actor: user,
+              imageCount: countTrackingImages(record),
+              previousImageCount: countTrackingImages(previousById.get(record.id)),
+              newUpdatedAt: recordMeta.updatedAt,
+              previousUpdatedAt: saving.recordMeta?.[record.id]?.updatedAt,
+              recordId: record.id,
+              workspaceId: saving.id,
+            });
             saving = { ...saving, recordMeta: { ...saving.recordMeta, [record.id]: recordMeta } };
           } catch (error) {
-            if (!isBomWriteCurrent(writeScope) || index === 0) throw error;
+            if (!isBomWriteCurrent(writeScope)) throw error;
             failed += 1;
+            firstError ??= error;
           }
         }
       }
-      assertBomWriteCurrent(writeScope);
-      if (failed > 0) throw new Error(`已帶入 ${result.filled.length - failed} 筆，${failed} 筆有人同時在改，沒有寫入。請重新打開比對再帶入一次。`);
+      saved = result.filled.length - failed;
+    }
+    assertBomWriteCurrent(writeScope);
+    if (saved > 0 || result.filled.length === 0) {
+      void logMaterialWorkspaceAction({
+        action: "version.recarry",
+        actor: user,
+        metadata: { seriesId: series.id, seriesName: series.name, fromWorkspaceId: before.workspace.id, filled: saved, failed, remaining: result.remaining },
+        workspaceId: after.workspace.id,
+      });
     }
     const carry = after.version.carry;
-    if (carry && (result.filled.length > 0 || carry.orphaned !== result.remaining)) {
+    // The counts on the version row are only rewritten once everything is in; a partial run is counted next time.
+    if (carry && failed === 0 && (saved > 0 || carry.orphaned !== result.remaining)) {
       await saveBomWorkspaceVersion(after.workspace.id, {
         ...after.version, seriesId: series.id, seriesName: series.name,
-        carry: { ...carry, tracked: (carry.tracked ?? 0) + result.filled.length, orphaned: result.remaining },
+        // Versions from before 2026-11-17 show 「對上 N」 (matched lines); that number stays as it was.
+        carry: { ...carry, ...(carry.tracked === undefined ? {} : { tracked: carry.tracked + saved }), orphaned: result.remaining },
       }, () => assertBomWriteCurrent(writeScope));
     }
-    void logMaterialWorkspaceAction({
-      action: "version.recarry",
-      actor: user,
-      metadata: { seriesId: series.id, seriesName: series.name, fromWorkspaceId: before.workspace.id, filled: result.filled.length, remaining: result.remaining },
-      workspaceId: after.workspace.id,
-    });
-    if (!onScreen || carry) await reloadBomWorkspaces(activeBomId).catch(() => undefined);
-    return { filled: result.filled.length, remaining: result.remaining };
+    await reloadBomWorkspaces(activeBomId).catch(() => undefined);
+    if (failed > 0) {
+      const busy = firstError instanceof BomRecordConflictError || failed < result.filled.length;
+      throw new Error(saved > 0
+        ? `已帶入 ${saved} 筆，${failed} 筆${busy ? "有人同時在改" : "寫入失敗"}，沒有寫入。請重新打開比對再帶入一次。`
+        : busy ? "有人同時在改這個版本，資料沒有變更。請重新打開比對再帶入一次。" : "帶入失敗，資料沒有變更，請稍後再試。");
+    }
+    return { filled: saved, remaining: result.remaining };
   };
 
   const assignBomSeriesProject = async (series: BomSeries, projectId: string | null) => {

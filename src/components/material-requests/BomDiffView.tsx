@@ -150,11 +150,13 @@ function KindChips({ entry }: { entry: BomDiffEntry }) {
 }
 
 export function BomDiffView({
-  series, before, after, result, loading, error, onPickBefore, onPickAfter, onSwap, onBack, onExport, exporting, initialLostOnly = false, initialView, onLostOnlyChange, compact = false, onLocate, locateFills = false, onRecarry, recarrying = false,
+  series, before, after, result, loading, error, onPickBefore, onPickAfter, onSwap, onBack, onExport, exporting, initialLostOnly = false, initialView, onLostOnlyChange, compact = false, onLocate, locateFills = false, recarry,
 }: {
-  /** 帶入舊版資料: fills old website data into the new version's matching rows; absent when the new side cannot be edited. */
-  onRecarry?: () => void;
-  recarrying?: boolean;
+  /**
+   * 帶入舊版資料, offered when the old side is the version the new one was uploaded over: `run` fills the old
+   * website data into the new version's matching rows; `blocked` says why it cannot (not current, no permission).
+   */
+  recarry?: { run?: () => void; blocked?: string; busy: boolean };
   /** Opened from an upload that left website data behind: start on 只看未帶入. */
   initialLostOnly?: boolean;
   /** 返回比對: start with the filters and open part the user left with. */
@@ -259,14 +261,14 @@ export function BomDiffView({
       </div>
 
       {/* An upload that missed data whose part is still in the new version: say so once and offer the fix, apart from the filters. */}
-      {recarryCount > 0 && (
-        <div data-testid="bom-diff-recarry" className="bom-diff-recarry" role="status">
+      {recarry && recarryCount > 0 && (
+        <div data-testid="bom-diff-recarry" className="bom-diff-recarry">
           <History aria-hidden="true" className="bom-diff-recarry-icon" />
-          <p><strong>{recarryCount.toLocaleString()} 筆舊版資料在新版找得到同一顆料，但沒有帶過去。</strong><span>{onRecarry ? "帶入後會補到新版那顆料；新版已經填過的不會被覆蓋。" : `${after.displayNumber} 不是目前版本，或你沒有編輯權限，無法帶入。`}</span></p>
-          {onRecarry && (
-            <Button type="button" size="sm" disabled={recarrying} aria-busy={recarrying || undefined} onClick={onRecarry} title={`把 ${before.displayNumber} 的追蹤、Note、負責人與 SPEC 附件補到 ${after.displayNumber} 的同一顆料`} className="bom-diff-recarry-action h-9 shrink-0 gap-1.5">
-              {recarrying ? <LoaderCircle className="bom-diff-spinner h-4 w-4" aria-hidden="true" /> : <History className="h-4 w-4" aria-hidden="true" />}
-              {recarrying ? "帶入中…" : `帶入舊版資料 ${recarryCount.toLocaleString()} 筆`}
+          <p role="status"><strong>{recarryCount.toLocaleString()} 筆舊版資料在新版找得到同一顆料，但沒有帶過去。</strong><span>{recarry.blocked ?? "帶入後會補到新版那顆料；新版已經填過的不會被覆蓋。"}</span></p>
+          {recarry.run && (
+            <Button type="button" size="sm" disabled={recarry.busy} aria-busy={recarry.busy || undefined} onClick={recarry.run} title={`把 ${before.displayNumber} 的追蹤、Note、負責人與 SPEC 附件補到 ${after.displayNumber} 的同一顆料`} className="bom-diff-recarry-action h-9 shrink-0 gap-1.5">
+              {recarry.busy ? <LoaderCircle className="bom-diff-spinner h-4 w-4" aria-hidden="true" /> : <History className="h-4 w-4" aria-hidden="true" />}
+              {recarry.busy ? "帶入中…" : `帶入舊版資料 ${recarryCount.toLocaleString()} 筆`}
             </Button>
           )}
         </div>

@@ -256,15 +256,27 @@ interface LineMatch {
 const lineKeys = (record: MaterialWorkbookRecord) => {
   const part = upper(record.partNumber);
   const mpn = upper(record.manufacturerPartNumber);
-  // The same MPN typed with or without its dashes, dots or spaces (RC0402FR-0710KL / RC0402FR0710KL).
-  const bare = mpn.replace(/[^0-9A-Z]/g, "");
+  // The same MPN typed with or without its dashes, slashes or spaces (RC0402FR-0710KL / RC0402FR0710KL).
+  // Dots stay: SMBJ5.0A and SMBJ50A are different parts.
+  const bare = mpn.replace(/[\s\-_/]+/g, "");
+  const maker = upper(record.manufacturer);
   return {
     part: part ? `part:${part}` : "",
-    vendorMpn: mpn ? `vendor:${upper(record.manufacturer)}|${mpn}` : "",
+    vendorMpn: mpn ? `vendor:${maker}|${mpn}` : "",
     mpn: mpn ? `mpn:${mpn}` : "",
     bareMpn: bare ? `bare:${bare}` : "",
+    vendorBare: bare && maker ? `vendor-bare:${maker}|${bare}` : "",
   };
 };
+
+const PLACEHOLDER_MPNS = new Set(["NA", "N/A", "TBD", "TBA", "NONE", "NULL", "無", "待確認", "待定"]);
+
+/** A placeholder ("-", "N/A", "TBD") or a code too short to name one part is never searched for across the board. */
+function isSearchableMpn(record: MaterialWorkbookRecord) {
+  const mpn = upper(record.manufacturerPartNumber);
+  const bare = mpn.replace(/[\s\-_/.]+/g, "");
+  return bare.length >= 4 && /[0-9]/.test(bare) && !PLACEHOLDER_MPNS.has(mpn);
+}
 
 /** Strongest vendor identity first: 實體料號, 廠商+MPN, MPN, then the MPN without punctuation. */
 const LINE_KEY_LEVELS = ["part", "vendorMpn", "mpn", "bareMpn"] as const;
@@ -307,6 +319,12 @@ export interface BomLocatedLine {
 }
 
 /**
+ * Board-wide identities, strongest first. Across the whole board the vendor must agree, except for an
+ * exact MPN that appears once on each side (the vendor name is often written differently).
+ */
+const MOVED_KEY_LEVELS = ["part", "vendorMpn", "vendorBare", "mpn"] as const;
+
+/**
  * Second look for old lines that the location match left without a partner: the same vendor part
  * anywhere in the new version. Locations get renumbered, split, merged or lose their Ref Des on a
  * vendor row between two Excel files; an application in progress belongs to the part, so it should
@@ -321,24 +339,36 @@ export function matchBomMovedLines(previous: readonly BomLocatedLine[], next: re
     const tokens = new Set(left);
     return right.reduce((count, token) => count + (tokens.has(token) ? 1 : 0), 0);
   };
-  for (const level of LINE_KEY_LEVELS) {
+  const keyOf = (line: BomLocatedLine, level: (typeof MOVED_KEY_LEVELS)[number]) =>
+    level !== "part" && !isSearchableMpn(line.record) ? "" : lineKeys(line.record)[level];
+  for (const level of MOVED_KEY_LEVELS) {
     const index = new Map<string, BomLocatedLine[]>();
     for (const line of next) {
       if (usedAfter.has(line.record)) continue;
-      const key = lineKeys(line.record)[level];
+      const key = keyOf(line, level);
       if (!key) continue;
       const list = index.get(key);
       if (list) list.push(line);
       else index.set(key, [line]);
     }
+    const previousCount = new Map<string, number>();
+    if (level === "mpn") {
+      for (const line of previous) {
+        if (usedBefore.has(line.record)) continue;
+        const key = keyOf(line, level);
+        if (key) previousCount.set(key, (previousCount.get(key) ?? 0) + 1);
+      }
+    }
     for (const line of previous) {
       if (usedBefore.has(line.record)) continue;
-      const key = lineKeys(line.record)[level];
+      const key = keyOf(line, level);
       if (!key) continue;
+      const candidates = (index.get(key) ?? []).filter((candidate) => !usedAfter.has(candidate.record));
+      // Without the vendor, only a part that is unambiguous on both sides moves.
+      if (level === "mpn" && (candidates.length !== 1 || previousCount.get(key) !== 1)) continue;
       let best: BomLocatedLine | undefined;
       let bestOverlap = -1;
-      for (const candidate of index.get(key) ?? []) {
-        if (usedAfter.has(candidate.record)) continue;
+      for (const candidate of candidates) {
         const score = overlap(line.tokens, candidate.tokens);
         if (score > bestOverlap) { best = candidate; bestOverlap = score; }
       }
@@ -601,7 +631,7 @@ function markMovedAndUncarriedLines(entries: BomDiffEntry[], before: readonly Ma
   const added: Array<BomLocatedLine & { line: BomVendorLineChange; entry: BomDiffEntry }> = [];
   for (const entry of entries) {
     for (const line of entry.lines) {
-      if (line.kind === "removed" && line.before && bomRecordHasTracking(line.before)) removed.push({ record: line.before, tokens: entry.before?.tokens ?? [], line });
+      if (line.kind === "removed" && line.before && bomRecordHasWebsiteData(line.before)) removed.push({ record: line.before, tokens: entry.before?.tokens ?? [], line });
       if (line.kind === "added" && line.after) added.push({ record: line.after, tokens: entry.after?.tokens ?? [], line, entry });
     }
   }
@@ -618,15 +648,22 @@ function markMovedAndUncarriedLines(entries: BomDiffEntry[], before: readonly Ma
     old.line.movedTo = target.entry.displayRef;
     old.line.movedRecord = pair.after.record;
     target.line.movedFrom = fromEntry.get(pair.before.record)?.displayRef ?? "";
-    if (bomRecordHasWebsiteData(pair.before.record) && !bomRecordHasWebsiteData(pair.after.record)) old.line.notCarried = true;
+    if (needsRecarry(pair.before.record, pair.after.record)) old.line.notCarried = true;
   }
   for (const entry of entries) {
     for (const line of entry.lines) {
-      if ((line.kind === "same" || line.kind === "changed") && line.before && line.after
-        && bomRecordHasWebsiteData(line.before) && !bomRecordHasWebsiteData(line.after)) line.notCarried = true;
+      if ((line.kind === "same" || line.kind === "changed") && line.before && line.after && needsRecarry(line.before, line.after)) line.notCarried = true;
     }
     entry.trackingLost = entry.lines.filter((line) => isLostLine(line)).length;
   }
+}
+
+/**
+ * The new line has none of the old line's website data, and carrying it would really give it some
+ * (a status typed in the new Excel can win over the old one; that is not something 帶入 can fill).
+ */
+function needsRecarry(before: MaterialWorkbookRecord, after: MaterialWorkbookRecord) {
+  return bomRecordHasWebsiteData(before) && !bomRecordHasWebsiteData(after) && bomRecordHasWebsiteData(carryLine(before, after));
 }
 
 /** Old website data that the new version does not hold: no counterpart at all, or a counterpart that never received it. */
@@ -783,13 +820,6 @@ export interface BomCarryResult {
 }
 
 /**
- * Copies website data (RD tracking, Note, 負責人, SPEC files) from the previous
- * version onto the matching rows of the new version. Rows are matched by design
- * position and vendor identity, never by row number. Old rows with data and no
- * counterpart are reported, not dropped. `from: "current"` is the switch back to an
- * older version, where the version that was current wins over the target's own data.
- */
-/**
  * Old and new lines that are the same part: by location and vendor first, then old lines with
  * website data that found no partner are looked up by vendor part anywhere in the new version.
  * Shared by the upload carry-over and 帶入舊版資料, and the same rule the comparison uses.
@@ -813,7 +843,8 @@ export function pairBomLines(previous: readonly MaterialWorkbookRecord[], next: 
   const previousTokens = tokensOf(previousGroups);
   const nextTokens = tokensOf(nextGroups);
   const moved = matchBomMovedLines(
-    previous.filter((record) => !usedPrevious.has(record) && bomRecordHasTracking(record)).map((record) => ({ record, tokens: previousTokens.get(record) ?? [] })),
+    // Only data entered on the website follows a part elsewhere; text read from the old Excel stays with its row.
+    previous.filter((record) => !usedPrevious.has(record) && bomRecordHasWebsiteData(record)).map((record) => ({ record, tokens: previousTokens.get(record) ?? [] })),
     next.filter((record) => !usedNext.has(record)).map((record) => ({ record, tokens: nextTokens.get(record) ?? [] })),
   );
   for (const pair of moved) {
@@ -823,13 +854,24 @@ export function pairBomLines(previous: readonly MaterialWorkbookRecord[], next: 
   return { pairs, usedPrevious };
 }
 
+/**
+ * Copies website data (RD tracking, Note, 負責人, SPEC files) from the previous
+ * version onto the matching rows of the new version. Rows are matched by design
+ * position and vendor identity, never by row number. Old rows with data and no
+ * counterpart are reported, not dropped. `from: "current"` is the switch back to an
+ * older version, where the version that was current wins over the target's own data.
+ */
 export function carryBomTracking(previous: readonly MaterialWorkbookRecord[], next: readonly MaterialWorkbookRecord[], options: { from?: "upload" | "current" } = {}): BomCarryResult {
-  const carryOne = options.from === "current" ? carryLineFromCurrent : carryLine;
+  const fromCurrent = options.from === "current";
+  const carryOne = fromCurrent ? carryLineFromCurrent : carryLine;
   const carried = new Map<MaterialWorkbookRecord, MaterialWorkbookRecord>();
   const { pairs, usedPrevious: matchedPrevious } = pairBomLines(previous, next);
   let tracked = 0;
   let moved = 0;
   for (const pair of pairs) {
+    // Switching back replaces the target's Note, 負責人 and SPEC files; a part found at another location
+    // only fills a target row that has nothing of its own.
+    if (fromCurrent && pair.moved && bomRecordHasWebsiteData(pair.after)) continue;
     carried.set(pair.after, carryOne(pair.before, pair.after));
     if (bomRecordHasTracking(pair.before)) tracked += 1;
     if (pair.moved) moved += 1;
@@ -866,7 +908,7 @@ export function recarryBomTracking(previous: readonly MaterialWorkbookRecord[], 
   const { pairs } = pairBomLines(previous, current);
   const replacements = new Map<MaterialWorkbookRecord, MaterialWorkbookRecord>();
   for (const pair of pairs) {
-    if (!bomRecordHasWebsiteData(pair.before) || bomRecordHasWebsiteData(pair.after)) continue;
+    if (!needsRecarry(pair.before, pair.after)) continue;
     replacements.set(pair.after, carryLine(pair.before, pair.after));
   }
   const records = current.map((record) => replacements.get(record) ?? record);

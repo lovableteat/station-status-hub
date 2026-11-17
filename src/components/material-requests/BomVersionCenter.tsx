@@ -393,7 +393,13 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     }
   };
 
-  const canRecarry = Boolean(onRecarry && canFillDiff && ready);
+  // 帶入舊版資料 only from the version the new one was uploaded over (what its 未帶入 count is measured against).
+  const recarryPair = Boolean(diffBefore && diffAfter && diffAfter.version.previousWorkspaceId === diffBefore.workspace.id);
+  const recarryBlocked = !recarryPair || !diffAfter ? undefined
+    : !diffAfter.isCurrent ? `${diffAfter.displayNumber} 不是目前版本，只能帶入目前版本。`
+      : !onRecarry || !canEdit ? "你沒有編輯權限，請有權限的同事帶入。"
+        : !ready ? "共用資料尚未連線，連線後才能帶入。"
+          : undefined;
   const recarry = async () => {
     if (!onRecarry || !diffSeries || !diffBefore || !diffAfter) return;
     setRecarrying(true);
@@ -409,6 +415,10 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         : "沒有需要帶入的資料：新版的同一顆料都已經有自己的資料" });
     } catch (error) {
       setFeedback({ view: "diff", tone: "error", text: error instanceof Error ? error.message : "帶入失敗，資料沒有變更，請稍後再試。" });
+      // Some rows may have been written before the failure: compare again from what is saved.
+      recordsCache.current.clear();
+      setDiffLoad(null);
+      setDiffAttempt((current) => current + 1);
     } finally {
       setRecarrying(false);
     }
@@ -522,6 +532,8 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         const describe = (item: BomSeriesVersion) => {
           const isActive = item.workspace.id === activeBomId;
           const carry = item.version.carry;
+          // 未帶入 was counted against the version this one was uploaded over.
+          const previousVersion = selectedSeries.versions.find((candidate) => candidate.workspace.id === item.version.previousWorkspaceId);
           const comparePair = bomVersionComparePair(selectedSeries, item);
           const compareOther = comparePair && (comparePair.before === item ? comparePair.after : comparePair.before);
           const carriedCount = carry?.tracked ?? carry?.matched ?? 0;
@@ -536,8 +548,8 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
           const carryChips = carry ? (
             <span className="bom-version-chip-row flex gap-1" title={carryTitle}>
               <span className={cn(CHIP, carry.tracked === undefined ? CHIP_TONE.neutral : CHIP_TONE.success)}>{carry.tracked === undefined ? "對上" : "帶入"} {carriedCount}</span>
-              {carry.orphaned > 0 && (comparePair
-                ? <button type="button" data-testid="bom-version-orphaned" onClick={() => openDiff(selectedSeries, comparePair.before, comparePair.after, { lostOnly: true })} title={`打開 ${comparePair.before.displayNumber} → ${comparePair.after.displayNumber} 比對，只看沒有帶到新版的資料`} className={cn(CHIP, CHIP_TONE.danger, "cursor-pointer hover:bg-destructive/25")}>未帶入 {carry.orphaned}</button>
+              {carry.orphaned > 0 && (previousVersion
+                ? <button type="button" data-testid="bom-version-orphaned" onClick={() => openDiff(selectedSeries, previousVersion, item, { lostOnly: true })} title={`打開 ${previousVersion.displayNumber} → ${item.displayNumber} 比對，只看沒有帶到新版的資料`} className={cn(CHIP, CHIP_TONE.danger, "cursor-pointer hover:bg-destructive/25")}>未帶入 {carry.orphaned}</button>
                 : <span className={cn(CHIP, CHIP_TONE.danger)}>未帶入 {carry.orphaned}</span>)}
               {carry.manual > 0 && <span className={cn(CHIP, CHIP_TONE.neutral)} title="網站上手動新增、新版 Excel 沒有的料件，已保留到這一版">手動 {carry.manual}</span>}
             </span>
@@ -671,8 +683,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
             compact={compact}
             onLocate={canLocateDiff ? locateDiffEntry : undefined}
             locateFills={canFillDiff}
-            onRecarry={canRecarry ? () => void recarry() : undefined}
-            recarrying={recarrying}
+            recarry={recarryPair ? { run: recarryBlocked ? undefined : () => void recarry(), blocked: recarryBlocked, busy: recarrying } : undefined}
           />
         ) : (
           <div className="bom-version-columns grid min-h-0 min-w-0 flex-1">
