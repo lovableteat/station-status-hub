@@ -46,7 +46,7 @@ jobs:
       - name: Complete unit and source contracts
         run: npm test
       - name: Reject high and critical dependency advisories
-        run: npm audit --audit-level=high
+        run: node scripts/audit-dependencies.mjs
       - name: Anonymous data exposure and authenticated compatibility
         run: node tests/anonymousExposure.integration.mjs "$AUDIT_QA_DIR/node_modules/@electric-sql/pglite"
       - name: Staged security proposals preserve operating data and attachment access

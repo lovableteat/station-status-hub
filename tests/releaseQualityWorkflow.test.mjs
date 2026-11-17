@@ -17,7 +17,7 @@ test('Pages waits for the same-commit quality gate before building and deploying
 });
 
 test('release checks include lint, types, all unit contracts and severe dependency advisories', () => {
-  for (const command of ['npm run lint', 'npm run typecheck', 'npm test', 'npm audit --audit-level=high']) {
+  for (const command of ['npm run lint', 'npm run typecheck', 'npm test', 'node scripts/audit-dependencies.mjs']) {
     assert.ok(quality.includes(`run: ${command}\n`), `missing required command: ${command}`);
   }
   assert.match(quality, /node tests\/anonymousExposure\.integration\.mjs/);
@@ -74,4 +74,27 @@ test('draft-PR checks remain isolated from production deployment and credentials
   assert.equal((regression.match(/!cancelled\(\) && steps\.install-browser\.outcome == 'success'/g) || []).length, 8, 'independent browser checks continue after earlier failures without hiding the failed job');
   assert.equal((regression.match(/timeout --signal=TERM --kill-after=10s 180s node tests\//g) || []).length, 8, 'a browser fixture cannot leave later independent checks waiting on a leaked process');
   assert.match(read('tests/auditMobileWorkspaces.browser.cjs'), /spawn\(process\.execPath, \[path\.resolve\('node_modules\/vite\/bin\/vite\.js'\)/);
+});
+
+// 2026-11-18: GHSA-fc5q-39xc-vjpf covers every picomatch release with no fix; the owner allowed that one advisory only.
+test('the dependency gate fails on every high or critical advisory except a dated, named exception', async () => {
+  const { ADVISORY_EXCEPTIONS, findBlockingAdvisories } = await import('../scripts/audit-dependencies.mjs');
+  assert.deepEqual(ADVISORY_EXCEPTIONS.map((item) => [item.id, item.package]), [['GHSA-fc5q-39xc-vjpf', 'picomatch']]);
+  for (const item of ADVISORY_EXCEPTIONS) assert.ok(Date.parse(item.until) <= Date.parse('2026-12-31'), `${item.id} is reviewed by the end of 2026`);
+  const advisory = (id, severity = 'high') => ({ source: 1, name: 'x', title: 't', url: `https://github.com/advisories/${id}`, severity, range: '*' });
+  const report = { vulnerabilities: {
+    picomatch: { severity: 'high', via: [advisory('GHSA-fc5q-39xc-vjpf')] },
+    vite: { severity: 'high', via: ['picomatch'] },
+    lodash: { severity: 'critical', via: [advisory('GHSA-aaaa-bbbb-cccc', 'critical')] },
+    minimist: { severity: 'moderate', via: [advisory('GHSA-dddd-eeee-ffff', 'moderate')] },
+  } };
+  const today = new Date('2026-11-18T00:00:00Z');
+  const { blocking, excepted } = findBlockingAdvisories(report, ADVISORY_EXCEPTIONS, today);
+  assert.deepEqual(blocking.map((item) => item.id), ['GHSA-aaaa-bbbb-cccc']);
+  assert.deepEqual(excepted.map((item) => item.id), ['GHSA-fc5q-39xc-vjpf']);
+  // The same advisory on another package, or after the review date, blocks again.
+  assert.equal(findBlockingAdvisories({ vulnerabilities: { other: { via: [advisory('GHSA-fc5q-39xc-vjpf')] } } }, ADVISORY_EXCEPTIONS, today).blocking.length, 1);
+  assert.equal(findBlockingAdvisories(report, ADVISORY_EXCEPTIONS, new Date('2027-01-01T00:00:00Z')).blocking.length, 2);
+  const quality = read('.github/workflows/audit-on-main.yml');
+  assert.doesNotMatch(quality, /npm audit --audit-level/, 'the gate runs through the script so the exception list is the only way through');
 });
