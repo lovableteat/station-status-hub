@@ -20,19 +20,29 @@ test('each analysis is bound to exact official/working versions and page mapping
   assert.notEqual(k.circuitPdfAiReviewKey({...target,officialVersionId:'a:b',workingVersionId:'c'}),k.circuitPdfAiReviewKey({...target,officialVersionId:'a',workingVersionId:'b:c'}));
 });
 
-test('missing categories, duplicate checks and unsupported/ungrounded findings cannot become success',()=>{
-  const k=service();
-  for(const value of[
-    {...analysis(),checks:analysis().checks.slice(1)},
-    {...analysis(),checks:[analysis().checks[0],analysis().checks[0],analysis().checks[2]]},
-    {...analysis(),findings:[]},
-    {...analysis(),checks:analysis().checks.map(check=>check.category==='net-name'?{...check,state:'no-visible-issue'}:check)},
-    {...analysis(),findings:[{...analysis().findings[0],officialEvidence:''}]},
-    {...analysis(),findings:[{...analysis().findings[0],category:'erc-pass'}]},
-    {...analysis(),findings:Array(41).fill(analysis().findings[0])},
-  ]) assert.throws(()=>k.parseCircuitPdfAiAnalysis(JSON.stringify(value),target));
+// 2026-11-19: a paid answer with a small flaw is repaired towards "needs a person" instead of being thrown away.
+test('a flawed answer is repaired towards caution and never becomes a clean result',()=>{
+  const k=service(), parse=value=>k.parseCircuitPdfAiAnalysis(JSON.stringify(value),target), state=(result,category)=>result.checks.find(check=>check.category===category).state;
+  const missing=parse({...analysis(),checks:analysis().checks.slice(1)});
+  assert.equal(missing.checks.length,3);assert.equal(state(missing,'connectivity'),'unverifiable');
+  const repeated=parse({...analysis(),checks:[analysis().checks[0],analysis().checks[0],analysis().checks[2]]});
+  assert.equal(state(repeated,'net-name'),'unverifiable','a check the model never answered is not assumed clean');
+  const unlocated=parse({...analysis(),findings:[]});
+  assert.equal(state(unlocated,'net-name'),'unverifiable');assert.match(unlocated.checks.find(check=>check.category==='net-name').note,/沒有列出具體位置/);
+  const contradicted=parse({...analysis(),checks:analysis().checks.map(check=>check.category==='net-name'?{...check,state:'no-visible-issue'}:check)});
+  assert.equal(state(contradicted,'net-name'),'possible-issue','findings under a check marked clean make it 有待核對');
+  const noEvidence=parse({...analysis(),findings:[{...analysis().findings[0],officialEvidence:''}]});
+  assert.equal(noEvidence.findings.length,1);assert.match(noEvidence.findings[0].officialEvidence,/沒有提供/);
+  const unknownKind=parse({...analysis(),findings:[{...analysis().findings[0],category:'erc-pass'}]});
+  assert.equal(unknownKind.findings.length,0);assert.match(unknownKind.summary,/1 筆 AI 回覆/);assert.equal(state(unknownKind,'net-name'),'unverifiable');
+  const many=parse({...analysis(),findings:Array(41).fill(analysis().findings[0])});
+  assert.equal(many.findings.length,40);assert.match(many.summary,/1 筆 AI 回覆/);
+  for(const hopeless of ['{}','{"summary":"只有摘要"}','[]','不是 JSON']) assert.throws(()=>k.parseCircuitPdfAiAnalysis(hopeless,target));
   const empty={...analysis(),checks:analysis().checks.map(c=>({...c,state:'unverifiable'})),findings:[]};
-  assert.equal(k.parseCircuitPdfAiAnalysis(JSON.stringify(empty),target).findings.length,0);
+  assert.equal(parse(empty).findings.length,0);
+  // A stored report is still held to the strict rules: nothing is repaired on the way back in.
+  const stored={...report(),checks:report().checks.map(check=>check.category==='net-name'?{...check,state:'no-visible-issue'}:check)};
+  assert.equal(k.normalizeCircuitPdfAiReviewReport(stored),null);
 });
 
 test('stored reports retain human decisions and reject malformed provenance or unbounded notes',()=>{
@@ -74,13 +84,13 @@ test('annotation coordinates survive reload and invalid sides stay unlocated',()
 
 function adapter(payloadFactory=()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(analysis())}}]}), {status=200, headers=new Headers()}={}) {
   const sent=[],renders=[];
-  const canvas={width:0,height:0,toBlob(done){done(new Blob(['PNG'],{type:'image/png'}));}};
+  const canvas={width:0,height:0,getContext:()=>null,toBlob(done){done(new Blob(['PNG'],{type:'image/png'}));}};
   class Reader {readAsDataURL(){this.result='data:image/png;base64,UE5H';Promise.resolve().then(()=>this.onload());}}
   const k=loader({globals:{document:{createElement:()=>({...canvas})},FileReader:Reader},mocks:{
     '../api-management/apiKeyHelpers':{normalizeApiKeyPermissions:()=>({read:true,metadata:{provider:'openai',baseUrl:'https://api.openai.com/v1',model:'gpt-5.4'}})},
     '../api-management/aiUsageTelemetry':{trackedProviderFetch:async request=>{sent.push(request);return{ok:status>=200&&status<300,status,headers,json:async()=>payloadFactory()};}},
   }})('src/components/circuit-changes/circuitPdfAiReview.ts');
-  const pdf={numPages:3000,getPage:async page=>({getViewport:({scale})=>({width:1000*scale,height:700*scale,convertToViewportPoint:(x,y)=>[x*scale,(700-y)*scale]}),render:options=>{renders.push({page,width:options.canvas.width,height:options.canvas.height});return{promise:Promise.resolve(),cancel(){}};},getTextContent:async()=>({items:[{str:'PCIE_RX_P',transform:[1,0,0,1,10,20]}]})})};
+  const pdf={numPages:3000,getPage:async page=>({cleanup(){},getViewport:({scale})=>({width:1000*scale,height:700*scale,convertToViewportPoint:(x,y)=>[x*scale,(700-y)*scale]}),render:options=>{renders.push({page,width:options.canvas.width,height:options.canvas.height});return{promise:Promise.resolve(),cancel(){}};},getTextContent:async()=>({items:[{str:'PCIE_RX_P',transform:[1,0,0,1,10,20]}]})})};
   const input={official:{id:'official',name:'官方.pdf',page:2,pdf},working:{id:'working',name:'工作.pdf',page:3,pdf},model:{id:'model-key::gpt-5.4',label:'QA GPT',record:{id:'model-key',api_key:'qa-test-secret',is_active:true}},userName:'RD 工程師',signal:new AbortController().signal};
   return {k,input,sent,renders};
 }
@@ -91,7 +101,10 @@ test('real provider adapter sends both full-page images at high detail and coord
   const body=JSON.parse(sent[0].init.body), images=body.messages.flatMap(message=>message.content).filter(part=>part.type==='image_url');
   assert.equal(images.length,2);assert.ok(images.every(image=>image.image_url.detail==='high'));
   assert.match(JSON.stringify(body),/官方.pdf/);assert.match(JSON.stringify(body),/工作.pdf/);assert.match(JSON.stringify(body),/PCIE_RX_P（x=0\.010, y=0\.971）/);assert.match(JSON.stringify(body),/不可聲稱通過電氣驗證或正式審核/);
-  assert.deepEqual(renders.map(item=>[item.page,item.width,item.height]),[[2,4000,2800],[3,4000,2800]]);
+  // Providers scale pages down to about 2048 px before a model sees them, so nothing larger is uploaded.
+  assert.deepEqual(renders.map(item=>[item.page,item.width,item.height]),[[2,2048,1434],[3,2048,1434]]);
+  assert.equal(body.response_format.type,'json_schema');assert.equal(body.response_format.json_schema.strict,true);assert.equal(body.reasoning_effort,'low');
+  assert.equal(result.source,'ai');
   assert.match(result.id,/^[0-9a-f-]{36}$/);assert.equal(result.createdAt,result.updatedAt);assert.equal(result.generatedBy,'RD 工程師');assert.equal(result.findings[0].decision,'pending');
 });
 
@@ -110,4 +123,87 @@ test('a non-JSON rate limit retains Retry-After and records the actual attempt',
   assert.equal(sent[0].attemptNumber,2);
   await assert.rejects(k.runCircuitPdfAiReview({...input,model:{...input.model,record:{...input.model.record,is_active:false}}}), error=>error.kind==='auth');
   assert.equal(sent.length,1);
+});
+
+test('token usage reported by the provider is kept on the report and survives reload',async()=>{
+  const {k,input}=adapter(()=>({usage:{prompt_tokens:5200,completion_tokens:640},choices:[{finish_reason:'stop',message:{content:JSON.stringify(analysis())}}]}));
+  const result=await k.runCircuitPdfAiReview(input);
+  assert.deepEqual({...result.usage},{input:5200,output:640});
+  const reopened=k.normalizeCircuitPdfAiReviewReport(JSON.parse(JSON.stringify(result)));
+  assert.deepEqual({...reopened.usage},{input:5200,output:640});assert.equal(reopened.source,'ai');
+  assert.equal(k.normalizeCircuitPdfAiReviewReport({...JSON.parse(JSON.stringify(result)),usage:{input:-1,output:2}}),null);
+  assert.equal(k.normalizeCircuitPdfAiReviewReport({...JSON.parse(JSON.stringify(result)),source:'guess'}),null);
+});
+
+const item=(str,x,y)=>({str,x,y,width:.05,height:.012});
+const sameDiff={textComparable:true,graphicsComparable:true,sizeChanged:false,textChanges:[],regions:[]};
+const changedDiff={textComparable:true,graphicsComparable:true,sizeChanged:false,textChanges:[{kind:'changed',before:item('PCIE_RX_P',.3,.2),after:item('PCIE_RX_N',.3,.2)}],regions:[{box:{x:.6,y:.6,width:.1,height:.02},base:false,work:true}]};
+const side=(id,page)=>({id,name:`${id}.pdf`,page});
+
+test('a page the local comparison finds the same is a complete report without any AI request',()=>{
+  const k=service(), result=k.buildCircuitLocalReport({official:side('official',2),working:side('working',3),userName:'RD',diff:sameDiff});
+  assert.equal(result.source,'local');assert.equal(result.modelLabel,'本機比對（未使用 AI）');assert.equal(result.local.identical,true);assert.equal(k.isCircuitReportIdentical(result),true);
+  assert.deepEqual([...result.checks.map(check=>check.state)],['no-visible-issue','no-visible-issue','no-visible-issue']);assert.equal(result.findings.length,0);assert.match(result.summary,/沒有送 AI/);
+  const reopened=k.normalizeCircuitPdfAiReviewReport(JSON.parse(JSON.stringify(result)));
+  assert.deepEqual(JSON.parse(JSON.stringify(reopened)),JSON.parse(JSON.stringify(result)),'the stored report comes back unchanged, so a later manual save matches it');
+});
+
+test('a page that differs lists every difference with its place, and each check says what was compared',()=>{
+  const k=service(), result=k.buildCircuitLocalReport({official:side('official',2),working:side('working',3),userName:'RD',diff:changedDiff});
+  assert.equal(result.local.identical,false);assert.equal(k.isCircuitReportIdentical(result),false);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.findings.map(finding=>[finding.id,finding.category,finding.title]))),[['F1','net-name','文字改了：PCIE_RX_P → PCIE_RX_N'],['F2','connectivity','圖形改了（線條、接點或符號）']]);
+  assert.deepEqual(Object.fromEntries(result.checks.map(check=>[check.category,check.state])),{connectivity:'possible-issue','net-name':'possible-issue','label-name':'no-visible-issue'});
+  assert.match(result.summary,/有 2 處不同（文字改 1 處、圖形 1 處）/);
+  assert.ok(k.normalizeCircuitPdfAiReviewReport(JSON.parse(JSON.stringify(result))));
+  const unreadable=k.buildCircuitLocalReport({official:side('official',2),working:side('working',3),userName:'RD',diff:{...sameDiff,textComparable:false}});
+  assert.deepEqual(Object.fromEntries(unreadable.checks.map(check=>[check.category,check.state])),{connectivity:'no-visible-issue','net-name':'unverifiable','label-name':'unverifiable'});
+  assert.equal(unreadable.local.identical,true,'drawings laid over each other were the same');
+});
+
+test('with the differences already known the model is shown them enlarged, and the report lists the confirmed ones first',async()=>{
+  const {k,input,sent,renders}=adapter(()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({...analysis(),findings:[{...analysis().findings[0],title:'A1 改接到 B1',category:'connectivity'}],checks:analysis().checks.map(check=>check.category==='net-name'?{...check,state:'unverifiable'}:check)})}}]}));
+  const result=await k.runCircuitPdfAiReview({...input,local:{diff:changedDiff}});
+  const body=JSON.parse(sent[0].init.body), images=body.messages.flatMap(message=>message.content).filter(part=>part.type==='image_url');
+  assert.equal(images.length,6,'two whole pages and two changed areas from both versions');
+  assert.match(JSON.stringify(body),/已經確定的差異/);assert.match(JSON.stringify(body),/1\. 文字改了：PCIE_RX_P → PCIE_RX_N/);assert.match(JSON.stringify(body),/不要重複列出/);
+  assert.equal(renders.filter(item=>item.width===2048).length,2);
+  assert.deepEqual([...result.findings.map(finding=>finding.title)],['文字改了：PCIE_RX_P → PCIE_RX_N','圖形改了（線條、接點或符號）','A1 改接到 B1']);
+  assert.deepEqual([...result.findings.map(finding=>finding.id)],['F1','F2','F3']);
+  assert.equal(result.checks.find(check=>check.category==='net-name').state,'possible-issue','the more careful of the two answers');
+  assert.match(result.summary,/^本機比對：這一頁有 2 處不同/);assert.match(result.summary,/AI 說明：/);
+  assert.equal(result.modelLabel,'QA GPT＋本機比對');assert.equal(result.source,'ai');assert.equal(result.local.changed,1);
+  assert.ok(k.normalizeCircuitPdfAiReviewReport(JSON.parse(JSON.stringify(result))));
+});
+
+// Review 2026-11-19.
+test('options only some models take are sent only to them, and a dropped connection is not counted as an answer',async()=>{
+  const body=async model=>{const {k,input,sent}=adapter();const run=k.runCircuitPdfAiReview;void run;const made=loader({globals:{document:{createElement:()=>({width:0,height:0,getContext:()=>null,toBlob(done){done(new Blob(['PNG'],{type:'image/png'}));}})},FileReader:class{readAsDataURL(){this.result='data:image/png;base64,UE5H';Promise.resolve().then(()=>this.onload());}}},mocks:{
+    '../api-management/apiKeyHelpers':{normalizeApiKeyPermissions:()=>({read:true,metadata:{provider:'openai',baseUrl:'https://api.openai.com/v1',model}})},
+    '../api-management/aiUsageTelemetry':{trackedProviderFetch:async request=>{sent.push(request);return{ok:true,status:200,headers:new Headers(),json:async()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(analysis())}}]})};}},
+  }})('src/components/circuit-changes/circuitPdfAiReview.ts');await made.runCircuitPdfAiReview(input);return JSON.parse(sent[0].init.body);};
+  const reasoning=await body('gpt-5.4');assert.equal(reasoning.reasoning_effort,'low');assert.equal(reasoning.response_format.type,'json_schema');
+  const structured=await body('gpt-4.1-mini');assert.equal(structured.reasoning_effort,undefined);assert.equal(structured.response_format.type,'json_schema');
+  const older=await body('gpt-4o');assert.equal(older.reasoning_effort,undefined);assert.equal(older.response_format,undefined);assert.equal(older.max_completion_tokens,undefined);
+  const dropped=loader({globals:{TextEncoder,document:{createElement:()=>({width:0,height:0,getContext:()=>null,toBlob(done){done(new Blob(['PNG'],{type:'image/png'}));}})},FileReader:class{readAsDataURL(){this.result='data:image/png;base64,UE5H';Promise.resolve().then(()=>this.onload());}}},mocks:{
+    '../api-management/apiKeyHelpers':{normalizeApiKeyPermissions:()=>({read:true,metadata:{provider:'gemini',baseUrl:'https://generativelanguage.googleapis.com/v1beta',model:'gemini-3.5-flash'}})},
+    '../api-management/aiUsageTelemetry':{trackedProviderFetch:async()=>{throw new TypeError('Failed to fetch');}},
+  }})('src/components/circuit-changes/circuitPdfAiReview.ts');
+  await assert.rejects(dropped.runCircuitPdfAiReview(adapter().input),error=>error.kind==='network');
+  const {k:cut,input}=adapter(()=>({choices:[{finish_reason:'length',message:{content:JSON.stringify(analysis())}}]}));
+  await assert.rejects(cut.runCircuitPdfAiReview(input),error=>error.kind==='invalid','a cut-off answer is not asked for again');
+});
+
+test('a finding the model returned that cannot be kept never leaves a check clean, and every new report is already in its stored form',async()=>{
+  const k=service();
+  const partly=k.parseCircuitPdfAiAnalysis(JSON.stringify({...analysis(),findings:[{...analysis().findings[0],category:'erc-pass'}]}),target);
+  assert.deepEqual(Object.fromEntries(partly.checks.map(check=>[check.category,check.state])),{connectivity:'unverifiable','net-name':'unverifiable','label-name':'unverifiable'});
+  assert.match(partly.checks.find(check=>check.category==='label-name').note,/1 筆回覆無法列入/);
+  // A box outside the page and a summary cut at a space are stored exactly as this window keeps them.
+  const offSheet={textComparable:true,graphicsComparable:true,sizeChanged:false,regions:[],textChanges:[{kind:'added',after:{str:'OFF_SHEET',x:1.02,y:.5,width:.05,height:.012}}]};
+  const local=k.buildCircuitLocalReport({official:side('official',2),working:side('working',3),userName:'RD',diff:offSheet});
+  assert.deepEqual(JSON.parse(JSON.stringify(k.normalizeCircuitPdfAiReviewReport(JSON.parse(JSON.stringify(local))))),JSON.parse(JSON.stringify(local)));
+  const {k:service2,input}=adapter(()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify({...analysis(),summary:'字 '.repeat(1990)})}}]}));
+  const merged=await service2.runCircuitPdfAiReview({...input,local:{diff:changedDiff}});
+  assert.ok(merged.summary.length<=4000&&merged.summary===merged.summary.trim());
+  assert.deepEqual(JSON.parse(JSON.stringify(service2.normalizeCircuitPdfAiReviewReport(JSON.parse(JSON.stringify(merged))))),JSON.parse(JSON.stringify(merged)));
 });

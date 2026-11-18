@@ -111,11 +111,13 @@ export function CircuitPdfPanel({ onUploaded, mode = "review", captureSide = "be
       const state: AiPageState = !basePage ? "new" : !result ? "none" : result.pending ? "diff" : result.confirmed ? "confirmed" : "clear";
       if (result) { compared += 1; if (result.live.length) differing += 1; }
       const words = state === "new" ? "基準版沒有對應頁" : state === "none" ? `基準版第 ${basePage} 頁 · 還沒比對`
-        : state === "diff" ? `基準版第 ${basePage} 頁 · AI 找到 ${result!.live.length} 處，${result!.pending} 處待判讀`
-        : state === "confirmed" ? `基準版第 ${basePage} 頁 · ${result!.confirmed} 處差異已確認` : `基準版第 ${basePage} 頁 · AI 未見差異`;
+        : state === "diff" ? `基準版第 ${basePage} 頁 · 找到 ${result!.live.length} 處不同，${result!.pending} 處待判讀`
+        : state === "confirmed" ? `基準版第 ${basePage} 頁 · ${result!.confirmed} 處差異已確認`
+          // A page settled by 本機比對 was never read by an AI; it says so.
+          : `基準版第 ${basePage} 頁 · ${result!.report.source === "local" ? "兩版相同（本機比對）" : "AI 未見差異"}`;
       return { state, words };
     });
-    return { cells, title: `AI 已比對 ${compared} / ${active.pages} 頁，${differing} 頁有差異（紅：待判讀，青：已確認，空心：未見差異，橘框：基準版沒有這頁）。拖曳白色標記換頁；點一格直接跳頁，也可以按方向鍵換頁` };
+    return { cells, title: `已比對 ${compared} / ${active.pages} 頁，${differing} 頁有差異（紅：待判讀，青：已確認，空心：未見差異，橘框：基準版沒有這頁）。拖曳白色標記換頁；點一格直接跳頁，也可以按方向鍵換頁` };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the page match is summed up by alignmentKey
   }, [mode, active?.id, active?.pages, compare?.id, compare?.pages, pdfs.alignmentKey, pdfs.compareOffset, aiResults?.pages]);
   const pageState = active ? circuitPdfPageState(registry, active.id, page) : "none";
@@ -451,8 +453,8 @@ export function CircuitPdfPanel({ onUploaded, mode = "review", captureSide = "be
     : aiResults?.loading && !aiResults.pages.size ? <span className="circuit-pdf-ai-status" role="status"><CircuitSpinner />讀取 AI 結果…</span>
     : !pdfs.comparePage ? null
     : <span className="circuit-pdf-ai-status" role="status" data-kind={aiPage ? aiPage.pending ? "diff" : aiPage.confirmed ? "confirmed" : "clear" : "none"}
-      title={aiPage ? "這一頁 AI 比對的結果；點圖上的框可直接看那一項的兩版證據並判讀" : "這一頁還沒用 AI 比對；按「AI 比對新舊版」開始"}>
-      {aiPage ? aiPage.pending ? `本頁 ${aiPage.pending} 處待判讀` : aiPage.confirmed ? `本頁 ${aiPage.confirmed} 處差異已確認` : "本頁 AI 未見差異" : "本頁還沒比對"}
+      title={aiPage ? "這一頁比對的結果；點圖上的框可直接看那一項的兩版證據並判讀" : "這一頁還沒比對；按「AI 比對新舊版」開始"}>
+      {aiPage ? aiPage.pending ? `本頁 ${aiPage.pending} 處待判讀` : aiPage.confirmed ? `本頁 ${aiPage.confirmed} 處差異已確認` : aiPage.report.source === "local" ? "本頁兩版相同" : "本頁 AI 未見差異" : "本頁還沒比對"}
     </span>;
   // The baseline page, typed where it is shown; how it was found.
   const basePageField = mode === "ai" && compare ? <BasePageField value={pdfs.comparePage} pages={compare.pages} working={page} onCommit={target => { setFailure(""); (pdfs.setComparePage ?? ((value: number) => pdfs.setCompareOffset(value - page)))(target); }} /> : null;

@@ -10,6 +10,7 @@ const service = () => {
 const plain = value => JSON.parse(JSON.stringify(value));
 const report = page => ({ id: `report-${page.workingPage}`, workingPage: page.workingPage, officialPage: page.officialPage });
 const settle = () => new Promise(resolve => setImmediate(resolve));
+const quick = { attempts: 3, answerAttempts: 2, backoffMs: [1, 1], networkWaitsMs: [1, 1, 1], stopAfterFailures: 3, saveBackoffMs: [1, 1], maxProviderWaitMs: 60_000 };
 
 test("every working page retains its offset counterpart or an explicit unmatched row", () => {
   const { buildCircuitPdfAiBatchPages: build } = service();
@@ -70,17 +71,19 @@ test("three pages run concurrently and a slow page cannot block the other worker
   assert.ok(pages.every(page => page.status === "pending"), "caller rows are not mutated in place");
 });
 
-test("one failed analysis or save does not discard successful pages or stop following pages", async () => {
+test("a page that keeps failing is tried again and then marked failed, a save that keeps failing keeps the answer, and the other pages go on", async () => {
   const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run } = service();
-  const latest = new Map(), saved = [], controller = new AbortController();
-  await run({ pages: build(4, 4, 0), signal: controller.signal,
-    analyse: async page => { if (page.workingPage === 2) throw new Error("第 2 頁來源讀取失敗"); return report(page); },
-    save: async value => { if (value.workingPage === 3) throw new Error("第 3 頁暫時無法儲存"); saved.push(value.workingPage); },
+  const latest = new Map(), saved = [], analysed = [], saveTries = [], controller = new AbortController();
+  await run({ pages: build(4, 4, 0), signal: controller.signal, policy: quick,
+    analyse: async page => { analysed.push(page.workingPage); if (page.workingPage === 2) throw new Error("第 2 頁 AI 回覆無法讀取"); return report(page); },
+    save: async value => { saveTries.push(value.workingPage); if (value.workingPage === 3) throw new Error("第 3 頁暫時無法儲存"); saved.push(value.workingPage); },
     onUpdate: page => latest.set(page.workingPage, plain(page)),
   });
-  assert.deepEqual(saved, [1, 4]);
+  assert.deepEqual(saved.sort(), [1, 4]);
+  assert.equal(analysed.filter(page => page === 2).length, 2, "an unusable answer was paid for: one more try, not three");
+  assert.equal(saveTries.filter(page => page === 3).length, 3, "storing is tried again before the page is left unsaved");
   assert.equal(latest.get(1).status, "complete");
-  assert.equal(latest.get(2).status, "failed"); assert.match(latest.get(2).error, /來源讀取失敗/); assert.equal(latest.get(2).report, undefined);
+  assert.equal(latest.get(2).status, "failed"); assert.match(latest.get(2).error, /無法讀取/); assert.equal(latest.get(2).report, undefined); assert.equal(latest.get(2).attempts, 2);
   assert.equal(latest.get(3).status, "unsaved"); assert.equal(latest.get(3).report.id, "report-3"); assert.match(latest.get(3).error, /無法儲存/);
   assert.equal(latest.get(4).status, "complete");
 });
@@ -162,7 +165,7 @@ test("a short provider Retry-After delays new pages and retries the affected pag
       }
       return report(page);
     },
-    save: async value => saved.push(value.workingPage), onUpdate: () => {}, onCooldown: until => cooldowns.push(until),
+    save: async value => saved.push(value.workingPage), onUpdate: () => {}, onCooldown: until => cooldowns.push(until), policy: quick,
   });
   assert.deepEqual([...attempts], [[1, 2], [2, 1], [3, 1], [4, 1]]);
   assert.ok(calls.slice(3).every(([, time]) => time - throttledAt >= 50));
@@ -208,4 +211,108 @@ test("an already cancelled queue makes no provider, storage, or progress calls",
   await run({ pages: build(2, 2, 0), signal: controller.signal,
     analyse: async () => assert.fail("must not analyse"), save: async () => assert.fail("must not save"), onUpdate: () => assert.fail("must not update"),
   });
+});
+
+// 2026-11-19: failures used to need a manual retry per page, and a network drop failed every remaining page.
+test("a timeout, a busy provider or a dropped answer is retried by itself with the attempt number passed on", async () => {
+  const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run, AiRequestFailure } = service();
+  const tries = new Map(), latest = new Map(), waits = [];
+  await run({ pages: build(3, 3, 0), signal: new AbortController().signal, policy: quick,
+    analyse: async (page, attempt) => {
+      tries.set(page.workingPage, [...(tries.get(page.workingPage) ?? []), attempt]);
+      if (page.workingPage === 1 && attempt < 3) throw new AiRequestFailure("逾時", "timeout");
+      if (page.workingPage === 2 && attempt === 1) throw new AiRequestFailure("繁忙", "busy");
+      return report(page);
+    },
+    save: async () => {}, onUpdate: page => latest.set(page.workingPage, page.status), onWait: wait => waits.push(wait?.kind ?? null),
+  });
+  assert.deepEqual(plain([...tries]), [[1, [1, 2, 3]], [2, [1, 2]], [3, [1]]]);
+  assert.deepEqual([...latest.values()], ["complete", "complete", "complete"]);
+  assert.ok(waits.includes("retry") && waits.includes("provider"));
+  assert.equal(waits.at(-1), null, "nothing is shown as waiting once the batch is over");
+});
+
+test("while the network is down no page fails: the batch waits, and goes on by itself when the connection is back", async () => {
+  const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run, AiRequestFailure } = service();
+  let offline = 2;
+  const statuses = [], attempts = [];
+  await run({ pages: build(2, 2, 0), signal: new AbortController().signal, policy: quick,
+    analyse: async (page, attempt) => {
+      attempts.push([page.workingPage, attempt]);
+      if (offline > 0) { offline--; throw new AiRequestFailure(offline ? "AI 連線暫時中斷。" : "無法確認本系統用量紀錄", offline ? "network" : "tracking"); }
+      return report(page);
+    },
+    save: async () => {}, onUpdate: page => statuses.push([page.workingPage, page.status]),
+  });
+  assert.ok(statuses.every(([, status]) => status !== "failed"));
+  assert.deepEqual(statuses.filter(([, status]) => status === "complete").map(([page]) => page).sort(), [1, 2]);
+  assert.ok(attempts.every(([, attempt]) => attempt === 1), "a request that never reached the provider does not use up an attempt");
+});
+
+test("a connection that does not come back pauses the batch with every unfinished page still waiting", async () => {
+  const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run, AiRequestFailure, CircuitPdfAiBatchStop } = service();
+  const latest = new Map(), saved = [];
+  let calls = 0;
+  const failure = await run({ pages: build(6, 6, 0), signal: new AbortController().signal, policy: quick,
+    analyse: async page => { calls++; if (page.workingPage === 1 && calls === 1) return report(page); throw new AiRequestFailure("AI 連線暫時中斷。", "network"); },
+    save: async value => saved.push(value.workingPage), onUpdate: page => latest.set(page.workingPage, page.status),
+  }).then(() => null, error => error);
+  assert.ok(failure instanceof CircuitPdfAiBatchStop);
+  assert.equal(failure.reason, "network");
+  assert.deepEqual(saved, [1]);
+  assert.ok([...latest].every(([page, status]) => page === 1 ? status === "complete" : status === "pending"), JSON.stringify([...latest]));
+  assert.ok(calls < 20, "the waits are shared, not multiplied by the pages in flight");
+});
+
+test("pages failing one after another stop the batch before more tokens are spent, and a success in between starts the count again", async () => {
+  const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run, AiRequestFailure, CircuitPdfAiBatchStop } = service();
+  const analysed = new Set(), latest = new Map();
+  const failure = await run({ pages: build(12, 12, 0), signal: new AbortController().signal, policy: quick,
+    analyse: async page => { analysed.add(page.workingPage); if (page.workingPage === 2) return report(page); throw new AiRequestFailure("逾時", "timeout"); },
+    save: async () => {}, onUpdate: page => latest.set(page.workingPage, page.status),
+  }).then(() => null, error => error);
+  assert.ok(failure instanceof CircuitPdfAiBatchStop);
+  assert.equal(failure.reason, "failures");
+  assert.match(failure.message, /連續 3 頁比對失敗/);
+  assert.ok(analysed.size <= 8, `stopped early, asked for ${analysed.size} of 12 pages`);
+  assert.equal(latest.get(2), "complete");
+  assert.ok([...latest.values()].filter(status => status === "failed").length >= 3);
+  assert.ok(!latest.has(12), "pages not started stay as they were");
+});
+
+test("a request the provider rejects as malformed is not sent again, and a long provider pause stops the batch at once", async () => {
+  const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run, AiRequestFailure } = service();
+  const calls = [];
+  await run({ pages: build(1, 1, 0), signal: new AbortController().signal, policy: quick,
+    analyse: async page => { calls.push(page.workingPage); throw new AiRequestFailure("AI 請求內容無法使用", "invalid"); }, save: async () => {}, onUpdate: () => {},
+  });
+  assert.deepEqual(calls, [1]);
+  const latest = new Map();
+  await assert.rejects(run({ pages: build(4, 4, 0), signal: new AbortController().signal, policy: quick,
+    analyse: async () => { throw new AiRequestFailure("每分鐘額度已滿", "minute-quota", 10 * 60_000); }, save: async () => {}, onUpdate: page => latest.set(page.workingPage, page.status),
+  }), /每分鐘額度已滿/);
+  assert.ok([...latest.values()].every(status => status === "pending"), "nothing is marked failed for a pause the provider asked for");
+});
+
+test("an answer that cannot be stored because the connection is gone waits for it and is stored without another AI request", async () => {
+  const { buildCircuitPdfAiBatchPages: build, runCircuitPdfAiBatchReview: run, AiRequestFailure, CircuitPdfAiBatchStop } = service();
+  let offline = 3, analysed = 0;
+  const latest = new Map(), waits = [];
+  await run({ pages: build(2, 2, 0), signal: new AbortController().signal, policy: { ...quick, networkWaitsMs: [1, 1, 1, 1, 1] },
+    analyse: async page => { analysed++; return report(page); },
+    save: async () => { if (offline > 0) { offline--; throw new AiRequestFailure("無法連到系統", "network"); } },
+    onUpdate: page => latest.set(page.workingPage, page.status), onWait: wait => waits.push(wait?.kind ?? null),
+  });
+  assert.equal(analysed, 2, "the paid answers are not asked for again");
+  assert.deepEqual([...latest.values()], ["complete", "complete"]);
+  assert.ok(waits.includes("network"));
+  // A connection that stays away keeps the answers on their pages and pauses the batch.
+  const kept = new Map();
+  const failure = await run({ pages: build(2, 2, 0), signal: new AbortController().signal, policy: quick,
+    analyse: async page => report(page), save: async () => { throw new AiRequestFailure("無法連到系統", "network"); }, onUpdate: page => kept.set(page.workingPage, plain(page)),
+  }).then(() => null, error => error);
+  assert.ok(failure instanceof CircuitPdfAiBatchStop);
+  assert.equal(failure.reason, "network");
+  assert.ok([...kept.values()].every(page => page.status === "unsaved" ? page.report.id === `report-${page.workingPage}` : page.status === "pending"), JSON.stringify([...kept.values()].map(page => page.status)));
+  assert.ok([...kept.values()].some(page => page.status === "unsaved"));
 });

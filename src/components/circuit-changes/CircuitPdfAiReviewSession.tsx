@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { CircuitPdfAiReview } from "./CircuitPdfAiReviewDialog";
 import { circuitPdfAiReviewKey, type CircuitPdfAiReviewReport } from "./circuitPdfAiReview";
-import { loadCircuitPdfAiReviews, saveCircuitPdfAiReview, type SavedCircuitPdfAiReview } from "./pdfAiReviewStorage";
+import { CircuitAiReviewConflict, loadCircuitPdfAiPairReviews, loadCircuitPdfAiReviews, saveCircuitPdfAiReview, type SavedCircuitPdfAiReview } from "./pdfAiReviewStorage";
 import type { CircuitPdfModel } from "./useCircuitPdfs";
 
 export function CircuitPdfAiReviewSession({ open, onOpenChange, seriesId, userId, userName, canEdit, pdfs, focusFinding }: {
@@ -44,7 +44,16 @@ export function CircuitPdfAiReviewSession({ open, onOpenChange, seriesId, userId
   const savePage = async (report: CircuitPdfAiReviewReport) => {
     if (!canEdit || current.current !== scope || report.key !== pageKey(report.workingPage)) throw new Error("版本、頁碼或權限已變更，請重新開啟初審。");
     const previous = rowsRef.current.find(row => row.report.id === report.id);
-    const value = await saveCircuitPdfAiReview(seriesId, report, previous?.revision ?? 0);
+    let value: SavedCircuitPdfAiReview;
+    try { value = await saveCircuitPdfAiReview(seriesId, report, previous?.revision ?? 0); }
+    catch (failure) {
+      // A new result refused as "already changed" was stored by an earlier attempt whose reply never arrived (a dropped
+      // connection): the stored record with the same id is that result, not somebody else's.
+      if (!(failure instanceof CircuitAiReviewConflict) || previous) throw failure;
+      const stored = (await loadCircuitPdfAiReviews(seriesId, report.key)).find(row => row.report.id === report.id);
+      if (!stored) throw failure;
+      value = stored;
+    }
     if (current.current !== scope) return;
     const next = (previous ? rowsRef.current.map(row => row.report.id === report.id ? value : row) : [value, ...rowsRef.current])
       .sort((a, b) => b.report.createdAt.localeCompare(a.report.createdAt));
@@ -63,9 +72,20 @@ export function CircuitPdfAiReviewSession({ open, onOpenChange, seriesId, userId
     const next = [...rowsRef.current.filter(row => row.report.key !== target), ...value].sort((a, b) => b.report.createdAt.localeCompare(a.report.createdAt));
     rowsRef.current = next; setRows(next); loadedPages.current.add(target);
   };
+  // Every saved result of the pair: a batch skips the pages it holds, and the report covers them all.
+  const loadAll = async () => {
+    if (current.current !== scope || !baseline || !working) throw new Error("版本、頁碼或權限已變更，請重新開啟初審。");
+    const value = await loadCircuitPdfAiPairReviews(seriesId, baseline.id, working.id);
+    if (current.current !== scope) throw new Error("版本、頁碼或權限已變更，請重新開啟初審。");
+    const ids = new Set(value.map(row => row.report.id));
+    const next = [...rowsRef.current.filter(row => !ids.has(row.report.id)), ...value].sort((a, b) => b.report.createdAt.localeCompare(a.report.createdAt));
+    rowsRef.current = next; setRows(next);
+    for (const row of value) loadedPages.current.add(row.report.key);
+    return next.map(row => row.report);
+  };
   if (!open) return null;
   if (!validSources || loaded !== scope) return <Dialog open onOpenChange={onOpenChange}><DialogContent><DialogTitle>AI 比對新舊版</DialogTitle><DialogDescription>{!validSources ? "請先開啟兩份不同的 PDF。" : error || "正在讀取這兩個版本的初審紀錄…"}</DialogDescription>{error && <Button type="button" onClick={() => setRetry(value => value + 1)}>重試讀取</Button>}</DialogContent></Dialog>;
   return <CircuitPdfAiReview open onOpenChange={onOpenChange} official={baseline} working={working} userName={userName} disabled={!canEdit}
     savedReport={rows.find(row => row.report.key === key)?.report} previousReports={rows.map(row => row.report)} onSave={save} focusFinding={focusFinding}
-    allPages={{ officialOffset, officialPageFor: matchedPageFor, mappingKey, onLoadPage: loadPage, onSave: savePage }} />;
+    allPages={{ officialOffset, officialPageFor: matchedPageFor, mappingKey, onLoadPage: loadPage, onSave: savePage, onLoadAll: loadAll }} />;
 }

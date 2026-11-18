@@ -1,8 +1,9 @@
 import type { ApiKeyRecord } from '../../src/components/api-management/apiKeyHelpers';
+import { AiRequestFailure } from '../../src/components/api-management/aiRequestRecovery';
 const model: ApiKeyRecord = {id:'qa-vision',key_name:'QA Vision',api_key:'qa-no-real-key',description:null,is_active:true,expires_at:null,last_used_at:null,usage_count:0,created_at:'2026-11-09T00:00:00Z',permissions:{read:true,metadata:{provider:'openai',model:'qa-vision',baseUrl:'https://api.openai.com/v1',editable:false}}};
 export const supabase = {from(){return{select(){return this},eq(){return this},order(){return this},abortSignal(){return Promise.resolve({data:[model],error:null})}}}};
 export async function trackedProviderFetch(request: {init:RequestInit}) {
-  const qa=(window as unknown as {__circuitAiQA:{mode:string;calls:Array<Record<string,unknown>>;failPages?:number[];slowPages?:number[];held?:Record<number,()=>void>}}).__circuitAiQA;
+  const qa=(window as unknown as {__circuitAiQA:{mode:string;calls:Array<Record<string,unknown>>;failPages?:number[];failOnce?:number[];networkDown?:number;slowPages?:number[];held?:Record<number,()=>void>}}).__circuitAiQA;
   const body=JSON.parse(String(request.init.body)), system=body.messages[0].content;
   const systemText=typeof system==='string'?system:system.map((part:{text?:string})=>part.text??'').join('');
   const target={officialVersionId:JSON.parse(systemText.match(/"officialVersionId":("[^"]+")/)?.[1]??'"official-v1"'),workingVersionId:JSON.parse(systemText.match(/"workingVersionId":("[^"]+")/)?.[1]??'"work-v2"'),officialPage:Number(systemText.match(/"officialPage":(\d+)/)?.[1]??1),workingPage:Number(systemText.match(/"workingPage":(\d+)/)?.[1]??1)};
@@ -19,7 +20,12 @@ export async function trackedProviderFetch(request: {init:RequestInit}) {
     });
   }
   if(qa.mode==='slow'||qa.slowPages?.includes(target.workingPage)) await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,30000);request.init.signal?.addEventListener('abort',()=>{clearTimeout(timer);reject(new DOMException('Cancelled','AbortError'));},{once:true})});
-  if(qa.failPages?.includes(target.workingPage))throw new Error(`QA 第 ${target.workingPage} 頁分析失敗`);
+  // networkDown: that many requests never reach the provider (a dropped connection), then it is back.
+  if((qa.networkDown??0)>0){qa.networkDown=(qa.networkDown??0)-1;qa.calls.pop();throw new AiRequestFailure('AI 連線暫時中斷。','network');}
+  if(qa.failOnce?.includes(target.workingPage)){qa.failOnce=qa.failOnce.filter(page=>page!==target.workingPage);throw new AiRequestFailure('選用的 AI 模型回應逾時，請稍後重試。','timeout');}
+  // failPages: the provider answers, but with something that is not a review (paid for and unusable). A thrown error
+  // here would be a dropped connection instead, which is waited for rather than counted as a failure.
+  if(qa.failPages?.includes(target.workingPage))return {ok:true,status:200,headers:new Headers(),json:async()=>({choices:[{finish_reason:'stop',message:{content:`QA 第 ${target.workingPage} 頁分析失敗`}}]})};
   const content={...target,summary:`工作第 ${target.workingPage} 頁／官方第 ${target.officialPage} 頁有一處差分 Net 標籤需要人工核對。未使用原生 netlist，不能證明完整連通。`,checks:[
     {category:'connectivity',state:'unverifiable',note:'PDF 未附原生 netlist，需人工核對接點'},
     {category:'net-name',state:'possible-issue',note:'CON2A A1 的 P/N 名稱不同'},
@@ -28,5 +34,5 @@ export async function trackedProviderFetch(request: {init:RequestInit}) {
     {category:'connectivity',priority:'medium',title:'接點是否實際連通無法確認',location:'位置無法定位',officialEvidence:'未見可判定的接點',workingEvidence:'未見可判定的接點',suggestion:'請人工核對連接性。',certainty:'unclear',officialBox:{x:.98,y:.55,width:.15,height:.06},workingBox:null},
     {category:'connectivity',priority:'low',title:'A1 接點需確認',location:'右側 A1 接腳',officialEvidence:'無法定位接點',workingEvidence:'A1',suggestion:'確認線段是否接上 A1。',certainty:'unclear',officialBox:null,workingBox:{x:.77,y:.33,width:.10,height:.07}},
   ]};
-  return {ok:true,status:200,headers:new Headers(),json:async()=>({choices:[{finish_reason:qa.mode==='truncate'?'length':'stop',message:{content:qa.mode==='invalid'?'{}':JSON.stringify(content)}}]})};
+  return {ok:true,status:200,headers:new Headers(),json:async()=>({usage:{prompt_tokens:4200,completion_tokens:380},choices:[{finish_reason:qa.mode==='truncate'?'length':'stop',message:{content:qa.mode==='invalid'?'{}':JSON.stringify(content)}}]})};
 }

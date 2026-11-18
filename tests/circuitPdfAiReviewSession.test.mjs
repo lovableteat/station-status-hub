@@ -8,16 +8,20 @@ const report = (id = "existing", page = 3) => ({ id, key: `v1:official:working:$
 const pdfs = () => ({ compare: { id: "official", name: "官方.pdf" }, comparePdf: { numPages: 500 }, comparePage: 2, compareOffset: -1,
   active: { id: "working", name: "工作.pdf" }, activePdf: { numPages: 500 }, page: 3 });
 
-async function mount({ rows = [], firstLoad, ...overrides } = {}) {
+class CircuitAiReviewConflict extends Error {}
+async function mount({ rows = [], firstLoad, save, ...overrides } = {}) {
   const loads = [], saves = [];
   let loadResult = firstLoad;
   const storage = {
+    CircuitAiReviewConflict,
+    loadCircuitPdfAiPairReviews: async () => structuredClone(rows),
     loadCircuitPdfAiReviews: async (seriesId, targetKey) => {
       loads.push({ seriesId, targetKey });
       return loadResult ? loadResult() : structuredClone(rows);
     },
     saveCircuitPdfAiReview: async (seriesId, value, expectedRevision) => {
       saves.push({ seriesId, report: structuredClone(value), expectedRevision });
+      if (save) return save(value, expectedRevision);
       return { report: structuredClone(value), revision: expectedRevision + 1 };
     },
   };
@@ -214,5 +218,34 @@ test("all-pages callbacks cannot load or save after a version/account/permission
     await assert.rejects(old.onSave(report("late", 4)), /權限已變更/);
     await assert.rejects(old.onLoadPage(4), /權限已變更/);
     assert.equal(view.saves.length, 0);
+  } finally { view.unmount(); }
+});
+
+// Review 2026-11-19: the result was stored but the reply never arrived (a dropped connection); the retry is refused as
+// "already changed" and used to leave a paid answer unsaved for good.
+test("a new result stored by an attempt whose reply was lost is recognised on the retry instead of being refused", async () => {
+  const generated = report("new-report");
+  let stored = false;
+  const view = await mount({ save: async value => { if (!stored) { stored = true; throw Object.assign(new Error("無法連到系統"), { kind: "network" }); } throw new CircuitAiReviewConflict("初審紀錄已變更"); } });
+  try {
+    await assert.rejects(view.review.onSave(generated), /無法連到系統/);
+    view.setLoad(() => [{ report: structuredClone(generated), revision: 1 }]);
+    await act(async () => view.review.onSave(generated));
+    assert.deepEqual(structuredClone(view.review.previousReports), [generated], "the stored record is adopted");
+    // The next manual judgement goes out at the stored revision.
+    view.setLoad(undefined);
+    await assert.rejects(view.review.onSave({ ...generated, summary: "人工判讀" }), CircuitAiReviewConflict);
+    assert.equal(view.saves.at(-1).expectedRevision, 1);
+  } finally { view.unmount(); }
+});
+
+test("a conflict on a record somebody else really changed is still refused", async () => {
+  const existing = report("existing");
+  const view = await mount({ rows: [{ report: existing, revision: 2 }], save: async () => { throw new CircuitAiReviewConflict("初審紀錄已變更"); } });
+  try {
+    await assert.rejects(view.review.onSave({ ...existing, summary: "我的判讀" }), CircuitAiReviewConflict);
+    const fresh = report("brand-new");
+    view.setLoad(() => []);
+    await assert.rejects(view.review.onSave(fresh), CircuitAiReviewConflict, "nothing with that id is stored, so it is a real refusal");
   } finally { view.unmount(); }
 });

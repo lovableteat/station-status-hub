@@ -1,13 +1,23 @@
 import type { AdditiveClient, AdditiveQuery } from "./storage";
 import { supabase } from "@/integrations/supabase/client";
 import { circuitPdfAiReviewKey, normalizeCircuitPdfAiReviewReport, type CircuitPdfAiReviewReport } from "./circuitPdfAiReview";
+import { AiRequestFailure } from "../api-management/aiRequestRecovery";
 
 export interface SavedCircuitPdfAiReview { report: CircuitPdfAiReviewReport; revision: number }
 type ReviewRow = { report: unknown; revision: number };
 const db = supabase as unknown as AdditiveClient<{ circuit_pdf_ai_reviews: ReviewRow }, { circuit_pdf_save_ai_review: ReviewRow }>;
+/** Somebody (or an earlier attempt of ours whose reply was lost) already stored another revision of this record. */
+export class CircuitAiReviewConflict extends Error { constructor(message: string) { super(message); this.name = "CircuitAiReviewConflict"; } }
+/** The request never reached the database (offline, a dropped connection, no answer in time): worth waiting for, not a rejected result. */
+const UNREACHABLE = /failed to fetch|networkerror|network request failed|load failed|timed? ?out|timeout|aborted|err_internet|err_network/i;
 async function request<Row, Result>(query: AdditiveQuery<Row, Result>) {
-  const { data, error, status } = await query.abortSignal(AbortSignal.timeout(20_000));
-  if (error) throw new Error(status === 409 || error.code === "PT409" ? "初審紀錄已變更，請關閉後重新開啟核對；你的判讀尚未覆蓋其他人。" : error.message || "AI 初審紀錄尚未儲存，請重試。");
+  let answer;
+  try { answer = await query.abortSignal(AbortSignal.timeout(20_000)); }
+  catch { throw new AiRequestFailure("無法連到系統，結果還留在這個視窗，連線恢復後會自動再存。", "network"); }
+  const { data, error, status } = answer;
+  if (error && (status === 0 || UNREACHABLE.test(error.message ?? ""))) throw new AiRequestFailure("無法連到系統，結果還留在這個視窗，連線恢復後會自動再存。", "network");
+  if (error && (status === 409 || error.code === "PT409")) throw new CircuitAiReviewConflict("初審紀錄已變更，請關閉後重新開啟核對；你的判讀尚未覆蓋其他人。");
+  if (error) throw new Error(error.message || "AI 初審紀錄尚未儲存，請重試。");
   return data;
 }
 function saved(row: ReviewRow): SavedCircuitPdfAiReview {
