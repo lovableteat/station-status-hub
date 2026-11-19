@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/security-proposals/legacy-pcb/README.md`；程式參考基準：`dc6fccc0c1f1510b91f87bcf299a68f383669f07`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/security-proposals/legacy-pcb/README.md`；程式參考基準：`8ba4408dd6773745fe9f71e60c30ce0464214989`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Legacy PCB snapshots: protected reads without moving data
 
@@ -6,7 +6,7 @@
 
 The **additive APIs are applied**, recorded as
 `20261112064452_add_protected_profile_and_legacy_pcb_read_apis`. Their
-[exact server-ledger copy](https://github.com/lovableteat/station-status-hub/blob/dc6fccc0c1f1510b91f87bcf299a68f383669f07/supabase/migrations/20261112064452_add_protected_profile_and_legacy_pcb_read_apis.sql)
+[exact server-ledger copy](https://github.com/lovableteat/station-status-hub/blob/8ba4408dd6773745fe9f71e60c30ce0464214989/supabase/migrations/20261112064452_add_protected_profile_and_legacy_pcb_read_apis.sql)
 is now in migrations for history reconciliation, not replay. The historical
 `01-add-read-apis-PENDING.sql` candidate stays unchanged outside migrations.
 **Raw-column enforcement and the twelve-RPC/broad/Storage proposals remain pending.**
