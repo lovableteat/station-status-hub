@@ -92,6 +92,29 @@ test("results expose semantic severity and change state while filters remain per
   assert.match(source, /onClick=\{clear\}>全部清除/);
 });
 
+test("the report list is open by default, so the Excel tracker is found without a click", async () => {
+  // 2026-11-19, a colleague: folded by default, people did not find the Excel tracker and the other reports.
+  const source = await read("src/components/comparison/ComparisonWorkspace.tsx");
+  const ast = ts.createSourceFile("Workspace.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let opening;
+  function visit(node) {
+    if (ts.isJsxOpeningElement(node) && node.tagName.getText(ast) === "details"
+      && node.attributes.properties.some(attribute => attribute.name?.getText(ast) === "className" && attribute.initializer?.getText(ast) === '"comparison-section comparison-reports"')) opening = node;
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  assert.ok(opening, "the report list is a section of the result");
+  const attribute = name => opening.attributes.properties.find(item => item.name?.getText(ast) === name);
+  const open = attribute("open");
+  assert.ok(open, "open without a click");
+  assert.ok(!open.initializer || open.initializer.expression?.getText(ast) === "true", "always open, not tied to a condition that could fold it again");
+  const key = attribute("key")?.initializer?.getText(ast) ?? "";
+  assert.ok(key.includes("session.id") && key.includes("reportRuns"), "another result and a finished comparison show it open again");
+  assert.ok(!key.includes("savedAt"), "saving a reply must not open a list the user folded");
+  assert.ok(source.includes("setReportRuns(count => count + 1)"), "a finished comparison counts as a new list");
+  assert.match(await read("src/components/comparison/ComparisonGuide.tsx"), /「報表與完整資料」下載（預設展開）/);
+});
+
 test("restored results start with sources collapsed while new comparisons keep inputs open", async () => {
   const source = await read("src/components/comparison/ComparisonWorkspace.tsx");
   assert.match(source, /className="comparison-source-settings" open=\{!session\}/);
