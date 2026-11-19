@@ -6,7 +6,8 @@ import ExcelJS from 'exceljs';
 const {loader}=createRequire(import.meta.url)('./support/renderHarness.cjs');
 const load=loader({globals:{Blob}});
 const parts=load('src/components/material-requests/projectParts.ts');
-const {buildProjectParts,filterProjectParts,buildPjeRows,buildPjeWorkbook,buildProjectPartsRows,describeProjectPartBoards,projectPartsFileName,EMPTY_PROJECT_PARTS_FILTERS,PJE_HEADERS,PJE_SHEET_NAME}=parts;
+const {buildProjectParts,filterProjectParts,buildPjeRows,buildPjeWorkbook,buildProjectPartsRows,describeProjectPartBoards,describeMissingQty,projectPartsFileName,
+  projectPartColumnOptions,projectPartQtyLabel,sortProjectParts,planProjectPartCategory,projectPartRowSignature,EMPTY_PROJECT_PARTS_FILTERS,PROJECT_PARTS_HEADERS,PJE_HEADERS,PJE_SHEET_NAME}=parts;
 
 // Synthetic boards only (public repository): no real board, project or vendor names.
 let next=0;
@@ -35,9 +36,11 @@ test('the same part on several boards becomes one row with each board, its quant
   assert.match(byMpn['QA-CONN-20'].uses[0].refs,/J1/);assert.match(byMpn['QA-CONN-20'].uses[0].refs,/J5/);
   assert.equal(byMpn['QA-CONN-20'].totalQty,4);
   assert.equal(byMpn['QA-CONN-20'].status,'physical');
-  // A quantity that is not a number is kept as written, and the total does not pretend.
+  // A position without a number is named, not guessed: no total, shown as 未填.
   assert.equal(byMpn['QA-MPN-C9'].totalQty,null);
-  assert.equal(byMpn['QA-MPN-C9'].uses[0].qtyText,'n/a');
+  assert.equal(byMpn['QA-MPN-C9'].uses[0].qty,null);
+  assert.deepEqual(plain(byMpn['QA-MPN-C9'].uses[0].missingRefs),['C9']);
+  assert.equal(projectPartQtyLabel(byMpn['QA-MPN-C9']),'未填');
   // Connectors first, then ICs, then passives; within a category parts used on more boards first.
   assert.deepEqual(plain(result.map(part=>part.category)),['connector','ic','rlc','rlc']);
   assert.equal(describeProjectPartBoards(byMpn['QA-CPU-1']),'QA_Board_A ×1、QA_Board_B ×2');
@@ -61,17 +64,20 @@ test('rows the BOM left without any number or name stay one row per board',()=>{
   assert.equal(result.length,2);
 });
 
-test('filters: words, status, several categories at once, board and maker',()=>{
+test('filters: words, status, several categories at once, and the column filters (board, maker)',()=>{
   const a=[row('U1',{...cpu}),row('J1',{...conn}),row('R1',{name:'QA RES 10K',manufacturer:'QA RES MAKER',partUsageStatus:'停產'}),row('Q1',{name:'QA MOSFET',partNumber:''})];
   const b=[row('U7',{...cpu})];
   const list=buildProjectParts([board('s-a','QA_Board_A',a),board('s-b','QA_Board_B',b)]);
   const f=overrides=>filterProjectParts(list,{...EMPTY_PROJECT_PARTS_FILTERS,...overrides}).map(part=>part.mpn);
   assert.deepEqual(plain(f({categories:['ic','connector']}).sort()),['QA-CONN-20','QA-CPU-1']);
-  assert.deepEqual(plain(f({board:'s-b'})),['QA-CPU-1']);
+  assert.deepEqual(plain(f({columns:{boards:['QA_Board_B']}})),['QA-CPU-1']);
+  assert.deepEqual(plain(f({columns:{boards:[]}})),[],'nothing ticked in a column shows nothing, as in Excel');
   assert.deepEqual(plain(f({query:'board_b cpu'})),['QA-CPU-1'],'board names are searchable, every word must match');
   assert.deepEqual(plain(f({status:'risk'})),['QA-MPN-R1']);
   assert.deepEqual(plain(f({status:'unnumbered'}).sort()),['QA-MPN-Q1','QA-MPN-R1']);
-  assert.deepEqual(plain(f({manufacturer:'QA CONN MAKER'})),['QA-CONN-20']);
+  assert.deepEqual(plain(f({columns:{manufacturer:['QA CONN MAKER']}})),['QA-CONN-20']);
+  assert.deepEqual(plain(f({columns:{status:['停產']}})),['QA-MPN-R1']);
+  assert.deepEqual(plain(f({columns:{physical:['(空白)']}}).sort()),['QA-MPN-Q1','QA-MPN-R1'],'(空白) finds the parts without the number');
   assert.equal(f({}).length,list.length);
 });
 
@@ -101,7 +107,8 @@ test('the full export keeps every board, quantity and position; file names are s
   const list=buildProjectParts([board('s-a','QA_Board_A',[row('U1',{...cpu})]),board('s-b','QA_Board_B',[row('U7',{...cpu,qty:2})])]);
   const [line]=buildProjectPartsRows(list);
   assert.equal(line[0],'IC');assert.equal(line[9],2);assert.equal(line[10],'QA_Board_A ×1\nQA_Board_B ×2');assert.equal(line[11],3);
-  assert.equal(line[12],'QA_Board_A：U1\nQA_Board_B：U7');
+  assert.equal(line[12],'QA_Board_A：U1\nQA_Board_B：U7');assert.equal(line[13],'');
+  assert.equal(PROJECT_PARTS_HEADERS.length,line.length);
   assert.equal(projectPartsFileName('QA/專案 X','PJE備料表',new Date(2026,10,19)),'QA-專案_X_PJE備料表_20261119.xlsx');
 });
 
@@ -137,8 +144,12 @@ test('quantities are read per position, TEMP numbers are not part numbers, a CPU
   const cap={name:'QA CAP 1uF',manufacturer:'QA CAP MAKER',manufacturerPartNumber:'QA-CAP-1'};
   const list=buildProjectParts([board('s-a','A',[row('C1',{...cap,qty:2}),row('C2',{...cap,qty:'x'}),row('C3',{...cap,qty:3})]),board('s-b','B',[row('C9',{...cap,qty:5})])]);
   assert.equal(list.length,1);
-  assert.equal(list[0].uses[0].qtyText,'2+x+3');assert.equal(list[0].uses[1].qty,5);assert.equal(list[0].totalQty,null);
-  assert.deepEqual(plain(buildPjeRows(list)[0].slice(3)),['A ×2+x+3、B ×5','2+x+3+5']);
+  assert.equal(list[0].uses[0].qty,5);assert.deepEqual(plain(list[0].uses[0].missingRefs),['C2']);assert.equal(list[0].uses[1].qty,5);
+  assert.equal(list[0].totalQty,10);assert.equal(list[0].missingCount,1);
+  assert.deepEqual(plain(buildPjeRows(list)[0].slice(3)),['A ×5（+1 未填）、B ×5',10],'PJE sees the position without a quantity');
+  // Only plain numbers are quantities: no hex, exponent or negative number sneaks into the total.
+  const [strict]=buildProjectParts([board('s-a','A',[row('C1',{...cap,qty:'1e2'}),row('C2',{...cap,qty:'0x10'}),row('C3',{...cap,qty:'-1'}),row('C4',{...cap,qty:'1,200'})])]);
+  assert.equal(strict.totalQty,1200);assert.deepEqual(plain(strict.uses[0].missingRefs),['C1','C2','C3']);
   const [temp]=buildProjectParts([board('s-a','A',[row('U5',{name:'QA TEMP IC',manufacturerPartNumber:'QA-TEMP',partNumber:'TEMP-0001'})])]);
   assert.equal(temp.status,'unnumbered');assert.equal(temp.physicalPartNumber,'');
   const [processor]=buildProjectParts([board('s-a','A',[row('CPU1',{...cpu})])]);
@@ -147,7 +158,9 @@ test('quantities are read per position, TEMP numbers are not part numbers, a CPU
 
 test('makers are compared without case, so one filter option finds every spelling',()=>{
   const list=buildProjectParts([board('s-a','A',[row('U1',{name:'QA ONE',manufacturer:'QA Maker',manufacturerPartNumber:'QA-1'}),row('U2',{name:'QA TWO',manufacturer:'QA MAKER',manufacturerPartNumber:'QA-2'})])]);
-  assert.equal(filterProjectParts(list,{...EMPTY_PROJECT_PARTS_FILTERS,manufacturer:'qa maker'}).length,2);
+  const [option,...others]=projectPartColumnOptions(list,'manufacturer');
+  assert.equal(others.length,0);assert.equal(option.count,2);assert.equal(option.label,'QA Maker');
+  assert.equal(filterProjectParts(list,{...EMPTY_PROJECT_PARTS_FILTERS,columns:{manufacturer:[option.value]}}).length,2);
 });
 
 test('placeholder MPNs ("-", "N/A", "NC") are no part numbers, so different parts behind them stay apart',()=>{
@@ -176,4 +189,74 @@ test('the most urgent category of any position counts, also on one board',()=>{
   assert.equal(part.category,'ic');
   const [connector]=buildProjectParts([board('s-a','A',[row('CONN1',{name:'QA HEADER',manufacturerPartNumber:'QA-HDR-1'})])]);
   assert.equal(connector.category,'connector');
+});
+
+test('positions the BOM left without a quantity ("-", blank) stay out of the total and are named, "2.0" is 2',()=>{
+  const header={name:'QA HEADER 2X5',manufacturer:'QA HDR MAKER',manufacturerPartNumber:'QA-HDR-10'};
+  const list=buildProjectParts([
+    board('s-a','QA_Board_A',[row('CONN1',{...header,qty:'2.0'}),row('TEMP-0000001',{...header,qty:'-'})]),
+    board('s-b','QA_Board_B',[row('JMP1',{...header,qty:2})]),
+  ]);
+  assert.equal(list.length,1);
+  const [part]=list;
+  assert.deepEqual(plain(part.uses.map(use=>[use.board,use.qty,use.missingRefs])),[['QA_Board_A',2,['TEMP-0000001']],['QA_Board_B',2,[]]]);
+  assert.equal(part.totalQty,4);assert.equal(part.missingCount,1);
+  assert.equal(describeProjectPartBoards(part),'QA_Board_A ×2（+1 未填）、QA_Board_B ×2');
+  assert.equal(describeProjectPartBoards({uses:[part.uses[0]]}),'QA_Board_A（+1 未填）','one board alone still says it');
+  assert.equal(describeMissingQty(part),'QA_Board_A：TEMP-0000001');
+  assert.deepEqual(plain(buildPjeRows(list)[0].slice(3)),['QA_Board_A ×2（+1 未填）、QA_Board_B ×2',4],'PJE gets a number, never "2.0+-+2", and sees what is not counted');
+  const line=buildProjectPartsRows(list)[0];
+  assert.equal(line[11],4);assert.equal(line[13],'QA_Board_A：TEMP-0000001');
+  // A part whose every position lacks a quantity: 未填 on screen, an empty Usage for PJE.
+  const [unknown]=buildProjectParts([board('s-a','QA_Board_A',[row('X9',{name:'QA CHIP CAP',manufacturerPartNumber:'QA-CAP-X',qty:''})])]);
+  assert.equal(unknown.totalQty,null);assert.equal(projectPartQtyLabel(unknown),'未填');
+  assert.equal(buildPjeRows([unknown])[0][4],'');
+});
+
+test('a column filter lists the values the other filters leave, and the columns sort A to Z or by quantity',()=>{
+  const list=buildProjectParts([
+    board('s-a','QA_Board_A',[row('U1',{...cpu,qty:1}),row('J1',{...conn,qty:3}),row('R1',{name:'QA RES 10K',manufacturer:'QA RES MAKER',qty:''})]),
+    board('s-b','QA_Board_B',[row('U7',{...cpu,qty:2})]),
+  ]);
+  const boards=projectPartColumnOptions(list,'boards');
+  assert.deepEqual(plain(boards.map(option=>[option.value,option.count])),[['QA_Board_A',3],['QA_Board_B',1]]);
+  const onlyB=filterProjectParts(list,{...EMPTY_PROJECT_PARTS_FILTERS,columns:{boards:['QA_Board_B']}},'manufacturer');
+  assert.deepEqual(plain(projectPartColumnOptions(onlyB,'manufacturer').map(option=>option.label)),['QA CPU MAKER'],'the maker list follows the board filter');
+  assert.deepEqual(plain(filterProjectParts(list,{...EMPTY_PROJECT_PARTS_FILTERS,columns:{boards:['QA_Board_B']}},'boards').length),3,'its own filter is left out of its list');
+  assert.deepEqual(plain(projectPartColumnOptions(list,'qty').map(option=>option.value).sort()),['3','有未填用量的位號','未填'],'a part with any position unfilled can be found');
+  const byQty=sortProjectParts(list,{key:'qty',direction:'desc'}).map(part=>part.totalQty);
+  assert.deepEqual(plain(byQty),[3,3,null],'未填 stays last');
+  const byName=sortProjectParts(list,{key:'name',direction:'asc'}).map(part=>part.name);
+  assert.deepEqual(plain(byName),['QA CONN 2X10','QA CPU SOCKET PART','QA RES 10K']);
+  assert.equal(sortProjectParts(list,null),list,'no sort keeps the default order');
+});
+
+test('a part knows the rows behind it on each board and whether its category was picked by hand',()=>{
+  const osc={name:'QA OSC 25MHz',manufacturer:'QA OSC MAKER',manufacturerPartNumber:'QA-OSC-25'};
+  const a=[row('U3',{...osc}),row('U3',{...osc,isGroupStart:false,manufacturer:'QA OSC MAKER B',manufacturerPartNumber:'QA-OSC-25B'})];
+  const b=[row('X7',{...osc,pendingCategory:'other'})];
+  const [part,...rest]=buildProjectParts([board('s-a','A',a),board('s-b','B',b)]);
+  assert.equal(rest.length,0);
+  assert.deepEqual(plain(part.uses.map(use=>[use.boardId,use.recordIds])),[['s-a',[a[0].id,a[1].id]],['s-b',[b[0].id]]],'main and alternate rows, per board');
+  assert.equal(part.category,'other');assert.equal(part.manualCategory,true,'a hand-picked category on any board wins');
+  assert.equal(part.autoCategory,'ic','依位號自動 would bring back the most urgent position (U3)');
+  const [plainPart]=buildProjectParts([board('s-a','A',[row('U9',{...osc})])]);
+  assert.equal(plainPart.manualCategory,false);assert.equal(plainPart.category,'ic');assert.equal(plainPart.autoCategory,'ic');
+});
+
+test('a hand-picked category is written only to rows that still show the part it was picked for',()=>{
+  const ic={name:'QA IC',manufacturer:'QA MAKER',manufacturerPartNumber:'QA-IC-1'};
+  const shown=[row('U1',{...ic}),row('U1',{...ic,isGroupStart:false,manufacturer:'QA MAKER B',manufacturerPartNumber:'QA-IC-1B'}),row('U2',{...ic,pendingCategory:'other'})];
+  const rows=shown.map(record=>({id:record.id,signature:projectPartRowSignature(record)}));
+  // The same ids after a new upload: U1's row is now another part, one row is gone.
+  const now=[{...shown[0],refDes:'R9',manufacturerPartNumber:'QA-RES-9'},shown[1],shown[2]];
+  const plan=planProjectPartCategory(now,rows,'other');
+  assert.deepEqual(plain(plan.updates.map(record=>[record.id,record.pendingCategory])),[[shown[1].id,'other']],'U2 already is 其他; the changed row is not touched');
+  assert.equal(plan.moved,1);
+  const gone=planProjectPartCategory([shown[1]],rows,null);
+  assert.equal(gone.moved,2,'rows that are not there any more count as moved');
+  const auto=planProjectPartCategory(shown,rows,null);
+  assert.deepEqual(plain(auto.updates.map(record=>record.id)),[shown[2].id],'依位號自動 clears only rows with a hand-picked category');
+  assert.equal('pendingCategory' in auto.updates[0],false);
+  assert.equal(shown[2].pendingCategory,'other','the given rows are never changed');
 });

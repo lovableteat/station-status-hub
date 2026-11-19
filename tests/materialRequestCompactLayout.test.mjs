@@ -5,6 +5,7 @@ import ts from "typescript";
 import { MATERIAL_CE_FIELDS } from "../src/components/material-requests/materialUploadContract.mjs";
 
 const source = (await readFile(new URL("../src/components/material-requests/MaterialRequestPage.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const filterSource = (await readFile(new URL("../src/components/material-requests/materialExcelFilter.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const presentationSource = await readFile(new URL("../src/components/material-requests/materialRequestPresentation.ts", import.meta.url), "utf8");
 const storageSource = (await readFile(new URL("../src/components/material-requests/materialBomStorage.ts", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const versionCenter = (await readFile(new URL("../src/components/material-requests/BomVersionCenter.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
@@ -156,7 +157,7 @@ test("dialogs and popovers use the page theme tokens instead of their own fixed 
     slice("function MaterialRecordDialog(", "type MaterialColumnVisibility"),
     settingsDialog,
     slice("function MaterialExportDialog(", "export function MaterialRequestPage() {"),
-    slice("  return (\n    <Popover open={open} onOpenChange={handleOpenChange}>", "function ResizableHeader("),
+    filterSource.slice(filterSource.indexOf("  return (\n    <Popover open={open}") >= 0 ? filterSource.indexOf("  return (\n    <Popover open={open}") : assert.fail("the column filter panel markup moved")),
   ].join("\n");
   assert.doesNotMatch(dialogBlocks, /#0[0-9a-f]{5}|bg-\[#|border-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d|bg-(?:cyan|sky|blue|teal|violet|fuchsia|emerald)-\d/);
   assert.match(dialogBlocks, /workspace-dialog-section/);
@@ -278,7 +279,9 @@ test("待處理料 keeps compact category controls and fills every toolbar actio
 });
 
 test("column filters stage checkbox changes and expose Excel-style apply and cancel", () => {
-  const popover = slice("function ExcelFilterPopover(", "function ResizableHeader(");
+  assert.ok(filterSource.indexOf("export function ExcelFilterPopover") >= 0, "the shared column filter must exist");
+  const popover = filterSource.slice(filterSource.indexOf("export function ExcelFilterPopover"));
+  assert.match(source, /import \{ ExcelFilterPopover \} from "\.\/materialExcelFilter";/);
   assert.match(popover, /const toggleValue = \(value: string, checked: boolean\) => \{\s*setDraftValues\(/);
   assert.match(popover, /onClick=\{commitSelection\}/);
   for (const text of ["（全選）", ">全不選<", ">確定<", ">取消<", "中的篩選"]) assert.ok(popover.includes(text), text);

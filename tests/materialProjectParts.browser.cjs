@@ -1,5 +1,7 @@
 // 專案總料表 end to end on the isolated material workspace (QA data only, no production reads or writes):
 // open it from BOM 版本管理, the shared parts of two boards merge, the archived board stays out, filters and chips,
+// a position without a quantity stays out of the total and is named, the material table's column filters and sort,
+// a hand-picked category written back to both boards (one on screen, one not) that is still there after reopening,
 // tick rows, download the PJE 備料表 and read it back; a board that fails to load blocks the export until 重試 or
 // 仍要匯出; then the phone layout (cards, one scroll, the two actions at the bottom, 44px targets, no sideways scroll).
 // Run by hand: AUDIT_QA_DIR=<folder with playwright> MATERIAL_QA_PORT=8300 node tests/materialProjectParts.browser.cjs
@@ -63,8 +65,12 @@ async function readBook(download, dir) {
     const table = view.getByTestId('project-parts-table');
     const sharedConnector = table.locator('tbody tr', { hasText: 'QA-MPN-7' });
     assert.match(await sharedConnector.innerText(), /2 板/);
-    assert.ok((await sharedConnector.innerText()).includes('QA 主板(僅隔離資料) ×1、QA 子板(僅隔離資料) ×2'));
+    assert.ok((await sharedConnector.innerText()).includes('QA 子板(僅隔離資料) ×2、QA 主板(僅隔離資料) ×1'));
     assert.equal(await table.locator('tbody tr', { hasText: 'QA-ARCHIVED-ONLY' }).count(), 0, 'nothing from the archived board');
+    // The row whose quantity is "-": the total stays a number and says one position wrote none.
+    const qtyCell = table.locator('tbody tr', { hasText: 'QA-CONN-88' }).locator('td.project-parts-num');
+    assert.equal((await qtyCell.innerText()).replace(/\s+/g, ''), '4+1未填');
+    assert.ok((await qtyCell.locator('.project-parts-qty').getAttribute('title')).includes('沒有算進總用量的位號：\nQA 子板(僅隔離資料)：TEMP-QA-0001'));
 
     await view.getByRole('button', { name: /^IC/ }).click();
     await view.getByRole('button', { name: /^CONNECTOR/ }).click();
@@ -84,7 +90,7 @@ async function readBook(download, dir) {
     assert.deepEqual(sheet.getRow(1).values.slice(1), ['Items', 'Vendor', 'PN', '使用在哪個板子', 'Usage']);
     assert.equal(sheet.getRow(1).getCell(1).fill.fgColor.argb, 'FFCAEDFB');
     assert.equal(sheet.rowCount, 3);
-    assert.deepEqual(sheet.getRow(2).values.slice(1), ['RES 10K 1% 0402 J1', 'QA Vendor B', 'QA-MPN-7', 'QA 主板(僅隔離資料) ×1、QA 子板(僅隔離資料) ×2', 3]);
+    assert.deepEqual(sheet.getRow(2).values.slice(1), ['RES 10K 1% 0402 J4', 'QA Vendor B', 'QA-MPN-7', 'QA 子板(僅隔離資料) ×2、QA 主板(僅隔離資料) ×1', 3]);
     assert.match(await view.getByTestId('project-parts-notice').innerText(), /已下載 PJE 備料表（2 項）/);
 
     // A search with no match keeps the header and offers 全部清除, which clears every filter.
@@ -94,6 +100,55 @@ async function readBook(download, dir) {
     await table.getByRole('button', { name: '全部清除' }).click();
     await page.waitForFunction(() => document.querySelector('[data-testid=project-parts-count]')?.textContent.trim() === '11 / 11 項');
     assert.equal(await view.getByTestId('project-parts-active-filters').count(), 0, 'no chip is left');
+
+    // The material table's column filters: tick one board in 使用在哪個板子, see its chip, sort 總用量 Z to A.
+    await table.getByRole('button', { name: '篩選使用在哪個板子', exact: true }).click();
+    const panel = page.getByTestId('material-column-filter-panel');
+    await panel.waitFor();
+    assert.ok(await panel.getByRole('checkbox', { name: 'QA 主板(僅隔離資料)' }).isVisible());
+    await panel.getByRole('button', { name: '全不選' }).click();
+    await panel.getByRole('checkbox', { name: 'QA 子板(僅隔離資料)' }).click();
+    await panel.getByRole('button', { name: '確定' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-parts-count]')?.textContent.trim() === '4 / 11 項');
+    assert.match(await view.getByTestId('project-parts-active-filters').innerText(), /使用在哪個板子：QA 子板\(僅隔離資料\)/);
+    await table.getByRole('button', { name: '篩選總用量', exact: true }).click();
+    await panel.waitFor();
+    await panel.getByRole('button', { name: '從 Z 到 A 排序' }).click();
+    const totals = await table.locator('tbody td.project-parts-num').evaluateAll((cells) => cells.map((cell) => Number.parseFloat(cell.textContent)));
+    const written = totals.filter(Number.isFinite); // 未填 rows stay last and have no number
+    assert.deepEqual(written, [...written].sort((a, b) => b - a), `sorted by quantity: ${JSON.stringify(totals)}`);
+    await view.getByRole('button', { name: /^移除篩選：使用在哪個板子/ }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-parts-count]')?.textContent.trim() === '11 / 11 項');
+    // The dialog's scroll lock must not swallow the wheel over the value list (it once scrolled on the material page only).
+    await table.getByRole('button', { name: '篩選MPN', exact: true }).click();
+    await panel.waitFor();
+    // The pointer rests on the first value, which is on screen (the lower part of the list can sit behind 取消／確定).
+    await panel.locator('.overflow-y-auto[style] label').first().hover();
+    for (let notch = 0; notch < 3; notch += 1) await page.mouse.wheel(0, 100);
+    await page.waitForFunction(() => document.querySelector('[data-testid=material-column-filter-panel] .overflow-y-auto[style]')?.scrollTop > 0);
+    await panel.getByRole('button', { name: '取消' }).click();
+    await panel.waitFor({ state: 'hidden' });
+
+    // A hand-picked category: the IC used on both boards becomes 其他, is written to both BOMs, survives reopening,
+    // and 依位號自動 brings the IC back.
+    const sharedIc = () => view.getByTestId('project-parts-table').locator('tbody tr', { hasText: 'QA-MPN-8' });
+    const picker = () => sharedIc().getByRole('combobox', { name: /的分類，目前/ });
+    assert.match(await picker().innerText(), /^IC$/);
+    const tickedBefore = await sharedIc().getAttribute('data-selected');
+    await picker().click();
+    await page.getByRole('option', { name: '其他', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-parts-notice]')?.textContent.includes('已寫回 2 塊板子'));
+    assert.match(await picker().innerText(), /其他 · 手動/);
+    assert.equal(await sharedIc().getAttribute('data-selected'), tickedBefore, 'choosing a category does not tick or untick the row');
+    await view.getByRole('button', { name: '← 返回系列' }).click();
+    await page.getByTestId('bom-project-parts-entry').click();
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-parts-count]')?.textContent.trim() === '11 / 11 項');
+    assert.match(await picker().innerText(), /其他 · 手動/, 'saved, not only shown');
+    await picker().click();
+    await page.getByRole('option', { name: '依位號自動（IC）' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-parts-notice]')?.textContent.includes('依位號自動（IC）'));
+    assert.match(await picker().innerText(), /^IC$/);
+
     await view.getByRole('button', { name: '← 返回系列' }).click();
     await page.getByTestId('bom-series-list').waitFor();
 
@@ -118,9 +173,15 @@ async function readBook(download, dir) {
     const bar = phone.locator('.project-parts-mobile-actions');
     const barBox = await bar.boundingBox();
     assert.ok(barBox.y + barBox.height <= 844 + 1, 'the actions stay on screen');
-    const heights = await phone.locator('.project-parts-back, .project-parts-category, .project-parts-select, .project-parts-mobile-actions button').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height));
+    assert.ok(await phone.getByRole('combobox', { name: '篩選欄位' }).isVisible(), 'the column filters are on the phone too');
+    const heights = await phone.locator('.project-parts-back, .project-parts-category, .project-parts-select, .project-parts-mobile-column > button, .project-parts-category-picker, .project-parts-mobile-actions button').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height));
     assert.ok(heights.every((height) => height >= 44), `44px targets: ${JSON.stringify(heights)}`);
     await phone.locator('.project-parts-card-main').first().tap();
+    await phonePage.waitForFunction(() => document.querySelector('.project-parts-mobile-actions')?.textContent.includes('已選 1 項'), null, { timeout: 5000 });
+    // The category on a card opens its own list and does not tick the card.
+    await phone.locator('.project-parts-card').nth(1).getByRole('combobox', { name: /的分類，目前/ }).tap();
+    await phonePage.getByRole('listbox').waitFor();
+    await phonePage.keyboard.press('Escape');
     assert.match(await bar.innerText(), /已選 1 項/);
     console.log('專案總料表 browser flow: passed');
   } finally {

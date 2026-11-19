@@ -95,6 +95,19 @@
 .project-parts-table .project-parts-boards-cell { max-width: 20rem; }
 .project-parts-table .project-parts-boards-cell b { margin-right: 6px; border-radius: 4px; padding: 0 5px; background: hsl(var(--warning) / .16); color: hsl(var(--warning)); font-size: 11px; font-weight: 700; }
 .project-parts-table .project-parts-num { text-align: right; font-variant-numeric: tabular-nums; }
+.project-parts-table .project-parts-filter-head th { border-bottom: 1px solid hsl(var(--border)); padding: 0 6px 6px; font-weight: 600; text-align: left; }
+.project-parts-table .project-parts-filter-head th[data-column] { min-width: 6.5rem; }
+.project-parts-head-note { display: flex; height: 32px; align-items: center; justify-content: center; color: hsl(var(--muted-foreground)); }
+.project-parts-qty-missing { margin-left: 6px; border-radius: 4px; padding: 0 5px; background: hsl(var(--warning) / .16); color: hsl(var(--warning)); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.project-parts-qty-missing:first-child { margin-left: 0; }
+.project-parts-category-picker { width: auto; height: 26px; cursor: pointer; gap: 4px; padding: 0 6px 0 8px; font-weight: 700; }
+.project-parts-category-picker > svg:last-child { width: 12px; height: 12px; opacity: .7; }
+.project-parts-category-picker--manual { box-shadow: inset 0 0 0 1px currentColor; }
+.project-parts-category-picker[aria-busy] { cursor: progress; }
+.project-parts-card-foot { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 10px 10px 36px; }
+.project-parts-view[data-compact] .project-parts-category-picker { height: 44px; flex: none; padding-inline: 10px; }
+.project-parts-mobile-column { display: grid; min-width: 0; flex-basis: 100%; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 8px; }
+.project-parts-mobile-column > button:last-child { height: 44px; }
 .project-parts-table-state { height: auto !important; padding: 28px 12px !important; text-align: center; white-space: normal !important; }
 .project-parts-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .project-parts-alt { margin-left: 6px; color: hsl(var(--muted-foreground)); font-family: inherit; font-size: 11px; font-style: normal; }
@@ -146,7 +159,7 @@
 .project-parts-card-main > button[role="checkbox"] { margin-top: 2px; }
 .project-parts-card-body { display: grid; min-width: 0; flex: 1; gap: 3px; font-size: 13px; line-height: 19px; }
 .project-parts-card-line { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.project-parts-card-name { margin-left: 6px; color: hsl(var(--foreground)); font-weight: 650; }
+.project-parts-card-name { color: hsl(var(--foreground)); font-weight: 650; }
 .project-parts-card-qty { display: grid; flex: none; justify-items: end; color: hsl(var(--foreground)); font-size: 16px; font-variant-numeric: tabular-nums; font-weight: 700; }
 .project-parts-card-qty small { color: hsl(var(--muted-foreground)); font-size: 11px; font-weight: 500; }
 .project-parts-cards-state { padding: 20px 8px; text-align: center; }

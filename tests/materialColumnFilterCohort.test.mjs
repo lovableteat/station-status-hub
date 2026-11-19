@@ -111,10 +111,15 @@ const helperNames = ['parseSearchTokens', 'splitRefDesignators', 'getUniqueMpnCo
   'normalizeFilterValue', 'uniqueNormalizedValues', 'createCachedColumnValues', 'normalizeColumnFilterSelection',
   'normalizeTrackingWorkflowStatus', 'getTrackingWorkflowStatus', 'inferFilterOptionTone', 'buildExcelFilterOptions',
   'getTrackingStatusDisplayLabel', 'buildTrackingStatusFilterOptions'];
+// The column filter's value helpers live in their own module, shared with 專案總料表.
+const valuesSource = await readFile(new URL('../src/components/material-requests/materialExcelFilterValues.ts', import.meta.url), 'utf8');
+const valuesAst = ts.createSourceFile('materialExcelFilterValues.ts', valuesSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const helpers = helperNames.map(name => {
-  const match = pageAst.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
-  assert.ok(match, `Production helper ${name} is required`);
-  return match.getText(pageAst);
+  for (const ast of [pageAst, valuesAst]) {
+    const match = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
+    if (match) return match.getText(ast).replace(/^export\s+/, '');
+  }
+  assert.fail(`Production helper ${name} is required`);
 }).join('\n');
 const projections = ['searchTokens', 'hasActiveColumnFilters', 'groupRuntimeIndex', 'columnFilterSets', 'matchesRecordSearch', 'matchesSearch',
   'matchesAvailability', 'markedGroupKeySet', 'markedFilterSet', 'markedLocationFilterSet', 'matchesMarkedState', 'getMatchingGroup',

@@ -154,7 +154,7 @@ test("adding the meaning row preserves record, blue-group and imported-tracking 
 
   const page = await readFile(new URL("../src/components/material-requests/MaterialRequestPage.tsx", import.meta.url), "utf8");
   const helpers = page.slice(page.indexOf("function isImportedTrackingEntry("), page.indexOf("function getBestTrackingRecord("));
-  const merge = page.slice(page.indexOf("function mergeImportedWorkspace("), page.indexOf("function parseSearchTokens("));
+  const merge = page.slice(page.indexOf("function mergeImportedWorkspace("), page.indexOf("function isPrimaryInternalPart("));
   assert.ok(helpers.includes("function mergeTrackingHistories("));
   assert.ok(merge.includes("const existingRecords"));
   const compiled = ts.transpileModule(`${helpers}\n${merge}`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;

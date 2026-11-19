@@ -25,7 +25,7 @@ import type { MaterialWorkbookRecord } from "./materialRequestUtils";
 import type { NvBomChange } from "./nvBomCompare";
 import type { NvBomTableCandidate, NvBomTableLink } from "./nvBomTableMatch";
 import type { NvBomCompareSession } from "./NvBomComparePanel";
-import { ProjectPartsView } from "./ProjectPartsView";
+import { ProjectPartsView, type SetProjectPartCategory } from "./ProjectPartsView";
 import "./bomVersionCenter.css";
 
 const UNASSIGNED_VALUE = "__unassigned__";
@@ -142,6 +142,8 @@ export interface BomVersionCenterProps {
   onLocateDiffEntry?: (target: BomDiffLocateTarget) => boolean;
   /** 帶入舊版資料: fills the older version's website data into the current version's matching rows. */
   onRecarry?: (target: { series: BomSeries; before: BomSeriesVersion; after: BomSeriesVersion }) => Promise<{ filled: number; remaining: number }>;
+  /** 專案總料表: a hand-picked category written back to each board's current version (missing without edit permission). */
+  onSetProjectPartCategory?: SetProjectPartCategory;
 }
 
 export interface BomDiffLocateTarget {
@@ -204,7 +206,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const {
     open, onOpenChange, canEdit, ready, busy = false, activeBomId, activeProjectId, activeProjectName, historyAccountId, projects, projectNames, seriesList, exportedBy,
     loadRecords, currentBomName, matchCurrentBom, onLocateCurrentBom, onView, onSetCurrent, onUploadVersion, onUploadNew, onAssignProject, onRenameSeries, onUpdateVersion, onSetArchived, onDeleteVersion, onDeleteSeries, onOpenPageTracker, onDownloadSource,
-    diffRequest, onLocateDiffEntry, onRecarry,
+    diffRequest, onLocateDiffEntry, onRecarry, onSetProjectPartCategory,
   } = props;
   const [tableScrollRef, tableOverflows] = useOverflowX<HTMLDivElement>();
   const compact = useCompact();
@@ -686,7 +688,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         </Suspense>}
         {mode === "nv" ? null : mode === "parts" ? (
           partsSeries.length > 0
-            ? <ProjectPartsView key={partsProjectId ?? ""} projectName={partsProjectName} series={partsSeries} loadVersion={loadPartsVersion} exportedBy={exportedBy} compact={compact} onBack={() => setMode("series")} />
+            ? <ProjectPartsView key={partsProjectId ?? ""} projectName={partsProjectName} series={partsSeries} loadVersion={loadPartsVersion} exportedBy={exportedBy} compact={compact} onBack={() => setMode("series")} onSetCategory={canEdit && ready ? onSetProjectPartCategory : undefined} />
             : <div className="project-parts-gone"><p>這個專案目前沒有可以合併的 BOM 系列（可能剛被封存或移到別的專案）。</p><Button type="button" variant="outline" size="sm" onClick={() => setMode("series")} title="回到 BOM 系列清單" className="h-11">← 返回系列</Button></div>
         ) : mode === "diff" && diffSeries && diffBefore && diffAfter ? (
           <BomDiffView

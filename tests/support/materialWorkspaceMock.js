@@ -120,12 +120,14 @@ const store = new Map([[workspace.id, workspace], [previousWorkspace.id, previou
 const fullRecords = new Map([[workspace.id, records], [previousWorkspace.id, previousRecords], [legacyWorkspace.id, previousRecords.slice(0, 3)]]);
 // ?qaProjectParts: QA 專案 has a second board that shares U1 and J1 with the main board, adds a CPU and a connector
 // of its own, and an archived board that 專案總料表 must leave out. ?qaProjectPartsFail: the second board fails once.
+// The connector also sits on a row whose 位號 holds a number and whose quantity is "-", as real CE BOMs have.
 if (new URLSearchParams(window.location.search).has('qaProjectParts')) {
   const subId = 'bom:qa-sub:v1:qa0101', oldId = 'bom:qa-old:v1:qa0201';
   const subRecords = [
     makeRecord('U3', 8, { qty: 2 }), makeRecord('J4', 7, { qty: 2 }),
     makeRecord('U20', 70, { name: 'QA CPU 子板主晶片', manufacturer: 'QA CPU CO', manufacturerPartNumber: 'QA-CPU-77', partNumber: '000-PHYSICAL-CPU', virtualAlternative: '' }),
     makeRecord('J30', 71, { name: 'QA CONN 子板高速連接器', manufacturer: 'QA CONN CO', manufacturerPartNumber: 'QA-CONN-88', partNumber: '', virtualAlternative: '', qty: 4 }),
+    makeRecord('TEMP-QA-0001', 72, { name: 'QA CONN 子板高速連接器', manufacturer: 'QA CONN CO', manufacturerPartNumber: 'QA-CONN-88', partNumber: '', virtualAlternative: '', qty: '-' }),
   ];
   const version = (id, name) => ({ seriesId: `series:${id}`, seriesName: name, versionNumber: 1, label: '', note: '', uploadedAt: stamp(3), uploadedBy: 'QA 目前使用者', isCurrent: true, currentChangedAt: stamp(3) });
   store.set(subId, { id: subId, name: 'QA 子板（僅隔離資料）.xlsx', updatedAt: stamp(3), project: { projectId: project.id, projectName: project.name }, payload: { ...seed, sourceFile: 'QA 子板（僅隔離資料）.xlsx', sheetName: 'QA', records: [], recordCount: subRecords.length }, recordMeta: {}, version: version('qa-sub', 'QA 子板（僅隔離資料）.xlsx') });
@@ -248,6 +250,7 @@ export const saveBomWorkspaceRecord = async (target, record) => {
   if (liveRecords && index >= 0 && target.recordMeta?.[record.id]?.updatedAt !== store.get(target.id).recordMeta[record.id]?.updatedAt) throw new BomRecordConflictError('QA record revision conflict');
   if (index >= 0) list[index] = structuredClone(record); else list.push(structuredClone(record));
   fullRecords.set(target.id, list);
+  if (!liveRecords && target.updatedAt && store.has(target.id)) store.get(target.id).updatedAt = target.updatedAt;
   const recordMeta = { updatedAt: liveRecords ? nextRecordStamp() : new Date().toISOString(), updatedBy: user.displayName, version: 1 };
   if (liveRecords) {
     const noteSnapshot = { record: structuredClone(record), recordMeta };

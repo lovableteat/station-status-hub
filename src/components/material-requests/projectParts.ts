@@ -5,9 +5,11 @@
  * PJE 備料表 is this list in the five columns PJE asked for, so long-lead parts (CPU, IC, connector) can be ordered first.
  */
 import { BOM_PLACEHOLDER } from "./bomUploadChecks";
+import { matchesExcelFilter, normalizeFilterValue, type ColumnFilterSelection, type ExcelFilterOption } from "./materialExcelFilterValues";
 import { buildMaterialMainGroups, sortMaterialAlternatives, type MaterialMainGroup } from "./materialMainRows";
-import { resolvePendingMaterialCategory, PENDING_MATERIAL_CATEGORIES, type PendingMaterialCategory } from "./materialRequestPresentation";
+import { getPendingMaterialCategory, resolvePendingMaterialCategory, PENDING_MATERIAL_CATEGORIES, type PendingMaterialCategory } from "./materialRequestPresentation";
 import { buildMaterialDataset, isTemporaryPartNumber, normalizeMaterialSearchText, type MaterialRecord, type MaterialWorkbookRecord } from "./materialRequestUtils";
+import type { MaterialColumnSort } from "./materialTableSort";
 
 export interface ProjectPartsBoard {
   /** Series id; one series is one board. */
@@ -22,11 +24,13 @@ export interface ProjectPartsBoard {
 export interface ProjectPartUse {
   boardId: string;
   board: string;
-  /** Sum of this part's quantity on the board; null when a quantity on the board is not a number. */
+  /** Sum of the quantities the BOM wrote for this part on the board ("2.0" is 2); null when no position wrote one. */
   qty: number | null;
-  /** The quantities as the BOM wrote them ("2+x"), when one of them is not a number. */
-  qtyText: string;
+  /** Positions on this board without a quantity (blank, "-", text): left out of the sum and named instead of guessed. */
+  missingRefs: string[];
   refs: string;
+  /** Every row (main and alternates) of this part's positions on the board: a hand-picked category is written to all of them. */
+  recordIds: string[];
 }
 
 export type ProjectPartStatus = "physical" | "virtual" | "unnumbered";
@@ -34,15 +38,23 @@ export type ProjectPartStatus = "physical" | "virtual" | "unnumbered";
 export interface ProjectPart {
   key: string;
   category: PendingMaterialCategory;
+  /** The category was picked by hand (here or in 待處理料) on some board, and wins over the 位號 rule. */
+  manualCategory: boolean;
+  /** What the 位號 rule alone gives (the most urgent position): what 依位號自動 brings back. */
+  autoCategory: PendingMaterialCategory;
   /** Every virtual / physical part number the boards gave this part, "、" between them. */
   virtualPartNumber: string;
   physicalPartNumber: string;
+  /** The same numbers one by one, for the column filters. */
+  virtualNumbers: string[];
+  physicalNumbers: string[];
   name: string;
   spec: string;
   manufacturer: string;
   mpn: string;
   /** 零件狀態 (or phase out, or the 供料狀態 that makes it a risk) of every board, "、" between different ones. */
   usageStatus: string;
+  statuses: string[];
   /** A risk on any board or position makes the whole row a risk. */
   risk: boolean;
   /** The most complete numbering any board has. */
@@ -50,8 +62,10 @@ export interface ProjectPart {
   /** Other vendors of the same positions, "maker MPN", without duplicates. */
   alternates: string[];
   uses: ProjectPartUse[];
-  /** Sum over the boards; null when one of them is not a number. */
+  /** Sum of every quantity the boards wrote; null when no position wrote one. */
   totalQty: number | null;
+  /** Positions without a quantity on all boards together; they are not in totalQty. */
+  missingCount: number;
   searchText: string;
 }
 
@@ -74,17 +88,49 @@ export function projectPartToken(value: unknown) {
   return text(value).normalize("NFKC").toUpperCase().replace(/\s+/g, " ");
 }
 
+/**
+ * What a hand-picked category was chosen for: position, maker and MPN of one row. Row ids are positions in the sheet
+ * ("Sheet-12"), so after a new upload the same id can be another part; a write skips a row whose fingerprint changed.
+ */
+export function projectPartRowSignature(record: Pick<MaterialRecord, "refDes" | "manufacturer" | "manufacturerPartNumber">) {
+  return JSON.stringify([projectPartToken(record.refDes), projectPartToken(record.manufacturer), projectPartToken(record.manufacturerPartNumber)]);
+}
+
+/**
+ * The rows a hand-picked category is written to on one board: rows that still show what was picked (same id and
+ * fingerprint) and have another category. `moved` counts rows that became another part or are gone; they are left alone.
+ */
+export function planProjectPartCategory<T extends MaterialWorkbookRecord>(
+  records: readonly T[],
+  rows: ReadonlyArray<{ id: string; signature: string }>,
+  category: PendingMaterialCategory | null,
+): { updates: T[]; moved: number } {
+  const wanted = new Map(rows.map(row => [row.id, row.signature] as const));
+  const present = new Set(records.map(record => record.id));
+  let moved = rows.filter(row => !present.has(row.id)).length;
+  const updates: T[] = [];
+  for (const record of records) {
+    if (!wanted.has(record.id)) continue;
+    if (projectPartRowSignature(record) !== wanted.get(record.id)) { moved += 1; continue; }
+    if ((record.pendingCategory ?? null) === category) continue;
+    const next = { ...record };
+    if (category) next.pendingCategory = category;
+    else delete next.pendingCategory;
+    updates.push(next);
+  }
+  return { updates, moved };
+}
+
 /** "N/A", "-", "NC", "DNI", "TBD" are no part numbers (the upload checks use the same list); TEMP- is none yet. */
 function realNumber(value: unknown) {
   const written = text(value);
   return written && !BOM_PLACEHOLDER.test(written) && !isTemporaryPartNumber(written) ? written : "";
 }
 
+/** A quantity is a plain number ("2", "2.0", "1,200"); "-", "0x10", "1e2", "-1" or text are no quantity. */
 function parseQty(value: unknown): number | null {
   const raw = text(value).replaceAll(",", "");
-  if (!raw) return null;
-  const number = Number(raw);
-  return Number.isFinite(number) ? number : null;
+  return /^\d+(?:\.\d+)?$/.test(raw) ? Number(raw) : null;
 }
 
 function addQty(left: number | null, right: number | null) {
@@ -122,11 +168,12 @@ function usageStatusOf(record: MaterialRecord) {
   return text(record.partUsageStatus) || text(record.phaseOutStatus) || (record.isRisk ? text(record.sourcingStatus) : "");
 }
 
-type Use = Omit<ProjectPartUse, "qty" | "qtyText"> & { raw: string[] };
+type Use = Omit<ProjectPartUse, "qty" | "missingRefs"> & { quantities: number[]; missing: string[] };
 interface Draft {
   key: string;
   manual?: PendingMaterialCategory;
   auto: PendingMaterialCategory;
+  byRef: PendingMaterialCategory;
   physical: Set<string>;
   virtual: Set<string>;
   statuses: Set<string>;
@@ -152,7 +199,7 @@ export function buildProjectParts(boards: readonly ProjectPartsBoard[]): Project
       let draft = drafts.get(key);
       if (!draft) {
         draft = {
-          key, auto: "other", physical: new Set(), virtual: new Set(), statuses: new Set(), risk: false,
+          key, auto: "other", byRef: "other", physical: new Set(), virtual: new Set(), statuses: new Set(), risk: false,
           name: "", names: new Set(), spec: "", manufacturer: realNumber(primary.manufacturer), mpn: realNumber(primary.manufacturerPartNumber),
           alternates: new Map(), uses: [], useIndex: new Map(),
         };
@@ -171,6 +218,8 @@ export function buildProjectParts(boards: readonly ProjectPartsBoard[]): Project
         const category = resolvePendingMaterialCategory(location);
         if (category.manual) draft.manual ??= category.category;
         else if ((CATEGORY_ORDER.get(category.category) ?? 9) < (CATEGORY_ORDER.get(draft.auto) ?? 9)) draft.auto = category.category;
+        const byRef = getPendingMaterialCategory(location.displayRef);
+        if ((CATEGORY_ORDER.get(byRef) ?? 9) < (CATEGORY_ORDER.get(draft.byRef) ?? 9)) draft.byRef = byRef;
         const head = location.primaryRecord as MaterialRecord;
         const status = usageStatusOf(head);
         if (status) draft.statuses.add(status);
@@ -180,37 +229,45 @@ export function buildProjectParts(boards: readonly ProjectPartsBoard[]): Project
           const token = projectPartToken(alternate);
           if (alternate && token !== mainSelf && !draft.alternates.has(token)) draft.alternates.set(token, alternate);
         }
-        // Each position's own quantity: the merged main has already turned a mix of numbers and text into "—".
-        const raw = text(location.qty) || "?";
-        const use = draft.useIndex.get(board.id);
-        if (use) {
-          use.raw.push(raw);
-          use.refs = [use.refs, location.displayRef].filter(Boolean).join(", ");
-        } else {
-          const next: Use = { boardId: board.id, board: board.name, refs: location.displayRef, raw: [raw] };
-          draft.useIndex.set(board.id, next);
-          draft.uses.push(next);
+        // Each position's own quantity (the merged main has already turned a mix into "—"). A position the BOM left
+        // without a number (blank, "-", text) is not guessed: it stays out of the sum and is named instead.
+        let use = draft.useIndex.get(board.id);
+        if (!use) {
+          use = { boardId: board.id, board: board.name, refs: "", recordIds: [], quantities: [], missing: [] };
+          draft.useIndex.set(board.id, use);
+          draft.uses.push(use);
         }
+        use.refs = [use.refs, location.displayRef].filter(Boolean).join(", ");
+        for (const record of location.records) if (!use.recordIds.includes(record.id)) use.recordIds.push(record.id);
+        const qty = parseQty(location.qty);
+        if (qty === null) use.missing.push(location.displayRef || "（沒有位號）");
+        else use.quantities.push(qty);
       }
     }
   }
   return [...drafts.values()].map(draft => {
-    const uses = draft.uses.map(({ raw, ...use }): ProjectPartUse => {
-      const qty = raw.reduce<number | null>((sum, value) => addQty(sum, parseQty(value)), 0);
-      return { ...use, qty, qtyText: qty === null ? raw.join("+") : "" };
-    });
-    const totalQty = uses.reduce<number | null>((sum, use) => addQty(sum, use.qty), 0);
-    const physicalPartNumber = [...draft.physical].join("、"), virtualPartNumber = [...draft.virtual].join("、");
-    const usageStatus = [...draft.statuses].join("、");
+    const uses = draft.uses.map(({ quantities, missing, ...use }): ProjectPartUse => ({
+      ...use,
+      qty: quantities.length ? quantities.reduce<number | null>((sum, value) => addQty(sum, value), 0) : null,
+      missingRefs: missing,
+    }));
+    const written = uses.filter(use => use.qty !== null);
+    const totalQty = written.length ? written.reduce<number | null>((sum, use) => addQty(sum, use.qty), 0) : null;
+    const missingCount = uses.reduce((sum, use) => sum + use.missingRefs.length, 0);
+    const physicalNumbers = [...draft.physical], virtualNumbers = [...draft.virtual], statuses = [...draft.statuses];
+    const physicalPartNumber = physicalNumbers.join("、"), virtualPartNumber = virtualNumbers.join("、");
+    const usageStatus = statuses.join("、");
     const alternates = [...draft.alternates.values()];
     const part: ProjectPart = {
       key: draft.key,
       category: draft.manual ?? draft.auto,
-      virtualPartNumber, physicalPartNumber,
+      manualCategory: draft.manual !== undefined,
+      autoCategory: draft.byRef,
+      virtualPartNumber, physicalPartNumber, virtualNumbers, physicalNumbers,
       name: draft.name, spec: draft.spec, manufacturer: draft.manufacturer, mpn: draft.mpn,
-      usageStatus, risk: draft.risk,
+      usageStatus, statuses, risk: draft.risk,
       status: physicalPartNumber ? "physical" : virtualPartNumber ? "virtual" : "unnumbered",
-      alternates, uses, totalQty,
+      alternates, uses, totalQty, missingCount,
       searchText: normalizeMaterialSearchText([
         virtualPartNumber, physicalPartNumber, ...draft.names, draft.spec, draft.manufacturer, draft.mpn, usageStatus,
         ...alternates, ...uses.flatMap(use => [use.board, use.refs]),
@@ -223,55 +280,128 @@ export function buildProjectParts(boards: readonly ProjectPartsBoard[]): Project
     || COLLATOR.compare(left.mpn, right.mpn));
 }
 
+/** The table's columns with an Excel-style filter, in table order (分類 has its own buttons above the table). */
+export const PROJECT_PART_COLUMNS = [
+  { key: "virtual", label: "虛擬料號" },
+  { key: "physical", label: "實體料號" },
+  { key: "name", label: "品名" },
+  { key: "manufacturer", label: "廠商" },
+  { key: "mpn", label: "MPN" },
+  { key: "boards", label: "使用在哪個板子" },
+  { key: "qty", label: "總用量" },
+  { key: "status", label: "零件狀態" },
+] as const;
+export type ProjectPartColumnKey = typeof PROJECT_PART_COLUMNS[number]["key"];
+
 export interface ProjectPartsFilters {
   query: string;
   status: ProjectPartStatus | "risk" | "all";
   categories: PendingMaterialCategory[];
-  board: string;
-  manufacturer: string;
+  /** Column filters as the material table keeps them: null (or missing) is everything, [] is nothing. */
+  columns: Partial<Record<ProjectPartColumnKey, ColumnFilterSelection>>;
 }
 
-export const EMPTY_PROJECT_PARTS_FILTERS: ProjectPartsFilters = { query: "", status: "all", categories: [], board: "", manufacturer: "" };
-
-export function filterProjectParts(parts: readonly ProjectPart[], filters: ProjectPartsFilters) {
-  const terms = normalizeMaterialSearchText(filters.query).split(/\s+/).filter(Boolean);
-  return parts.filter(part => terms.every(term => part.searchText.includes(term))
-    && (filters.status === "all" || (filters.status === "risk" ? part.risk : part.status === filters.status))
-    && (filters.categories.length === 0 || filters.categories.includes(part.category))
-    && (!filters.board || part.uses.some(use => use.boardId === filters.board))
-    && (!filters.manufacturer || projectPartToken(part.manufacturer) === projectPartToken(filters.manufacturer)));
-}
+export const EMPTY_PROJECT_PARTS_FILTERS: ProjectPartsFilters = { query: "", status: "all", categories: [], columns: {} };
 
 export function formatProjectQty(value: number | null, fallback = "—") {
   return value === null ? fallback : value.toLocaleString("zh-TW", { maximumFractionDigits: 6 });
 }
 
-/** "Board_A ×2、Board_B ×1"; one board alone is just its name. */
-export function describeProjectPartBoards(part: Pick<ProjectPart, "uses">, separator = "、") {
-  if (part.uses.length === 1) return part.uses[0].board;
-  return part.uses.map(use => `${use.board} ×${use.qty === null ? use.qtyText || "?" : formatProjectQty(use.qty)}`).join(separator);
+export const PROJECT_QTY_MISSING = "未填";
+/** The 總用量 filter value of every part with a position that wrote no quantity (shown as "4 +1 未填"). */
+export const PROJECT_QTY_PARTLY_MISSING = "有未填用量的位號";
+
+/** The 總用量 as shown and filtered: the sum, or 未填 when no position wrote a quantity. */
+export function projectPartQtyLabel(part: Pick<ProjectPart, "totalQty">) {
+  return formatProjectQty(part.totalQty, PROJECT_QTY_MISSING);
 }
 
-function totalQtyText(part: Pick<ProjectPart, "uses" | "totalQty">) {
-  return part.totalQty === null ? part.uses.map(use => use.qty === null ? use.qtyText || "?" : formatProjectQty(use.qty)).join("+") : part.totalQty;
+/** The values a part shows in a filterable column; a blank one is "(空白)" in the filter, as in the material table. */
+export function projectPartColumnValues(part: ProjectPart, key: ProjectPartColumnKey): string[] {
+  switch (key) {
+    case "virtual": return part.virtualNumbers.length ? part.virtualNumbers : [""];
+    case "physical": return part.physicalNumbers.length ? part.physicalNumbers : [""];
+    case "name": return [part.name || part.spec];
+    case "manufacturer": return [projectPartToken(part.manufacturer)];
+    case "mpn": return [part.mpn];
+    case "boards": return part.uses.map(use => use.board);
+    // Plain numbers ("1200", not "1,200") so the value list sorts them as numbers.
+    case "qty": return [part.totalQty === null ? PROJECT_QTY_MISSING : String(part.totalQty), ...(part.missingCount > 0 ? [PROJECT_QTY_PARTLY_MISSING] : [])];
+    case "status": return part.statuses.length ? part.statuses : [part.risk ? "風險料" : ""];
+  }
+}
+
+/** Every filter at once; ignoredColumn leaves that column's own filter out, so its value list shows what it can still pick. */
+export function filterProjectParts(parts: readonly ProjectPart[], filters: ProjectPartsFilters, ignoredColumn?: ProjectPartColumnKey) {
+  const terms = normalizeMaterialSearchText(filters.query).split(/\s+/).filter(Boolean);
+  const columns = PROJECT_PART_COLUMNS.filter(({ key }) => key !== ignoredColumn && filters.columns[key] != null);
+  return parts.filter(part => terms.every(term => part.searchText.includes(term))
+    && (filters.status === "all" || (filters.status === "risk" ? part.risk : part.status === filters.status))
+    && (filters.categories.length === 0 || filters.categories.includes(part.category))
+    && columns.every(({ key }) => matchesExcelFilter(filters.columns[key] ?? null, projectPartColumnValues(part, key))));
+}
+
+/** The checkbox list of a column filter: each value once, with how many parts carry it. */
+export function projectPartColumnOptions(parts: readonly ProjectPart[], key: ProjectPartColumnKey): ExcelFilterOption[] {
+  const options = new Map<string, ExcelFilterOption>();
+  for (const part of parts) {
+    for (const value of new Set(projectPartColumnValues(part, key).map(normalizeFilterValue))) {
+      const option = options.get(value);
+      if (option) option.count += 1;
+      // A maker is one option however the boards capitalise it ("Acme", "ACME"); the list shows the first spelling.
+      else options.set(value, { value, label: key === "manufacturer" && part.manufacturer ? part.manufacturer : value, count: 1 });
+    }
+  }
+  return [...options.values()];
+}
+
+/** A column's A→Z / Z→A from its filter; 總用量 by number. Blank and 未填 stay last either way. */
+export function sortProjectParts(parts: readonly ProjectPart[], sort: MaterialColumnSort<ProjectPartColumnKey> | null): readonly ProjectPart[] {
+  if (!sort) return parts;
+  const factor = sort.direction === "asc" ? 1 : -1;
+  return [...parts].sort((left, right) => {
+    if (sort.key === "qty") {
+      if (left.totalQty === null || right.totalQty === null) return left.totalQty === right.totalQty ? 0 : left.totalQty === null ? 1 : -1;
+      return (left.totalQty - right.totalQty) * factor;
+    }
+    const a = projectPartColumnValues(left, sort.key).join("、"), b = projectPartColumnValues(right, sort.key).join("、");
+    if (!a || !b) return a === b ? 0 : !a ? 1 : -1;
+    return COLLATOR.compare(a, b) * factor;
+  });
+}
+
+/**
+ * "Board_A ×2、Board_B ×1"; one board alone is just its name; a board whose positions wrote no quantity is ×未填, and
+ * positions without a quantity next to written ones are counted ("×2（+1 未填）") so PJE does not order too few unseen.
+ */
+export function describeProjectPartBoards(part: Pick<ProjectPart, "uses">, separator = "、") {
+  const unfilled = (use: ProjectPartUse) => (use.qty !== null && use.missingRefs.length > 0 ? `（+${use.missingRefs.length} ${PROJECT_QTY_MISSING}）` : "");
+  if (part.uses.length === 1) return `${part.uses[0].board}${unfilled(part.uses[0])}`;
+  return part.uses.map(use => `${use.board} ×${formatProjectQty(use.qty, PROJECT_QTY_MISSING)}${unfilled(use)}`).join(separator);
+}
+
+/** The positions the 總用量 leaves out because the BOM wrote no quantity there: "Board：REF, REF" per board. */
+export function describeMissingQty(part: Pick<ProjectPart, "uses">, separator = "\n") {
+  return part.uses.filter(use => use.missingRefs.length > 0).map(use => `${use.board}：${use.missingRefs.join(", ")}`).join(separator);
 }
 
 /** The PJE 備料表 exactly as PJE's template has it: one sheet, these five columns, header on row 1. */
 export const PJE_SHEET_NAME = "Material list(PCBA)";
 export const PJE_HEADERS = ["Items", "Vendor", "PN", "使用在哪個板子", "Usage"] as const;
 
+/** Usage is the number PJE orders by: the quantities the boards wrote; empty when no position wrote one. */
 export function buildPjeRows(parts: readonly ProjectPart[]): Array<[string, string, string, string, number | string]> {
-  return parts.map(part => [part.name || part.spec, part.manufacturer, part.mpn, describeProjectPartBoards(part), totalQtyText(part)]);
+  return parts.map(part => [part.name || part.spec, part.manufacturer, part.mpn, describeProjectPartBoards(part), part.totalQty ?? ""]);
 }
 
-export const PROJECT_PARTS_HEADERS = ["分類", "虛擬料號", "實體料號", "品名", "規格", "廠商", "MPN", "零件狀態", "替代料", "使用板子數", "使用在哪個板子", "總用量", "各板位號"] as const;
+export const PROJECT_PARTS_HEADERS = ["分類", "虛擬料號", "實體料號", "品名", "規格", "廠商", "MPN", "零件狀態", "替代料", "使用板子數", "使用在哪個板子", "總用量", "各板位號", "未填用量的位號"] as const;
 
 export function buildProjectPartsRows(parts: readonly ProjectPart[]): Array<Array<string | number>> {
   const labels = new Map(PENDING_MATERIAL_CATEGORIES.map(category => [category.key, category.label]));
   return parts.map(part => [
     labels.get(part.category) ?? part.category, part.virtualPartNumber, part.physicalPartNumber, part.name, part.spec, part.manufacturer, part.mpn,
-    part.usageStatus, part.alternates.join("\n"), part.uses.length, describeProjectPartBoards(part, "\n"), totalQtyText(part),
-    part.uses.map(use => `${use.board}：${use.refs}`).join("\n"),
+    part.usageStatus, part.alternates.join("\n"), part.uses.length, describeProjectPartBoards(part, "\n"), part.totalQty ?? "",
+    part.uses.map(use => `${use.board}：${use.refs}`).join("\n"), describeMissingQty(part),
   ]);
 }
 
@@ -332,7 +462,7 @@ export async function buildProjectPartsWorkbook(parts: readonly ProjectPart[], m
   workbook.created = meta.exportedAt;
   workbook.title = `${meta.projectName} 專案總料表`;
   const sheet = workbook.addWorksheet("專案總料表");
-  sheet.columns = [12, 18, 18, 40, 28, 20, 26, 22, 30, 10, 34, 10, 44].map(width => ({ width }));
+  sheet.columns = [12, 18, 18, 40, 28, 20, 26, 22, 30, 10, 34, 10, 44, 30].map(width => ({ width }));
   const header = writeRow(sheet, PROJECT_PARTS_HEADERS);
   header.eachCell(cell => {
     cell.font = { bold: true, color: { argb: "FFFFFFFF" } };

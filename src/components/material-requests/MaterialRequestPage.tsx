@@ -16,8 +16,6 @@ import {
 } from "react";
 import type { CSSProperties } from "react";
 import {
-  ArrowDownAZ,
-  ArrowUpAZ,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -34,12 +32,9 @@ import {
   FileCode2,
   FileSpreadsheet,
   FileText,
-  Filter,
-  FilterX,
   History,
   Layers3,
   Loader2,
-  Minus,
   MoreHorizontal,
   Paperclip,
   Pencil,
@@ -79,7 +74,6 @@ import { Input } from "@/components/ui/input";
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { Label } from "@/components/ui/label";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -185,6 +179,10 @@ const CircuitChangesWorkspace = recoverableLazy(() => import("../circuit-changes
 /** A part shown in the table from a comparison; a version comparison keeps the pair so 返回比對 can reopen it. */
 type BomTableLocation = NvBomTableCandidate & { returnDiff?: Omit<BomDiffRequest, "token"> };
 import { restoreMaterialColumnSort, sortMaterialTableRows, type MaterialColumnSort } from "./materialTableSort";
+import { ExcelFilterPopover } from "./materialExcelFilter";
+import type { SetProjectPartCategory } from "./ProjectPartsView";
+import { planProjectPartCategory } from "./projectParts";
+import { matchesExcelFilter, normalizeColumnFilterSelection, parseSearchTokens, uniqueNormalizedValues, type ColumnFilterSelection, type ExcelFilterTone } from "./materialExcelFilterValues";
 import { MaterialRequestOwnerPicker, type MaterialRequestOwner } from "./MaterialRequestOwnerPicker";
 import { useMaterialRequestOwners } from "./useMaterialRequestOwners";
 import { exportPendingMaterialsExcel } from "./pendingMaterialsExport";
@@ -261,17 +259,6 @@ const AVAILABILITY_FILTER_LABELS: Record<AvailabilityFilter, string> = {
   risk: "有風險",
   single: "單一來源",
 };
-
-interface ExcelFilterOption {
-  label: string;
-  value: string;
-  count: number;
-  keywords?: string;
-  tone?: ExcelFilterTone;
-}
-
-type ExcelFilterTone = "emerald" | "amber" | "sky" | "rose" | "slate";
-type ColumnFilterSelection = string[] | null;
 
 interface SavedMaterialChanges {
   added: MaterialWorkbookRecord[];
@@ -360,9 +347,6 @@ const DEFAULT_COLUMN_WIDTHS = [56, 240, 56, 130, 200, 150, 130, 160, 150, 150, 1
 const MIN_COLUMN_WIDTHS = [48, 180, 48, 100, 150, 110, 100, 130, 120, 110, 120, 100, 100, 90, 120, 130, 160];
 const MAX_COLUMN_WIDTHS = [96, 520, 96, 360, 520, 360, 300, 400, 360, 360, 480, 300, 300, 260, 400, 360, 520];
 const MATERIAL_NOTE_MAX_LENGTH = 4_000;
-const FILTER_OPTION_ROW_HEIGHT = 38;
-const FILTER_OPTION_LIST_HEIGHT = 224;
-const FILTER_OPTION_OVERSCAN = 8;
 // One collator for the Ref sort; localeCompare with options builds one per comparison.
 const REF_COLLATOR = new Intl.Collator(undefined, { numeric: true });
 // Status chips share one shape and the page's semantic tones.
@@ -1007,12 +991,6 @@ function mergeImportedWorkspace(existingWorkspace: BomWorkspace | undefined, wor
   };
 }
 
-function parseSearchTokens(query: string) {
-  return (query.match(/"[^"]+"|\S+/g) ?? [])
-    .map((token) => normalizeMaterialSearchText(token.replace(/^"|"$/g, "")))
-    .filter(Boolean);
-}
-
 function isPrimaryInternalPart(record: MaterialRecord) {
   return isPreferredInternalPartNumber(record.partNumber);
 }
@@ -1256,15 +1234,6 @@ function getTrackingStatusCardTone(status: string) {
 }
 
 
-function normalizeFilterValue(value: string) {
-  const normalized = String(value ?? "").normalize("NFKC").replace(/\u3000/g, " ").trim();
-  return normalized || "(空白)";
-}
-
-function uniqueNormalizedValues(values: string[]) {
-  return Array.from(new Set(values.map(normalizeFilterValue)));
-}
-
 function createCachedColumnValues(values: string[]): CachedColumnValues {
   const raw = uniqueNormalizedValues(values);
 
@@ -1402,13 +1371,6 @@ function buildTrackingStatusFilterOptions(valueGroups: string[][]) {
     }));
 }
 
-function matchesExcelFilter(selectedValues: ColumnFilterSelection, candidateValues: string[]) {
-  if (selectedValues === null) return true;
-  if (selectedValues.length === 0) return false;
-  const normalizedCandidates = uniqueNormalizedValues(candidateValues);
-  return normalizedCandidates.some((value) => selectedValues.includes(value));
-}
-
 function matchesRecordColumnFilters(
   record: MaterialRecord,
   group: MaterialGroup,
@@ -1432,260 +1394,6 @@ function matchesColumnFilters(
 ) {
   return group.records.some((record) =>
     matchesRecordColumnFilters(record, group, filters, ignoredKey)
-  );
-}
-
-function normalizeColumnFilterSelection(selectedValues: ColumnFilterSelection | undefined) {
-  // Filters restored from an older saved layout may lack newer columns.
-  if (selectedValues == null) return null;
-
-  return Array.from(new Set(
-    selectedValues.map((value) => normalizeFilterValue(
-      value === "無狀態" ? "新增追蹤" : String(value ?? ""),
-    )),
-  ));
-}
-
-function ExcelFilterPopover({
-  filterKey,
-  getOptions,
-  label,
-  triggerLabel,
-  optionRowHeight = FILTER_OPTION_ROW_HEIGHT,
-  selectedValues,
-  onSelectedValuesChange,
-  activeSort,
-  onSortChange,
-}: {
-  filterKey: ColumnFilterKey;
-  getOptions: (key: ColumnFilterKey) => ExcelFilterOption[];
-  label: string;
-  triggerLabel?: string;
-  optionRowHeight?: number;
-  selectedValues: ColumnFilterSelection;
-  onSelectedValuesChange: (values: ColumnFilterSelection) => void;
-  activeSort: MaterialColumnSort<ColumnFilterKey> | null;
-  onSortChange: (sort: MaterialColumnSort<ColumnFilterKey>) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [isPanelReady, setIsPanelReady] = useState(false);
-  const [options, setOptions] = useState<ExcelFilterOption[]>([]);
-  const isSorted = activeSort?.key === filterKey;
-  const sortDirection = isSorted ? activeSort.direction : "asc";
-  const [searchValue, setSearchValue] = useState("");
-  const [scrollTop, setScrollTop] = useState(0);
-  const [draftValues, setDraftValues] = useState<ColumnFilterSelection>(null);
-  const deferredSearchValue = useDeferredValue(searchValue);
-  const selected = useMemo(() => normalizeColumnFilterSelection(selectedValues), [selectedValues]);
-  const allOptionValues = useMemo(() => options.map((option) => option.value), [options]);
-  const optionValueSet = useMemo(() => new Set(allOptionValues), [allOptionValues]);
-  const selectedList = useMemo(() => (draftValues === null ? allOptionValues : draftValues), [allOptionValues, draftValues]);
-  const selectedSet = useMemo(() => new Set(selectedList), [selectedList]);
-  const hiddenSelectedCount = draftValues === null ? 0 : draftValues.filter((value) => !optionValueSet.has(value)).length;
-  const isSearching = searchValue !== deferredSearchValue;
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (nextOpen) setDraftValues(selected);
-    setOpen(nextOpen);
-  };
-
-  useEffect(() => {
-    if (!open) {
-      setIsPanelReady(false);
-      setOptions([]);
-      setSearchValue("");
-      setScrollTop(0);
-      return undefined;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      setOptions(getOptions(filterKey));
-      setIsPanelReady(true);
-    });
-
-    return () => window.cancelAnimationFrame(frameId);
-  }, [filterKey, getOptions, open]);
-
-  const searchTokens = useMemo(() => parseSearchTokens(deferredSearchValue), [deferredSearchValue]);
-  const searchHasValue = searchTokens.length > 0;
-  const filteredOptions = useMemo(() => {
-    const next = searchHasValue
-      ? options.filter((option) => {
-          const searchableText = `${option.label} ${option.keywords ?? option.value}`.toLowerCase();
-          return searchTokens.every((token) => filterKey === "refDes" ? matchesMaterialReference(option.value, token) : searchableText.includes(token));
-        })
-      : options;
-    return [...next].sort((left, right) => sortDirection === "asc"
-      ? left.label.localeCompare(right.label, undefined, { numeric: true })
-      : right.label.localeCompare(left.label, undefined, { numeric: true }));
-  }, [filterKey, options, searchHasValue, searchTokens, sortDirection]);
-  const visibleValues = useMemo(() => filteredOptions.map((option) => option.value), [filteredOptions]);
-  const visibleCheckedCount = filteredOptions.filter((option) => selectedSet.has(option.value)).length;
-  const allVisibleChecked = filteredOptions.length > 0 && visibleCheckedCount === filteredOptions.length;
-
-  useEffect(() => {
-    setScrollTop(0);
-  }, [deferredSearchValue, sortDirection]);
-
-  const virtualStartIndex = Math.max(0, Math.floor(scrollTop / optionRowHeight) - FILTER_OPTION_OVERSCAN);
-  const virtualEndIndex = Math.min(filteredOptions.length, Math.ceil((scrollTop + FILTER_OPTION_LIST_HEIGHT) / optionRowHeight) + FILTER_OPTION_OVERSCAN);
-  const visibleOptionSlice = filteredOptions.slice(virtualStartIndex, virtualEndIndex);
-
-  const commitSelection = () => {
-    const values = searchHasValue ? selectedList.filter(value => visibleValues.includes(value)) : draftValues;
-    const normalized = normalizeColumnFilterSelection(values);
-    const isEverything = normalized === null || (normalized.every(value => optionValueSet.has(value))
-      && options.length > 0
-      && normalized.length === options.length
-      && options.every((option) => normalized.includes(option.value)));
-    onSelectedValuesChange(isEverything ? null : normalized);
-    setOpen(false);
-  };
-  const toggleValue = (value: string, checked: boolean) => {
-    setDraftValues(checked ? Array.from(new Set([...selectedList, value])) : selectedList.filter((item) => item !== value));
-  };
-  const toggleVisible = (checked: boolean) => {
-    if (!searchHasValue) {
-      setDraftValues(checked ? null : []);
-      return;
-    }
-    setDraftValues(checked ? Array.from(new Set([...selectedList, ...visibleValues])) : selectedList.filter(value => !visibleValues.includes(value)));
-  };
-  const triggerSummary = selected === null ? "全部" : `${selected.length}項`;
-
-  return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "flex h-8 w-full items-center justify-between rounded-md border px-2 text-left text-xs font-semibold transition-colors hover:border-primary/50 hover:bg-primary/10",
-            selected === null
-              ? "border-border bg-secondary/60 text-foreground"
-              : "border-primary/45 bg-primary/15 text-foreground",
-          )}
-          title={selected === null ? `篩選${label}` : `${label}：已選 ${selected.length} 項`}
-          aria-label={`篩選${label}${isSorted ? `，${sortDirection === "asc" ? "A 到 Z" : "Z 到 A"}排序` : ""}`}
-        >
-          <span className="inline-flex min-w-0 items-center gap-1.5">
-            <Filter className={cn("h-3.5 w-3.5 flex-none", selected === null ? "text-muted-foreground" : "text-primary")} />
-            <span className="truncate">{triggerLabel ?? label}</span>
-            {isSorted && <span className="shrink-0 text-primary">{sortDirection === "asc" ? "↑" : "↓"}</span>}
-          </span>
-          {selected !== null && !triggerLabel && (
-            <span className="ml-1 flex-none rounded bg-primary/20 px-1.5 text-[10px] leading-4 text-primary">
-              {triggerSummary}
-            </span>
-          )}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        collisionPadding={12}
-        sticky="always"
-        data-testid="material-column-filter-panel"
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-          (event.currentTarget as HTMLElement | null)?.querySelector<HTMLInputElement>("input")?.focus();
-        }}
-        className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(360px,calc(100vw-24px))] flex-col overflow-hidden rounded-lg border border-border bg-popover p-2.5 text-popover-foreground shadow-lg"
-      >
-        <div className="min-h-0 space-y-2 overflow-y-auto">
-          <div className="flex shrink-0 items-center gap-2 px-1">
-            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{label}</p>
-            <span className="shrink-0 text-xs text-muted-foreground">已選 {visibleCheckedCount}/{filteredOptions.length}</span>
-          </div>
-          <div className="shrink-0 space-y-1 border-b border-border pb-2" role="group" aria-label={`${label}篩選工具`}>
-            {(["asc", "desc"] as const).map(direction => <button key={direction} type="button" onClick={() => { onSortChange({ key: filterKey, direction }); setOpen(false); }} aria-pressed={isSorted && sortDirection === direction} className={cn("flex min-h-9 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm", isSorted && sortDirection === direction ? "bg-primary/15 text-primary" : "text-foreground hover:bg-accent")}>
-              {direction === "asc" ? <ArrowDownAZ className="h-4 w-4 shrink-0" /> : <ArrowUpAZ className="h-4 w-4 shrink-0" />}{direction === "asc" ? "從 A 到 Z 排序" : "從 Z 到 A 排序"}
-            </button>)}
-            <button type="button" disabled={selected === null} onClick={() => { onSelectedValuesChange(null); setOpen(false); }} className="flex min-h-9 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground hover:bg-accent disabled:cursor-default disabled:opacity-40"><FilterX className="h-4 w-4 shrink-0" /><span className="break-words">清除「{label}」中的篩選</span></button>
-          </div>
-
-          <div className="relative shrink-0">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchValue}
-              onChange={(event) => setSearchValue(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && isPanelReady && !isSearching) {
-                  event.preventDefault();
-                  commitSelection();
-                } else if (event.key === "Escape") {
-                  setOpen(false);
-                }
-              }}
-              placeholder="搜尋篩選值"
-              aria-label={`搜尋${label}篩選值`}
-              className="h-9 rounded-lg pl-8 pr-3 text-[13px]"
-            />
-          </div>
-
-          {isPanelReady ? (
-            <div className="flex min-h-0 flex-col rounded-xl border border-border bg-background/40">
-              <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-border p-2">
-                <label className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 px-0.5 text-[13px] font-semibold text-foreground">
-                  <span className="relative inline-flex shrink-0 items-center justify-center">
-                    <Checkbox aria-label={`全選${label}篩選值`} className="h-5 w-5 rounded-[3px] data-[state=indeterminate]:bg-primary [&[data-state=indeterminate]_svg]:invisible" checked={allVisibleChecked ? true : visibleCheckedCount > 0 ? "indeterminate" : false} onCheckedChange={checked => toggleVisible(checked === true)} />
-                    {visibleCheckedCount > 0 && !allVisibleChecked && <Minus className="pointer-events-none absolute h-3.5 w-3.5 text-primary-foreground" aria-hidden="true" />}
-                  </span>
-                  <span>{searchHasValue ? "（全選搜尋結果）" : "（全選）"}</span>
-                </label>
-                <button type="button" onClick={() => setDraftValues([])} className="min-h-8 shrink-0 whitespace-nowrap rounded-md border border-muted-foreground/60 bg-secondary px-2 text-xs font-semibold text-foreground hover:bg-accent">全不選</button>
-              </div>
-
-              {filteredOptions.length > 0 ? (
-                <div className="min-h-0 overflow-y-auto" style={{ height: Math.min(filteredOptions.length * optionRowHeight, FILTER_OPTION_LIST_HEIGHT) }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
-                  <div className="relative" style={{ height: filteredOptions.length * optionRowHeight }}>
-                    {visibleOptionSlice.map((option, index) => {
-                      const checked = selectedSet.has(option.value);
-                      const offsetY = (virtualStartIndex + index) * optionRowHeight;
-
-                      return (
-                        <label
-                          key={option.value}
-                          className={cn(
-                            "absolute left-0 right-0 flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] hover:bg-accent",
-                            checked ? "text-foreground" : "text-muted-foreground",
-                          )}
-                          style={{ top: offsetY, height: optionRowHeight }}
-                        >
-                          <Checkbox aria-label={option.label} className="h-5 w-5 rounded-[3px]" checked={checked} onCheckedChange={(value) => toggleValue(option.value, value === true)} />
-                          {filterKey === "trackingStatus" && <span
-                            className={cn(
-                              "h-2 w-2 flex-none rounded-full",
-                              materialTrackingStatusPresentation(option.value).text,
-                            )}
-                            style={filterKey === "trackingStatus" ? { backgroundColor: "currentColor" } : undefined}
-                          />}
-                          <span className="min-w-0 flex-1 truncate">{option.label}</span>
-                          <span className="rounded-full bg-secondary px-2 text-[11px] leading-5 text-muted-foreground">{option.count}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div className="px-2 py-6 text-center text-[13px] text-muted-foreground">找不到符合的篩選值</div>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-border bg-background/40 px-3 py-8 text-center text-[13px] text-muted-foreground">
-              正在載入篩選清單...
-            </div>
-          )}
-
-        </div>
-        <div className="mt-2 shrink-0 space-y-2 border-t border-border px-1 pt-2">
-          <p className="text-xs text-muted-foreground">
-            {hiddenSelectedCount > 0 && !searchHasValue ? `另有 ${hiddenSelectedCount} 個已選值不在目前清單，仍會保留` : searchHasValue ? "確定後僅顯示勾選的搜尋結果" : "勾選完成後按「確定」套用"}
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(false)} className="h-9 min-w-20 text-sm">取消</Button>
-            <Button type="button" size="sm" disabled={!isPanelReady || isSearching} onClick={commitSelection} className="h-9 min-w-20 text-sm">確定</Button>
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
   );
 }
 
@@ -4248,8 +3956,9 @@ export function MaterialRequestPage() {
           const restoredFilters = { ...EMPTY_COLUMN_FILTERS };
           for (const key of FILTER_KEYS) {
             const values = parsed.columnFilters[key];
+            // A layout saved before 2026-10 calls the first tracking status 無狀態; it is 新增追蹤 now.
             const validValues = Array.isArray(values)
-              ? values.filter((value) => typeof value === "string")
+              ? values.filter((value) => typeof value === "string").map((value) => (value === "無狀態" ? "新增追蹤" : value))
               : [];
             restoredFilters[key] = Array.isArray(values) && (values.length === 0 || validValues.length > 0) ? validValues : null;
           }
@@ -5237,6 +4946,109 @@ export function MaterialRequestPage() {
         : busy ? "有人同時在改這個版本，資料沒有變更。請重新打開比對再帶入一次。" : "帶入失敗，資料沒有變更，請稍後再試。");
     }
     return { filled: saved, remaining: result.remaining };
+  };
+
+  // 專案總料表: a hand-picked category for one part, written to its rows on every board (each board's current version,
+  // on screen or not). Rows someone changed in the meantime are not overwritten (record revisions, as 帶入舊版資料).
+  const setProjectPartCategory: SetProjectPartCategory = async (targets, category, onProgress) => {
+    const writeScope = captureBomWrite();
+    if (!canEditModuleAccess) throw new Error("沒有編輯權限，無法改分類。");
+    if (!isCollaborativeReady) throw new Error("共用資料尚未連線，請稍後再改。");
+    // Only into versions that are current now: a list built before someone uploaded or switched versions points at a
+    // version that is history (read-only), and its row ids are other parts in the new one.
+    const currentIds = new Set(seriesList.map((series) => series.current.workspace.id));
+    const outdated = targets.filter(({ workspace }) => !currentIds.has(workspace.id));
+    if (outdated.length > 0) {
+      const names = outdated.map(({ workspace }) => seriesList.find((series) => series.versions.some((version) => version.workspace.id === workspace.id))?.name ?? workspace.name).join("、");
+      throw new Error(`${names} 已經換了目前版本，分類沒有寫入；表格會重新載入，載入好再改一次。`);
+    }
+    // First read every board (rows not on screen come with their revisions) and the version records from the server
+    // (another browser may have switched versions a moment ago), then write: nothing is written if a read fails.
+    let prepared: Array<{ onScreen: boolean; target: BomWorkspace | null; updates: MaterialWorkbookRecord[]; moved: number }>;
+    try {
+      const [versions, ...boards] = await Promise.all([
+        loadBomWorkspaceVersions(),
+        ...targets.map(async ({ workspace, rows }) => {
+          const onScreen = workspace.id === activeWorkspace.id && isFullDatasetLoaded;
+          const target = onScreen ? null : await loadBomWorkspaceForWrite(workspace);
+          // A row whose position, maker or MPN is no longer what was shown is someone else's part now: left alone.
+          return { onScreen, target, ...planProjectPartCategory(onScreen ? basePayload.records : target!.payload.records, rows, category) };
+        }),
+      ]);
+      const historical = targets.filter(({ workspace }) => versions.get(workspace.id)?.isCurrent === false);
+      if (historical.length > 0) {
+        throw new Error(`${historical.map(({ workspace }) => workspace.name).join("、")} 剛被換成歷史版本（別人切換了目前版本），分類沒有寫入；表格會重新載入，載入好再改一次。`);
+      }
+      prepared = boards;
+    } catch (error) {
+      if (!isBomWriteCurrent(writeScope)) throw error;
+      await reloadBomWorkspaces(activeBomId).catch(() => undefined);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message.includes("分類沒有寫入") ? message : `讀取 BOM 失敗，分類沒有寫入（${message}），請稍後再試。`);
+    }
+    assertBomWriteCurrent(writeScope);
+    const total = prepared.reduce((sum, item) => sum + item.updates.length, 0);
+    const moved = prepared.reduce((sum, item) => sum + item.moved, 0);
+    let saved = 0;
+    let failed = 0;
+    let boards = 0;
+    let firstError: unknown = null;
+    onProgress?.(0, total);
+    for (const { onScreen, target, updates } of prepared) {
+      if (updates.length === 0) continue;
+      const savedBefore = saved;
+      if (onScreen) {
+        try {
+          const result = await saveRecordsToActiveBom(updates);
+          saved += result.saved;
+          failed += result.failed;
+        } catch (error) {
+          if (!isBomWriteCurrent(writeScope)) throw error;
+          failed += updates.length;
+          firstError ??= error;
+        }
+        onProgress?.(saved + failed, total);
+      } else if (target) {
+        const byId = new Map(updates.map((record) => [record.id, record] as const));
+        const records = target.payload.records.map((record) => byId.get(record.id) ?? record);
+        let saving: BomWorkspace = { ...target, payload: { ...target.payload, records, recordCount: records.length }, updatedAt: new Date().toISOString() };
+        const previousById = new Map(target.payload.records.map((record) => [record.id, record] as const));
+        for (const record of updates) {
+          try {
+            const recordMeta = await saveBomWorkspaceRecord(saving, record, () => assertBomWriteCurrent(writeScope));
+            void logMaterialRecordChange({
+              action: "update",
+              actor: user,
+              imageCount: countTrackingImages(record),
+              previousImageCount: countTrackingImages(previousById.get(record.id)),
+              newUpdatedAt: recordMeta.updatedAt,
+              previousUpdatedAt: saving.recordMeta?.[record.id]?.updatedAt,
+              recordId: record.id,
+              workspaceId: saving.id,
+            });
+            saving = { ...saving, recordMeta: { ...saving.recordMeta, [record.id]: recordMeta } };
+            saved += 1;
+          } catch (error) {
+            if (!isBomWriteCurrent(writeScope)) throw error;
+            failed += 1;
+            firstError ??= error;
+          }
+          onProgress?.(saved + failed, total);
+        }
+      }
+      if (saved > savedBefore) boards += 1;
+    }
+    await reloadBomWorkspaces(activeBomId).catch(() => undefined);
+    if (failed > 0 || moved > 0) {
+      const busy = firstError instanceof BomRecordConflictError;
+      const parts = [
+        saved > 0 && `已存 ${saved} 列`,
+        failed > 0 && `${failed} 列${busy ? "有人同時在改" : "寫入失敗"}，沒有寫入`,
+        moved > 0 && `${moved} 列在這段時間換成別的料（可能上傳了新版），沒有寫入`,
+      ].filter(Boolean);
+      throw new Error(`${parts.join("；")}。表格已重新載入，請再改一次。`);
+    }
+    return { saved, boards };
   };
 
   const assignBomSeriesProject = async (series: BomSeries, projectId: string | null) => {
@@ -6307,6 +6119,7 @@ export function MaterialRequestPage() {
         onLocateCurrentBom={locateCurrentBom}
         onLocateDiffEntry={locateBomDiffEntry}
         onRecarry={canEditModuleAccess ? recarryBomVersion : undefined}
+        onSetProjectPartCategory={canEditModuleAccess ? setProjectPartCategory : undefined}
         onView={(id) => { switchActiveBom(id); setBomManagerOpen(false); }}
         onSetCurrent={requestSetCurrentBomVersion}
         onUploadVersion={(series) => { uploadTargetSeriesRef.current = series.id; fileInputRef.current?.click(); }}

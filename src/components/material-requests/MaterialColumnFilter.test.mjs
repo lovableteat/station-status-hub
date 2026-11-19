@@ -1,26 +1,22 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
-import ts from "typescript";
 
 const require = createRequire(import.meta.url);
 const { React, create, act, loader } = require("../../../tests/support/renderHarness.cjs");
 
 function mountFilter(initial = null, triggerLabel) {
   const writes = [];
+  // The shared column filter (料號表 and 專案總料表 both use it); only its far-away helpers are stubbed.
   const load = loader({
     window: { requestAnimationFrame: callback => { callback(); return 1; }, cancelAnimationFrame() {} },
-    globals: { FILTER_OPTION_ROW_HEIGHT: 38, FILTER_OPTION_LIST_HEIGHT: 224, FILTER_OPTION_OVERSCAN: 8 },
-    transform(source, file) {
-      if (!file.endsWith("MaterialRequestPage.tsx")) return source;
-      const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-      return ast.statements.filter(node => ts.isFunctionDeclaration(node)
-        ? ["ExcelFilterPopover", "normalizeColumnFilterSelection", "normalizeFilterValue", "parseSearchTokens"].includes(node.name?.text)
-        : ts.isImportDeclaration(node) && ["react", "lucide-react", "@/lib/utils", "@/components/ui/popover", "@/components/ui/input", "@/components/ui/checkbox", "@/components/ui/button"].includes(node.moduleSpecifier.text)
-      ).map(node => node.getText(ast)).join("\n") + "\nexport { ExcelFilterPopover };";
+    mocks: {
+      "./materialSearch": { matchesMaterialReference: (value, token) => String(value).toLowerCase().includes(token) },
+      "./materialTrackingStatus": { materialTrackingStatusPresentation: () => ({ text: "" }) },
+      "./materialRequestUtils": { normalizeMaterialSearchText: value => String(value ?? "").toLowerCase() },
     },
   });
-  const { ExcelFilterPopover } = load("src/components/material-requests/MaterialRequestPage.tsx");
+  const { ExcelFilterPopover } = load("src/components/material-requests/materialExcelFilter.tsx");
   let selectedValues = initial;
   let root;
   const getOptions = () => ["ACES", "AMPHENOL", "NXP"].map(value => ({ value, label: value, count: 1 }));
