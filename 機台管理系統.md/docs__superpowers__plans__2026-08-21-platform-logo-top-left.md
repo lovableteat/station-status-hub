@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-08-21-platform-logo-top-left.md`；程式參考基準：`8ba4408dd6773745fe9f71e60c30ce0464214989`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-08-21-platform-logo-top-left.md`；程式參考基準：`70d8a496c162f45dbf908539dcc76cca794ed095`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 工作整合平台 Logo 左上定位 Implementation Plan
 
