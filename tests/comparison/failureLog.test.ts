@@ -82,10 +82,16 @@ test("a failure is explained in words, and the explanation claims nothing the me
   const fixable = explainFailure(summarizeEngineError(crash("ValueError: i2c 設定必須是欄位對照")));
   assert.deepEqual(fixable, { headline: "i2c 設定必須是欄位對照", detail: "", steps: [] });
 
+  // Only the bridge's ValueError speaks to the user; another error that quotes a Chinese name is an engine failure.
+  assert.equal(explainFailure(summarizeEngineError(crash("KeyError: '品名'"))).headline, "比對引擎執行時出錯");
+  // csv.reader names no file: what its messages usually mean, hedged.
+  const csvError = explainFailure(summarizeEngineError(`Traceback (most recent call last):\n  File "/engine/autocheck/parsers/bom_erp.py", line 123, in _flat_rows\n    return [r for r in csv.reader(io.StringIO(read_text(path)))]\n_csv.Error: new-line character seen in unquoted field - do you need to open the file with newline=''?`));
+  assert.equal(csvError.headline, "CSV 檔讀不出來");
+  assert.match(csvError.detail, /常見的原因是檔案存成 UTF-16/);
   const unknown = explainFailure(summarizeEngineError(crash("ZeroDivisionError: division by zero")));
   assert.equal(unknown.headline, "比對引擎執行時出錯");
   assert.match(unknown.detail, /ZeroDivisionError: division by zero/);
-  assert.doesNotMatch(unknown.steps.join(""), /不是操作錯誤/, "the page cannot know whose doing it is");
+  assert.doesNotMatch(unknown.steps.join(""), /不是操作錯誤|管理員會/, "the page cannot know whose doing it is, nor whether the record was sent");
 });
 
 test("a stopped job and an empty message are not failures; the title prefix marks an automatic record", () => {
@@ -210,6 +216,25 @@ test("the engine picks its reader by the extension, and the 判斷 follows it", 
   assert.equal(previewInputFile(new Uint8Array(0), note(), true).format, "空檔案");
   assert.equal(previewInputFile(utf8("%PDF-1.7\n"), note(), true).notes[0], "這是 PDF，不是 BOM。");
   assert.equal(previewInputFile(Uint8Array.from([1, 0, 0, 2, 0, 0, 0, 9]), note(), true).format, "二進位檔");
+  // A .csv as pandas reads it for the ERP header: UTF-8 only, and no row wider than the first.
+  const big5Csv = Uint8Array.from(Buffer.from("a544a5f3aec6b8b92cab7ea6572cb357aee62cb2d5a6a8a5ceb6712cb4a1a5f3a6ecb86d0a50312c4341502c31752c312c43310a", "hex"));
+  const big5Said = previewInputFile(big5Csv, note("bom.csv"), true);
+  assert.match(big5Said.notes.join(""), /^這份 \.csv 是 Big5／ANSI 編碼。引擎讀 \.csv 的公司 ERP 格式時用 UTF-8，中文欄名會讀成亂碼/);
+  assert.equal(big5Said.headerFound, false);
+  const titled = previewInputFile(utf8("QA BOARD BOM\n主件料號,品名,規格,組成用量,插件位置\nP1,CAP,1uF,1,C1\n"), note("bom.csv"), true);
+  assert.match(titled.notes.join(""), /^第 1 列只有 1 格，第 2 列有 5 格。引擎讀 \.csv 的公司 ERP 格式時以第 1 列的格數為準/);
+  assert.equal(titled.notes.length, 1, "no OrCAD sentence about the same row");
+  assert.ok(titled.lines.includes("  2│主件料號,品名,規格,組成用量,插件位置"));
+  assert.equal(titled.headerFound, false);
+  assert.match(said(utf8("Item\tQuantity\tReference\tPart\n1\t1\tC1\t1uF\n"), "bom.csv"), /欄位之間是 Tab，不是逗號。引擎讀 \.csv 只用逗號切欄位/);
+  // The company ERP header below row 30 is named for what it is.
+  const farDown = [...Array.from({ length: 34 }, (_, index) => `note ${index + 1},,,,,`), "項次,主件料號,品名,規格,組成用量,插件位置", "1,P1,CAP,1uF,1,C1"].join("\n");
+  assert.match(said(utf8(farDown), "bom.csv"), /第 35 列是公司 ERP 的表頭列，但引擎只在前 30 列找公司 ERP 的表頭。/);
+  // HTML saved under .BOM, and a sample that is not the whole file.
+  assert.match(said(utf8("<html><body><table><tr><td>主件料號</td></tr></table>"), "bom.BOM"), /^這份檔案的內容是 HTML 表格（網頁格式），副檔名卻是 \.bom。/);
+  const big = utf8(`${"filler text line without tabs here\n".repeat(2400)}`);
+  assert.ok(big.length > 64 * 1024);
+  assert.doesNotMatch(said(big, "x.BOM"), /整份檔案沒有 Tab/, "only the start was read");
   const html = previewInputFile(utf8("<html><body><table><tr><td>主件料號</td></tr></table>"), note("bom.xls"), true);
   assert.match(html.format, /^HTML 表格/);
   assert.match(html.notes[0], /這一頁沒有解開表格，所以不能說是哪一欄對不上/);
@@ -225,6 +250,8 @@ test("a workbook's first rows get the same checks, and a healthy namesake is not
   assert.match(complete.notes.join(""), /^照這一頁對引擎規則的比對，第 1 列符合公司 ERP 的表頭（五個欄位都有）。這次仍然失敗/);
   assert.equal(complete.headerFound, true);
   assert.match(previewSheetRows([["主件料號", "品名", "插件位置"]], workbook, true).notes.join(""), /第 1 列是公司 ERP 的表頭列，但少了：規格（Spec）、用量（組成用量／Qty）。/);
+  const lowSheet = [...Array.from({ length: 31 }, () => [""]), ["項次", "主件料號", "品名", "規格", "組成用量", "插件位置"]];
+  assert.match(previewSheetRows(lowSheet, workbook, true).notes.join(""), /第 32 列是公司 ERP 的表頭列，但引擎只在前 30 列找/);
 
   // The error names a file, not a side.
   const healthy = previewInputFile(utf8(ORCAD), note("x.BOM", 9, "B"), true), broken = previewInputFile(utf16le(ORCAD), note("x.BOM", 9, "A"), true);
@@ -265,7 +292,7 @@ test("the record says what, which files and why, inside what the backend accepts
   assert.equal(lines[4], "比對名稱：QA BOARD｜A=EVT → B=DVT");
   assert.match(log.description, /▍A QA_BOARD_20261019\.BOM｜33\.2 KiB｜文字檔（UTF-16，Tab 分隔）\n判斷：這份檔案是 UTF-16 編碼/);
   assert.match(log.description, /檔案開頭（⇥ 代表 Tab）：\n {2}1│Cover Page/);
-  assert.match(log.description, /這次交給引擎的檔案（3 份）：\nA {2}QA_BOARD_20261019\.BOM {2}33\.2 KiB\nA {2}pstxnet\.dat {2}1\.1 MiB/);
+  assert.match(log.description, /這次用到的檔案（3 份）：\nA {2}QA_BOARD_20261019\.BOM {2}33\.2 KiB\nA {2}pstxnet\.dat {2}1\.1 MiB/);
   assert.match(log.description, /引擎位置：parsers\/bom_erp\.py:172 parse_bom ← parsers\/bom_erp\.py:214 load_bom ← loader\.py:180 build_design ← pipeline\.py:76 run/);
   assert.match(log.description, /原始訊息（結尾）：\n[\s\S]*ValueError: BOM header not recognised/);
   assert.ok(log.copyText.includes(TRACEBACK.trim()), "複製紀錄 carries the whole message");
@@ -275,7 +302,7 @@ test("the record says what, which files and why, inside what the backend accepts
   const plain = buildFailureLog(input({ message: "執行超過 10 分鐘，已停止；請縮小輸入或重新執行", previews: [], files: [] }));
   assert.equal(plain.title, "【失敗紀錄】比對：比對跑超過 10 分鐘，已經停止");
   assert.equal(plain.description.split("\n")[2], "原始訊息：執行超過 10 分鐘，已停止；請縮小輸入或重新執行");
-  assert.doesNotMatch(plain.description, /原始訊息（結尾）|這次交給引擎的檔案/);
+  assert.doesNotMatch(plain.description, /原始訊息（結尾）|這次用到的檔案/);
   const own = buildFailureLog(input({ job: "匯入備份", message: "備份格式無效", previews: [], files: [{ side: "備份", path: "old.autocheck.zip", size: 2048 }] }));
   assert.equal(own.description.split("\n")[1], "原因：備份格式無效");
   assert.doesNotMatch(own.description, /引擎訊息|原始訊息/);
@@ -413,6 +440,12 @@ test("only a refusal of the content is given up; anything that can pass is tried
     refuse = false;
     assert.deepEqual((await flushFailureQueue(moody.sink, kept, account, NOW)).sent, [stuck.id], answer);
   }
+
+  // A lapsed sign-in is not a reason to give up an old record: it waits for the next sign-in.
+  const lapsed = memory(); const waiting = record({ at: NOW - FAILURE_KEEP_MS - 1 });
+  queueFailureRecord(lapsed, waiting);
+  const expired = await flushFailureQueue(backend(() => "JWT expired").sink, lapsed, account, NOW);
+  assert.deepEqual([expired.dropped, expired.waiting], [[], [waiting.id]]);
 
   // Nothing waits forever: after two weeks a record that still cannot be sent is given up. One that can is sent.
   const old = memory(); const stale = record({ at: NOW - FAILURE_KEEP_MS - 1 }), sendable = record({ at: NOW - FAILURE_KEEP_MS - 1 });

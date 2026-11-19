@@ -129,14 +129,20 @@ export function explainFailure(summary: EngineErrorSummary): FailureExplanation 
     steps: ["關掉其他分頁後再試。", "還是不行，請改用伺服器處理，或減少 Datasheet 的數量。"],
   };
   if (!summary.traceback) return ownWords(reason);
-  // The page's own engine bridge raises its messages for the user in Chinese (缺少必要 netlist, 設定必須是…): those
-  // are something the user can fix, and they say so themselves.
-  const message = reason.replace(/^[A-Za-z_][\w.]*:\s*/, "");
-  if (/[㐀-鿿]/.test(message)) return ownWords(message);
+  if (/new-line character seen in unquoted field|line contains NUL|^_?csv\.Error|^Error: /m.test(reason) && /csv/i.test(summary.traceback ? summary.frames.join(" ") + reason : reason)) return {
+    headline: "CSV 檔讀不出來",
+    detail: `引擎用逗號分隔的方式讀 .csv 時停下來了（${clipLogText(firstLine(reason), 200)}）。這種訊息常見的原因是檔案存成 UTF-16（Unicode 文字），或只用 CR 換行；下面的檔案開頭會寫出這份檔案的編碼。`,
+    steps: ["用 Excel 另存成「CSV UTF-8（逗號分隔）」再試。"],
+  };
+  // The page's own engine bridge raises its messages for the user in Chinese, as ValueError (缺少必要 netlist,
+  // 設定必須是…): something the user can fix, and they say so themselves. Other errors that merely quote a Chinese
+  // name (KeyError: '品名') are engine failures.
+  const message = reason.replace(/^ValueError:\s*/, "");
+  if (summary.kind === "ValueError" && /[㐀-鿿]/.test(message)) return ownWords(message);
   return {
     headline: "比對引擎執行時出錯",
     detail: `引擎回報：${clipLogText(firstLine(reason), 300)}`,
-    steps: ["引擎遇到它沒有處理到的情況；同樣的檔案再試一次，結果會一樣。", "管理員會從這筆紀錄看到完整的引擎訊息。"],
+    steps: ["引擎遇到它沒有處理到的情況；同樣的檔案再試一次，結果會一樣。", "完整的引擎訊息在下面的「引擎原始訊息」，也可以按「複製紀錄」。"],
   };
 }
 
@@ -300,6 +306,8 @@ function diagnoseRows(rows: readonly (readonly unknown[])[], lineText: (index: n
     if (bare) return { notes: [...notes, `這份檔案開頭有 UTF-8 的檔頭記號（BOM；Excel 的「CSV UTF-8」和記事本的「具有 BOM 的 UTF-8」會加）。引擎讀 OrCAD 格式時沒有把它去掉，所以第 1 ${unit}第一欄的欄名對不上；去掉之後第 1 ${unit}就符合 OrCAD 的表頭（認得：${recognized(bare.columns)}）。請另存成不帶 BOM 的 UTF-8 或 ANSI 再試。`], focus: 0, headerFound: false };
   }
   if (company) return { notes, focus: company.index, headerFound: false };
+  const lateCompany = erpRows ? findErpHeader(erpRows, Math.min(erpRows.length, 400)) : null;
+  if (lateCompany) return { notes: [`第 ${lateCompany.index + 1} ${unit}是公司 ERP 的表頭${unit}，但引擎只在前 ${ERP_HEADER_SCAN} ${unit}找公司 ERP 的表頭。請把表頭移到前 ${ERP_HEADER_SCAN} ${unit}內再試。`], focus: lateCompany.index, headerFound: false };
   // A real header that sits too far down: exact, by the engine's own column rule.
   const late = findOrcadHeader(rows, Math.min(rows.length, 400));
   if (late) return { notes: [`第 ${late.index + 1} ${unit}符合 OrCAD 的表頭（認得：${recognized(late.columns)}），但引擎只找前 ${HEADER_SCAN} ${unit}。請把表頭移到前 ${HEADER_SCAN} ${unit}內再試。`], focus: late.index, headerFound: false };
@@ -345,7 +353,7 @@ export function previewInputFile(bytes: ArrayBuffer | Uint8Array, file: InputFil
   if (text === null) return { ...base, format: "二進位檔", notes: bom ? ["這份檔案不是文字檔也不是 Excel，引擎讀不出表格。"] : [] };
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   if (all.length > head.length) lines.pop();      // the last line of the sample is cut off
-  const html = /^\s*(<!doctype html|<html)/i.test(text) || /<table/i.test(text.slice(0, 4000));
+  const html = /^\s*(<!doctype html|<html)/i.test(text) || /<table/i.test(text.slice(0, 4000)), complete = all.length <= head.length;
   if (html && !textReport) return { ...base, format: `HTML 表格（${encoding}）`, lines: numberedLines(lines, null), notes: bom ? ["這是存成 HTML 的表格（公司 ERP 匯出的 .xls 是這種）。引擎會讀其中最大的表格，在前 30 列找公司 ERP 的表頭（主件料號、品名、規格、組成用量、插件位置）。這一頁沒有解開表格，所以不能說是哪一欄對不上。"] : [] };
   const tabbed = lines.some(line => line.includes("\t"));
   const format = `文字檔（${encoding}，${tabbed ? "Tab 分隔" : "沒有 Tab"}）`;
@@ -353,12 +361,25 @@ export function previewInputFile(bytes: ArrayBuffer | Uint8Array, file: InputFil
 
   if (workbook) return { ...base, format, lines: numberedLines(lines, null), notes: [`副檔名是 ${kind}，內容卻是純文字，不是 Excel 活頁簿。引擎依副檔名把它當活頁簿開，所以讀不出來。Tab 分隔的報表請把副檔名改成 .BOM 或 .txt，逗號分隔的請改成 .csv，或用 Excel 另存成真正的 .xlsx 再試。`] };
   if (!textReport && kind !== ".csv") return { ...base, format, lines: numberedLines(lines, null), notes: [`副檔名是 ${kind || "（沒有）"}：引擎把它當 Excel 活頁簿開，內容卻是純文字，所以讀不出來。`] };
+  if (html) return { ...base, format: `HTML 表格（${encoding}）`, lines: numberedLines(lines, null), notes: [`這份檔案的內容是 HTML 表格（網頁格式），副檔名卻是 ${kind}。引擎依副檔名把它當文字報表讀，所以讀不出表格。如果它是公司 ERP 匯出的檔案，請保留原本的 .xls 副檔名再試。`] };
   const rows = textReport ? engineTextRows(lines) : csvRows(lines.join("\n"));
-  const diagnosis = textReport
-    ? diagnoseRows(rows, index => lines[index] ?? "", "行", null, tabbed ? "引擎用 Tab 切欄位" : "整份檔案沒有 Tab，引擎改用兩個以上的空白切欄位")
-    // .csv: pandas first (it drops the BOM mark) for the ERP header, then csv.reader over the text as read_text gives
-    // it (the mark stays) for the OrCAD header.
-    : diagnoseRows(rows, index => lines[index] ?? "", "列", rows.map((row, index) => index ? row : [String(row[0] ?? "").replace(LEADING_MARK, ""), ...row.slice(1)]), null);
+  const extra: string[] = [];
+  let erpRows: (readonly unknown[])[] | null = null, erpFocus: number | null = null;
+  if (!textReport) {
+    // .csv: pandas reads it first, for the company ERP header: as UTF-8 (it drops the BOM mark), with as many columns
+    // as the first line has. Then csv.reader reads the text read_text gives (the mark stays), for the OrCAD header.
+    const bare = rows.map((row, index) => index ? row : [String(row[0] ?? "").replace(LEADING_MARK, ""), ...row.slice(1)]);
+    const erp = findErpHeader(bare, Math.min(bare.length, 400)), wider = bare.findIndex(row => row.length > bare[0].length);
+    if (!encoding.startsWith("UTF-8") && !utf16) { if (erp) { erpFocus = erp.index; extra.push(`這份 .csv 是 ${encoding} 編碼。引擎讀 .csv 的公司 ERP 格式時用 UTF-8，中文欄名會讀成亂碼，所以第 ${erp.index + 1} 列的表頭對不上。請用 Excel 另存成「CSV UTF-8（逗號分隔）」再試。`); } }
+    else if (wider >= 0) { if (erp) { erpFocus = erp.index; extra.push(`第 1 列只有 ${bare[0].length} 格，第 ${wider + 1} 列有 ${bare[wider].length} 格。引擎讀 .csv 的公司 ERP 格式時以第 1 列的格數為準，遇到比它多的列就讀不下去。請刪掉表頭上方的標題列，讓表頭成為第 1 列再試。`); } }
+    else erpRows = bare;
+    if (tabbed && rows.slice(0, HEADER_SCAN).every(row => row.length <= 1)) extra.push("這份 .csv 的欄位之間是 Tab，不是逗號。引擎讀 .csv 只用逗號切欄位，所以每一列都只有一格。請改用逗號分隔，或把副檔名改成 .txt（OrCAD 格式）再試。");
+  }
+  const cut = tabbed ? "引擎用 Tab 切欄位" : complete ? "整份檔案沒有 Tab，引擎改用兩個以上的空白切欄位" : "檔案開頭這一段沒有 Tab；整份檔案都沒有 Tab 時，引擎用兩個以上的空白切欄位，只要後面有一個 Tab 就全部改用 Tab 切";
+  const found = textReport ? diagnoseRows(rows, index => lines[index] ?? "", "行", null, cut) : diagnoseRows(rows, index => lines[index] ?? "", "列", erpRows, null);
+  // When the company ERP header is there and pandas cannot read it, that is the finding; the OrCAD sentence about the
+  // same row would only distract.
+  const diagnosis = found.headerFound || !extra.length ? found : erpFocus !== null ? { ...found, notes: extra, focus: erpFocus } : { ...found, notes: [...extra, ...found.notes] };
   if (!utf16) return { ...base, format, notes: diagnosis.notes, lines: numberedLines(lines, diagnosis.focus), headerFound: diagnosis.headerFound };
   // Read as UTF-16 the content may be fine, but the engine does not read it that way: the encoding is the finding.
   const inside = diagnosis.headerFound ? [`內容本身的表頭在第 ${(diagnosis.focus ?? 0) + 1} ${textReport ? "行" : "列"}，寫法符合引擎的規則。`] : diagnosis.notes.map(note => `換掉編碼之後還要注意：${note}`);
@@ -443,7 +464,7 @@ export function buildFailureLog(input: FailureLogInput): FailureLog {
   // As many file lines as fit; the rest are counted, so the list never ends in the middle of a name.
   const fileText = (room: number) => {
     if (!fileLines.length) return "";
-    const kept: string[] = [], heading = `這次交給引擎的檔案（${fileLines.length} 份）：`, rest = (count: number) => `…另有 ${count} 份`;
+    const kept: string[] = [], heading = `這次用到的檔案（${fileLines.length} 份）：`, rest = (count: number) => `…另有 ${count} 份`;
     let used = heading.length;
     for (const line of fileLines) {
       const next = Number.isFinite(room) ? clipLogText(line, 160) : line;

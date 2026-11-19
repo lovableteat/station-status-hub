@@ -109,7 +109,9 @@ export async function flushFailureQueue(sink: FailureLogSink, store: KeyValueSto
       }
       result.reasons[record.id] = reason;
       if (isContentRefusal(reason)) record.tries += 1;
-      if (record.tries >= FAILURE_SEND_TRIES || now - record.at > FAILURE_KEEP_MS) result.dropped.push({ id: record.id, reason });
+      // A lapsed sign-in is not the record's fault: an old record waits for the next sign-in instead of being given up.
+      const signIn = /jwt|expired|\b401\b|安全登入|permission denied/i.test(reason);
+      if (record.tries >= FAILURE_SEND_TRIES || (!signIn && now - record.at > FAILURE_KEEP_MS)) result.dropped.push({ id: record.id, reason });
       else result.waiting.push(record.id);
     }
   }

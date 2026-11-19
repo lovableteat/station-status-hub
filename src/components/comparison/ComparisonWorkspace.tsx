@@ -156,6 +156,9 @@ export default function ComparisonWorkspace() {
       if (!store) return null;
       const result = await flushFailureQueue(failureSink, store, account);
       result.sent.forEach(id => failureOutcome.current.sent.add(id));
+      setFailure(current => !current || current.record === "saved" ? current
+        : result.sent.includes(current.id) ? { ...current, record: "saved", recordNote: undefined }
+          : result.dropped.some(item => item.id === current.id) ? { ...current, record: "rejected", recordNote: result.reasons[current.id] } : current);
       for (const item of result.dropped) {
         failureOutcome.current.dropped.set(item.id, item.reason);
         // Nobody may be looking at the failure this belonged to any more; the reason at least stays in the console.
@@ -174,18 +177,24 @@ export default function ComparisonWorkspace() {
     return () => window.removeEventListener("online", send);
   }, [accountId, canRecordFailures, flushFailures]);
   const reportFailure = async (job: string, message: string, currentEpoch: number) => {
-    const files = jobFiles.current, reason = summarizeEngineError(message).reason, bom = /\bBOM\b/i.test(reason);
+    const files = jobFiles.current, reason = summarizeEngineError(message).reason, bom = /\bBOM\b|csv/i.test(reason);
     const found: InputFilePreview[] = [];
     const look = async () => {
-      for (const file of filesNamedIn(reason, files)) {
+      const named = filesNamedIn(reason, files);
+      const targets = named.length ? named : /new-line character seen in unquoted field|line contains NUL|csv\.Error/.test(message) ? files.filter(file => file.bytes && /\.csv$/i.test(file.path)).slice(0, 2) : [];
+      for (const file of targets) {
         if (!file.bytes) continue;
         try {
           let preview = previewInputFile(file.bytes, file, bom);
           if (preview.spreadsheet && file.size <= FAILURE_SHEET_LIMIT) {
             const XLSX = await import("xlsx");
             // Only the first sheet and its first rows: the engine reads the first sheet, and the header is at its top.
-            const book = XLSX.read(file.bytes, { type: "array", sheets: 0, sheetRows: 80 });
-            preview = previewSheetRows(XLSX.utils.sheet_to_json<unknown[]>(book.Sheets[book.SheetNames[0]], { header: 1, raw: false, defval: "" }), preview, bom);
+            const book = XLSX.read(file.bytes, { type: "array", sheets: 0, sheetRows: 80 }), sheet = book.Sheets[book.SheetNames[0]];
+            // From A1, empty top rows and columns included: the engine counts rows from the top of the sheet, not from
+            // where the used cells begin.
+            const used = sheet?.["!ref"] ? XLSX.utils.decode_range(sheet["!ref"]) : null;
+            const rows = used ? XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: "", blankrows: true, range: { s: { r: 0, c: 0 }, e: used.e } }) : [];
+            preview = previewSheetRows(rows, preview, bom);
           }
           found.push(preview);
         } catch { /* The record is still worth having without the file's first lines. */ }

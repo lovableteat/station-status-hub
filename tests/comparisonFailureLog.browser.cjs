@@ -69,7 +69,7 @@ async function fail(page,root,name){
       assert.match(row.description,/^自動失敗紀錄｜比對｜\d{4}\/\d\d\/\d\d \d\d:\d\d:\d\d（台北時間）\n原因：BOM「QA_BOARD_20261019\.BOM」讀不出表頭\n引擎訊息：ValueError: BOM header not recognised in QA_BOARD_20261019\.BOM/);
       assert.match(row.description,/處理位置：這台電腦的瀏覽器\n比對名稱：失敗紀錄測試 \d+｜A=EVT → B=DVT/);
       assert.match(row.description,/▍A A\/QA_BOARD_20261019\.BOM｜[\d.]+ B｜文字檔（UTF-16，Tab 分隔）/);
-      assert.match(row.description,/這次交給引擎的檔案（10 份）：/);
+      assert.match(row.description,/這次用到的檔案（10 份）：/);
       assert.match(row.description,/引擎位置：parsers\/bom_erp\.py:\d+ parse_bom/);
       assert.match(row.description,/原始訊息（結尾）：[\s\S]*Traceback|原始訊息（結尾）：[\s\S]*ValueError/);
       assert.deepEqual(Object.keys(row.page_context).sort(),['browser','height','revisionA','revisionB','width']);
@@ -105,6 +105,8 @@ async function fail(page,root,name){
       await qa(page,()=>{window.__failureQA.offline=false;window.dispatchEvent(new Event('online'));});
       await page.waitForFunction(()=>window.__failureQA.rows.filter(row=>row.is_submitted).length===2,null,{timeout:20000});
       await page.waitForFunction(()=>localStorage.getItem('comparison-failure-log:11111111-1111-4111-8111-111111111111')===null,null,{timeout:20000});
+      // The notice still on screen says so once the record has gone out.
+      await notice(page).locator('.comparison-failure-record[data-state="saved"]').waitFor({timeout:20000});
 
       // 4. A record the backend refuses says so and points at 複製紀錄; it is not shown as saved.
       await qa(page,()=>{window.__failureQA.refuse='回報內容格式不正確';});
