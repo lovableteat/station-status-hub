@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/architecture.md`；程式參考基準：`482a17ee36d108da6fc97778288142e3c4548b91`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/architecture.md`；程式參考基準：`8981d1b67748da24efae731dee4296839e667ef6`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 工作整合平台架構指南
 
@@ -130,7 +130,7 @@ main.tsx
 
 這裡的九個畫面入口不等於九個資料庫權限群組。`workspacePermissions.ts` 定義七組權限工作區；`file-uploads` 由 `test-plan` 繼承 `station-status`，`comparison` 的入口與 render guard 由 `ai-chat` 授權。畫面用的 `Index.tsx` WorkspaceId 與權限用的 WorkspaceId 不能直接互換。
 
-比對系統可由 `workspace=comparison&module=comparison` 直接進入，首頁與 render guard 都使用 `ai-chat` 授權，沒有另加資料庫權限 key。`comparisonTab` 保存五個功能頁；結果條件使用 `compareSearch`、`compareStatus`、`compareOwner`、`compareSeverity`、`compareCategory`、`comparePage`，位址庫使用 `librarySearch`、`librarySigned`。意見收集清單使用 `feedbackSearch`、`feedbackStatus`、`feedbackOwner`、`feedbackCategory`。切換全站工作區時清除這些頁內條件，結果列表的「全部清除」保留 workspace、module 與功能頁上下文。
+比對系統可由 `workspace=comparison&module=comparison` 直接進入，首頁與 render guard 都使用 `ai-chat` 授權，沒有另加資料庫權限 key。`comparisonTab` 保存五個功能頁；結果條件使用 `compareSearch`、`compareStatus`、`compareOwner`、`compareSeverity`、`compareCategory`、`comparePage`，位址庫使用 `librarySearch`、`librarySigned`。意見收集清單使用 `feedbackSearch`、`feedbackStatus`、`feedbackOwner`、`feedbackCategory`、`feedbackSource`（使用者回報／自動失敗紀錄）。切換全站工作區時清除這些頁內條件，結果列表的「全部清除」保留 workspace、module 與功能頁上下文。
 
 ## 5. Provider 與資料流
 

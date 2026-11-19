@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/specs/2026-10-29-bom-version-control-design.md`；程式參考基準：`482a17ee36d108da6fc97778288142e3c4548b91`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/specs/2026-10-29-bom-version-control-design.md`；程式參考基準：`8981d1b67748da24efae731dee4296839e667ef6`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # BOM 版本控制與新舊版差異設計
 
