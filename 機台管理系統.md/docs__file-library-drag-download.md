@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/file-library-drag-download.md`；程式參考基準：`8981d1b67748da24efae731dee4296839e667ef6`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/file-library-drag-download.md`；程式參考基準：`dc6fccc0c1f1510b91f87bcf299a68f383669f07`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 檔案上傳頁：拖到桌面的下載怎麼送出
 

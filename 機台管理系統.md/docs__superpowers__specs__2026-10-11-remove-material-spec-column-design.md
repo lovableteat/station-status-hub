@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/specs/2026-10-11-remove-material-spec-column-design.md`；程式參考基準：`8981d1b67748da24efae731dee4296839e667ef6`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/specs/2026-10-11-remove-material-spec-column-design.md`；程式參考基準：`dc6fccc0c1f1510b91f87bcf299a68f383669f07`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 移除 BOM 總表規格／備註欄
 

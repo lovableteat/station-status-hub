@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/security/applied-legacy-pcb-read-apis-20261112.md`；程式參考基準：`8981d1b67748da24efae731dee4296839e667ef6`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/security/applied-legacy-pcb-read-apis-20261112.md`；程式參考基準：`dc6fccc0c1f1510b91f87bcf299a68f383669f07`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Applied additive profile and legacy PCB read APIs
 
@@ -32,7 +32,7 @@ separately gated raw-read closure must not be inferred from this additive result
 
 ## Immutable server-ledger copy
 
-[Repository migration](https://github.com/lovableteat/station-status-hub/blob/8981d1b67748da24efae731dee4296839e667ef6/supabase/migrations/20261112064452_add_protected_profile_and_legacy_pcb_read_apis.sql):
+[Repository migration](https://github.com/lovableteat/station-status-hub/blob/dc6fccc0c1f1510b91f87bcf299a68f383669f07/supabase/migrations/20261112064452_add_protected_profile_and_legacy_pcb_read_apis.sql):
 
 - Version: `20261112064452`
 - Name: `add_protected_profile_and_legacy_pcb_read_apis`
@@ -43,7 +43,7 @@ separately gated raw-read closure must not be inferred from this additive result
 The server statement was independently retrieved from the applied ledger. The
 repository copy preserves those exact bytes, including the historical PENDING
 comment. That comment is not current deployment status. The original
-[preparation candidate](https://github.com/lovableteat/station-status-hub/blob/8981d1b67748da24efae731dee4296839e667ef6/docs/security-proposals/legacy-pcb/01-add-read-apis-PENDING.sql)
+[preparation candidate](https://github.com/lovableteat/station-status-hub/blob/dc6fccc0c1f1510b91f87bcf299a68f383669f07/docs/security-proposals/legacy-pcb/01-add-read-apis-PENDING.sql)
 remains byte-for-byte unchanged for audit and synthetic regression.
 
 Only the candidate's outer `BEGIN;` and final `COMMIT;` were removed for the
@@ -56,7 +56,7 @@ or submit the historical candidate to the migration tool.
 
 ## Reconciliation and later promotion
 
-Use the [read-only applied-state verifier](https://github.com/lovableteat/station-status-hub/blob/8981d1b67748da24efae731dee4296839e667ef6/docs/security-proposals/legacy-pcb/verify-applied-read-apis.sql)
+Use the [read-only applied-state verifier](https://github.com/lovableteat/station-status-hub/blob/dc6fccc0c1f1510b91f87bcf299a68f383669f07/docs/security-proposals/legacy-pcb/verify-applied-read-apis.sql)
 to check all four recorded ledger statements and the two exact zero-argument API
 identities, owner, body hashes and complete ACLs. It reads only metadata and ledger
 text; it neither calls the APIs nor reads account/PCB content. The standalone
