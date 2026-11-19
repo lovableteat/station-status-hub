@@ -191,6 +191,8 @@ test("pending materials are classified by reference prefix with connectors and I
   assert.equal(presentation.getPendingMaterialCategory("J12, J13"), "connector");
   assert.equal(presentation.getPendingMaterialCategory("u839"), "ic");
   for (const ref of ["R7063", "LB37", "C1", "RN5", "L2"]) assert.equal(presentation.getPendingMaterialCategory(ref), "rlc");
+  assert.equal(presentation.getPendingMaterialCategory("CPU1"), "ic", "a CPU is no capacitor");
+  for (const ref of ["CN3", "CON12", "CONN1"]) assert.equal(presentation.getPendingMaterialCategory(ref), "connector");
   for (const ref of ["D138", "FB1", "Q3", "", "123"]) assert.equal(presentation.getPendingMaterialCategory(ref), "other");
   // Baseboard power section (2026-11-17): PU／PR／PL／PC were all filed under 其他.
   assert.equal(presentation.getPendingMaterialCategory("PU1, PU2, PU3"), "ic");

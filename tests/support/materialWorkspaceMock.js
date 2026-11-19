@@ -118,6 +118,22 @@ const legacyWorkspace = {
 };
 const store = new Map([[workspace.id, workspace], [previousWorkspace.id, previousWorkspace], [legacyWorkspace.id, legacyWorkspace]]);
 const fullRecords = new Map([[workspace.id, records], [previousWorkspace.id, previousRecords], [legacyWorkspace.id, previousRecords.slice(0, 3)]]);
+// ?qaProjectParts: QA 專案 has a second board that shares U1 and J1 with the main board, adds a CPU and a connector
+// of its own, and an archived board that 專案總料表 must leave out. ?qaProjectPartsFail: the second board fails once.
+if (new URLSearchParams(window.location.search).has('qaProjectParts')) {
+  const subId = 'bom:qa-sub:v1:qa0101', oldId = 'bom:qa-old:v1:qa0201';
+  const subRecords = [
+    makeRecord('U3', 8, { qty: 2 }), makeRecord('J4', 7, { qty: 2 }),
+    makeRecord('U20', 70, { name: 'QA CPU 子板主晶片', manufacturer: 'QA CPU CO', manufacturerPartNumber: 'QA-CPU-77', partNumber: '000-PHYSICAL-CPU', virtualAlternative: '' }),
+    makeRecord('J30', 71, { name: 'QA CONN 子板高速連接器', manufacturer: 'QA CONN CO', manufacturerPartNumber: 'QA-CONN-88', partNumber: '', virtualAlternative: '', qty: 4 }),
+  ];
+  const version = (id, name) => ({ seriesId: `series:${id}`, seriesName: name, versionNumber: 1, label: '', note: '', uploadedAt: stamp(3), uploadedBy: 'QA 目前使用者', isCurrent: true, currentChangedAt: stamp(3) });
+  store.set(subId, { id: subId, name: 'QA 子板（僅隔離資料）.xlsx', updatedAt: stamp(3), project: { projectId: project.id, projectName: project.name }, payload: { ...seed, sourceFile: 'QA 子板（僅隔離資料）.xlsx', sheetName: 'QA', records: [], recordCount: subRecords.length }, recordMeta: {}, version: version('qa-sub', 'QA 子板（僅隔離資料）.xlsx') });
+  store.set(oldId, { id: oldId, name: 'QA 封存板（僅隔離資料）.xlsx', updatedAt: stamp(30), project: { projectId: project.id, projectName: project.name }, archive: { archivedAt: stamp(10), archivedBy: 'QA' }, payload: { ...seed, sourceFile: 'QA 封存板.xlsx', sheetName: 'QA', records: [], recordCount: 1 }, recordMeta: {}, version: version('qa-old', 'QA 封存板（僅隔離資料）.xlsx') });
+  fullRecords.set(subId, subRecords);
+  fullRecords.set(oldId, [makeRecord('U99', 99, { name: 'QA 封存板才有的料', manufacturerPartNumber: 'QA-ARCHIVED-ONLY' })]);
+  if (new URLSearchParams(window.location.search).has('qaProjectPartsFail')) window.__qaFailOnce = new Set([subId]);
+}
 const safetyMode = new URLSearchParams(window.location.search).get('qaBomSafety');
 if (safetyMode === 'empty') { store.clear(); fullRecords.clear(); }
 if (safetyMode) window.__qaBomSafety = { reads: 0, writes: [] };
@@ -188,7 +204,12 @@ export const loadBomWorkspaceVersions = async () => new Map([...store.values()].
 export const loadPageTrackerMap = async () => new Map([...store.values()].flatMap(item => (item.pageTracker ? [[item.id, item.pageTracker]] : [])));
 export const loadTableColorThemeMap = async () => new Map([...store.values()].flatMap(item => (item.tableColorTheme ? [[item.id, item.tableColorTheme]] : [])));
 export const loadBomWorkspaceForWrite = async (target) => { await new Promise(resolve => setTimeout(resolve, 120)); if (!fullRecords.has(target.id)) throw new Error('QA：找不到這個版本'); const rows = structuredClone(fullRecords.get(target.id)); return { ...target, payload: { ...target.payload, records: rows, recordCount: rows.length }, recordMeta: structuredClone(store.get(target.id)?.recordMeta ?? {}) }; };
-export const loadBomWorkspaceRecords = async (workspaceId) => { await new Promise(resolve => setTimeout(resolve, 120)); if (!fullRecords.has(workspaceId)) throw new Error('QA：找不到這個版本'); return structuredClone(fullRecords.get(workspaceId)); };
+export const loadBomWorkspaceRecords = async (workspaceId) => {
+  await new Promise(resolve => setTimeout(resolve, 120));
+  if (window.__qaFailOnce?.delete(workspaceId)) throw new Error('QA：模擬讀取失敗');
+  if (!fullRecords.has(workspaceId)) throw new Error('QA：找不到這個版本');
+  return structuredClone(fullRecords.get(workspaceId));
+};
 export const loadBomWorkspaceRecordChanges = async (current) => {
   const change = { workspaceIds: [current.id], records: [] };
   if (!liveRecords || !fullRecords.has(current.id)) return change;

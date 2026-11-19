@@ -1,6 +1,6 @@
 import { recoverableLazy } from "@/components/common/recoverableLazy";
-import { Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronDown, CircleAlert, CircleCheck, Download, FileArchive, FileText, GitCompareArrows, Layers3, LoaderCircle, MoreHorizontal, Pencil, Search, Trash2, Upload, X } from "lucide-react";
+import { Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ChevronDown, CircleAlert, CircleCheck, ClipboardList, Download, FileArchive, FileText, GitCompareArrows, Layers3, LoaderCircle, MoreHorizontal, Pencil, Search, Trash2, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -25,6 +25,7 @@ import type { MaterialWorkbookRecord } from "./materialRequestUtils";
 import type { NvBomChange } from "./nvBomCompare";
 import type { NvBomTableCandidate, NvBomTableLink } from "./nvBomTableMatch";
 import type { NvBomCompareSession } from "./NvBomComparePanel";
+import { ProjectPartsView } from "./ProjectPartsView";
 import "./bomVersionCenter.css";
 
 const UNASSIGNED_VALUE = "__unassigned__";
@@ -213,7 +214,9 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
-  const [mode, setMode] = useState<"series" | "diff" | "nv">("series");
+  const [mode, setMode] = useState<"series" | "diff" | "nv" | "parts">("series");
+  /** 專案總料表: the project whose boards are merged. */
+  const [partsProjectId, setPartsProjectId] = useState<string | null>(null);
   const [nvVisited, setNvVisited] = useState(false);
   const [nvBomTargetId, setNvBomTargetId] = useState<string | null>(null);
   const historyScope = historyAccountId ? JSON.stringify([historyAccountId, activeProjectId ?? null]) : undefined;
@@ -239,7 +242,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const selectedProjectName = selectedSeries?.project
     ? projectNames.get(selectedSeries.project.projectId) || selectedSeries.project.projectName || "未指定專案"
     : "未指定專案";
-  const description = mode === "nv" ? "比較兩份 NV 原始 BOM，查看實際變更並定位目前料號申請表。"
+  const description = mode === "parts" ? "合併專案所有 BOM 的目前版本，篩選、匯出，並轉成 PJE 備料表。" : mode === "nv" ? "比較兩份 NV 原始 BOM，查看實際變更並定位目前料號申請表。"
     : `工作區專案：${activeProjectName ?? "未選擇"} · 所選 BOM 專案：${selectedProjectName} · 全部 ${seriesList.length} 個系列 · ${totalVersions} 個版本${archivedSeries.length > 0 ? ` · 已封存 ${archivedSeries.length} 個` : ""} · 使用中：${activeSeries ? `${activeSeries.series.name} ${activeSeries.version.displayNumber}` : "未選擇"}`;
   const nvCompareButton = <Button type="button" variant="outline" size="sm" data-testid="bom-nv-compare-entry" onClick={() => { setNvBomTargetId(activeBomId); setNvVisited(true); setMode("nv"); }} title="另選兩份 NV 原始 Excel 比對，不受此系列版本數限制" className="bom-nv-compare-entry h-9 gap-2 border-primary/40 text-primary"><GitCompareArrows aria-hidden="true" className="h-4 w-4" />NV 原始 BOM 比對</Button>;
   const nvCanLocateCurrentBom = nvBomTargetId === activeBomId;
@@ -302,6 +305,25 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     }
     return promise;
   };
+  const latestCachedRecords = useRef(cachedRecords);
+  latestCachedRecords.current = cachedRecords;
+  const loadPartsVersion = useCallback((version: BomSeriesVersion) => latestCachedRecords.current(version), []);
+  // Every live series of a project, whatever the search box hides: the merged list is the whole project.
+  const liveSeriesByProject = useMemo(() => {
+    const byProject = new Map<string, BomSeries[]>();
+    for (const series of liveSeries) if (series.project?.projectId) byProject.set(series.project.projectId, [...(byProject.get(series.project.projectId) ?? []), series]);
+    return byProject;
+  }, [liveSeries]);
+  // The same boards keep the same list object: an edit elsewhere in the workspace does not rebuild the merge.
+  const partsSeriesRef = useRef<{ key: string; series: BomSeries[] }>({ key: "", series: [] });
+  const partsSeries = useMemo(() => {
+    const next = partsProjectId ? liveSeriesByProject.get(partsProjectId) ?? [] : [];
+    const key = next.map((series) => `${series.id}:${series.name}:${series.current.workspace.id}:${series.current.workspace.updatedAt}`).join("|");
+    if (partsSeriesRef.current.key !== key) partsSeriesRef.current = { key, series: next };
+    return partsSeriesRef.current.series;
+  }, [liveSeriesByProject, partsProjectId]);
+  const partsProjectName = partsProjectId ? projectNames.get(partsProjectId) || partsSeries[0]?.project?.projectName || "專案" : "";
+  const openProjectParts = (projectId: string) => { setPartsProjectId(projectId); setFeedback(null); setMode("parts"); };
 
   const openDiff = (series: BomSeries, before: BomSeriesVersion, after: BomSeriesVersion, options: { lostOnly?: boolean } = {}) => {
     setSelectedSeriesId(series.id);
@@ -647,9 +669,9 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         event.preventDefault();
       }}>
         <DialogHeader className="bom-version-header">
-          <div className="flex flex-wrap items-center gap-3"><DialogTitle className="text-xl">{mode === "nv" ? "NV 原始 BOM 比對" : "BOM 版本管理"}</DialogTitle>{mode !== "nv" && !selectedSeries && nvCompareButton}</div>
+          <div className="flex flex-wrap items-center gap-3"><DialogTitle className="text-xl">{mode === "nv" ? "NV 原始 BOM 比對" : mode === "parts" ? "專案總料表" : "BOM 版本管理"}</DialogTitle>{mode !== "nv" && mode !== "parts" && !selectedSeries && nvCompareButton}</div>
           <DialogDescription className="sr-only">{description}</DialogDescription>
-          {mode !== "nv" && <div className="bom-version-overview">{selectedSeries && <span className="bom-version-project" title={`「${selectedSeries.name}」所屬專案：${selectedProjectName}`}><Layers3 aria-hidden="true" />所選 BOM 專案：{selectedProjectName}</span>}<span className="bom-version-workspace" title="目前工作區的導覽專案，不會改變所選 BOM 的專案歸屬">工作區專案：{activeProjectName ?? "未選擇"}</span><span>全部 {seriesList.length} 個系列</span><span>{totalVersions} 個版本</span>{archivedSeries.length > 0 && <span className="bom-version-archived">已封存 {archivedSeries.length} 個</span>}</div>}
+          {mode !== "nv" && mode !== "parts" && <div className="bom-version-overview">{selectedSeries && <span className="bom-version-project" title={`「${selectedSeries.name}」所屬專案：${selectedProjectName}`}><Layers3 aria-hidden="true" />所選 BOM 專案：{selectedProjectName}</span>}<span className="bom-version-workspace" title="目前工作區的導覽專案，不會改變所選 BOM 的專案歸屬">工作區專案：{activeProjectName ?? "未選擇"}</span><span>全部 {seriesList.length} 個系列</span><span>{totalVersions} 個版本</span>{archivedSeries.length > 0 && <span className="bom-version-archived">已封存 {archivedSeries.length} 個</span>}</div>}
         </DialogHeader>
         {feedback?.view === mode && <p role={feedback.tone === "ok" ? "status" : "alert"} data-testid="bom-version-feedback" data-tone={feedback.tone} className="bom-version-feedback">{feedback.tone === "ok" ? <CircleCheck aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}<span>{feedback.text}</span></p>}
         {pendingAction && mode === "series" && <VersionActivity>{ACTION_LABELS[pendingAction]}</VersionActivity>}
@@ -662,7 +684,11 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
             matchCurrentBom={nvCanLocateCurrentBom ? matchCurrentBom : undefined}
             onLocateCurrentBom={nvCanLocateCurrentBom && onLocateCurrentBom ? locateNvResult : undefined} />
         </Suspense>}
-        {mode === "nv" ? null : mode === "diff" && diffSeries && diffBefore && diffAfter ? (
+        {mode === "nv" ? null : mode === "parts" ? (
+          partsSeries.length > 0
+            ? <ProjectPartsView key={partsProjectId ?? ""} projectName={partsProjectName} series={partsSeries} loadVersion={loadPartsVersion} exportedBy={exportedBy} compact={compact} onBack={() => setMode("series")} />
+            : <div className="project-parts-gone"><p>這個專案目前沒有可以合併的 BOM 系列（可能剛被封存或移到別的專案）。</p><Button type="button" variant="outline" size="sm" onClick={() => setMode("series")} title="回到 BOM 系列清單" className="h-11">← 返回系列</Button></div>
+        ) : mode === "diff" && diffSeries && diffBefore && diffAfter ? (
           <BomDiffView
             key={`diff:${diffViewSeed.token}`}
             initialLostOnly={diffViewSeed.lostOnly}
@@ -711,6 +737,11 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
                       <ChevronDown aria-hidden="true" className="bom-project-chevron h-4 w-4 flex-none" />
                     </button></h4>
                     <div id={`${projectGroupId}-${group.key}`} hidden={!expanded}>
+                      {group.projectId && (liveSeriesByProject.get(group.projectId)?.length ?? 0) > 0 && (
+                        <button type="button" data-testid="bom-project-parts-entry" onClick={() => openProjectParts(group.projectId!)} title={`把「${group.label}」每個 BOM 系列的目前版本合併成一張總料表：同一顆料只列一次，可篩選、匯出，並轉成 PJE 備料表`} className="bom-project-parts-entry">
+                          <ClipboardList aria-hidden="true" />專案總料表<small>合併 {liveSeriesByProject.get(group.projectId)!.length} 個系列</small>
+                        </button>
+                      )}
                       {group.workspaces.length === 0
                         ? <div className="bom-project-empty"><strong>尚無 BOM</strong><p>{canEdit ? "上傳 Excel，或將現有系列移入此專案。" : "請有編輯權限的同事上傳或指定專案。"}</p></div>
                         : group.workspaces.map((series) => renderSeriesRow(series))}

@@ -40,7 +40,8 @@ const describePart = (record: MaterialWorkbookRecord) => [text(record.manufactur
 const refsOf = (record: MaterialWorkbookRecord) => bomRefTokens(record.refDes);
 const digitCount = (value: string) => value.replace(/\D/g, "").length;
 /** Blank-ish values that are not a maker's name or a part: "N/A", "TBD", "-", and not-fitted rows ("NC", "DNI", "DNP"). */
-const PLACEHOLDER = /^(?:N\/?A|NONE|TBD|TBC|NULL|NC|N\/?C|DNI|DNP|DNF|NI|NIL|OPEN|GENERIC|[-—–_/.]+|無|空白|不上件)$/i;
+export const BOM_PLACEHOLDER = /^(?:N\/?A|NONE|TBD|TBC|NULL|NC|N\/?C|DNI|DNP|DNF|NI|NIL|OPEN|GENERIC|[-—–_/.]+|無|空白|不上件)$/i;
+const PLACEHOLDER = BOM_PLACEHOLDER;
 /** "R1-R10", "C5~C9": one position the website cannot split. "J1-1" (a pin of J1) is not a range. */
 const RANGE = /~|^([A-Z]+)\d+-\1\d+$/i;
 /** The same written with spaces, "R10 - R15", which splits into two positions and a dash. */
