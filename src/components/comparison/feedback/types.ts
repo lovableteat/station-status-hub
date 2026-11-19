@@ -1,9 +1,12 @@
 export const FEEDBACK_CATEGORIES = { bug: "功能問題", ui: "畫面問題", suggestion: "改善建議", other: "其他" } as const;
 export const FEEDBACK_STATUSES = { new: "未處理", in_progress: "處理中", resolved: "已修正" } as const;
+/** Where a report came from: written by a person, or recorded by the page when a job failed (failureLog.ts). */
+export const FEEDBACK_SOURCES = { manual: "使用者回報", failure: "自動失敗紀錄" } as const;
 export const FEEDBACK_TABS = { compare: "比對檢查", review: "審查追蹤", power: "Power Tree", i2c: "I²C Map", library: "位址庫" } as const;
 export type FeedbackCategory = keyof typeof FEEDBACK_CATEGORIES;
 export type FeedbackStatus = keyof typeof FEEDBACK_STATUSES;
 export type FeedbackTab = keyof typeof FEEDBACK_TABS;
+export type FeedbackSource = keyof typeof FEEDBACK_SOURCES;
 export interface FeedbackContext { browser: string; width: number; height: number; revisionA: string; revisionB: string }
 export interface FeedbackImage { id: string; name: string; path: string; mime: "image/png" | "image/jpeg" | "image/webp"; size: number }
 export interface FeedbackAttachment { id: string; file: File }
@@ -16,7 +19,7 @@ export interface FeedbackReport extends Omit<FeedbackDraft, "reporterId"> {
   isSubmitted: boolean; status: FeedbackStatus; adminNote: string; createdAt: string;
   submittedAt: string | null; updatedAt: string;
 }
-export interface FeedbackFilters { query: string; status: FeedbackStatus | "all"; owner: string; category: FeedbackCategory | "all" }
+export interface FeedbackFilters { query: string; status: FeedbackStatus | "all"; owner: string; category: FeedbackCategory | "all"; source: FeedbackSource | "all" }
 export interface FeedbackAdapter {
   listReports(adminMode?: boolean): Promise<FeedbackReport[]>;
   getReport(id: string): Promise<FeedbackReport | null>;

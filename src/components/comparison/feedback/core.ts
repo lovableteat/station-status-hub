@@ -1,3 +1,4 @@
+import { isFailureLogTitle } from "../failureLog.ts";
 import { FEEDBACK_CATEGORIES, FEEDBACK_STATUSES, FEEDBACK_TABS } from "./types.ts";
 import type { FeedbackAttachment, FeedbackDraft, FeedbackFilters, FeedbackImage, FeedbackReport } from "./types.ts";
 
@@ -60,7 +61,8 @@ export function filterFeedbackReports(reports: readonly FeedbackReport[], filter
   return reports.filter(report => (!query || [report.title, report.description, report.projectName, report.reporterName, report.reporterUsername, report.adminNote, report.id].some(text => text.toLocaleLowerCase().includes(query)))
     && (filters.status === "all" || report.status === filters.status)
     && (!filters.owner || (report.reporterId ?? `deleted:${report.reporterUsername}`) === filters.owner)
-    && (filters.category === "all" || report.category === filters.category));
+    && (filters.category === "all" || report.category === filters.category)
+    && (!filters.source || filters.source === "all" || (filters.source === "failure") === isFailureLogTitle(report.title)));
 }
 
 export function assertReviewInput(status: string, note: string) {

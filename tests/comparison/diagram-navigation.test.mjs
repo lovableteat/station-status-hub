@@ -69,6 +69,8 @@ function workspace(tab = "diagram", stored = []) {
     "./storage": { async listSessions(id) { return id === accountA ? stored : []; }, async readLibrary() { return "devices: []\n"; } },
     "./files": { inspectRevision: () => ({}), validateRevision: () => [], revisionProgress: () => ({ ready: 0, total: 5 }), sameRevisionSources: () => false, formatBytes: bytes => `${bytes} B` },
     "./datasheetSelection": {},
+    // 失敗紀錄 (2026-11-19): the page holds the backend adapter it records failures through; nothing is sent here.
+    "./feedback/supabaseAdapter": { createSupabaseFeedbackAdapter: () => ({}) },
   });
   let tree;
   const render = () => tree = harness.render();

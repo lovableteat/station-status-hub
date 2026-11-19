@@ -115,6 +115,57 @@ test("the report list is open by default, so the Excel tracker is found without 
   assert.match(await read("src/components/comparison/ComparisonGuide.tsx"), /「報表與完整資料」下載（預設展開）/);
 });
 
+test("the optional tools are open by default too, below the run button", async () => {
+  // 2026-11-19, the same request: a folded 選用工具 is not found either. It stays optional and can be folded by hand.
+  const source = await read("src/components/comparison/ComparisonWorkspace.tsx");
+  const ast = ts.createSourceFile("Workspace.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let opening;
+  function visit(node) {
+    if (ts.isJsxOpeningElement(node) && node.tagName.getText(ast) === "details"
+      && node.attributes.properties.some(attribute => attribute.name?.getText(ast) === "className" && attribute.initializer?.getText(ast) === '"comparison-optional"')) opening = node;
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  assert.ok(opening, "the optional tools are one section");
+  const open = opening.attributes.properties.find(attribute => attribute.name?.getText(ast) === "open");
+  assert.ok(open && (!open.initializer || open.initializer.expression?.getText(ast) === "true"), "open without a click, not tied to a condition");
+  assert.ok(source.indexOf('className="comparison-run-actions"') < source.indexOf('className="comparison-optional"'), "the run button is not pushed down by them");
+  // The notes about skipped checks and reports that failed sit under the report list; the manual tells people to read them.
+  assert.ok(source.includes('<details open className="comparison-report-hints"><summary title='), "解析與輸出提示 is open by default as well");
+});
+
+test("a failed job is explained and recorded; a prompt for missing input and a stopped job are not", async () => {
+  // 2026-11-19: a user got the engine's raw traceback and nobody else could see it. Every failure is now recorded in
+  // the backend through the 意見收集 store, without a new table.
+  const source = await read("src/components/comparison/ComparisonWorkspace.tsx");
+  assert.ok(source.includes('const canRecordFailures = sessionMode === "authenticated" && Boolean(accountId) && canViewModule("ai-chat");'), "the same sign-in as 意見收集; the demo account sends nothing");
+  const runJob = source.slice(source.indexOf("const runJob = async"), source.indexOf("const showProgress"));
+  assert.ok(runJob.includes("setFailure(null)") && runJob.includes('jobStage.current = "work"'), "a new job starts clean");
+  assert.ok(runJob.includes("stillCheckingInput() || !shouldRecordFailure(message) || !(job || summarizeEngineError(message).traceback)"), "prompts, a stopped job and plain messages of unnamed jobs keep the one-line alert");
+  assert.ok(runJob.includes("await reportFailure(job ||"), "everything else is explained and recorded");
+  const start = source.slice(source.indexOf("const start = async"), source.indexOf("const mutateCurrent"));
+  assert.ok(start.indexOf('jobStage.current = "input"') < start.indexOf("請填寫比對名稱"), "checking what was picked is not a failure");
+  const handed = start.indexOf('jobStage.current = "work"');
+  assert.ok(start.indexOf("readRevision(inspectRevision(a.files)") < handed && start.indexOf("readOption(") < handed, "a file that is too large or cannot be read is still a prompt");
+  assert.ok(handed < start.indexOf("runtimeRef.current.request<ComparisonResult>"), "once the engine has the files, a message is a failure");
+  assert.ok(start.indexOf("jobFiles.current = [") < handed, "the record knows which files the engine was given");
+  assert.ok(start.includes('}, mode === "single" ? "單板畫圖" : "比對");'));
+  for (const job of ['"匯出備份"', '"匯入備份"', '"下載 Excel 追蹤表"']) assert.ok(source.includes(`}, ${job});`), `${job} is a named job`);
+  const report = source.slice(source.indexOf("const reportFailure = async"), source.indexOf("const stillCheckingInput"));
+  assert.ok(report.indexOf("queueFailureRecord(store, record)") < report.indexOf("flushFailures(accountId)"), "kept on this computer before it is sent");
+  assert.ok(report.includes("Promise.race([look(), new Promise<void>(resolve => setTimeout(resolve, FAILURE_PREVIEW_MS))])"), "looking at the file cannot hold up the notice");
+  assert.ok(report.includes("sheets: 0, sheetRows: 80"), "only the top of the first sheet is read");
+  assert.ok(source.includes('jobFiles.current = [{ side: "備份", path: file.name, size: file.size }];'), "a failed import names the backup file");
+  assert.ok((await read("src/pages/Index.tsx")).includes('"feedbackSource",'), "the new URL key is cleared with the other 意見收集 keys");
+  assert.ok(source.includes('{failure && <ComparisonFailureNotice failure={failure} onClose={() => setFailure(null)} />}'));
+  const notice = await read("src/components/comparison/ComparisonFailureNotice.tsx");
+  assert.ok(notice.indexOf("log.explanation.headline") < notice.indexOf("comparison-failure-raw"), "the plain reason comes first, the engine's message last");
+  assert.match(notice, /\(log\.summary\.traceback \|\| log\.raw !== log\.explanation\.headline\) && <details className="comparison-failure-raw">/, "the message as it arrived is always reachable, folded");
+  const store = await read("src/components/comparison/failureLogStore.ts");
+  assert.ok(store.includes('category: "bug"') && store.includes("screenshots: []"), "stored as a 功能問題 report without pictures");
+  assert.match(await read("src/components/comparison/feedback/supabaseAdapter.ts"), /\.like\("title", `\$\{FAILURE_LOG_PREFIX\}%`\)/);
+});
+
 test("restored results start with sources collapsed while new comparisons keep inputs open", async () => {
   const source = await read("src/components/comparison/ComparisonWorkspace.tsx");
   assert.match(source, /className="comparison-source-settings" open=\{!session\}/);

@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json, Tables } from "@/integrations/supabase/types";
+import { FAILURE_LOG_PREFIX } from "../failureLog";
 import { validateFeedbackImageRecord } from "./core";
 import { FEEDBACK_CATEGORIES, FEEDBACK_STATUSES, FEEDBACK_TABS } from "./types";
 import type { FeedbackAdapter, FeedbackContext, FeedbackImage, FeedbackReport } from "./types";
@@ -16,6 +17,12 @@ function mapReport(value: FeedbackRow | Json): FeedbackReport {
     title: row.title, description: row.description, category: row.category as FeedbackReport["category"], tab: row.comparison_tab as FeedbackReport["tab"], projectName: row.project_name,
     context: row.page_context as unknown as FeedbackContext, screenshots, isSubmitted: row.is_submitted, status: row.status as FeedbackReport["status"], adminNote: row.admin_note,
     createdAt: row.created_at, submittedAt: row.submitted_at, updatedAt: row.updated_at };
+}
+
+/** 自動失敗紀錄 nobody has looked at yet, for the number on the 意見收集 button (administrators only see all of them). */
+export async function countOpenFailureLogs(): Promise<number> {
+  const { count, error } = await supabase.from("comparison_feedback").select("id", { count: "exact", head: true }).eq("is_submitted", true).eq("status", "new").like("title", `${FAILURE_LOG_PREFIX}%`);
+  throwError(error); return count ?? 0;
 }
 
 export function createSupabaseFeedbackAdapter(): FeedbackAdapter {

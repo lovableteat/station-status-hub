@@ -17,8 +17,9 @@ import { downloadLocal } from "../downloads";
 import { captureFeedbackScreenshot } from "./capture";
 import { assertReviewInput, feedbackDate, filterFeedbackReports, MAX_FEEDBACK_IMAGES, prepareFeedbackImages } from "./core";
 import { createFeedbackRepository } from "./repository";
-import { createSupabaseFeedbackAdapter } from "./supabaseAdapter";
-import { FEEDBACK_CATEGORIES, FEEDBACK_STATUSES, FEEDBACK_TABS } from "./types";
+import { countOpenFailureLogs, createSupabaseFeedbackAdapter } from "./supabaseAdapter";
+import { isFailureLogTitle } from "../failureLog";
+import { FEEDBACK_CATEGORIES, FEEDBACK_SOURCES, FEEDBACK_STATUSES, FEEDBACK_TABS } from "./types";
 import type { FeedbackAttachment, FeedbackCategory, FeedbackImage, FeedbackReport, FeedbackStatus, FeedbackTab } from "./types";
 import { useFeedbackFilters } from "./useFeedbackFilters";
 import "./feedback.css";
@@ -57,7 +58,7 @@ function ReportDetails({ report, isAdmin, busy, download, preview, review, dirty
   const save = async () => { try { const updated = await review(baseline, status, note); setBaseline(updated); setStatus(updated.status); setNote(updated.adminNote); } catch { /* Parent keeps the error and unsaved fields visible. */ } };
   return <section className="feedback-detail" aria-label="回報詳情">
     <div className="feedback-section-heading"><div><h3>{report.title}</h3><p>{report.reporterName} · {FEEDBACK_TABS[report.tab]} · {feedbackDate(report.submittedAt ?? report.createdAt)}</p></div><Badge variant="secondary">{FEEDBACK_STATUSES[report.status]}</Badge></div>
-    <p className="feedback-description">{report.description}</p>
+    {isFailureLogTitle(report.title) ? <pre className="feedback-log" tabIndex={0} aria-label="失敗紀錄內容">{report.description}</pre> : <p className="feedback-description">{report.description}</p>}
     {!!report.projectName && <p className="feedback-context-line">比對名稱：{report.projectName}</p>}
     <div className="feedback-image-grid">{report.screenshots.map(image => <RemoteImage key={image.id} image={image} download={download} preview={preview} />)}</div>
     <details className="feedback-environment"><summary>頁面資訊</summary><p>{report.context.browser}</p><p>畫面尺寸：{report.context.width} × {report.context.height} · 版本：{report.context.revisionA || "—"} → {report.context.revisionB || "—"}</p><p>回報編號：{report.id}</p></details>
@@ -85,6 +86,7 @@ export function ComparisonFeedback({ tab: currentTab, projectName, revisionA, re
   const [reports, setReports] = useState<FeedbackReport[]>([]); const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false); const [busy, setBusy] = useState(false); const [adding, setAdding] = useState(false); const [capturing, setCapturing] = useState(false);
   const [message, setMessage] = useState(""); const [error, setError] = useState(""); const [preview, setPreview] = useState<Preview | null>(null);
+  const [openFailures, setOpenFailures] = useState(0); const listed = useRef(false);
   const busyRef = useRef(false); const addingRef = useRef(false); const loadEpoch = useRef(0); const captureController = useRef<AbortController | null>(null);
   const reviewDirty = useRef(false); const setReviewDirty = useCallback((value: boolean) => { reviewDirty.current = value; }, []);
   const chooser = useRef<HTMLInputElement>(null); const { filters, setFilter, clear } = useFeedbackFilters();
@@ -104,12 +106,23 @@ export function ComparisonFeedback({ tab: currentTab, projectName, revisionA, re
         await repository.cleanupDraft(pendingId, () => assertCurrent(token));
         if (window.sessionStorage.getItem(pendingKey) === pendingId) window.sessionStorage.removeItem(pendingKey);
       }
-      const next = await repository.listReports(isAdmin); if (epoch === loadEpoch.current && isCurrent(token)) setReports(next);
+      const next = await repository.listReports(isAdmin); if (epoch === loadEpoch.current && isCurrent(token)) { setReports(next); listed.current = true; }
     }
     catch (caught) { if (epoch === loadEpoch.current && isCurrent(token)) setError(caught instanceof Error ? caught.message : "回報載入失敗。"); }
     finally { if (epoch === loadEpoch.current && isCurrent(token)) setLoading(false); }
   }, [accountId, isAdmin, repository, captureScope, isCurrent, assertCurrent]);
   useEffect(() => { if (open && canSubmit) void refresh(); }, [open, canSubmit, refresh]);
+  // Administrators see on the button how many 自動失敗紀錄 are still 未處理, without opening the window.
+  useEffect(() => {
+    setOpenFailures(0); listed.current = false;
+    if (!isAdmin) return;
+    let cancelled = false;
+    void countOpenFailureLogs().then(count => { if (!cancelled) setOpenFailures(count); }).catch(() => { /* The number is a convenience; the window still lists everything. */ });
+    return () => { cancelled = true; };
+  }, [isAdmin, accountId]);
+  // After that the number follows the loaded list (a status the administrator changes here); a list that failed to
+  // load, or has not arrived yet, leaves the number as it was.
+  useEffect(() => { if (isAdmin && listed.current) setOpenFailures(reports.filter(report => report.status === "new" && isFailureLogTitle(report.title)).length); }, [isAdmin, reports]);
   const visible = useMemo(() => filterFeedbackReports(reports, filters), [reports, filters]);
   const owners = useMemo(() => [...new Map(reports.map(report => [report.reporterId ?? `deleted:${report.reporterUsername}`, report.reporterName])).entries()].sort((a, b) => a[1].localeCompare(b[1], "zh-Hant")), [reports]);
   const selected = reports.find(report => report.id === selectedId);
@@ -174,7 +187,7 @@ export function ComparisonFeedback({ tab: currentTab, projectName, revisionA, re
     if ((title.trim() || description.trim() || attachments.length || reviewDirty.current) && !window.confirm("還有未送出的回報或未儲存的處理備註。要放棄並關閉嗎？")) return;
     setOpen(false); setPreview(null); resetDraft();
   };
-  const hasFilters = Boolean(filters.query.trim() || filters.status !== "all" || filters.owner || filters.category !== "all");
+  const hasFilters = Boolean(filters.query.trim() || filters.status !== "all" || filters.owner || filters.category !== "all" || filters.source !== "all");
   const changePanel = (value: string) => {
     if (busy || adding) return;
     if (reviewDirty.current && !window.confirm("處理備註尚未儲存。要放棄並切換嗎？")) return;
@@ -186,9 +199,9 @@ export function ComparisonFeedback({ tab: currentTab, projectName, revisionA, re
     reviewDirty.current = false; setPreview(null); setSelectedId(id);
   };
   return <>
-    <Button variant="outline" className="comparison-feedback-trigger" disabled={!canSubmit || capturing} title={!canSubmit ? "需要安全登入才能送出回報" : "附上截圖與問題說明"} onClick={() => { setPanel(isAdmin ? "reports" : "new"); setError(""); setOpen(true); }}><MessageSquarePlus data-icon="inline-start" />意見收集</Button>
+    <Button variant="outline" className="comparison-feedback-trigger" disabled={!canSubmit || capturing} title={!canSubmit ? "需要安全登入才能送出回報" : openFailures ? `有 ${openFailures} 筆比對失敗紀錄還沒處理；點開到「回報管理」查看` : isAdmin ? "查看大家的回報與自動記下的比對失敗紀錄" : "附上截圖與問題說明；比對失敗時系統也會自動記一筆"} onClick={() => { setPanel(isAdmin ? "reports" : "new"); setError(""); setOpen(true); }}><MessageSquarePlus data-icon="inline-start" />意見收集{openFailures > 0 && <Badge variant="destructive" className="comparison-feedback-count" aria-label={`${openFailures} 筆失敗紀錄未處理`}>{openFailures}</Badge>}</Button>
     <Dialog open={open && !capturing} onOpenChange={close}><DialogContent className="comparison-feedback-dialog" hideCloseButton={busy || adding} onInteractOutside={event => { if (busy || adding) event.preventDefault(); }} onEscapeKeyDown={event => { if (busy || adding) event.preventDefault(); }}>
-      <DialogHeader><DialogTitle>AutoCheck 意見收集</DialogTitle><DialogDescription>附上截圖與問題說明，管理員可集中查看並匯出整理。</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>AutoCheck 意見收集</DialogTitle><DialogDescription>附上截圖與問題說明，管理員可集中查看並匯出整理。比對失敗時，系統也會自動在這裡記一筆「失敗紀錄」。</DialogDescription></DialogHeader>
       {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
       {message && <p role="status" aria-live="polite">{message}</p>}
       <Tabs className="feedback-tabs" value={panel} onValueChange={changePanel}><TabsList><TabsTrigger value="new" disabled={busy || adding}>新增回報</TabsTrigger><TabsTrigger value="reports" disabled={busy || adding}>{isAdmin ? "回報管理" : "我的回報"}</TabsTrigger></TabsList>
@@ -208,8 +221,9 @@ export function ComparisonFeedback({ tab: currentTab, projectName, revisionA, re
           <div className="feedback-filterbar"><Input aria-label="搜尋回報" placeholder="搜尋標題、說明或回報者" value={filters.query} onChange={event => setFilter("query", event.target.value)} /><Select value={filters.status} onValueChange={value => setFilter("status", value as typeof filters.status)}><SelectTrigger aria-label="回報狀態"><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="all">全部狀態</SelectItem>{Object.entries(FEEDBACK_STATUSES).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectGroup></SelectContent></Select>
             {isAdmin && <Select value={filters.owner || "all"} onValueChange={value => setFilter("owner", value === "all" ? "" : value)}><SelectTrigger aria-label="回報者"><SelectValue placeholder="全部回報者" /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="all">全部回報者</SelectItem>{owners.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectGroup></SelectContent></Select>}
             <Select value={filters.category} onValueChange={value => setFilter("category", value as typeof filters.category)}><SelectTrigger aria-label="回報分類"><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="all">全部分類</SelectItem>{Object.entries(FEEDBACK_CATEGORIES).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectGroup></SelectContent></Select>
+            <Select value={filters.source} onValueChange={value => setFilter("source", value as typeof filters.source)}><SelectTrigger aria-label="回報來源" title="只看使用者自己寫的回報，或只看比對失敗時系統自動記下的紀錄"><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="all">全部來源</SelectItem>{Object.entries(FEEDBACK_SOURCES).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectGroup></SelectContent></Select>
           </div>
-          {hasFilters && <div className="feedback-filter-chips" aria-label="目前回報篩選條件">{filters.query.trim() && <Button variant="secondary" size="sm" aria-label="清除回報搜尋" onClick={() => setFilter("query", "")}>搜尋：{filters.query}<X /></Button>}{filters.status !== "all" && <Button variant="secondary" size="sm" aria-label="清除回報狀態" onClick={() => setFilter("status", "all")}>狀態：{FEEDBACK_STATUSES[filters.status]}<X /></Button>}{filters.owner && <Button variant="secondary" size="sm" aria-label="清除回報者" onClick={() => setFilter("owner", "")}>回報者：{owners.find(([id]) => id === filters.owner)?.[1] ?? "已移除的帳號"}<X /></Button>}{filters.category !== "all" && <Button variant="secondary" size="sm" aria-label="清除回報分類" onClick={() => setFilter("category", "all")}>分類：{FEEDBACK_CATEGORIES[filters.category]}<X /></Button>}<Button variant="ghost" size="sm" onClick={clear}>全部清除</Button></div>}
+          {hasFilters && <div className="feedback-filter-chips" aria-label="目前回報篩選條件">{filters.query.trim() && <Button variant="secondary" size="sm" aria-label="清除回報搜尋" onClick={() => setFilter("query", "")}>搜尋：{filters.query}<X /></Button>}{filters.status !== "all" && <Button variant="secondary" size="sm" aria-label="清除回報狀態" onClick={() => setFilter("status", "all")}>狀態：{FEEDBACK_STATUSES[filters.status]}<X /></Button>}{filters.owner && <Button variant="secondary" size="sm" aria-label="清除回報者" onClick={() => setFilter("owner", "")}>回報者：{owners.find(([id]) => id === filters.owner)?.[1] ?? "已移除的帳號"}<X /></Button>}{filters.category !== "all" && <Button variant="secondary" size="sm" aria-label="清除回報分類" onClick={() => setFilter("category", "all")}>分類：{FEEDBACK_CATEGORIES[filters.category]}<X /></Button>}{filters.source !== "all" && <Button variant="secondary" size="sm" aria-label="清除回報來源" onClick={() => setFilter("source", "all")}>來源：{FEEDBACK_SOURCES[filters.source]}<X /></Button>}<Button variant="ghost" size="sm" onClick={clear}>全部清除</Button></div>}
           <div className="feedback-table-wrap"><table className="feedback-table"><thead><tr><th>問題</th><th>狀態</th><th>分類</th><th>回報者</th><th>頁籤</th><th>截圖</th><th>回報時間</th></tr></thead><tbody>{loading ? <tr><td colSpan={7} role="status">正在載入回報…</td></tr> : visible.length ? visible.map(report => <tr key={report.id} aria-selected={selectedId === report.id}><td><button type="button" onClick={() => selectReport(report.id)}><strong>{report.title}</strong><small>{report.projectName || report.id.slice(0, 8)}</small></button></td><td><Badge variant="secondary">{FEEDBACK_STATUSES[report.status]}</Badge></td><td>{FEEDBACK_CATEGORIES[report.category]}</td><td>{report.reporterName}</td><td>{FEEDBACK_TABS[report.tab]}</td><td>{report.screenshots.length} 張</td><td>{feedbackDate(report.submittedAt ?? report.createdAt)}</td></tr>) : <tr><td colSpan={7}>{hasFilters ? "目前篩選條件沒有符合的回報" : isAdmin ? "尚未收到回報" : "尚未送出回報"}</td></tr>}</tbody></table></div>
           {selected && <ReportDetails key={selected.id} report={selected} isAdmin={isAdmin} busy={busy} download={download} preview={setPreview} review={review} dirty={setReviewDirty} />}
         </TabsContent>

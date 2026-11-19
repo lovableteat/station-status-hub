@@ -29,6 +29,10 @@ import { listSessions, saveSession, readLibrary, saveLibrary } from "./storage";
 import { useComparisonFilters } from "./useComparisonFilters";
 import { ComparisonFeedback } from "./feedback/ComparisonFeedback";
 import { ComparisonGuide } from "./ComparisonGuide";
+import { ComparisonFailureNotice, type ComparisonFailureState } from "./ComparisonFailureNotice";
+import { buildFailureLog, cleanLogText, clipLogText, filesNamedIn, previewInputFile, previewSheetRows, settlePreviews, shouldRecordFailure, summarizeEngineError, type InputFilePreview } from "./failureLog";
+import { flushFailureQueue, queueFailureRecord, sendFailureRecord, type FailureFlushResult, type FailureRecord } from "./failureLogStore";
+import { createSupabaseFeedbackAdapter } from "./feedback/supabaseAdapter";
 import { DATASHEET_BATCH_LIMIT, DATASHEET_COUNT_LIMIT, mergeDatasheetFiles } from "./datasheetSelection";
 import type { Artifact, ComparisonResult, ComparisonSession, InputFile, ReviewReply } from "./types";
 import "./comparison.css";
@@ -40,6 +44,12 @@ type DiagramSource = { accountId: string; sessionId: string; kind: "power" | "i2
 type OptionalKey = "config" | "railMap" | "railDomain" | "i2cDeclared";
 const optionalInputs: Array<{ key: OptionalKey; label: string; accept: string }> = [{ key: "config", label: "規則設定 YAML", accept: ".yaml,.yml" }, { key: "railMap", label: "Net 電壓對照 CSV", accept: ".csv" }, { key: "railDomain", label: "電源域 CSV", accept: ".csv" }, { key: "i2cDeclared", label: "I²C Block Diagram 對照 CSV", accept: ".csv" }];
 const blankRevision = (): RevisionInput => ({ files: [], selected: {} });
+/** This computer's storage, or null where the browser blocks it. */
+const localStore = (): Storage | null => { try { return window.localStorage; } catch { return null; } };
+/** A workbook larger than this is recorded without its first rows: reading it happens on the page itself. */
+const FAILURE_SHEET_LIMIT = 8 * 1024 * 1024;
+/** Looking at the failed file may not hold up the notice: after this long the record goes out without the file's first lines. */
+const FAILURE_PREVIEW_MS = 5000;
 
 // Optional inputs use the same picker language as the A/B panels instead of a bare native file control.
 function OptionalFileField({ id, label, accept, file, disabled, onChange }: { id: string; label: string; accept: string; file: File | undefined; disabled: boolean; onChange: (file: File | undefined) => void }) {
@@ -58,11 +68,12 @@ function OptionalFileField({ id, label, accept, file, disabled, onChange }: { id
 export default function ComparisonWorkspace() {
   const compact = useIsCompactLayout();
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
-  const { user } = useUser();
-  const { canEditModule } = usePermissions();
+  const { user, sessionMode } = useUser();
+  const { canEditModule, canViewModule } = usePermissions();
   const canEdit = canEditModule("ai-chat");
   const accountId = user?.userId ?? "";
   const scope = useWorkspaceMutationScope(accountId || null, canEdit);
+  const canRecordFailures = sessionMode === "authenticated" && Boolean(accountId) && canViewModule("ai-chat");
   const { filters, update, clear } = useComparisonFilters();
   const [a, setA] = useState<RevisionInput>(blankRevision);
   const [b, setB] = useState<RevisionInput>(blankRevision);
@@ -89,6 +100,16 @@ export default function ComparisonWorkspace() {
   const [diagramSource, setDiagramSource] = useState<DiagramSource | null>(null);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
+  // 失敗紀錄: a failed job is explained on the page and recorded in the backend (意見收集), so an administrator can
+  // see every failure without asking the user for the log.
+  const [failure, setFailure] = useState<ComparisonFailureState | null>(null);
+  const jobFiles = useRef<Array<{ side: string; path: string; size: number; bytes?: ArrayBuffer }>>([]);
+  // "input" while the page is still checking what was picked: those messages are prompts, not failures.
+  const jobStage = useRef<"input" | "work">("work");
+  const failureSink = useMemo(() => createSupabaseFeedbackAdapter(), []);
+  const failureFlush = useRef<Promise<unknown>>(Promise.resolve());
+  // What became of the records of this page load: a record can be sent by a flush that was already under way.
+  const failureOutcome = useRef({ sent: new Set<string>(), dropped: new Map<string, string>() });
   const [notice, setNotice] = useState<{ message: string; tone: "info" | "success"; shownInToast?: boolean } | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [engine, setEngine] = useState<EngineSettings>(() => readEngineSettings());
@@ -103,13 +124,13 @@ export default function ComparisonWorkspace() {
   // Switching where the engine runs replaces the runtime; the page code above it is the same for both.
   const changeEngine = (next: EngineSettings) => {
     if (busyRef.current) return;
-    runtimeRef.current.cancel(); runtimeRef.current = createRuntime(next); writeEngineSettings(next); setEngine(next); setError("");
+    runtimeRef.current.cancel(); runtimeRef.current = createRuntime(next); writeEngineSettings(next); setEngine(next); setError(""); setFailure(null);
     setNotice({ tone: "info", message: next.mode === "server" ? `之後的比對會送到 ${engineHost(next.url)} 處理；結果仍只存在這台電腦的瀏覽器` : "之後的比對在這台電腦的瀏覽器處理" });
   };
 
   useEffect(() => {
     const currentEpoch = ++epoch.current;
-    runtimeRef.current.cancel(); busyRef.current = false; setBusy(false); setProgress(""); setError(""); setNotice(null);
+    runtimeRef.current.cancel(); busyRef.current = false; setBusy(false); setProgress(""); setError(""); setFailure(null); setNotice(null);
     setCurrent(null); setSessions([]); setLibraryEntries([]); setLibraryYaml("devices: []\n"); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setProjectName(""); setRestoring(true); setRestoredAccountId(accountId); setDiagramSource(null);
     setMode("compare"); setSingleInput(blankRevision()); setSingleLabel("BOARD"); setChartSide("b");
     if (!accountId) { setRestoring(false); return; }
@@ -128,13 +149,87 @@ export default function ComparisonWorkspace() {
     return () => Object.values(next).forEach(url => URL.revokeObjectURL(url));
   }, [allArtifacts]);
 
-  const runJob = async <T,>(work: () => Promise<T>): Promise<T | undefined> => {
+  // Records waiting on this computer go out one after the other, never two sends at once.
+  const flushFailures = useCallback((account: string): Promise<FailureFlushResult | null> => {
+    const next = failureFlush.current.then(async () => {
+      const store = localStore();
+      if (!store) return null;
+      const result = await flushFailureQueue(failureSink, store, account);
+      result.sent.forEach(id => failureOutcome.current.sent.add(id));
+      for (const item of result.dropped) {
+        failureOutcome.current.dropped.set(item.id, item.reason);
+        // Nobody may be looking at the failure this belonged to any more; the reason at least stays in the console.
+        console.warn(`比對失敗紀錄 ${item.id.slice(0, 8)} 沒有送進後台，已放棄：${item.reason}`);
+      }
+      return result;
+    }).catch(() => null);
+    failureFlush.current = next;
+    return next;
+  }, [failureSink]);
+  useEffect(() => {
+    if (!canRecordFailures) return;
+    const send = () => void flushFailures(accountId);
+    send();
+    window.addEventListener("online", send);
+    return () => window.removeEventListener("online", send);
+  }, [accountId, canRecordFailures, flushFailures]);
+  const reportFailure = async (job: string, message: string, currentEpoch: number) => {
+    const files = jobFiles.current, reason = summarizeEngineError(message).reason, bom = /\bBOM\b/i.test(reason);
+    const found: InputFilePreview[] = [];
+    const look = async () => {
+      for (const file of filesNamedIn(reason, files)) {
+        if (!file.bytes) continue;
+        try {
+          let preview = previewInputFile(file.bytes, file, bom);
+          if (preview.spreadsheet && file.size <= FAILURE_SHEET_LIMIT) {
+            const XLSX = await import("xlsx");
+            // Only the first sheet and its first rows: the engine reads the first sheet, and the header is at its top.
+            const book = XLSX.read(file.bytes, { type: "array", sheets: 0, sheetRows: 80 });
+            preview = previewSheetRows(XLSX.utils.sheet_to_json<unknown[]>(book.Sheets[book.SheetNames[0]], { header: 1, raw: false, defval: "" }), preview, bom);
+          }
+          found.push(preview);
+        } catch { /* The record is still worth having without the file's first lines. */ }
+      }
+    };
+    await Promise.race([look(), new Promise<void>(resolve => setTimeout(resolve, FAILURE_PREVIEW_MS))]);
+    if (currentEpoch !== epoch.current) return;
+    const previews = settlePreviews([...found]);
+    const single = mode === "single", text = (value: string, limit: number) => clipLogText(cleanLogText(value).trim(), limit, "");
+    const log = buildFailureLog({ job, message, at: new Date(), engine: engine.mode === "server" ? `伺服器 ${engineHost(engine.url)}` : "這台電腦的瀏覽器", projectName,
+      labels: single ? `單板 ${singleLabel.trim()}` : `A=${aLabel.trim()} → B=${bLabel.trim()}`, files: files.map(({ side, path, size }) => ({ side, path, size })), previews });
+    const id = crypto.randomUUID();
+    if (!canRecordFailures) { setFailure({ id, log, record: "off" }); return; }
+    setFailure({ id, log, record: "sending" });
+    const record: FailureRecord = { id, reporterId: accountId, title: log.title, description: log.description, tab: filters.tab === "diagram" ? "compare" : filters.tab, projectName: text(projectName, 120),
+      context: { browser: text(navigator.userAgent, 400), width: window.innerWidth, height: window.innerHeight, revisionA: text(single ? "" : aLabel, 80), revisionB: text(single ? singleLabel : bLabel, 80) }, at: Date.now(), tries: 0 };
+    const settle = (state: ComparisonFailureState["record"], recordNote?: string) => setFailure(current => current?.id === id ? { ...current, record: state, recordNote } : current);
+    const store = localStore();
+    // Kept on this computer first, so a closed tab or a dropped connection does not lose it.
+    if (store && queueFailureRecord(store, record)) void flushFailures(accountId).then(result => {
+      // Asked of everything this page load has sent: a flush that was already running may have taken this record along.
+      const { sent, dropped } = failureOutcome.current;
+      if (sent.has(id)) settle("saved");
+      else if (dropped.has(id)) settle("rejected", dropped.get(id));
+      else settle("queued", result?.reasons[id]);
+    });
+    else void sendFailureRecord(failureSink, record).then(() => settle("saved"), caught => settle("rejected", caught instanceof Error ? caught.message : String(caught)));
+  };
+  const stillCheckingInput = () => jobStage.current === "input";
+  /** `job` names what is being done (「比對」…); a job without a name only records an engine crash, not a message meant for the user. */
+  const runJob = async <T,>(work: () => Promise<T>, job = ""): Promise<T | undefined> => {
     if (busyRef.current) return undefined;
     const currentEpoch = epoch.current;
-    busyRef.current = true; setBusy(true); setError(""); setNotice(null); setProgress("準備處理資料…");
+    busyRef.current = true; setBusy(true); setError(""); setFailure(null); setNotice(null); setProgress("準備處理資料…");
+    jobFiles.current = []; jobStage.current = "work";
     try { const result = await work(); return currentEpoch === epoch.current ? result : undefined; }
-    catch (error) { if (currentEpoch === epoch.current) setError(error instanceof Error ? error.message : String(error)); return undefined; }
-    finally { if (currentEpoch === epoch.current) { busyRef.current = false; setBusy(false); setProgress(""); } }
+    catch (error) {
+      if (currentEpoch !== epoch.current) return undefined;
+      const message = error instanceof Error ? error.message : String(error);
+      if (stillCheckingInput() || !shouldRecordFailure(message) || !(job || summarizeEngineError(message).traceback)) setError(message);
+      else { setProgress("正在整理失敗紀錄…"); await reportFailure(job || "位址庫", message, currentEpoch).catch(() => { if (currentEpoch === epoch.current) setError(message); }); }
+      return undefined;
+    }
+    finally { jobFiles.current = []; if (currentEpoch === epoch.current) { busyRef.current = false; setBusy(false); setProgress(""); } }
   };
   const showProgress = (message: string) => setProgress(message);
   const persist = async (next: ComparisonSession, token: ReturnType<typeof scope.capture>) => {
@@ -188,6 +283,7 @@ export default function ComparisonWorkspace() {
   };
   const start = async () => {
     await runJob(async () => {
+      jobStage.current = "input";
       const token = scope.capture();
       const name = projectName.trim();
       if (!name || name.length > 120) throw new Error("請填寫比對名稱（最多 120 字），用來保存這個板件的結果與回覆");
@@ -203,11 +299,15 @@ export default function ComparisonWorkspace() {
       const runFiles = [...(mode === "single" ? [] : selectedRevisionFiles(inspectRevision(a.files), a.selected)), ...selectedRevisionFiles(inspectRevision(activeB.files), activeB.selected, required), ...Object.values(optional).filter((file): file is File => Boolean(file)), ...(declaredFile && !optional.i2cDeclared ? [declaredFile] : []), ...datasheets];
       if (runFiles.length > DATASHEET_COUNT_LIMIT || runFiles.reduce((sum, file) => sum + file.size, 0) > DATASHEET_BATCH_LIMIT) throw new Error("本次 A、B、選用工具與 Datasheet 合計不可超過 1000 份／128 MiB；大量 Datasheet 可到位址庫分批逐份處理");
       const [aFiles, bFiles] = await Promise.all([mode === "single" ? Promise.resolve([]) : readRevision(inspectRevision(a.files), a.selected), readRevision(inspectRevision(activeB.files), activeB.selected, required)]);
+      jobFiles.current = [...aFiles.map(file => ({ side: "A", path: file.path, size: file.bytes.byteLength, bytes: file.bytes })), ...bFiles.map(file => ({ side: mode === "single" ? "單板" : "B", path: file.path, size: file.bytes.byteLength, bytes: file.bytes })),
+        ...Object.values(optional).filter((file): file is File => Boolean(file)).map(file => ({ side: "選用", path: file.name, size: file.size })), ...datasheets.map(file => ({ side: "Datasheet", path: filePath(file), size: file.size }))];
       const options: Record<string, unknown> = { library: libraryYaml || "devices: []\n" };
       for (const [key, file] of Object.entries(optional)) if (file) options[key] = await readOption(file);
       if (declaredFile && !optional.i2cDeclared) options.i2cDeclared = await readOption(declaredFile);
       options.datasheets = await Promise.all(datasheets.map(async file => ({ path: filePath(file), bytes: await file.arrayBuffer() })));
       scope.assertCurrent(token);
+      // From here on a message is a failure of the job, not a prompt about what was picked.
+      jobStage.current = "work";
       const result = await runtimeRef.current.request<ComparisonResult>(mode === "single" ? "single" : "run", { a: aFiles, b: bFiles, aLabel: mode === "single" ? singleLabel.trim() : aLabel.trim(), bLabel: mode === "single" ? singleLabel.trim() : bLabel.trim(), options }, showProgress);
       scope.assertCurrent(token);
       const id = JSON.stringify([name, result.meta.a.label, result.meta.b.label]);
@@ -224,7 +324,7 @@ export default function ComparisonWorkspace() {
       }
       catch (error) { scope.assertCurrent(token); throw new Error(`結果已產生，但本機儲存失敗；請立即匯出備份。${error instanceof Error ? error.message : String(error)}`); }
       return next;
-    });
+    }, mode === "single" ? "單板畫圖" : "比對");
   };
   const mutateCurrent = async (change: (current: ComparisonSession) => ComparisonSession) => {
     const token = scope.capture();
@@ -259,11 +359,12 @@ export default function ComparisonWorkspace() {
       downloadLocal(await exportBackup(updated), `${current.projectName}_${current.result.meta.a.label}_vs_${current.result.meta.b.label}.autocheck.zip`, "application/zip");
       setNotice({ tone: "success", message: "備份已匯出，包含比對結果、審查回覆與原始報表" });
       return true;
-    });
+    }, "匯出備份");
   };
   const chooseSession = (id: string) => { const current = sessions.find(item => item.id === id); if (!current) return; setCurrent(current); setMode(current.result.mode === "single" ? "single" : "compare"); setSingleLabel(current.result.meta.b.label); setChartSide("b"); setProjectName(current.projectName); setALabel(current.result.meta.a.label); setBLabel(current.result.meta.b.label); setLibraryEntries(current.result.library); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setNotice(null); };
   const importSession = async (file: File) => {
     await runJob(async () => {
+      jobFiles.current = [{ side: "備份", path: file.name, size: file.size }];
       const token = scope.capture(); const restored = await importBackup(file); scope.assertCurrent(token);
       if (sessions.some(item => item.id === restored.id)) {
         const suffix = `（匯入 ${Date.now()}）`;
@@ -271,13 +372,13 @@ export default function ComparisonWorkspace() {
         restored.id = JSON.stringify([restored.projectName, restored.result.meta.a.label, restored.result.meta.b.label]);
       }
       await persist(restored, token); setMode(restored.result.mode === "single" ? "single" : "compare"); setSingleLabel(restored.result.meta.b.label); setChartSide("b"); setProjectName(restored.projectName); setALabel(restored.result.meta.a.label); setBLabel(restored.result.meta.b.label); setLibraryEntries(restored.result.library); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setNotice({ tone: "success", message: "備份已匯入；同名比對保留為另一份，原資料未被覆寫" }); return true;
-    });
+    }, "匯入備份");
   };
   const saveUserLibrary = async (yaml: string) => { const token = scope.capture(); await saveLibrary(token.accountId, yaml); scope.assertCurrent(token); setLibraryYaml(yaml); };
   const counts = useMemo(() => session ? { errors: session.result.rows.filter(row => row.severity === "ERROR").length, warnings: session.result.rows.filter(row => row.severity === "WARN").length, answered: session.result.rows.filter(row => session.replies[row.key]?.disp).length, newErrors: session.result.findings.filter(row => row.severity === "ERROR" && row.status === "NEW").length, newWarnings: session.result.findings.filter(row => row.severity === "WARN" && row.status === "NEW").length, changes: session.result.findings.filter(row => row.status === "CHANGE").length, unresolved: session.result.capRows.filter(row => row.verdict === "UNRESOLVED").length } : null, [session]);
   useEffect(() => { if (mode === "single" && filters.tab === "compare") document.querySelector<HTMLDetailsElement>(".comparison-source-settings")?.setAttribute("open", ""); }, [mode, filters.tab]);
   const schematic = session?.result.artifacts.find(artifact => artifact.key === "schematic");
-  const downloadArtifact = (artifact: Artifact) => { if (artifact.key !== "xlsx") downloadLocal(artifact.bytes, artifact.name, artifact.mime); else if (session) void runJob(async () => { const updated = await tracker(session); downloadLocal(updated.bytes, updated.name, updated.mime); return true; }); };
+  const downloadArtifact = (artifact: Artifact) => { if (artifact.key !== "xlsx") downloadLocal(artifact.bytes, artifact.name, artifact.mime); else if (session) void runJob(async () => { const updated = await tracker(session); downloadLocal(updated.bytes, updated.name, updated.mime); return true; }, "下載 Excel 追蹤表"); };
   const editorSession = restoredAccountId === accountId ? session : null;
   const editorSource = diagramSource?.accountId === accountId && diagramSource.sessionId === editorSession?.id ? diagramSource : undefined;
   const editorInitialSource = useMemo(() => editorSource ? { kind: editorSource.kind, revision: editorSource.revision } : undefined, [editorSource]);
@@ -300,13 +401,14 @@ export default function ComparisonWorkspace() {
 
   return <div ref={workspace} className="comparison-workspace" data-comparison-workspace="true" onDragOver={guardFileDrag} onDrop={guardFileDrag}>
     <div className="comparison-topbar">
-    <section className="comparison-page-header"><MaintenancePageHeader title="AutoCheck" description="線路改版比對與審查追蹤" icon={GitCompareArrows} wrapActionsOnMobile actions={<>{compact ? <Button variant="outline" size="icon" aria-label="AutoCheck 工具" aria-expanded={mobileToolsOpen} data-testid="comparison-mobile-tools-trigger" onClick={() => setMobileToolsOpen(true)}><MoreHorizontal /></Button> : <><ComparisonGuide /><ComparisonFeedback tab={filters.tab === "diagram" ? "compare" : filters.tab} projectName={feedbackProjectName} revisionA={aLabel} revisionB={bLabel} /><Button variant="ghost" title="匯出備份：下載這份比對的 .autocheck.zip" disabled={!session || busy} onClick={() => void exportSession()}><Download />匯出備份</Button><Button variant="ghost" title="匯入備份：讀回之前匯出的 .autocheck.zip" disabled={!canEdit || busy} onClick={() => importInput.current?.click()}><Upload />匯入備份</Button>{canEdit ? <EngineSettingsControl settings={engine} onChange={changeEngine} disabled={busy} /> : <Badge variant="outline">唯讀</Badge>}</>}<Button variant="outline" title="清空目前的輸入，開始另一份比對" disabled={!canEdit || busy} onClick={() => { setCurrent(null); setMode("compare"); setSingleInput(blankRevision()); setProjectName(""); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setNotice(null); update("tab", "compare"); }}><Plus />新比對</Button></>} /></section>
+    <section className="comparison-page-header"><MaintenancePageHeader title="AutoCheck" description="線路改版比對與審查追蹤" icon={GitCompareArrows} wrapActionsOnMobile actions={<>{compact ? <Button variant="outline" size="icon" aria-label="AutoCheck 工具" aria-expanded={mobileToolsOpen} data-testid="comparison-mobile-tools-trigger" onClick={() => setMobileToolsOpen(true)}><MoreHorizontal /></Button> : <><ComparisonGuide /><ComparisonFeedback tab={filters.tab === "diagram" ? "compare" : filters.tab} projectName={feedbackProjectName} revisionA={aLabel} revisionB={bLabel} /><Button variant="ghost" title="匯出備份：下載這份比對的 .autocheck.zip" disabled={!session || busy} onClick={() => void exportSession()}><Download />匯出備份</Button><Button variant="ghost" title="匯入備份：讀回之前匯出的 .autocheck.zip" disabled={!canEdit || busy} onClick={() => importInput.current?.click()}><Upload />匯入備份</Button>{canEdit ? <EngineSettingsControl settings={engine} onChange={changeEngine} disabled={busy} /> : <Badge variant="outline">唯讀</Badge>}</>}<Button variant="outline" title="清空目前的輸入，開始另一份比對" disabled={!canEdit || busy} onClick={() => { setCurrent(null); setMode("compare"); setSingleInput(blankRevision()); setProjectName(""); setA(blankRevision()); setB(blankRevision()); setOptional({}); setDatasheets([]); setNotice(null); setFailure(null); update("tab", "compare"); }}><Plus />新比對</Button></>} /></section>
     <div className="comparison-workspace-nav"><nav aria-label="比對系統頁面">{Object.entries(tabLabels).map(([key, label]) => <Button key={key} variant={filters.tab === key ? "secondary" : "ghost"} aria-current={filters.tab === key ? "page" : undefined} onClick={() => { update("tab", key as keyof typeof tabLabels); if (key === "review" && session && session.result.mode !== "single") requestAnimationFrame(() => workspace.current?.querySelector(".comparison-review-anchor:not([hidden])")?.scrollIntoView({ block: "start" })); }}>{label}</Button>)}</nav></div>
     </div>
     {compact && <MobileToolsSheet testId="comparison-mobile-tools" open={mobileToolsOpen} onOpenChange={setMobileToolsOpen} title="AutoCheck 工具" description="說明、意見回報、備份與比對處理位置" sections={[{ key: "tools", content: <div className="comparison-mobile-tools"><div><ComparisonGuide /><ComparisonFeedback tab={filters.tab === "diagram" ? "compare" : filters.tab} projectName={feedbackProjectName} revisionA={aLabel} revisionB={bLabel} /><Button variant="ghost" disabled={!session || busy} onClick={() => void exportSession()}><Download />匯出備份</Button><Button variant="ghost" disabled={!canEdit || busy} onClick={() => importInput.current?.click()}><Upload />匯入備份</Button><EngineSettingsControl settings={engine} onChange={changeEngine} disabled={busy || !canEdit} /></div></div> }]} />}
     <input ref={importInput} type="file" accept=".zip" className="sr-only" aria-label="匯入 AutoCheck 備份" onChange={event => { const file = event.target.files?.[0]; if (file) void importSession(file); event.target.value = ""; }} />
     {!!sessions.length && <div className="comparison-session-picker"><Label>已儲存的比對</Label><Select value={session?.id ?? "new"} disabled={busy} onValueChange={chooseSession}><SelectTrigger aria-label="已儲存的比對"><SelectValue placeholder="選擇比對" /></SelectTrigger><SelectContent>{!session && <SelectItem value="new" disabled>新比對</SelectItem>}{sessions.map(item => <SelectItem key={item.id} value={item.id}>{item.projectName} · {item.result.mode === "single" ? `單板 ${item.result.meta.b.label}` : `${item.result.meta.a.label} → ${item.result.meta.b.label}`}</SelectItem>)}</SelectContent></Select><span>儲存於目前帳號與瀏覽器</span></div>}
     {error && <div className="comparison-alert" role="alert"><TriangleAlert /><p>{error}</p><Button variant="ghost" size="icon" aria-label="關閉錯誤訊息" onClick={() => setError("")}>×</Button></div>}
+    {failure && <ComparisonFailureNotice failure={failure} onClose={() => setFailure(null)} />}
     {notice && !(compact && notice.shownInToast) && <div className="comparison-notice" data-tone={notice.tone} role="status">{notice.tone === "success" ? <CheckCircle2 aria-hidden="true" /> : <Info aria-hidden="true" />}<p>{notice.message}</p></div>}
     {busy && <div className="comparison-progress"><div role="status"><span className="comparison-progress-indicator" aria-hidden="true" /><p>{progress || "正在處理…"}</p></div><Button variant="outline" onClick={() => runtimeRef.current.cancel()}><Square aria-hidden="true" />取消</Button></div>}
     {restoring ? <div className="comparison-loading" role="status"><span className="comparison-progress-indicator" aria-hidden="true" />正在讀取本機比對紀錄…</div> : <>
@@ -321,7 +423,9 @@ export default function ComparisonWorkspace() {
         {identical && <p className="comparison-input-warning" role="status"><TriangleAlert />A、B 的 Netlist 三份檔案看起來是同一份（檔名、大小、修改時間都相同），比對不會有差異。請確認沒有選到同一個資料夾。</p>}
         {mode === "compare" ? <div className="comparison-revision-grid"><ComparisonInputs side="A" step={2} label={aLabel} onLabel={setALabel} value={a} onChange={setA} disabled={!canEdit || busy} /><ComparisonInputs side="B" step={3} label={bLabel} onLabel={setBLabel} value={b} onChange={setB} disabled={!canEdit || busy} /></div> : <><div className="comparison-single-sources"><span>可另選資料夾，或沿用本次已選來源：</span><Button variant="outline" disabled={!canEdit || busy || !a.files.length} onClick={() => { setSingleInput(a); setSingleLabel(aLabel); }}>沿用 A · {aLabel}</Button><Button variant="outline" disabled={!canEdit || busy || !b.files.length} onClick={() => { setSingleInput(b); setSingleLabel(bLabel); }}>沿用 B · {bLabel}</Button></div><ComparisonInputs side="B" step={2} label={singleLabel} onLabel={setSingleLabel} value={singleInput} onChange={setSingleInput} disabled={!canEdit || busy} single /></>}
         {compact && runActions}
-        <details className="comparison-optional"><summary>選用工具：IC Datasheet 與進階設定<ChevronDown /></summary><div className="comparison-optional-grid">{optionalInputs.map(option => <OptionalFileField key={option.key} id={`comparison-option-${option.key}`} label={option.label} accept={option.accept} file={optional[option.key]} disabled={!canEdit || busy} onChange={file => setOptional(current => ({ ...current, [option.key]: file }))} />)}<div className="comparison-datasheets-run"><Label>IC Datasheet 規格書 PDF（選用）</Label><DatasheetFiles value={datasheets} onChange={setDatasheets} disabled={!canEdit || busy} inputPrefix="comparison-run-datasheets" /></div></div><p>已保存的使用者位址庫會自動套用；可在「位址庫」核對與管理。</p></details>
+        {/* Open by default (2026-11-19, the same request as the report list: folded parts are not found). The
+            tools stay optional; the heading folds them away by hand. */}
+        <details open className="comparison-optional"><summary title="這裡的 IC Datasheet 與進階設定都是選用的，不放也能比對；點標題可以收合或再展開">選用工具：IC Datasheet 與進階設定<ChevronDown /></summary><div className="comparison-optional-grid">{optionalInputs.map(option => <OptionalFileField key={option.key} id={`comparison-option-${option.key}`} label={option.label} accept={option.accept} file={optional[option.key]} disabled={!canEdit || busy} onChange={file => setOptional(current => ({ ...current, [option.key]: file }))} />)}<div className="comparison-datasheets-run"><Label>IC Datasheet 規格書 PDF（選用）</Label><DatasheetFiles value={datasheets} onChange={setDatasheets} disabled={!canEdit || busy} inputPrefix="comparison-run-datasheets" /></div></div><p>已保存的使用者位址庫會自動套用；可在「位址庫」核對與管理。</p></details>
         </section>
       </details>}
       {(filters.tab === "power" || filters.tab === "i2c") && <section className="comparison-chart-source"><div><strong>{session?.result.mode === "single" ? `單板：${session.result.meta.b.label}` : "圖表來源"}</strong>{session && session.result.mode !== "single" && <><Button variant={chartSide === "a" ? "secondary" : "outline"} aria-pressed={chartSide === "a"} onClick={() => setChartSide("a")}>A · {session.result.meta.a.label}</Button><Button variant={chartSide === "b" ? "secondary" : "outline"} aria-pressed={chartSide === "b"} onClick={() => setChartSide("b")}>B · {session.result.meta.b.label}</Button></>}</div><Button variant="outline" disabled={!canEdit || busy} onClick={() => { setMode("single"); update("tab", "compare"); document.querySelector<HTMLDetailsElement>(".comparison-source-settings")?.setAttribute("open", ""); }}>只畫單板圖</Button></section>}
@@ -337,7 +441,7 @@ export default function ComparisonWorkspace() {
             tracker and the other reports. It can still be folded by hand; another result, a finished comparison (also one
             that replaces a result of the same name) and coming back to the result pages show it open again. Saving a reply
             does not: the key must not follow savedAt. */}
-        <details key={`reports:${session.id}:${reportRuns}`} open className="comparison-section comparison-reports"><summary title="這次比對產出的報表都在這裡，Excel 追蹤表也在裡面；點標題可以收合或再展開"><FileText />報表與完整資料 · {session.result.artifacts.length} 份</summary><div className="comparison-report-list">{session.result.artifacts.map(artifact => <div key={artifact.key}><div><strong>{artifact.name}</strong><small>{formatBytes(artifact.bytes.byteLength)}</small></div><Button variant="outline" disabled={busy} onClick={() => downloadArtifact(artifact)}><Download />{artifact.key === "xlsx" ? "下載（含回覆）" : "下載"}</Button>{artifact.mime === "application/pdf" && <Button asChild variant="ghost"><a href={urls[artifact.key]} target="_blank" rel="noopener noreferrer">開啟</a></Button>}</div>)}</div>{!!session.result.warnings.length && <details><summary>解析與輸出提示 · {session.result.warnings.length}</summary>{session.result.warnings.map((warning, index) => <p key={index}>{warning}</p>)}</details>}</details>
+        <details key={`reports:${session.id}:${reportRuns}`} open className="comparison-section comparison-reports"><summary title="這次比對產出的報表都在這裡，Excel 追蹤表也在裡面；點標題可以收合或再展開"><FileText />報表與完整資料 · {session.result.artifacts.length} 份</summary><div className="comparison-report-list">{session.result.artifacts.map(artifact => <div key={artifact.key}><div><strong>{artifact.name}</strong><small>{formatBytes(artifact.bytes.byteLength)}</small></div><Button variant="outline" disabled={busy} onClick={() => downloadArtifact(artifact)}><Download />{artifact.key === "xlsx" ? "下載（含回覆）" : "下載"}</Button>{artifact.mime === "application/pdf" && <Button asChild variant="ghost"><a href={urls[artifact.key]} target="_blank" rel="noopener noreferrer">開啟</a></Button>}</div>)}</div>{!!session.result.warnings.length && <details open className="comparison-report-hints"><summary title="引擎略過或沒有完成的部分寫在這裡；點標題可以收合">解析與輸出提示 · {session.result.warnings.length}</summary>{session.result.warnings.map((warning, index) => <p key={index}>{warning}</p>)}</details>}</details>
       </>}
       {!session && filters.tab !== "compare" && filters.tab !== "library" && filters.tab !== "diagram" && <section className="comparison-section comparison-start-empty"><GitCompareArrows /><h2>先建立一份比對</h2><p>選擇 A／B 資料後執行檢查，結果會出現在審查表與圖表中。也可以匯入之前的備份。</p><Button onClick={() => update("tab", "compare")}>前往比對檢查</Button></section>}
       {filters.tab === "library" && <ComparisonLibrary key={accountId} runtime={runtimeRef.current} yaml={libraryYaml} entries={libraryEntries} onEntries={setLibraryEntries} onSave={saveUserLibrary} canEdit={canEdit} signedBy={user?.displayName ?? ""} busy={busy} runJob={runJob} />}

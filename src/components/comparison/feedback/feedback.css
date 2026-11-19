@@ -19,7 +19,10 @@
 .feedback-remote-image > p, .feedback-remote-image > div { padding: 14px; font-size: 13px; }
 .feedback-report-actions, .feedback-section-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .feedback-report-actions > div:last-child { display: flex; flex-wrap: wrap; gap: 8px; }
-.feedback-filterbar { display: grid; grid-template-columns: minmax(210px, 1fr) repeat(3, minmax(130px, 170px)); gap: 8px; margin-bottom: 10px; }
+/* 搜尋 takes what is left; the selects (three for a member, four for an administrator) keep one size and wrap together. */
+.feedback-filterbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.feedback-filterbar > input { flex: 1 1 210px; min-width: 0; }
+.feedback-filterbar > button { flex: 0 1 150px; min-width: 120px; }
 .feedback-filter-chips { margin-bottom: 10px; }
 .feedback-table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid hsl(var(--border)); border-radius: 10px; }
 .feedback-table { width: 100%; min-width: 850px; border-collapse: collapse; font-size: 13px; }
@@ -35,13 +38,17 @@
 .feedback-detail h3 { margin: 0; font-size: 17px; line-height: 1.5; overflow-wrap: anywhere; }
 .feedback-detail p { margin: 0; }
 .feedback-description, .feedback-admin-note p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
+/* 自動失敗紀錄: the lines of a file and of the engine's message keep their columns, so it scrolls sideways inside its own box. */
+.feedback-log { margin: 0; padding: 12px 14px; max-height: 420px; overflow: auto; border: 1px solid hsl(var(--border)); border-radius: 8px; background: hsl(var(--background) / .6); font-family: ui-monospace, SFMono-Regular, Consolas, "Microsoft JhengHei", monospace; font-size: 12px; line-height: 1.65; white-space: pre; tab-size: 4; }
+.feedback-log:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.comparison-feedback-count { margin-left: 6px; min-width: 20px; justify-content: center; padding-inline: 6px; }
 .feedback-environment p { margin-top: 6px; overflow-wrap: anywhere; }
 .workspace-dialog-surface.feedback-preview-dialog { width: min(1200px, calc(100vw - 24px)); max-width: 1200px; max-height: calc(100dvh - 24px); overflow: auto; }
 .feedback-preview-dialog img { display: block; max-width: 100%; height: auto; max-height: 75dvh; object-fit: contain; margin: auto; }
 @media (max-width: 700px) {
   .workspace-dialog-surface.comparison-feedback-dialog { padding: 18px 14px; }
-  .feedback-filterbar { grid-template-columns: 1fr 1fr; }
-  .feedback-filterbar > input { grid-column: 1 / -1; }
+  .feedback-filterbar > input { flex-basis: 100%; }
+  .feedback-filterbar > button { flex: 1 1 calc(50% - 4px); }
   .feedback-image-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .feedback-report-actions > div:last-child { width: 100%; }
   .feedback-report-actions > div:last-child > button { flex: 1 1 auto; }
