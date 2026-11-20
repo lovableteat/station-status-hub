@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`tests/pcb-designer/PROTECTED-READ-BROWSER.md`；程式參考基準：`70d8a496c162f45dbf908539dcc76cca794ed095`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`tests/pcb-designer/PROTECTED-READ-BROWSER.md`；程式參考基準：`e619ce2364ce1076986fc2e3b03097adb2be266f`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Protected legacy PCB and sanitized-profile browser contracts
 
