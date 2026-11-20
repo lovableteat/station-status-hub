@@ -66,11 +66,14 @@ async function readBook(download, dir) {
     const sharedConnector = table.locator('tbody tr', { hasText: 'QA-MPN-7' });
     assert.match(await sharedConnector.innerText(), /2 板/);
     assert.ok((await sharedConnector.innerText()).includes('QA 子板(僅隔離資料) ×2、QA 主板(僅隔離資料) ×1'));
+    // Ref Des: each board names its own positions.
+    assert.equal(await sharedConnector.locator('td.project-parts-refs').innerText(), 'QA 子板(僅隔離資料)：J4；QA 主板(僅隔離資料)：J1');
     assert.equal(await table.locator('tbody tr', { hasText: 'QA-ARCHIVED-ONLY' }).count(), 0, 'nothing from the archived board');
     // The row whose quantity is "-": the total stays a number and says one position wrote none.
     const qtyCell = table.locator('tbody tr', { hasText: 'QA-CONN-88' }).locator('td.project-parts-num');
     assert.equal((await qtyCell.innerText()).replace(/\s+/g, ''), '4+1未填');
-    assert.ok((await qtyCell.locator('.project-parts-qty').getAttribute('title')).includes('沒有算進總用量的位號：\nQA 子板(僅隔離資料)：TEMP-QA-0001'));
+    assert.ok((await qtyCell.locator('.project-parts-qty').getAttribute('title')).includes('沒有算進總用量的位號：\nQA 子板(僅隔離資料)：沒有位號（TEMP-QA-0001）'));
+    assert.equal(await table.locator('tbody tr', { hasText: 'QA-CONN-88' }).locator('td.project-parts-refs').innerText(), 'J30', 'a TEMP number in the 位號 column is no Ref Des');
 
     await view.getByRole('button', { name: /^IC/ }).click();
     await view.getByRole('button', { name: /^CONNECTOR/ }).click();
@@ -87,11 +90,18 @@ async function readBook(download, dir) {
     const pjeBook = await readBook(pjeDownload, dir);
     assert.deepEqual(pjeBook.worksheets.map((sheet) => sheet.name), ['Material list(PCBA)']);
     const sheet = pjeBook.worksheets[0];
-    assert.deepEqual(sheet.getRow(1).values.slice(1), ['Items', 'Vendor', 'PN', '使用在哪個板子', 'Usage']);
+    assert.deepEqual(sheet.getRow(1).values.slice(1), ['Items', 'Vendor', 'PN', '使用在哪個板子', 'Usage', 'Ref Des', '備註']);
     assert.equal(sheet.getRow(1).getCell(1).fill.fgColor.argb, 'FFCAEDFB');
-    assert.equal(sheet.rowCount, 3);
-    assert.deepEqual(sheet.getRow(2).values.slice(1), ['RES 10K 1% 0402 J4', 'QA Vendor B', 'QA-MPN-7', 'QA 子板(僅隔離資料) ×2、QA 主板(僅隔離資料) ×1', 3]);
-    assert.match(await view.getByTestId('project-parts-notice').innerText(), /已下載 PJE 備料表（2 項）/);
+    // One row per board: both ticked parts sit on both boards, so each is two rows next to each other, each with that
+    // board's own quantity (子板 ×2, 主板 ×1).
+    assert.equal(sheet.rowCount, 5);
+    assert.deepEqual(sheet.getRow(2).values.slice(1, 7), ['RES 10K 1% 0402 J4', 'QA Vendor B', 'QA-MPN-7', 'QA 子板(僅隔離資料)', 2, 'J4']);
+    assert.deepEqual(sheet.getRow(3).values.slice(1, 7), ['RES 10K 1% 0402 J4', 'QA Vendor B', 'QA-MPN-7', 'QA 主板(僅隔離資料)', 1, 'J1']);
+    assert.deepEqual(sheet.getRow(4).values.slice(2, 7), ['QA Vendor A', 'QA-MPN-8', 'QA 子板(僅隔離資料)', 2, 'U3']);
+    assert.deepEqual(sheet.getRow(5).values.slice(2, 7), ['QA Vendor A', 'QA-MPN-8', 'QA 主板(僅隔離資料)', 1, 'U1']);
+    assert.ok([2, 3, 4, 5].every((line) => !sheet.getRow(line).getCell(7).value), 'no 備註 when every position wrote its quantity');
+    assert.match(await view.getByTestId('project-parts-notice').innerText(), /已下載 PJE 備料表（2 項料件、每塊板子一列共 4 列）/);
+    if (process.env.PROJECT_PARTS_SHOTS) await page.screenshot({ path: path.join(process.env.PROJECT_PARTS_SHOTS, 'desktop-refdes.png') });
 
     // A search with no match keeps the header and offers 全部清除, which clears every filter.
     await view.getByRole('textbox', { name: '搜尋專案總料表' }).fill('zzz-no-match');
@@ -118,6 +128,17 @@ async function readBook(download, dir) {
     const written = totals.filter(Number.isFinite); // 未填 rows stay last and have no number
     assert.deepEqual(written, [...written].sort((a, b) => b - a), `sorted by quantity: ${JSON.stringify(totals)}`);
     await view.getByRole('button', { name: /^移除篩選：使用在哪個板子/ }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-parts-count]')?.textContent.trim() === '11 / 11 項');
+    // Ref Des has the same column filter: one position finds its part.
+    await table.getByRole('button', { name: '篩選Ref Des', exact: true }).click();
+    await panel.waitFor();
+    await panel.getByRole('button', { name: '全不選' }).click();
+    await panel.getByRole('checkbox', { name: 'J30' }).click();
+    await panel.getByRole('button', { name: '確定' }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid=project-parts-count]')?.textContent.trim() === '1 / 11 項');
+    assert.match(await table.locator('tbody tr').first().innerText(), /QA-CONN-88/);
+    assert.match(await view.getByTestId('project-parts-active-filters').innerText(), /Ref Des：J30/);
+    await view.getByRole('button', { name: /^移除篩選：Ref Des/ }).click();
     await page.waitForFunction(() => document.querySelector('[data-testid=project-parts-count]')?.textContent.trim() === '11 / 11 項');
     // The dialog's scroll lock must not swallow the wheel over the value list (it once scrolled on the material page only).
     await table.getByRole('button', { name: '篩選MPN', exact: true }).click();
@@ -164,11 +185,13 @@ async function readBook(download, dir) {
     assert.equal(await failing.getByTestId('project-parts-notice').count(), 0, 'the warning goes away once every board is in');
 
     // Phone: cards, one scroll, worded back on top, both actions at the bottom, thumb-sized targets.
-    const phoneContext = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+    const phoneContext = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, reducedMotion: 'reduce', acceptDownloads: true });
     const phonePage = await phoneContext.newPage();
     phonePage.on('pageerror', (error) => { throw error; });
     const phone = await openParts(phonePage, 'qaProjectParts', true);
     await phone.getByTestId('project-parts-cards').waitFor();
+    await phone.locator('.project-parts-card', { hasText: 'QA-MPN-7' }).filter({ hasText: '子板' }).waitFor(); // both boards loaded
+    assert.match(await phone.locator('.project-parts-card', { hasText: 'QA-MPN-7' }).innerText(), /Ref Des\s*QA 子板\(僅隔離資料\)：J4；QA 主板\(僅隔離資料\)：J1/, 'the card shows Ref Des too');
     assert.ok(await phonePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'no sideways scroll');
     const bar = phone.locator('.project-parts-mobile-actions');
     const barBox = await bar.boundingBox();
@@ -183,6 +206,23 @@ async function readBook(download, dir) {
     await phonePage.getByRole('listbox').waitFor();
     await phonePage.keyboard.press('Escape');
     assert.match(await bar.innerText(), /已選 1 項/);
+    // PJE from the phone's bottom bar with the list scrolled to the end: the same one-row-per-board sheet, and the
+    // notice is in the bottom bar right above the buttons (above the filter bar it was off-screen by then).
+    await phonePage.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await phone.locator('.project-parts-card').last().evaluate((node) => node.scrollIntoView({ block: 'end' }));
+    const [phoneDownload] = await Promise.all([phonePage.waitForEvent('download'), bar.getByRole('button', { name: /轉給 PJE 備料表/ }).tap()]);
+    // The notice first: a success hides itself after 8 seconds on the phone.
+    const phoneNotice = bar.getByTestId('project-parts-notice');
+    await phoneNotice.waitFor();
+    assert.match(await phoneNotice.innerText(), /已下載 PJE 備料表/);
+    const noticeBox = await phoneNotice.boundingBox();
+    const pjeBox = await bar.getByRole('button', { name: /轉給 PJE 備料表/ }).boundingBox();
+    assert.ok(noticeBox.y >= 0 && noticeBox.y + noticeBox.height <= pjeBox.y + 1 && pjeBox.y - (noticeBox.y + noticeBox.height) <= 16 && pjeBox.y + pjeBox.height <= 844 + 1, `the notice is on screen, right above the bottom buttons: ${JSON.stringify([noticeBox, pjeBox])}`);
+    if (process.env.PROJECT_PARTS_SHOTS) await phonePage.screenshot({ path: path.join(process.env.PROJECT_PARTS_SHOTS, 'phone-pje-notice.png') });
+    const phoneSheet = (await readBook(phoneDownload, dir)).worksheets[0];
+    const phoneRows = Array.from({ length: phoneSheet.rowCount - 1 }, (_, index) => phoneSheet.getRow(index + 2).values.slice(1));
+    assert.ok(phoneRows.length >= 1 && phoneRows.every((line) => !String(line[3]).includes('×') && (typeof line[4] === 'number' || line[4] === undefined || line[4] === '')), `one board per row with its Ref Des: ${JSON.stringify(phoneRows)}`);
+    assert.equal(new Set(phoneRows.map((line) => line[2])).size, 1, 'one ticked part');
     console.log('專案總料表 browser flow: passed');
   } finally {
     await browser.close();

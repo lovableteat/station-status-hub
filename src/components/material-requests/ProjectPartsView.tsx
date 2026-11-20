@@ -16,13 +16,14 @@ import type { MaterialWorkbookRecord } from "./materialRequestUtils";
 import type { MaterialColumnSort } from "./materialTableSort";
 import {
   EMPTY_PROJECT_PARTS_FILTERS, PROJECT_PART_COLUMNS, PROJECT_PART_STATUSES, PROJECT_QTY_MISSING, buildPjeWorkbook, buildProjectParts, buildProjectPartsWorkbook,
-  describeMissingQty, describeProjectPartBoards, filterProjectParts, formatProjectQty, projectPartColumnOptions, projectPartQtyLabel, projectPartsFileName,
+  describeMissingQty, describeProjectPartBoards, describeProjectPartRefs, filterProjectParts, formatProjectQty, projectPartColumnOptions, projectPartQtyLabel, projectPartsFileName,
   projectPartRowSignature, projectPartToken, sortProjectParts, type ProjectPart, type ProjectPartColumnKey, type ProjectPartsBoard, type ProjectPartsFilters,
 } from "./projectParts";
 import "./projectParts.css";
 
 export const PROJECT_PARTS_EMPTY_TEXT = "目前篩選條件沒有符合的料件";
 const PAGE = 300;
+const PHONE_NOTICE_MS = 8000;
 const COLUMN_LABEL = new Map<ProjectPartColumnKey, string>(PROJECT_PART_COLUMNS.map(column => [column.key, column.label]));
 const CATEGORY_TONE: Record<PendingMaterialCategory, keyof typeof CHIP_TONE> = { connector: "warning", ic: "primary", rlc: "neutral", other: "neutral" };
 const CATEGORY_LABEL = new Map(PENDING_MATERIAL_CATEGORIES.map(category => [category.key, category.label]));
@@ -77,6 +78,14 @@ export function ProjectPartsView({ projectName, series: liveSeries, loadVersion,
   const [shown, setShown] = useState(PAGE);
   const [exporting, setExporting] = useState<"pje" | "all" | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  // Phone: the notice sits in the sticky bottom bar over the cards, so a success goes away by itself (errors stay);
+  // a notice touched or focused is being read and stays until it is closed.
+  const [heldNotice, setHeldNotice] = useState<Notice | null>(null);
+  useEffect(() => {
+    if (!compact || notice?.tone !== "ok" || heldNotice === notice) return;
+    const timer = setTimeout(() => setNotice(current => (current === notice ? null : current)), PHONE_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [compact, notice, heldNotice]);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   // One load per board's current version; a newer upload or a retry loads it again.
@@ -244,7 +253,10 @@ export function ProjectPartsView({ projectName, series: liveSeries, loadVersion,
       const blob = kind === "pje" ? await buildPjeWorkbook(rows, meta) : await buildProjectPartsWorkbook(rows, meta);
       const fileName = projectPartsFileName(projectName, kind === "pje" ? "PJE備料表" : "總料表", exportedAt);
       downloadBlob(blob, fileName);
-      setNotice({ tone: "ok", text: `已下載${kind === "pje" ? " PJE 備料表" : "專案總料表"}（${rows.length.toLocaleString()} 項${failed.length ? `，不含 ${failed.map(item => boardName(item.id)).join("、")}` : ""}）：${fileName}` });
+      // PJE has one row per board, so the count of Excel rows is said next to the count of parts.
+      const lines = kind === "pje" ? rows.reduce((sum, part) => sum + part.uses.length, 0) : rows.length;
+      const counted = kind === "pje" && lines !== rows.length ? `${rows.length.toLocaleString()} 項料件、每塊板子一列共 ${lines.toLocaleString()} 列` : `${rows.length.toLocaleString()} 項`;
+      setNotice({ tone: "ok", text: `已下載${kind === "pje" ? " PJE 備料表" : "專案總料表"}（${counted}${failed.length ? `，不含 ${failed.map(item => boardName(item.id)).join("、")}` : ""}）：${fileName}` });
     } catch (error) {
       setNotice({ tone: "error", text: `匯出失敗：${error instanceof Error ? error.message : String(error)}。資料沒有變動，可以再按一次。` });
     } finally {
@@ -258,12 +270,13 @@ export function ProjectPartsView({ projectName, series: liveSeries, loadVersion,
       <Button type="button" variant="outline" size="sm" disabled={exporting === "pje"} aria-busy={exporting === "all" || undefined} onClick={() => void runExport("all")} title={`把目前篩選的 ${visible.length.toLocaleString()} 項料件匯出成 Excel，含每塊板子的用量與位號`} className="project-parts-export">
         {exporting === "all" ? <LoaderCircle className="project-parts-spinner" aria-hidden="true" /> : <Download aria-hidden="true" />}{exporting === "all" ? "匯出中…" : "匯出 Excel"}
       </Button>
-      <Button type="button" size="sm" disabled={exporting === "all"} aria-busy={exporting === "pje" || undefined} onClick={() => void runExport("pje")} title={selectedParts.length > 0 ? `把勾選的 ${selectedParts.length} 項料件轉成 PJE 備料表（Items、Vendor、PN、使用在哪個板子、Usage）` : `沒有勾選時，把目前篩選的 ${visible.length.toLocaleString()} 項料件轉成 PJE 備料表；只想給部分料件請先勾選`} className="project-parts-pje">
+      <Button type="button" size="sm" disabled={exporting === "all"} aria-busy={exporting === "pje" || undefined} onClick={() => void runExport("pje")} title={selectedParts.length > 0 ? `把勾選的 ${selectedParts.length} 項料件轉成 PJE 備料表（Items、Vendor、PN、使用在哪個板子、Usage、Ref Des、備註）；用在幾塊板子就分成幾列，Usage 和 Ref Des 是該板的` : `沒有勾選時，把目前篩選的 ${visible.length.toLocaleString()} 項料件轉成 PJE 備料表，每塊板子一列；只想給部分料件請先勾選`} className="project-parts-pje">
         {exporting === "pje" ? <LoaderCircle className="project-parts-spinner" aria-hidden="true" /> : <PackageCheck aria-hidden="true" />}{exporting === "pje" ? "產生中…" : <>轉給 PJE 備料表<span className="project-parts-pje-count">{pjeLabel}</span></>}
       </Button>
     </div>
   );
 
+  const noticeNode = notice && <p data-testid="project-parts-notice" className="project-parts-notice" data-tone={notice.tone} role={notice.tone === "error" ? "alert" : "status"} onPointerDown={() => setHeldNotice(notice)} onFocusCapture={() => setHeldNotice(notice)}>{notice.tone === "ok" ? <CircleCheck aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}<span>{notice.text}</span>{notice.exportAnyway && <Button type="button" variant="outline" size="sm" onClick={() => void runExport(notice.exportAnyway!, true)} title="不等沒載入的板子，直接匯出已載入的料" className="project-parts-notice-action">仍要匯出</Button>}<button type="button" onClick={() => setNotice(null)} aria-label="關閉訊息" title="關閉這則訊息"><X aria-hidden="true" /></button></p>;
   const scrollTop = () => resultsRef.current?.scrollTo({ top: 0 });
   const rows = visible.slice(0, shown);
   const more = visible.length - rows.length;
@@ -299,10 +312,10 @@ export function ProjectPartsView({ projectName, series: liveSeries, loadVersion,
         })}
       </ul>
 
-      {(notice || (!complete && parts.length > 0)) && (
+      {((notice && !compact) || (!complete && parts.length > 0)) && (
         <div className="project-parts-notices">
           {!complete && parts.length > 0 && <p className="project-parts-partial" role="status">{loading ? `還在載入 ${waiting.length - failed.length} 個系列，載入好會自動補進表格。` : `${failed.length} 個系列沒有載入（${failed.map(item => boardName(item.id)).join("、")}），表格裡沒有它們的料。`}</p>}
-          {notice && <p data-testid="project-parts-notice" className="project-parts-notice" data-tone={notice.tone} role={notice.tone === "error" ? "alert" : "status"}>{notice.tone === "ok" ? <CircleCheck aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}<span>{notice.text}</span>{notice.exportAnyway && <Button type="button" variant="outline" size="sm" onClick={() => void runExport(notice.exportAnyway!, true)} title="不等沒載入的板子，直接匯出已載入的料" className="project-parts-notice-action">仍要匯出</Button>}<button type="button" onClick={() => setNotice(null)} aria-label="關閉訊息" title="關閉這則訊息"><X aria-hidden="true" /></button></p>}
+          {!compact && noticeNode}
         </div>
       )}
 
@@ -361,7 +374,7 @@ export function ProjectPartsView({ projectName, series: liveSeries, loadVersion,
             <thead>
               <tr>
                 <th className="project-parts-check"><Checkbox checked={headerChecked} onCheckedChange={checked => toggleVisible(checked === true)} aria-label="勾選目前篩選的全部料件" title="勾選或取消目前篩選的全部料件" className={PARTIAL_CHECKBOX} /></th>
-                <th>分類</th><th>虛擬料號</th><th>實體料號</th><th>品名</th><th>廠商</th><th>MPN</th><th>使用在哪個板子</th><th className="project-parts-num">總用量</th><th>零件狀態</th>
+                <th>分類</th><th>虛擬料號</th><th>實體料號</th><th>品名</th><th>廠商</th><th>MPN</th><th>使用在哪個板子</th><th>Ref Des</th><th className="project-parts-num">總用量</th><th>零件狀態</th>
               </tr>
               {/* Second header row as in the material table: each column's Excel-style filter and sort. */}
               <tr className="project-parts-filter-head">
@@ -373,7 +386,7 @@ export function ProjectPartsView({ projectName, series: liveSeries, loadVersion,
               </tr>
             </thead>
             <tbody>
-              {tableState ? <tr><td colSpan={10} className="project-parts-table-state">{tableState}</td></tr> : rows.map(part => {
+              {tableState ? <tr><td colSpan={11} className="project-parts-table-state">{tableState}</td></tr> : rows.map(part => {
                 const checked = selected.has(part.key);
                 // Clicks inside the row only: the category list opens in a portal, its clicks must not tick the row.
                 return <tr key={part.key} data-selected={checked || undefined} onClick={event => { if (event.currentTarget.contains(event.target as Node) && !(event.target as HTMLElement).closest("button, [role=checkbox]")) toggle(part.key); }}>
@@ -385,6 +398,7 @@ export function ProjectPartsView({ projectName, series: liveSeries, loadVersion,
                   <td><span title={part.manufacturer}>{part.manufacturer || "—"}</span></td>
                   <td className="project-parts-mono"><span title={part.alternates.length ? `${part.mpn}\n替代料：\n${part.alternates.join("\n")}` : part.mpn}>{part.mpn || "—"}{part.alternates.length > 0 && <em className="project-parts-alt">+{part.alternates.length} 替代</em>}</span></td>
                   <td className="project-parts-boards-cell"><span title={qtyBreakdown(part)}>{part.uses.length > 1 && <b>{part.uses.length} 板</b>}{describeProjectPartBoards(part)}</span></td>
+                  <td className="project-parts-refs project-parts-mono"><span title={describeProjectPartRefs(part, "\n")}>{describeProjectPartRefs(part) || "—"}</span></td>
                   <td className="project-parts-num"><QtyValue part={part} /></td>
                   <td>{part.usageStatus || part.risk ? <span className={cn(CHIP, part.risk ? CHIP_TONE.danger : CHIP_TONE.neutral)} title={part.usageStatus || "料號表判定為風險料"}>{part.usageStatus || "風險料"}</span> : <span className="text-muted-foreground">—</span>}</td>
                 </tr>;
@@ -396,7 +410,8 @@ export function ProjectPartsView({ projectName, series: liveSeries, loadVersion,
         </div>
       )}
 
-      {compact && <div className="project-parts-mobile-actions">{actions}</div>}
+      {/* Phone: the answer to the bottom buttons (and to a card's category) sits right above them, wherever the list is scrolled. */}
+      {compact && <div className="project-parts-mobile-actions">{noticeNode}{actions}</div>}
     </section>
   );
 }
@@ -413,7 +428,7 @@ function MoreRows({ more, onMore, onAll }: { more: number; onMore: () => void; o
 function qtyBreakdown(part: ProjectPart) {
   const missing = describeMissingQty(part);
   return [
-    ...part.uses.map(use => `${use.board}：${formatProjectQty(use.qty, PROJECT_QTY_MISSING)}（${use.refs}）`),
+    ...part.uses.map(use => `${use.board}：${formatProjectQty(use.qty, PROJECT_QTY_MISSING)}${use.refs ? `（${use.refs}）` : ""}`),
     missing && `BOM 沒寫用量、沒有算進總用量的位號：\n${missing}`,
   ].filter(Boolean).join("\n");
 }
@@ -459,6 +474,7 @@ function PartCard({ part, checked, onToggle, category }: { part: ProjectPart; ch
           : "未編料號"}</span>
         <span className="project-parts-card-line">{part.manufacturer || "—"}<span className="project-parts-mono"> · {part.mpn || "—"}</span>{part.alternates.length > 0 && <em className="project-parts-alt">+{part.alternates.length} 替代</em>}</span>
         <span className="project-parts-card-line text-muted-foreground">{describeProjectPartBoards(part)}</span>
+        {describeProjectPartRefs(part) && <span className="project-parts-card-line project-parts-mono text-muted-foreground" title={describeProjectPartRefs(part, "\n")}><span className="project-parts-card-tag">Ref Des</span>{describeProjectPartRefs(part)}</span>}
       </span>
       <span className="project-parts-card-qty" title={qtyBreakdown(part)}>{projectPartQtyLabel(part)}<small>{part.totalQty !== null && part.missingCount > 0 ? `總用量 · ${part.missingCount} 未填` : "總用量"}</small></span>
     </label>

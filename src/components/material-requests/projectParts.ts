@@ -2,13 +2,14 @@
  * 專案總料表: every part of a BOM project's boards (the current version of each live series), merged into one list.
  * Each board's display mains come from the material table's own ranking (one BOM's list); the same part on several
  * boards, or at several positions of one board, becomes one row that says which boards use it and how many. The
- * PJE 備料表 is this list in the five columns PJE asked for, so long-lead parts (CPU, IC, connector) can be ordered first.
+ * PJE 備料表 is this list in PJE's template columns (plus Ref Des and a note), one row per board, so long-lead parts
+ * (CPU, IC, connector) can be ordered first.
  */
 import { BOM_PLACEHOLDER } from "./bomUploadChecks";
 import { matchesExcelFilter, normalizeFilterValue, type ColumnFilterSelection, type ExcelFilterOption } from "./materialExcelFilterValues";
 import { buildMaterialMainGroups, sortMaterialAlternatives, type MaterialMainGroup } from "./materialMainRows";
 import { getPendingMaterialCategory, resolvePendingMaterialCategory, PENDING_MATERIAL_CATEGORIES, type PendingMaterialCategory } from "./materialRequestPresentation";
-import { buildMaterialDataset, isTemporaryPartNumber, normalizeMaterialSearchText, type MaterialRecord, type MaterialWorkbookRecord } from "./materialRequestUtils";
+import { buildMaterialDataset, isTemporaryPartNumber, normalizeMaterialSearchText, splitRefDesignators, type MaterialRecord, type MaterialWorkbookRecord } from "./materialRequestUtils";
 import type { MaterialColumnSort } from "./materialTableSort";
 
 export interface ProjectPartsBoard {
@@ -28,7 +29,9 @@ export interface ProjectPartUse {
   qty: number | null;
   /** Positions on this board without a quantity (blank, "-", text): left out of the sum and named instead of guessed. */
   missingRefs: string[];
+  /** Ref Des: the positions the BOM wrote on this board, each once ("" when none); `positions` one by one. */
   refs: string;
+  positions: string[];
   /** Every row (main and alternates) of this part's positions on the board: a hand-picked category is written to all of them. */
   recordIds: string[];
 }
@@ -168,7 +171,31 @@ function usageStatusOf(record: MaterialRecord) {
   return text(record.partUsageStatus) || text(record.phaseOutStatus) || (record.isRisk ? text(record.sourcingStatus) : "");
 }
 
-type Use = Omit<ProjectPartUse, "qty" | "missingRefs"> & { quantities: number[]; missing: string[] };
+/** What a position list holds when the BOM wrote no position there (named in 未填用量的位號 by the row's own text). */
+export const PROJECT_NO_POSITION = "沒有位號";
+
+/**
+ * The positions one location's rows wrote. The material table puts the part number or the name in place of a blank
+ * 位號 (also in refGroup of a blue-row group), and CE BOMs sometimes write a part number or a description in the 位號
+ * column: a value equal to a number or name of these rows, a placeholder ("-", "N/A") or a TEMP- number is no position.
+ */
+export function projectLocationPositions(records: ReadonlyArray<Pick<MaterialRecord, "refDes" | "refGroup" | "partNumber" | "virtualAlternative" | "name" | "partName" | "manufacturerPartNumber">>) {
+  const notPosition = new Set(records.flatMap(record => [record.partNumber, record.virtualAlternative, record.name, record.partName, record.manufacturerPartNumber])
+    .map(projectPartToken).filter(Boolean));
+  const read = (value: unknown) => !text(value) || notPosition.has(projectPartToken(value)) ? [] : splitRefDesignators(value)
+    .filter(token => !BOM_PLACEHOLDER.test(token) && !isTemporaryPartNumber(token) && !notPosition.has(projectPartToken(token)));
+  const own = uniquePositions(records.flatMap(record => read(record.refDes)));
+  return own.length ? own : uniquePositions(records.flatMap(record => read(record.refGroup)));
+}
+
+/** "r1" and "R1" are one position (the first spelling stays). */
+function uniquePositions(positions: readonly string[]) {
+  const seen = new Map<string, string>();
+  for (const position of positions) if (!seen.has(projectPartToken(position))) seen.set(projectPartToken(position), position);
+  return [...seen.values()];
+}
+
+type Use = Omit<ProjectPartUse, "qty" | "missingRefs" | "refs" | "positions"> & { quantities: number[]; missing: string[]; positions: Map<string, string> };
 interface Draft {
   key: string;
   manual?: PendingMaterialCategory;
@@ -187,6 +214,8 @@ interface Draft {
   alternates: Map<string, string>;
   uses: Use[];
   useIndex: Map<string, Use>;
+  /** Searched but not shown: each location's own text (also when it is no position) and every row's part number, TEMP- too. */
+  searchExtra: Set<string>;
 }
 
 /** Merges every board's display mains into one row per part, boards in the order given. */
@@ -201,7 +230,7 @@ export function buildProjectParts(boards: readonly ProjectPartsBoard[]): Project
         draft = {
           key, auto: "other", byRef: "other", physical: new Set(), virtual: new Set(), statuses: new Set(), risk: false,
           name: "", names: new Set(), spec: "", manufacturer: realNumber(primary.manufacturer), mpn: realNumber(primary.manufacturerPartNumber),
-          alternates: new Map(), uses: [], useIndex: new Map(),
+          alternates: new Map(), uses: [], useIndex: new Map(), searchExtra: new Set(),
         };
         drafts.set(key, draft);
       }
@@ -233,21 +262,30 @@ export function buildProjectParts(boards: readonly ProjectPartsBoard[]): Project
         // without a number (blank, "-", text) is not guessed: it stays out of the sum and is named instead.
         let use = draft.useIndex.get(board.id);
         if (!use) {
-          use = { boardId: board.id, board: board.name, refs: "", recordIds: [], quantities: [], missing: [] };
+          use = { boardId: board.id, board: board.name, positions: new Map(), recordIds: [], quantities: [], missing: [] };
           draft.useIndex.set(board.id, use);
           draft.uses.push(use);
         }
-        use.refs = [use.refs, location.displayRef].filter(Boolean).join(", ");
-        for (const record of location.records) if (!use.recordIds.includes(record.id)) use.recordIds.push(record.id);
+        // Ref Des is only what the BOM wrote as a position, each once per board (the same R1 in two sections is one).
+        const positions = projectLocationPositions(location.records);
+        for (const position of positions) if (!use.positions.has(projectPartToken(position))) use.positions.set(projectPartToken(position), position);
+        if (location.displayRef) draft.searchExtra.add(location.displayRef);
+        for (const record of location.records) {
+          if (!use.recordIds.includes(record.id)) use.recordIds.push(record.id);
+          if (text(record.partNumber)) draft.searchExtra.add(text(record.partNumber));
+        }
         const qty = parseQty(location.qty);
-        if (qty === null) use.missing.push(location.displayRef || "（沒有位號）");
+        const ownText = location.displayRef && !BOM_PLACEHOLDER.test(location.displayRef) ? `（${location.displayRef}）` : "";
+        if (qty === null) use.missing.push(positions.length ? positions.join(", ") : `${PROJECT_NO_POSITION}${ownText}`);
         else use.quantities.push(qty);
       }
     }
   }
   return [...drafts.values()].map(draft => {
-    const uses = draft.uses.map(({ quantities, missing, ...use }): ProjectPartUse => ({
+    const uses = draft.uses.map(({ quantities, missing, positions, ...use }): ProjectPartUse => ({
       ...use,
+      positions: [...positions.values()],
+      refs: [...positions.values()].join(", "),
       qty: quantities.length ? quantities.reduce<number | null>((sum, value) => addQty(sum, value), 0) : null,
       missingRefs: missing,
     }));
@@ -270,7 +308,7 @@ export function buildProjectParts(boards: readonly ProjectPartsBoard[]): Project
       alternates, uses, totalQty, missingCount,
       searchText: normalizeMaterialSearchText([
         virtualPartNumber, physicalPartNumber, ...draft.names, draft.spec, draft.manufacturer, draft.mpn, usageStatus,
-        ...alternates, ...uses.flatMap(use => [use.board, use.refs]),
+        ...alternates, ...uses.flatMap(use => [use.board, use.refs]), ...draft.searchExtra,
       ].join(" ")),
     };
     return part;
@@ -288,6 +326,7 @@ export const PROJECT_PART_COLUMNS = [
   { key: "manufacturer", label: "廠商" },
   { key: "mpn", label: "MPN" },
   { key: "boards", label: "使用在哪個板子" },
+  { key: "refDes", label: "Ref Des" },
   { key: "qty", label: "總用量" },
   { key: "status", label: "零件狀態" },
 ] as const;
@@ -325,6 +364,11 @@ export function projectPartColumnValues(part: ProjectPart, key: ProjectPartColum
     case "manufacturer": return [projectPartToken(part.manufacturer)];
     case "mpn": return [part.mpn];
     case "boards": return part.uses.map(use => use.board);
+    // Each position once (r1 and R1 are one value), so ticking "J1" finds the part on any board; (空白) when a board has none.
+    case "refDes": {
+      const refs = [...new Set(part.uses.flatMap(use => use.positions.map(projectPartToken)))];
+      return part.uses.some(use => use.positions.length === 0) ? [...refs, ""] : refs;
+    }
     // Plain numbers ("1200", not "1,200") so the value list sorts them as numbers.
     case "qty": return [part.totalQty === null ? PROJECT_QTY_MISSING : String(part.totalQty), ...(part.missingCount > 0 ? [PROJECT_QTY_PARTLY_MISSING] : [])];
     case "status": return part.statuses.length ? part.statuses : [part.risk ? "風險料" : ""];
@@ -359,20 +403,24 @@ export function projectPartColumnOptions(parts: readonly ProjectPart[], key: Pro
 export function sortProjectParts(parts: readonly ProjectPart[], sort: MaterialColumnSort<ProjectPartColumnKey> | null): readonly ProjectPart[] {
   if (!sort) return parts;
   const factor = sort.direction === "asc" ? 1 : -1;
-  return [...parts].sort((left, right) => {
-    if (sort.key === "qty") {
+  if (sort.key === "qty") {
+    return [...parts].sort((left, right) => {
       if (left.totalQty === null || right.totalQty === null) return left.totalQty === right.totalQty ? 0 : left.totalQty === null ? 1 : -1;
       return (left.totalQty - right.totalQty) * factor;
-    }
-    const a = projectPartColumnValues(left, sort.key).join("、"), b = projectPartColumnValues(right, sort.key).join("、");
-    if (!a || !b) return a === b ? 0 : !a ? 1 : -1;
-    return COLLATOR.compare(a, b) * factor;
+    });
+  }
+  // Each part's text once, not on every comparison (the Ref Des of a big project is long).
+  const keyed = parts.map(part => ({ part, text: projectPartColumnValues(part, sort.key).filter(Boolean).join("、") }));
+  keyed.sort((left, right) => {
+    if (!left.text || !right.text) return left.text === right.text ? 0 : !left.text ? 1 : -1;
+    return COLLATOR.compare(left.text, right.text) * factor;
   });
+  return keyed.map(item => item.part);
 }
 
 /**
  * "Board_A ×2、Board_B ×1"; one board alone is just its name; a board whose positions wrote no quantity is ×未填, and
- * positions without a quantity next to written ones are counted ("×2（+1 未填）") so PJE does not order too few unseen.
+ * positions without a quantity next to written ones are counted ("×2（+1 未填）") so nobody reads the total as complete.
  */
 export function describeProjectPartBoards(part: Pick<ProjectPart, "uses">, separator = "、") {
   const unfilled = (use: ProjectPartUse) => (use.qty !== null && use.missingRefs.length > 0 ? `（+${use.missingRefs.length} ${PROJECT_QTY_MISSING}）` : "");
@@ -380,18 +428,40 @@ export function describeProjectPartBoards(part: Pick<ProjectPart, "uses">, separ
   return part.uses.map(use => `${use.board} ×${formatProjectQty(use.qty, PROJECT_QTY_MISSING)}${unfilled(use)}`).join(separator);
 }
 
+/** The Ref Des column: one board's positions as they are; several boards "Board：R1, R2；Board：—" (— has none). */
+export function describeProjectPartRefs(part: Pick<ProjectPart, "uses">, separator = "；") {
+  if (part.uses.length === 1) return part.uses[0].refs;
+  if (part.uses.every(use => !use.refs)) return "";
+  return part.uses.map(use => `${use.board}：${use.refs || "—"}`).join(separator);
+}
+
 /** The positions the 總用量 leaves out because the BOM wrote no quantity there: "Board：REF, REF" per board. */
 export function describeMissingQty(part: Pick<ProjectPart, "uses">, separator = "\n") {
   return part.uses.filter(use => use.missingRefs.length > 0).map(use => `${use.board}：${use.missingRefs.join(", ")}`).join(separator);
 }
 
-/** The PJE 備料表 exactly as PJE's template has it: one sheet, these five columns, header on row 1. */
+/**
+ * The PJE 備料表: one sheet, header on row 1, PJE's template's five columns in their places (A to E), then Ref Des in F
+ * (the user asked for it on 2026-11-20 once every board got its own row) and 備註 in G, which says what Usage leaves out.
+ */
 export const PJE_SHEET_NAME = "Material list(PCBA)";
-export const PJE_HEADERS = ["Items", "Vendor", "PN", "使用在哪個板子", "Usage"] as const;
+export const PJE_HEADERS = ["Items", "Vendor", "PN", "使用在哪個板子", "Usage", "Ref Des", "備註"] as const;
+export const PJE_QTY_UNKNOWN = "用量未填";
+type PjeRow = [string, string, string, string, number | string, string, string];
 
-/** Usage is the number PJE orders by: the quantities the boards wrote; empty when no position wrote one. */
-export function buildPjeRows(parts: readonly ProjectPart[]): Array<[string, string, string, string, number | string]> {
-  return parts.map(part => [part.name || part.spec, part.manufacturer, part.mpn, describeProjectPartBoards(part), part.totalQty ?? ""]);
+/**
+ * One row per board (user, 2026-11-20): a part used on two boards is two rows with the same Items / Vendor / PN, next
+ * to each other, so PJE can filter a board (使用在哪個板子 is exactly the board name) or add Usage up in Excel. Usage is
+ * that board's quantity, a number; empty when none of its positions wrote one; Ref Des that board's positions. 備註
+ * says what Usage leaves out ("+1 未填用量：J9", "用量未填：J9"), so PJE never reads an empty or partial Usage as the
+ * whole need.
+ */
+export function buildPjeRows(parts: readonly ProjectPart[]): PjeRow[] {
+  return parts.flatMap(part => part.uses.map((use): PjeRow => {
+    const missing = use.missingRefs.join("；");
+    const note = use.qty === null ? `${PJE_QTY_UNKNOWN}：${missing}` : use.missingRefs.length > 0 ? `+${use.missingRefs.length} ${PROJECT_QTY_MISSING}用量：${missing}` : "";
+    return [part.name || part.spec, part.manufacturer, part.mpn, use.board, use.qty ?? "", use.refs, note];
+  }));
 }
 
 export const PROJECT_PARTS_HEADERS = ["分類", "虛擬料號", "實體料號", "品名", "規格", "廠商", "MPN", "零件狀態", "替代料", "使用板子數", "使用在哪個板子", "總用量", "各板位號", "未填用量的位號"] as const;
@@ -401,7 +471,7 @@ export function buildProjectPartsRows(parts: readonly ProjectPart[]): Array<Arra
   return parts.map(part => [
     labels.get(part.category) ?? part.category, part.virtualPartNumber, part.physicalPartNumber, part.name, part.spec, part.manufacturer, part.mpn,
     part.usageStatus, part.alternates.join("\n"), part.uses.length, describeProjectPartBoards(part, "\n"), part.totalQty ?? "",
-    part.uses.map(use => `${use.board}：${use.refs}`).join("\n"), describeMissingQty(part),
+    part.uses.filter(use => use.refs).map(use => `${use.board}：${use.refs}`).join("\n"), describeMissingQty(part),
   ]);
 }
 
@@ -427,8 +497,9 @@ export function projectPartsFileName(projectName: string, kind: "總料表" | "P
 
 /**
  * The PJE workbook. Header as in PJE's template: Calibri 7 bold dark blue (使用在哪個板子 in Microsoft JhengHei),
- * light blue fill, centred and wrapped, thin borders; widths B 21, C 22.125, D 27.375; first row frozen. One
- * difference on purpose: the template leaves Items at the default width, which would hide the part names.
+ * light blue fill, centred and wrapped, thin borders; widths B 21, C 22.125, D 27.375; first row frozen. Differences
+ * on purpose: the template leaves Items at the default width, which would hide the part names; Ref Des (F) and 備註
+ * (G, Microsoft JhengHei like the other Chinese header) are added in the same header style.
  */
 export async function buildPjeWorkbook(parts: readonly ProjectPart[], meta: { projectName: string; exportedBy: string; exportedAt: Date }) {
   const ExcelJS = await import("exceljs");
@@ -441,10 +512,12 @@ export async function buildPjeWorkbook(parts: readonly ProjectPart[], meta: { pr
   sheet.getColumn(2).width = 21;
   sheet.getColumn(3).width = 22.125;
   sheet.getColumn(4).width = 27.375;
+  sheet.getColumn(6).width = 36;
+  sheet.getColumn(7).width = 30;
   const header = writeRow(sheet, PJE_HEADERS);
   const thin = { style: "thin" as const };
   header.eachCell((cell, column) => {
-    cell.font = { name: column === 4 ? "Microsoft JhengHei" : "Calibri", size: 7, bold: true, color: { argb: "FF002060" } };
+    cell.font = { name: column === 4 || column === 7 ? "Microsoft JhengHei" : "Calibri", size: 7, bold: true, color: { argb: "FF002060" } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFCAEDFB" } };
     cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
     cell.border = { top: thin, left: thin, bottom: thin, right: thin };

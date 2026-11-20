@@ -81,7 +81,7 @@
 .project-parts-notice > button svg { width: 14px; height: 14px; }
 
 .project-parts-results { min-height: 0; flex: 1; overflow: auto; border: 1px solid hsl(var(--border)); border-radius: 12px; background: hsl(var(--card) / .55); }
-.project-parts-table { width: 100%; min-width: 1120px; border-collapse: collapse; font-size: 13px; }
+.project-parts-table { width: 100%; min-width: 1260px; border-collapse: collapse; font-size: 13px; }
 .project-parts-table thead { position: sticky; top: 0; z-index: 2; background: hsl(var(--card)); }
 .project-parts-table th { border-bottom: 1px solid hsl(var(--border)); padding: 8px; color: hsl(var(--muted-foreground)); font-size: 12px; font-weight: 650; text-align: left; white-space: nowrap; }
 .project-parts-table td { max-width: 16rem; height: 40px; border-top: 1px solid hsl(var(--border) / .6); padding: 0 8px; color: hsl(var(--foreground) / .92); white-space: nowrap; }
@@ -93,6 +93,7 @@
 .project-parts-table .project-parts-check { width: 40px; padding-inline: 10px 4px; }
 .project-parts-table .project-parts-name { max-width: 22rem; }
 .project-parts-table .project-parts-boards-cell { max-width: 20rem; }
+.project-parts-table .project-parts-refs { max-width: 15rem; }
 .project-parts-table .project-parts-boards-cell b { margin-right: 6px; border-radius: 4px; padding: 0 5px; background: hsl(var(--warning) / .16); color: hsl(var(--warning)); font-size: 11px; font-weight: 700; }
 .project-parts-table .project-parts-num { text-align: right; font-variant-numeric: tabular-nums; }
 .project-parts-table .project-parts-filter-head th { border-bottom: 1px solid hsl(var(--border)); padding: 0 6px 6px; font-weight: 600; text-align: left; }
@@ -164,6 +165,7 @@
 .project-parts-card-qty small { color: hsl(var(--muted-foreground)); font-size: 11px; font-weight: 500; }
 .project-parts-cards-state { padding: 20px 8px; text-align: center; }
 .project-parts-mobile-actions { position: sticky; bottom: 0; z-index: 3; border-top: 1px solid hsl(var(--border)); padding: 8px 0 calc(8px + env(safe-area-inset-bottom)); background: hsl(var(--background)); }
+.project-parts-mobile-actions > .project-parts-notice { max-height: 40vh; margin-bottom: 8px; overflow-y: auto; }
 .project-parts-mobile-actions .project-parts-actions { width: 100%; flex-wrap: nowrap; margin: 0; }
 .project-parts-mobile-actions .project-parts-actions button { min-height: 44px; flex: 1 1 0; min-width: 0; }
 .project-parts-mobile-actions .project-parts-actions .project-parts-clear-selection { flex: none; }
