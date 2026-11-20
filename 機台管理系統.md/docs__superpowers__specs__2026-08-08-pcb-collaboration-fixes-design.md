@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/specs/2026-08-08-pcb-collaboration-fixes-design.md`；程式參考基準：`e619ce2364ce1076986fc2e3b03097adb2be266f`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/specs/2026-08-08-pcb-collaboration-fixes-design.md`；程式參考基準：`96656db6f6e0a577ede52fe7c3c493f1303aa3d7`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # PCB Designer 協作問題修正設計規格
 
