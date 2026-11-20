@@ -475,6 +475,27 @@ type PjeRow = [string, string, string, string, string, string, number | string, 
 export const PJE_PHYSICAL_BORROWED = "本板 BOM 沒有正式實體料號";
 
 /**
+ * The boards of a part that a 使用在哪個板子 filter keeps (user, 2026-11-20: 「篩哪塊板子就只出哪塊板子的列」), as the
+ * filter compares them; null (no filter) is every board.
+ */
+export function projectPartUsesOn(part: Pick<ProjectPart, "uses">, boards: ColumnFilterSelection = null) {
+  if (boards === null) return part.uses;
+  return part.uses.filter(use => boards.includes(normalizeFilterValue(use.board)));
+}
+
+/** What PJE gets from these parts under a board filter: the parts with a row, how many rows, how many get none. */
+export function planPjeExport<T extends Pick<ProjectPart, "uses">>(parts: readonly T[], boards: ColumnFilterSelection = null) {
+  const kept = parts.filter(part => projectPartUsesOn(part, boards).length > 0);
+  return { parts: kept, lines: kept.reduce((sum, part) => sum + projectPartUsesOn(part, boards).length, 0), skipped: parts.length - kept.length };
+}
+
+/** The boards of a 使用在哪個板子 filter in a sentence, short like its chip: "A、B 等 5 塊板子". */
+export function describeProjectBoardFilter(boards: readonly string[]) {
+  if (boards.length === 0) return "未選任何板子";
+  return `${boards.slice(0, 2).join("、")}${boards.length > 2 ? ` 等 ${boards.length} 塊板子` : ""}`;
+}
+
+/**
  * One row per board (user, 2026-11-20): a part used on two boards is two rows with the same Items / Vendor / PN, next
  * to each other, so PJE can filter a board (使用在哪個板子 is exactly the board name) or add Usage up in Excel.
  * 虛擬料號 is that board's own only: it names the substitute group its design allows, which another board's group does
@@ -484,9 +505,11 @@ export const PJE_PHYSICAL_BORROWED = "本板 BOM 沒有正式實體料號";
  * whose own BOM gave one vendor part two numbers shows both, and 備註 says so. Usage is that board's
  * quantity, a number; empty when none of its positions wrote one; Ref Des that board's positions. 備註 also says what
  * Usage leaves out ("+1 未填用量：J9", "用量未填：J9"), so PJE never reads an empty or partial Usage as the whole need.
+ * With a 使用在哪個板子 filter (boards) only the rows of the boards it keeps are written; the physical number of a board
+ * not numbered yet still comes from every board, since it belongs to the vendor part, not to the filter.
  */
-export function buildPjeRows(parts: readonly ProjectPart[]): PjeRow[] {
-  return parts.flatMap(part => part.uses.map((use): PjeRow => {
+export function buildPjeRows(parts: readonly ProjectPart[], boards: ColumnFilterSelection = null): PjeRow[] {
+  return parts.flatMap(part => projectPartUsesOn(part, boards).map((use): PjeRow => {
     const missing = use.missingRefs.join("；");
     const notes = [use.qty === null ? `${PJE_QTY_UNKNOWN}：${missing}` : use.missingRefs.length > 0 ? `+${use.missingRefs.length} ${PROJECT_QTY_MISSING}用量：${missing}` : ""];
     let physical = use.physicalNumbers.join("、");
@@ -544,7 +567,7 @@ export function projectPartsFileName(projectName: string, kind: "總料表" | "P
  * frozen. Differences on purpose: the template leaves Items at the default width, which would hide the part names; the
  * part numbers (A, B), Ref Des (H) and 備註 (I) are added in the same header style.
  */
-export async function buildPjeWorkbook(parts: readonly ProjectPart[], meta: { projectName: string; exportedBy: string; exportedAt: Date }) {
+export async function buildPjeWorkbook(parts: readonly ProjectPart[], meta: { projectName: string; exportedBy: string; exportedAt: Date }, boards: ColumnFilterSelection = null) {
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   workbook.creator = meta.exportedBy;
@@ -560,7 +583,7 @@ export async function buildPjeWorkbook(parts: readonly ProjectPart[], meta: { pr
     cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
     cell.border = { top: thin, left: thin, bottom: thin, right: thin };
   });
-  for (const row of buildPjeRows(parts)) writeRow(sheet, row).alignment = { vertical: "top", wrapText: true };
+  for (const row of buildPjeRows(parts, boards)) writeRow(sheet, row).alignment = { vertical: "top", wrapText: true };
   sheet.views = [{ state: "frozen", ySplit: 1 }];
   return new Blob([await workbook.xlsx.writeBuffer()], { type: XLSX_TYPE });
 }

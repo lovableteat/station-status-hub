@@ -114,6 +114,9 @@ async function readBook(download, dir) {
     await page.waitForFunction(() => document.querySelector('[data-testid=project-parts-count]')?.textContent.trim() === '11 / 11 項');
     assert.equal(await view.getByTestId('project-parts-active-filters').count(), 0, 'no chip is left');
 
+    // A third ticked part, used on 主板 only: the board filter below leaves it without a PJE row.
+    await table.locator('tbody tr').filter({ hasNotText: '子板' }).first().locator('td').nth(4).click();
+    assert.match(await pje.innerText(), /已選 3 項/);
     // The material table's column filters: tick one board in 使用在哪個板子, see its chip, sort 總用量 Z to A.
     await table.getByRole('button', { name: '篩選使用在哪個板子', exact: true }).click();
     const panel = page.getByTestId('material-column-filter-panel');
@@ -124,6 +127,16 @@ async function readBook(download, dir) {
     await panel.getByRole('button', { name: '確定' }).click();
     await page.waitForFunction(() => document.querySelector('[data-testid=project-parts-count]')?.textContent.trim() === '4 / 11 項');
     assert.match(await view.getByTestId('project-parts-active-filters').innerText(), /使用在哪個板子：QA 子板\(僅隔離資料\)/);
+    // PJE with that board filter: only 子板's rows (「篩哪塊板子就只出哪塊板子的列」); two ticked parts are on it, the
+    // third is not and the button says so before it is pressed.
+    assert.match(await pje.innerText(), /已選 3 項（1 項不在篩選的板子，不轉出）/);
+    assert.match(await pje.getAttribute('title'), /只轉出 QA 子板\(僅隔離資料\) 的列；勾選的料件中 1 項沒有用在篩選的板子，不會轉出/);
+    if (process.env.PROJECT_PARTS_SHOTS) await page.screenshot({ path: path.join(process.env.PROJECT_PARTS_SHOTS, 'desktop-pje-off-board.png') });
+    const [boardDownload] = await Promise.all([page.waitForEvent('download'), pje.click()]);
+    const boardSheet = (await readBook(boardDownload, dir)).worksheets[0];
+    assert.equal(boardSheet.rowCount, 3, 'header + one row for each ticked part, on 子板 only');
+    assert.deepEqual([2, 3].map((line) => [boardSheet.getRow(line).getCell(5).value, boardSheet.getRow(line).getCell(6).value]), [['QA-MPN-7', 'QA 子板(僅隔離資料)'], ['QA-MPN-8', 'QA 子板(僅隔離資料)']]);
+    assert.match(await view.getByTestId('project-parts-notice').innerText(), /已下載 PJE 備料表（2 項料件、只含篩選的板子（QA 子板\(僅隔離資料\)）共 2 列；1 項勾選的料件沒有用在這些板子，沒有轉出）/);
     await table.getByRole('button', { name: '篩選總用量', exact: true }).click();
     await panel.waitFor();
     await panel.getByRole('button', { name: '從 Z 到 A 排序' }).click();
@@ -227,6 +240,38 @@ async function readBook(download, dir) {
     assert.deepEqual(phoneSheet.getRow(1).values.slice(1, 3), ['虛擬料號', '實體料號'], 'the part numbers come first on the phone too');
     assert.ok(phoneRows.length >= 1 && phoneRows.every((line) => !String(line[5]).includes('×') && (typeof line[6] === 'number' || line[6] === undefined || line[6] === '')), `one board per row with its Ref Des: ${JSON.stringify(phoneRows)}`);
     assert.equal(new Set(phoneRows.map((line) => line[4])).size, 1, 'one ticked part');
+    // Phone, 使用在哪個板子 = 子板 with a 主板-only card ticked: the button says it will not go out, and the longer
+    // label stays inside the button. Then nothing ticked: PJE has the four parts on 子板, one row each, no 主板 row.
+    await bar.getByRole('button', { name: '清除勾選' }).tap();
+    await phone.locator('.project-parts-card').filter({ hasNotText: '子板' }).first().locator('.project-parts-card-main').tap();
+    await phonePage.waitForFunction(() => document.querySelector('.project-parts-mobile-actions')?.textContent.includes('已選 1 項'));
+    await phone.getByRole('combobox', { name: '篩選欄位' }).tap();
+    await phonePage.getByRole('option', { name: '使用在哪個板子' }).tap();
+    await phone.getByRole('button', { name: /^篩選使用在哪個板子/ }).tap();
+    const phonePanel = phonePage.getByTestId('material-column-filter-panel');
+    await phonePanel.waitFor();
+    await phonePanel.getByRole('button', { name: '全不選' }).tap();
+    await phonePanel.getByRole('checkbox', { name: 'QA 子板(僅隔離資料)' }).tap();
+    await phonePanel.getByRole('button', { name: '確定' }).tap();
+    await phonePage.waitForFunction(() => document.querySelector('[data-testid=project-parts-count]')?.textContent.trim() === '4 / 11 項');
+    const phoneBoardPje = bar.getByRole('button', { name: /轉給 PJE 備料表/ });
+    assert.match(await phoneBoardPje.innerText(), /已選 1 項（1 項不在篩選的板子，不轉出）/);
+    const labelFit = await phoneBoardPje.evaluate((button) => {
+      const label = button.querySelector('.project-parts-pje-count').getBoundingClientRect();
+      const box = button.getBoundingClientRect();
+      return { label: [label.left, label.right], box: [box.left, box.right], fits: label.left >= box.left - 1 && label.right <= box.right + 1 && box.right <= innerWidth + 1 };
+    });
+    assert.ok(labelFit.fits, `the longer label stays inside the button: ${JSON.stringify(labelFit)}`);
+    if (process.env.PROJECT_PARTS_SHOTS) await phonePage.screenshot({ path: path.join(process.env.PROJECT_PARTS_SHOTS, 'phone-pje-off-board.png') });
+    await bar.getByRole('button', { name: '清除勾選' }).tap();
+    assert.match(await phoneBoardPje.innerText(), /目前 4 項/);
+    const [phoneBoardDownload] = await Promise.all([phonePage.waitForEvent('download'), phoneBoardPje.tap()]);
+    await phonePage.waitForFunction(() => document.querySelector('.project-parts-mobile-actions [data-testid=project-parts-notice]')?.textContent.includes('只含篩選的板子'));
+    assert.match(await bar.getByTestId('project-parts-notice').innerText(), /4 項料件、只含篩選的板子（QA 子板\(僅隔離資料\)）共 4 列/);
+    const phoneBoardSheet = (await readBook(phoneBoardDownload, dir)).worksheets[0];
+    const phoneBoards = Array.from({ length: phoneBoardSheet.rowCount - 1 }, (_, index) => phoneBoardSheet.getRow(index + 2).getCell(6).value);
+    assert.deepEqual(phoneBoards, Array(4).fill('QA 子板(僅隔離資料)'), 'only 子板 rows on the phone too');
+    if (process.env.PROJECT_PARTS_SHOTS) await phonePage.screenshot({ path: path.join(process.env.PROJECT_PARTS_SHOTS, 'phone-pje-board-filter.png') });
     console.log('專案總料表 browser flow: passed');
   } finally {
     await browser.close();

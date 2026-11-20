@@ -7,7 +7,7 @@ const {loader}=createRequire(import.meta.url)('./support/renderHarness.cjs');
 const load=loader({globals:{Blob}});
 const parts=load('src/components/material-requests/projectParts.ts');
 const {buildProjectParts,filterProjectParts,buildPjeRows,buildPjeWorkbook,buildProjectPartsRows,describeProjectPartBoards,describeMissingQty,projectPartsFileName,
-  projectPartColumnOptions,projectPartQtyLabel,sortProjectParts,planProjectPartCategory,projectPartRowSignature,describeProjectPartRefs,projectLocationPositions,EMPTY_PROJECT_PARTS_FILTERS,PROJECT_PARTS_HEADERS,PJE_HEADERS,PJE_SHEET_NAME}=parts;
+  projectPartColumnOptions,projectPartQtyLabel,sortProjectParts,planProjectPartCategory,projectPartRowSignature,describeProjectPartRefs,projectLocationPositions,projectPartUsesOn,planPjeExport,describeProjectBoardFilter,EMPTY_PROJECT_PARTS_FILTERS,PROJECT_PARTS_HEADERS,PJE_HEADERS,PJE_SHEET_NAME}=parts;
 
 // Synthetic boards only (public repository): no real board, project or vendor names.
 let next=0;
@@ -328,6 +328,43 @@ test('PJE part numbers: each board\'s own; a board without a physical number get
   // Only a virtual number anywhere: the physical cell stays empty.
   const [virtualOnly]=buildProjectParts([board('s-a','A',[row('U5',{...ic,manufacturerPartNumber:'QA-PMIC-5',partNumber:'',virtualAlternative:'QA-VIRT-5'})])]);
   assert.deepEqual(plain(buildPjeRows([virtualOnly]).map(line=>[line[0],line[1],line[8]])),[['QA-VIRT-5','','']]);
+});
+
+test('PJE with a board filter: only the rows of the filtered boards; a board not numbered yet still borrows from the others',async()=>{
+  const ic={name:'QA PMIC',manufacturer:'QA PMIC MAKER',manufacturerPartNumber:'QA-PMIC-1'};
+  const list=buildProjectParts([
+    board('s-a','QA_Board_A',[row('U1',{...ic,partNumber:'QA-PHYS-1'}),row('R1',{partNumber:'QA-PHYS-R'})]),
+    board('s-b','QA_Board_B',[row('U2',{...ic,partNumber:''}),row('J1',{partNumber:'QA-PHYS-J'})]),
+    board('s-c','QA_Board_C',[row('U3',{...ic,partNumber:'QA-PHYS-1'})]),
+  ]);
+  const shown=filterProjectParts(list,{...EMPTY_PROJECT_PARTS_FILTERS,columns:{boards:['QA_Board_B']}});
+  assert.deepEqual(plain(shown.map(part=>part.mpn).sort()),['QA-MPN-J1','QA-PMIC-1'],'the table keeps the parts used on B');
+  assert.deepEqual(plain(buildPjeRows(shown,['QA_Board_B']).map(line=>[line[4],line[5],line[1],line[8]]).sort()),[
+    ['QA-MPN-J1','QA_Board_B','QA-PHYS-J',''],
+    ['QA-PMIC-1','QA_Board_B','QA-PHYS-1','本板 BOM 沒有正式實體料號，取自 QA_Board_A、QA_Board_C'],
+  ],'only B\'s rows; its missing number still comes from the boards the filter hides');
+  assert.deepEqual(plain(buildPjeRows(shown,['QA_Board_A','QA_Board_B']).map(line=>line[5]).sort()),['QA_Board_A','QA_Board_B','QA_Board_B'],'two boards: their rows only (C stays out)');
+  assert.equal(buildPjeRows(shown).length,4,'no board filter: every board\'s row, as before');
+  assert.equal(buildPjeRows(shown,[]).length,0,'no board ticked: no row');
+  // A ticked part the board filter hides (R1, only on A) gets no row, and the plan counts it.
+  const ticked=[...shown,list.find(part=>part.mpn==='QA-MPN-R1')];
+  const plan=planPjeExport(ticked,['QA_Board_B']);
+  assert.deepEqual(plain([plan.parts.map(part=>part.mpn).sort(),plan.lines,plan.skipped]),[['QA-MPN-J1','QA-PMIC-1'],2,1]);
+  assert.deepEqual(plain(((p)=>[p.parts.length,p.lines,p.skipped])(planPjeExport(ticked))),[3,5,0],'no board filter: every part, every board');
+  assert.deepEqual(plain(((p)=>[p.parts.length,p.lines,p.skipped])(planPjeExport(ticked,[]))),[0,0,3]);
+  assert.equal(describeProjectBoardFilter(['QA_Board_A']),'QA_Board_A');
+  assert.equal(describeProjectBoardFilter(['QA_Board_A','QA_Board_B','QA_Board_C']),'QA_Board_A、QA_Board_B 等 3 塊板子','short like the chip');
+  assert.equal(describeProjectBoardFilter([]),'未選任何板子');
+  // A board is matched by its filter value (a full-width space in the name is a plain one there).
+  const [spaced]=buildProjectParts([board('s-d','QA\u3000Board_D',[row('U9',{...ic})])]);
+  const [option]=projectPartColumnOptions([spaced],'boards');
+  assert.equal(option.value,'QA Board_D');
+  assert.equal(projectPartUsesOn(spaced,[option.value]).length,1,'the filter value of a board finds its row');
+  assert.equal(projectPartUsesOn(spaced,['QA_Board_A']).length,0);
+  const book=new ExcelJS.Workbook();
+  await book.xlsx.load(await (await buildPjeWorkbook(shown,{projectName:'QA',exportedBy:'QA',exportedAt:new Date(2026,10,20)},['QA_Board_B'])).arrayBuffer());
+  assert.equal(book.worksheets[0].rowCount,3,'header + B\'s two rows');
+  assert.ok([2,3].every(line=>book.worksheets[0].getRow(line).getCell(6).value==='QA_Board_B'));
 });
 
 test('Ref Des holds only positions: no part number, name, placeholder or TEMP number, each position once; search still finds them',()=>{

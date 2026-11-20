@@ -169,8 +169,10 @@
 .project-parts-mobile-actions .project-parts-actions { width: 100%; flex-wrap: nowrap; margin: 0; }
 .project-parts-mobile-actions .project-parts-actions button { min-height: 44px; flex: 1 1 0; min-width: 0; }
 .project-parts-mobile-actions .project-parts-actions .project-parts-clear-selection { flex: none; }
-.project-parts-mobile-actions .project-parts-pje { flex-direction: column; gap: 0; line-height: 17px; }
+/* PJE carries the longer label, 匯出 Excel only its words: PJE gets the larger share of the bar. */
+.project-parts-mobile-actions .project-parts-actions .project-parts-pje { height: auto; flex-grow: 1.4; flex-direction: column; gap: 0; padding-block: 4px; line-height: 17px; }
 .project-parts-mobile-actions .project-parts-pje svg { display: none; }
-.project-parts-mobile-actions .project-parts-pje-count { display: block; margin: 0; padding: 0; background: none; font-size: 11px; line-height: 14px; opacity: .85; }
+/* "已選 3 項（1 項不在篩選的板子，不轉出）" next to 清除勾選 is wider than the button: it wraps instead of spilling out. */
+.project-parts-mobile-actions .project-parts-pje-count { display: block; max-width: 100%; margin: 0; padding: 0; background: none; font-size: 11px; line-height: 14px; opacity: .85; text-align: center; white-space: normal; }
 
 .project-parts-gone { display: grid; justify-items: start; gap: 10px; border: 1px dashed hsl(var(--border)); border-radius: 12px; padding: 20px; color: hsl(var(--muted-foreground)); font-size: 14px; }

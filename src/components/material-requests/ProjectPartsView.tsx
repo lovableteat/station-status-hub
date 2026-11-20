@@ -16,7 +16,7 @@ import type { MaterialWorkbookRecord } from "./materialRequestUtils";
 import type { MaterialColumnSort } from "./materialTableSort";
 import {
   EMPTY_PROJECT_PARTS_FILTERS, PROJECT_PART_COLUMNS, PROJECT_PART_STATUSES, PROJECT_QTY_MISSING, buildPjeWorkbook, buildProjectParts, buildProjectPartsWorkbook,
-  describeMissingQty, describeProjectPartBoards, describeProjectPartRefs, filterProjectParts, formatProjectQty, projectPartColumnOptions, projectPartQtyLabel, projectPartsFileName,
+  describeMissingQty, describeProjectPartBoards, describeProjectPartRefs, filterProjectParts, formatProjectQty, projectPartColumnOptions, projectPartQtyLabel, projectPartsFileName, planPjeExport, describeProjectBoardFilter,
   projectPartRowSignature, projectPartToken, sortProjectParts, type ProjectPart, type ProjectPartColumnKey, type ProjectPartsBoard, type ProjectPartsFilters,
 } from "./projectParts";
 import "./projectParts.css";
@@ -228,8 +228,17 @@ export function ProjectPartsView({ projectName, series: liveSeries, loadVersion,
 
   // Ticked rows in the order on screen (the sort included), then ticked rows the filter hides.
   const pjeTargets = selectedParts.length > 0 ? [...visible.filter(part => selected.has(part.key)), ...selectedParts.filter(part => !visible.includes(part))] : visible;
-  const hiddenSelected = selectedParts.length - visibleSelected;
-  const pjeLabel = selectedParts.length > 0 ? `已選 ${selectedParts.length.toLocaleString()} 項${hiddenSelected > 0 ? `（${hiddenSelected} 項不在目前篩選）` : ""}` : `目前 ${visible.length.toLocaleString()} 項`;
+  // A 使用在哪個板子 filter also narrows PJE to those boards' rows (user, 2026-11-20: 「篩哪塊板子就只出哪塊板子的列」).
+  const boardFilter = filters.columns.boards ?? null;
+  const boardFilterText = boardFilter === null ? "" : describeProjectBoardFilter(boardFilter);
+  const boardFilterNote = boardFilter === null ? "" : boardFilter.length ? `；目前篩選了使用在哪個板子，只轉出 ${boardFilterText} 的列` : "；目前「使用在哪個板子」沒有選任何板子，不會轉出任何列";
+  const pjePlan = planPjeExport(pjeTargets, boardFilter);
+  // Ticked parts the filters hide still go to PJE, unless the board filter leaves them without a row (only hidden parts
+  // can: a part on screen is on a filtered board); the button says both before anyone presses it.
+  const offBoards = pjePlan.skipped;
+  const hiddenSelected = selectedParts.length - visibleSelected - offBoards;
+  const selectedNotes = [hiddenSelected > 0 ? `${hiddenSelected.toLocaleString()} 項不在目前篩選` : "", offBoards > 0 ? `${offBoards.toLocaleString()} 項不在篩選的板子，不轉出` : ""].filter(Boolean);
+  const pjeLabel = selectedParts.length > 0 ? `已選 ${selectedParts.length.toLocaleString()} 項${selectedNotes.length ? `（${selectedNotes.join("、")}）` : ""}` : `目前 ${visible.length.toLocaleString()} 項`;
 
   const runExport = async (kind: "pje" | "all", withoutMissing = false) => {
     if (exporting) return;
@@ -245,17 +254,26 @@ export function ProjectPartsView({ projectName, series: liveSeries, loadVersion,
     }
     const rows = kind === "pje" ? pjeTargets : visible;
     if (rows.length === 0) { setNotice({ tone: "error", text: kind === "pje" ? "沒有可以轉出的料件：請勾選料件，或放寬篩選條件。" : "目前篩選沒有料件可以匯出。" }); return; }
+    // PJE with a board filter: only the filtered boards' rows, so a ticked part used on none of them gives no row.
+    if (kind === "pje" && pjePlan.parts.length === 0) {
+      setNotice({ tone: "error", text: boardFilter?.length === 0
+        ? "「使用在哪個板子」沒有選任何板子，沒有列可以轉出：請在篩選裡勾選板子，或移除這個篩選。"
+        : `勾選的料件都沒有用在篩選的板子（${boardFilterText}），沒有列可以轉出：請勾選用在這些板子的料件，或移除「使用在哪個板子」篩選。` });
+      return;
+    }
     setExporting(kind);
     setNotice(null);
     try {
       const exportedAt = new Date();
       const meta = { projectName, exportedBy, exportedAt };
-      const blob = kind === "pje" ? await buildPjeWorkbook(rows, meta) : await buildProjectPartsWorkbook(rows, meta);
+      const blob = kind === "pje" ? await buildPjeWorkbook(pjePlan.parts, meta, boardFilter) : await buildProjectPartsWorkbook(rows, meta);
       const fileName = projectPartsFileName(projectName, kind === "pje" ? "PJE備料表" : "總料表", exportedAt);
       downloadBlob(blob, fileName);
-      // PJE has one row per board, so the count of Excel rows is said next to the count of parts.
-      const lines = kind === "pje" ? rows.reduce((sum, part) => sum + part.uses.length, 0) : rows.length;
-      const counted = kind === "pje" && lines !== rows.length ? `${rows.length.toLocaleString()} 項料件、每塊板子一列共 ${lines.toLocaleString()} 列` : `${rows.length.toLocaleString()} 項`;
+      // PJE has one row per board, so the count of Excel rows is said next to the count of parts; a board filter is named.
+      const { parts: kept, lines, skipped } = pjePlan;
+      const counted = kind !== "pje" ? `${rows.length.toLocaleString()} 項`
+        : boardFilter !== null ? `${kept.length.toLocaleString()} 項料件、只含篩選的板子（${boardFilterText}）共 ${lines.toLocaleString()} 列${skipped > 0 ? `；${skipped.toLocaleString()} 項勾選的料件沒有用在這些板子，沒有轉出` : ""}`
+          : lines !== kept.length ? `${kept.length.toLocaleString()} 項料件、每塊板子一列共 ${lines.toLocaleString()} 列` : `${kept.length.toLocaleString()} 項`;
       setNotice({ tone: "ok", text: `已下載${kind === "pje" ? " PJE 備料表" : "專案總料表"}（${counted}${failed.length ? `，不含 ${failed.map(item => boardName(item.id)).join("、")}` : ""}）：${fileName}` });
     } catch (error) {
       setNotice({ tone: "error", text: `匯出失敗：${error instanceof Error ? error.message : String(error)}。資料沒有變動，可以再按一次。` });
@@ -270,7 +288,7 @@ export function ProjectPartsView({ projectName, series: liveSeries, loadVersion,
       <Button type="button" variant="outline" size="sm" disabled={exporting === "pje"} aria-busy={exporting === "all" || undefined} onClick={() => void runExport("all")} title={`把目前篩選的 ${visible.length.toLocaleString()} 項料件匯出成 Excel，含每塊板子的用量與位號`} className="project-parts-export">
         {exporting === "all" ? <LoaderCircle className="project-parts-spinner" aria-hidden="true" /> : <Download aria-hidden="true" />}{exporting === "all" ? "匯出中…" : "匯出 Excel"}
       </Button>
-      <Button type="button" size="sm" disabled={exporting === "all"} aria-busy={exporting === "pje" || undefined} onClick={() => void runExport("pje")} title={selectedParts.length > 0 ? `把勾選的 ${selectedParts.length} 項料件轉成 PJE 備料表（虛擬料號、實體料號、Items、Vendor、PN、使用在哪個板子、Usage、Ref Des、備註）；用在幾塊板子就分成幾列，料號、Usage 和 Ref Des 是該板的（該板沒填實體料號時帶入其他板子同一顆料的，並寫在備註）` : `沒有勾選時，把目前篩選的 ${visible.length.toLocaleString()} 項料件轉成 PJE 備料表，每塊板子一列；只想給部分料件請先勾選`} className="project-parts-pje">
+      <Button type="button" size="sm" disabled={exporting === "all"} aria-busy={exporting === "pje" || undefined} onClick={() => void runExport("pje")} title={selectedParts.length > 0 ? `把勾選的 ${selectedParts.length.toLocaleString()} 項料件轉成 PJE 備料表（虛擬料號、實體料號、Items、Vendor、PN、使用在哪個板子、Usage、Ref Des、備註）；用在幾塊板子就分成幾列，料號、Usage 和 Ref Des 是該板的（該板沒填實體料號時帶入其他板子同一顆料的，並寫在備註）${boardFilterNote}${offBoards > 0 ? `；勾選的料件中 ${offBoards.toLocaleString()} 項沒有用在篩選的板子，不會轉出` : ""}` : `沒有勾選時，把目前篩選的 ${visible.length.toLocaleString()} 項料件轉成 PJE 備料表，每塊板子一列${boardFilterNote}；只想給部分料件請先勾選`} className="project-parts-pje">
         {exporting === "pje" ? <LoaderCircle className="project-parts-spinner" aria-hidden="true" /> : <PackageCheck aria-hidden="true" />}{exporting === "pje" ? "產生中…" : <>轉給 PJE 備料表<span className="project-parts-pje-count">{pjeLabel}</span></>}
       </Button>
     </div>
