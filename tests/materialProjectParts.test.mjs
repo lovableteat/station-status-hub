@@ -81,29 +81,34 @@ test('filters: words, status, several categories at once, and the column filters
   assert.equal(f({}).length,list.length);
 });
 
-test('the PJE sheet keeps the template\'s five columns in place and adds Ref Des and 備註, styled like the template, one row per board',async()=>{
+test('the PJE sheet starts with the part numbers, keeps the template\'s five columns in order, adds Ref Des and 備註, one row per board',async()=>{
   const list=buildProjectParts([board('s-a','QA_Board_A',[row('U1',{...cpu}),row('J1',{...conn,qty:2})]),board('s-b','QA_Board_B',[row('U7',{...cpu,qty:2})])]);
-  assert.deepEqual(plain([...PJE_HEADERS]),['Items','Vendor','PN','使用在哪個板子','Usage','Ref Des','備註']);
+  const headers=['虛擬料號','實體料號','Items','Vendor','PN','使用在哪個板子','Usage','Ref Des','備註'];
+  assert.deepEqual(plain([...PJE_HEADERS]),headers);
   // The CPU on two boards is two rows next to each other, each with its own board, that board's quantity and positions.
   assert.deepEqual(plain(buildPjeRows(list).map(row=>[...row])),[
-    ['QA CONN 2X10','QA CONN MAKER','QA-CONN-20','QA_Board_A',2,'J1',''],
-    ['QA CPU SOCKET PART','QA CPU MAKER','QA-CPU-1','QA_Board_A',1,'U1',''],
-    ['QA CPU SOCKET PART','QA CPU MAKER','QA-CPU-1','QA_Board_B',2,'U7',''],
+    ['QA-VIRT-CONN','QA-PHYS-CONN','QA CONN 2X10','QA CONN MAKER','QA-CONN-20','QA_Board_A',2,'J1',''],
+    ['','QA-PHYS-CPU','QA CPU SOCKET PART','QA CPU MAKER','QA-CPU-1','QA_Board_A',1,'U1',''],
+    ['','QA-PHYS-CPU','QA CPU SOCKET PART','QA CPU MAKER','QA-CPU-1','QA_Board_B',2,'U7',''],
   ]);
   const blob=await buildPjeWorkbook(list,{projectName:'QA 專案',exportedBy:'QA',exportedAt:new Date('2026-11-19T00:00:00Z')});
   const book=new ExcelJS.Workbook();await book.xlsx.load(await blob.arrayBuffer());
   assert.deepEqual(plain(book.worksheets.map(sheet=>sheet.name)),[PJE_SHEET_NAME]);
   const sheet=book.worksheets[0];
-  assert.deepEqual(plain(sheet.getRow(1).values.slice(1)),['Items','Vendor','PN','使用在哪個板子','Usage','Ref Des','備註']);
-  for(let column=1;column<=7;column++){const cell=sheet.getRow(1).getCell(column);assert.equal(cell.font.bold,true);assert.equal(cell.fill.fgColor.argb,'FFCAEDFB');}
-  assert.equal(sheet.getColumn(2).width,21);assert.equal(sheet.getColumn(3).width,22.125);assert.equal(sheet.getColumn(4).width,27.375);
-  // The template's header: Calibri 7 bold dark blue (Microsoft JhengHei for the Chinese header), centred, wrapped, thin borders.
-  for(let column=1;column<=7;column++){const cell=sheet.getRow(1).getCell(column);assert.equal(cell.font.size,7);assert.equal(cell.font.color.argb,'FF002060');assert.equal(cell.font.name,column===4||column===7?'Microsoft JhengHei':'Calibri');
+  assert.deepEqual(plain(sheet.getRow(1).values.slice(1)),headers);
+  for(let column=1;column<=9;column++){const cell=sheet.getRow(1).getCell(column);assert.equal(cell.font.bold,true);assert.equal(cell.fill.fgColor.argb,'FFCAEDFB');}
+  // The template's widths follow its columns (Vendor, PN, 使用在哪個板子); the part numbers are wide enough to read.
+  assert.deepEqual(plain([1,2,3,4,5,6,8,9].map(column=>sheet.getColumn(column).width)),[18,18,44,21,22.125,27.375,36,30]);
+  // The template's header: Calibri 7 bold dark blue (Microsoft JhengHei for the Chinese headers), centred, wrapped, thin borders.
+  for(let column=1;column<=9;column++){const cell=sheet.getRow(1).getCell(column);assert.equal(cell.font.size,7);assert.equal(cell.font.color.argb,'FF002060');assert.equal(cell.font.name,[1,2,6,9].includes(column)?'Microsoft JhengHei':'Calibri',headers[column-1]);
     assert.equal(cell.alignment.horizontal,'center');assert.equal(cell.alignment.vertical,'middle');assert.equal(cell.alignment.wrapText,true);for(const side of ['top','left','bottom','right'])assert.equal(cell.border[side].style,'thin');}
   assert.equal(sheet.views[0].state,'frozen');assert.equal(sheet.views[0].ySplit,1);
-  assert.deepEqual(plain(sheet.getRow(3).values.slice(1,7)),['QA CPU SOCKET PART','QA CPU MAKER','QA-CPU-1','QA_Board_A',1,'U1']);
-  assert.deepEqual(plain(sheet.getRow(4).values.slice(1,7)),['QA CPU SOCKET PART','QA CPU MAKER','QA-CPU-1','QA_Board_B',2,'U7']);
-  assert.equal(typeof sheet.getRow(4).getCell(5).value,'number','Usage stays a number PJE can add up');
+  assert.deepEqual(plain(sheet.getRow(2).values.slice(1,9)),['QA-VIRT-CONN','QA-PHYS-CONN','QA CONN 2X10','QA CONN MAKER','QA-CONN-20','QA_Board_A',2,'J1']);
+  assert.deepEqual(plain(sheet.getRow(3).values.slice(2,9)),['QA-PHYS-CPU','QA CPU SOCKET PART','QA CPU MAKER','QA-CPU-1','QA_Board_A',1,'U1']);
+  assert.deepEqual(plain(sheet.getRow(4).values.slice(2,9)),['QA-PHYS-CPU','QA CPU SOCKET PART','QA CPU MAKER','QA-CPU-1','QA_Board_B',2,'U7']);
+  assert.equal(sheet.getRow(4).getCell(1).type,ExcelJS.ValueType.Null,'no virtual number on the CPU: a truly blank cell (Excel finds it as blank), the physical one never stands in');
+  assert.equal(sheet.getRow(4).getCell(9).type,ExcelJS.ValueType.Null,'an empty 備註 is blank too');
+  assert.equal(typeof sheet.getRow(4).getCell(7).value,'number','Usage stays a number PJE can add up');
   assert.equal(sheet.rowCount,4);
 });
 
@@ -129,8 +134,8 @@ test('parts known only by name stay apart; the same vendor part merges even when
   assert.equal(chip.totalQty,2,'one part with both boards\' quantity');
   assert.equal(chip.physicalPartNumber,'QA-PHYS-9');
   assert.equal(chip.status,'physical');
-  assert.deepEqual(plain(buildPjeRows(list).filter(line=>line[2]==='QA-CPU-1')),[['QA CPU SOCKET PART','QA CPU MAKER','QA-CPU-1','A',1,'U1',''],['QA CPU SOCKET PART','QA CPU MAKER','QA-CPU-1','B',1,'U3','']],
-    'one PJE row per board under the same Items / Vendor / PN');
+  assert.deepEqual(plain(buildPjeRows(list).filter(line=>line[4]==='QA-CPU-1')),[['','QA-PHYS-9','QA CPU SOCKET PART','QA CPU MAKER','QA-CPU-1','A',1,'U1',''],['','QA-PHYS-9','QA CPU SOCKET PART','QA CPU MAKER','QA-CPU-1','B',1,'U3','本板 BOM 沒有正式實體料號，取自 A']],
+    'one PJE row per board under the same Items / Vendor / PN; board B, not numbered yet, gets the part\'s one number and says where from');
 });
 
 test('a risk, a status or an urgent category on any board counts, whatever the board order',()=>{
@@ -151,7 +156,7 @@ test('quantities are read per position, TEMP numbers are not part numbers, a CPU
   assert.equal(list.length,1);
   assert.equal(list[0].uses[0].qty,5);assert.deepEqual(plain(list[0].uses[0].missingRefs),['C2']);assert.equal(list[0].uses[1].qty,5);
   assert.equal(list[0].totalQty,10);assert.equal(list[0].missingCount,1);
-  assert.deepEqual(plain(buildPjeRows(list).map(line=>line.slice(3))),[['A',5,'C1, C2, C3','+1 未填用量：C2'],['B',5,'C9','']],'PJE sees the position without a quantity on its board, the board cell stays the board');
+  assert.deepEqual(plain(buildPjeRows(list).map(line=>line.slice(5))),[['A',5,'C1, C2, C3','+1 未填用量：C2'],['B',5,'C9','']],'PJE sees the position without a quantity on its board, the board cell stays the board');
   // Only plain numbers are quantities: no hex, exponent or negative number sneaks into the total.
   const [strict]=buildProjectParts([board('s-a','A',[row('C1',{...cap,qty:'1e2'}),row('C2',{...cap,qty:'0x10'}),row('C3',{...cap,qty:'-1'}),row('C4',{...cap,qty:'1,200'})])]);
   assert.equal(strict.totalQty,1200);assert.deepEqual(plain(strict.uses[0].missingRefs),['C1','C2','C3']);
@@ -209,13 +214,13 @@ test('positions the BOM left without a quantity ("-", blank) stay out of the tot
   assert.equal(describeProjectPartBoards(part),'QA_Board_A ×2（+1 未填）、QA_Board_B ×2');
   assert.equal(describeProjectPartBoards({uses:[part.uses[0]]}),'QA_Board_A（+1 未填）','one board alone still says it');
   assert.equal(describeMissingQty(part),'QA_Board_A：沒有位號（TEMP-0000001）');
-  assert.deepEqual(plain(buildPjeRows(list).map(line=>line.slice(3))),[['QA_Board_A',2,'CONN1','+1 未填用量：沒有位號（TEMP-0000001）'],['QA_Board_B',2,'JMP1','']],'PJE gets numbers, never "2.0+-+2", and sees what is not counted');
+  assert.deepEqual(plain(buildPjeRows(list).map(line=>line.slice(5))),[['QA_Board_A',2,'CONN1','+1 未填用量：沒有位號（TEMP-0000001）'],['QA_Board_B',2,'JMP1','']],'PJE gets numbers, never "2.0+-+2", and sees what is not counted');
   const line=buildProjectPartsRows(list)[0];
   assert.equal(line[11],4);assert.equal(line[13],'QA_Board_A：沒有位號（TEMP-0000001）');
   // A part whose every position lacks a quantity: 未填 on screen, an empty Usage for PJE.
   const [unknown]=buildProjectParts([board('s-a','QA_Board_A',[row('X9',{name:'QA CHIP CAP',manufacturerPartNumber:'QA-CAP-X',qty:''})])]);
   assert.equal(unknown.totalQty,null);assert.equal(projectPartQtyLabel(unknown),'未填');
-  assert.deepEqual(plain(buildPjeRows([unknown]).map(line=>line.slice(3))),[['QA_Board_A','','X9','用量未填：X9']],'an empty Usage says why in 備註');
+  assert.deepEqual(plain(buildPjeRows([unknown]).map(line=>line.slice(5))),[['QA_Board_A','','X9','用量未填：X9']],'an empty Usage says why in 備註');
 });
 
 test('a column filter lists the values the other filters leave, and the columns sort A to Z or by quantity',()=>{
@@ -282,7 +287,47 @@ test('Ref Des: each board\'s positions in the table and in PJE, and the column f
   assert.deepEqual(plain(f({refDes:['(空白)']})),['QA LABEL'],'a row without a position is (空白)');
   const values=projectPartColumnOptions(list,'refDes').map(option=>option.value);
   assert.deepEqual(plain(values),['R1','R2','R3','R7','(空白)']);
-  assert.deepEqual(plain(buildPjeRows([part]).map(line=>[line[3],line[5]])),[['QA_Board_A','R1, R2, R3'],['QA_Board_B','R7']],'PJE: the positions of that row\'s board');
+  assert.deepEqual(plain(buildPjeRows([part]).map(line=>[line[5],line[7]])),[['QA_Board_A','R1, R2, R3'],['QA_Board_B','R7']],'PJE: the positions of that row\'s board');
+});
+
+test('PJE part numbers: each board\'s own; a board without a physical number gets the part\'s one number, never a virtual group',()=>{
+  const ic={name:'QA PMIC',manufacturer:'QA PMIC MAKER',manufacturerPartNumber:'QA-PMIC-1'};
+  const list=buildProjectParts([
+    board('s-a','A',[row('U1',{...ic,partNumber:'QA-PHYS-A',virtualAlternative:'QA-VIRT-1'})]),
+    board('s-b','B',[row('U2',{...ic,partNumber:'QA-PHYS-B',virtualAlternative:''})]),
+    board('s-c','C',[row('U3',{...ic,partNumber:'TEMP-0000009',virtualAlternative:'N/A'})]),
+  ]);
+  assert.equal(list.length,1,'one vendor part');
+  const [part]=list;
+  assert.equal(part.physicalPartNumber,'QA-PHYS-A、QA-PHYS-B','the screen lists every number the boards gave');
+  assert.deepEqual(plain(part.uses.map(use=>[use.board,use.virtualNumbers,use.physicalNumbers])),[['A',['QA-VIRT-1'],['QA-PHYS-A']],['B',[],['QA-PHYS-B']],['C',[],[]]],
+    'each board keeps what its BOM wrote; TEMP- and N/A are no numbers');
+  assert.deepEqual(plain(buildPjeRows(list).map(line=>[line[5],line[0],line[1],line[8]])),[
+    ['A','QA-VIRT-1','QA-PHYS-A',''],
+    ['B','','QA-PHYS-B',''],
+    ['C','','','本板 BOM 沒有正式實體料號，各板不同：A＝QA-PHYS-A；B＝QA-PHYS-B'],
+  ],'a virtual group is that board\'s own; different physical numbers are named in 備註, never put in one cell');
+  // One physical number in the project: a board not numbered yet gets it and says where from; its virtual stays empty.
+  const one=buildProjectParts([
+    board('s-a','A',[row('U1',{...ic,partNumber:'QA-PHYS-1',virtualAlternative:'QA-VIRT-1'})]),
+    board('s-b','B',[row('U2',{...ic,partNumber:'',virtualAlternative:'',qty:'-'})]),
+    board('s-c','C',[row('U3',{...ic,partNumber:'qa-phys-1',virtualAlternative:''})]),
+  ]);
+  assert.equal(one[0].physicalPartNumber,'QA-PHYS-1','qa-phys-1 and QA-PHYS-1 are one number');
+  assert.deepEqual(plain(buildPjeRows(one).map(line=>[line[5],line[0],line[1],line[8]])),[
+    ['A','QA-VIRT-1','QA-PHYS-1',''],
+    ['B','','QA-PHYS-1','用量未填：U2\n本板 BOM 沒有正式實體料號，取自 A、C'],
+    ['C','','qa-phys-1',''],
+  ]);
+  // One board's own BOM gave the vendor part two numbers: both stay, 備註 says so; p1 / P1 is one filter value.
+  const [twice]=buildProjectParts([board('s-a','A',[row('U1',{...ic,partNumber:'QA-PHYS-X'}),row('U2',{...ic,partNumber:'QA-PHYS-Y'})])]);
+  assert.deepEqual(plain(buildPjeRows([twice]).map(line=>[line[1],line[8]])),[['QA-PHYS-X、QA-PHYS-Y','本板 BOM 給這顆料 2 個實體料號']]);
+  const cased=buildProjectParts([board('s-a','A',[row('U1',{...ic,partNumber:'qa-phys-z'})]),board('s-b','B',[row('U7',{...ic,manufacturerPartNumber:'QA-PMIC-7',partNumber:'QA-PHYS-Z'})])]);
+  assert.deepEqual(plain(projectPartColumnOptions(cased,'physical').map(option=>[option.value,option.label,option.count])),[['QA-PHYS-Z','qa-phys-z',2]],'one filter value for both spellings');
+  assert.equal(filterProjectParts(cased,{...EMPTY_PROJECT_PARTS_FILTERS,columns:{physical:['QA-PHYS-Z']}}).length,2);
+  // Only a virtual number anywhere: the physical cell stays empty.
+  const [virtualOnly]=buildProjectParts([board('s-a','A',[row('U5',{...ic,manufacturerPartNumber:'QA-PMIC-5',partNumber:'',virtualAlternative:'QA-VIRT-5'})])]);
+  assert.deepEqual(plain(buildPjeRows([virtualOnly]).map(line=>[line[0],line[1],line[8]])),[['QA-VIRT-5','','']]);
 });
 
 test('Ref Des holds only positions: no part number, name, placeholder or TEMP number, each position once; search still finds them',()=>{

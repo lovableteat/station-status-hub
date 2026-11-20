@@ -2,8 +2,8 @@
  * 專案總料表: every part of a BOM project's boards (the current version of each live series), merged into one list.
  * Each board's display mains come from the material table's own ranking (one BOM's list); the same part on several
  * boards, or at several positions of one board, becomes one row that says which boards use it and how many. The
- * PJE 備料表 is this list in PJE's template columns (plus Ref Des and a note), one row per board, so long-lead parts
- * (CPU, IC, connector) can be ordered first.
+ * PJE 備料表 is this list with the company part numbers first, then PJE's template columns (plus Ref Des and a note),
+ * one row per board, so long-lead parts (CPU, IC, connector) can be ordered first.
  */
 import { BOM_PLACEHOLDER } from "./bomUploadChecks";
 import { matchesExcelFilter, normalizeFilterValue, type ColumnFilterSelection, type ExcelFilterOption } from "./materialExcelFilterValues";
@@ -34,6 +34,9 @@ export interface ProjectPartUse {
   positions: string[];
   /** Every row (main and alternates) of this part's positions on the board: a hand-picked category is written to all of them. */
   recordIds: string[];
+  /** The virtual / physical numbers this board's BOM gave the part's main (TEMP- and placeholders are none). */
+  virtualNumbers: string[];
+  physicalNumbers: string[];
 }
 
 export type ProjectPartStatus = "physical" | "virtual" | "unnumbered";
@@ -130,6 +133,12 @@ function realNumber(value: unknown) {
   return written && !BOM_PLACEHOLDER.test(written) && !isTemporaryPartNumber(written) ? written : "";
 }
 
+/** Adds a real part number once: "p1" and "P1" are one number (the first spelling stays). */
+function addNumber(numbers: Map<string, string>, value: unknown) {
+  const written = realNumber(value);
+  if (written && !numbers.has(projectPartToken(written))) numbers.set(projectPartToken(written), written);
+}
+
 /** A quantity is a plain number ("2", "2.0", "1,200"); "-", "0x10", "1e2", "-1" or text are no quantity. */
 function parseQty(value: unknown): number | null {
   const raw = text(value).replaceAll(",", "");
@@ -195,14 +204,15 @@ function uniquePositions(positions: readonly string[]) {
   return [...seen.values()];
 }
 
-type Use = Omit<ProjectPartUse, "qty" | "missingRefs" | "refs" | "positions"> & { quantities: number[]; missing: string[]; positions: Map<string, string> };
+type Use = Omit<ProjectPartUse, "qty" | "missingRefs" | "refs" | "positions" | "virtualNumbers" | "physicalNumbers">
+  & { quantities: number[]; missing: string[]; positions: Map<string, string>; virtual: Map<string, string>; physical: Map<string, string> };
 interface Draft {
   key: string;
   manual?: PendingMaterialCategory;
   auto: PendingMaterialCategory;
   byRef: PendingMaterialCategory;
-  physical: Set<string>;
-  virtual: Set<string>;
+  physical: Map<string, string>;
+  virtual: Map<string, string>;
   statuses: Set<string>;
   risk: boolean;
   name: string;
@@ -228,14 +238,14 @@ export function buildProjectParts(boards: readonly ProjectPartsBoard[]): Project
       let draft = drafts.get(key);
       if (!draft) {
         draft = {
-          key, auto: "other", byRef: "other", physical: new Set(), virtual: new Set(), statuses: new Set(), risk: false,
+          key, auto: "other", byRef: "other", physical: new Map(), virtual: new Map(), statuses: new Set(), risk: false,
           name: "", names: new Set(), spec: "", manufacturer: realNumber(primary.manufacturer), mpn: realNumber(primary.manufacturerPartNumber),
           alternates: new Map(), uses: [], useIndex: new Map(), searchExtra: new Set(),
         };
         drafts.set(key, draft);
       }
-      if (realNumber(primary.partNumber)) draft.physical.add(text(primary.partNumber));
-      if (realNumber(primary.virtualAlternative)) draft.virtual.add(text(primary.virtualAlternative));
+      addNumber(draft.physical, primary.partNumber);
+      addNumber(draft.virtual, primary.virtualAlternative);
       draft.name ||= text(primary.name) || text(primary.partName);
       if (text(primary.name) || text(primary.partName)) draft.names.add(text(primary.name) || text(primary.partName));
       draft.spec ||= text(primary.partSpec);
@@ -262,10 +272,12 @@ export function buildProjectParts(boards: readonly ProjectPartsBoard[]): Project
         // without a number (blank, "-", text) is not guessed: it stays out of the sum and is named instead.
         let use = draft.useIndex.get(board.id);
         if (!use) {
-          use = { boardId: board.id, board: board.name, positions: new Map(), recordIds: [], quantities: [], missing: [] };
+          use = { boardId: board.id, board: board.name, positions: new Map(), recordIds: [], quantities: [], missing: [], virtual: new Map(), physical: new Map() };
           draft.useIndex.set(board.id, use);
           draft.uses.push(use);
         }
+        addNumber(use.physical, primary.partNumber);
+        addNumber(use.virtual, primary.virtualAlternative);
         // Ref Des is only what the BOM wrote as a position, each once per board (the same R1 in two sections is one).
         const positions = projectLocationPositions(location.records);
         for (const position of positions) if (!use.positions.has(projectPartToken(position))) use.positions.set(projectPartToken(position), position);
@@ -282,8 +294,10 @@ export function buildProjectParts(boards: readonly ProjectPartsBoard[]): Project
     }
   }
   return [...drafts.values()].map(draft => {
-    const uses = draft.uses.map(({ quantities, missing, positions, ...use }): ProjectPartUse => ({
+    const uses = draft.uses.map(({ quantities, missing, positions, virtual, physical, ...use }): ProjectPartUse => ({
       ...use,
+      virtualNumbers: [...virtual.values()],
+      physicalNumbers: [...physical.values()],
       positions: [...positions.values()],
       refs: [...positions.values()].join(", "),
       qty: quantities.length ? quantities.reduce<number | null>((sum, value) => addQty(sum, value), 0) : null,
@@ -292,7 +306,7 @@ export function buildProjectParts(boards: readonly ProjectPartsBoard[]): Project
     const written = uses.filter(use => use.qty !== null);
     const totalQty = written.length ? written.reduce<number | null>((sum, use) => addQty(sum, use.qty), 0) : null;
     const missingCount = uses.reduce((sum, use) => sum + use.missingRefs.length, 0);
-    const physicalNumbers = [...draft.physical], virtualNumbers = [...draft.virtual], statuses = [...draft.statuses];
+    const physicalNumbers = [...draft.physical.values()], virtualNumbers = [...draft.virtual.values()], statuses = [...draft.statuses];
     const physicalPartNumber = physicalNumbers.join("、"), virtualPartNumber = virtualNumbers.join("、");
     const usageStatus = statuses.join("、");
     const alternates = [...draft.alternates.values()];
@@ -358,8 +372,9 @@ export function projectPartQtyLabel(part: Pick<ProjectPart, "totalQty">) {
 /** The values a part shows in a filterable column; a blank one is "(空白)" in the filter, as in the material table. */
 export function projectPartColumnValues(part: ProjectPart, key: ProjectPartColumnKey): string[] {
   switch (key) {
-    case "virtual": return part.virtualNumbers.length ? part.virtualNumbers : [""];
-    case "physical": return part.physicalNumbers.length ? part.physicalNumbers : [""];
+    // Part numbers like makers: p1 and P1 are one value (the list shows the first spelling).
+    case "virtual": return part.virtualNumbers.length ? part.virtualNumbers.map(projectPartToken) : [""];
+    case "physical": return part.physicalNumbers.length ? part.physicalNumbers.map(projectPartToken) : [""];
     case "name": return [part.name || part.spec];
     case "manufacturer": return [projectPartToken(part.manufacturer)];
     case "mpn": return [part.mpn];
@@ -385,6 +400,12 @@ export function filterProjectParts(parts: readonly ProjectPart[], filters: Proje
     && columns.every(({ key }) => matchesExcelFilter(filters.columns[key] ?? null, projectPartColumnValues(part, key))));
 }
 
+function spelling(part: ProjectPart, key: ProjectPartColumnKey, value: string) {
+  if (key === "manufacturer") return part.manufacturer || value;
+  const numbers = key === "virtual" ? part.virtualNumbers : key === "physical" ? part.physicalNumbers : [];
+  return numbers.find(number => projectPartToken(number) === value) ?? value;
+}
+
 /** The checkbox list of a column filter: each value once, with how many parts carry it. */
 export function projectPartColumnOptions(parts: readonly ProjectPart[], key: ProjectPartColumnKey): ExcelFilterOption[] {
   const options = new Map<string, ExcelFilterOption>();
@@ -392,8 +413,8 @@ export function projectPartColumnOptions(parts: readonly ProjectPart[], key: Pro
     for (const value of new Set(projectPartColumnValues(part, key).map(normalizeFilterValue))) {
       const option = options.get(value);
       if (option) option.count += 1;
-      // A maker is one option however the boards capitalise it ("Acme", "ACME"); the list shows the first spelling.
-      else options.set(value, { value, label: key === "manufacturer" && part.manufacturer ? part.manufacturer : value, count: 1 });
+      // A maker or part number is one option however the boards capitalise it ("Acme", "ACME"); the list shows the first spelling.
+      else options.set(value, { value, label: spelling(part, key, value), count: 1 });
     }
   }
   return [...options.values()];
@@ -441,26 +462,45 @@ export function describeMissingQty(part: Pick<ProjectPart, "uses">, separator = 
 }
 
 /**
- * The PJE 備料表: one sheet, header on row 1, PJE's template's five columns in their places (A to E), then Ref Des in F
- * (the user asked for it on 2026-11-20 once every board got its own row) and 備註 in G, which says what Usage leaves out.
+ * The PJE 備料表: one sheet, header on row 1. 虛擬料號 and 實體料號 come first (A, B: the user, 2026-11-20, 「料號最重要」),
+ * then PJE's template's five columns in their order (C to G), Ref Des in H (asked for once every board got its own row)
+ * and 備註 in I, which says what Usage leaves out.
  */
 export const PJE_SHEET_NAME = "Material list(PCBA)";
-export const PJE_HEADERS = ["Items", "Vendor", "PN", "使用在哪個板子", "Usage", "Ref Des", "備註"] as const;
+export const PJE_HEADERS = ["虛擬料號", "實體料號", "Items", "Vendor", "PN", "使用在哪個板子", "Usage", "Ref Des", "備註"] as const;
 export const PJE_QTY_UNKNOWN = "用量未填";
-type PjeRow = [string, string, string, string, number | string, string, string];
+type PjeRow = [string, string, string, string, string, string, number | string, string, string];
+
+/** 備註 when a board's BOM has no real physical number (blank, TEMP-, a placeholder). */
+export const PJE_PHYSICAL_BORROWED = "本板 BOM 沒有正式實體料號";
 
 /**
  * One row per board (user, 2026-11-20): a part used on two boards is two rows with the same Items / Vendor / PN, next
- * to each other, so PJE can filter a board (使用在哪個板子 is exactly the board name) or add Usage up in Excel. Usage is
- * that board's quantity, a number; empty when none of its positions wrote one; Ref Des that board's positions. 備註
- * says what Usage leaves out ("+1 未填用量：J9", "用量未填：J9"), so PJE never reads an empty or partial Usage as the
- * whole need.
+ * to each other, so PJE can filter a board (使用在哪個板子 is exactly the board name) or add Usage up in Excel.
+ * 虛擬料號 is that board's own only: it names the substitute group its design allows, which another board's group does
+ * not. 實體料號 is that board's own; a board not numbered yet gets the one number the project has for the same vendor
+ * part (one vendor + MPN is one physical part) and 備註 says where it comes from; when the boards gave different numbers
+ * the cell stays empty and 備註 lists them, so no cell is filled with another board's numbers to choose from. A board
+ * whose own BOM gave one vendor part two numbers shows both, and 備註 says so. Usage is that board's
+ * quantity, a number; empty when none of its positions wrote one; Ref Des that board's positions. 備註 also says what
+ * Usage leaves out ("+1 未填用量：J9", "用量未填：J9"), so PJE never reads an empty or partial Usage as the whole need.
  */
 export function buildPjeRows(parts: readonly ProjectPart[]): PjeRow[] {
   return parts.flatMap(part => part.uses.map((use): PjeRow => {
     const missing = use.missingRefs.join("；");
-    const note = use.qty === null ? `${PJE_QTY_UNKNOWN}：${missing}` : use.missingRefs.length > 0 ? `+${use.missingRefs.length} ${PROJECT_QTY_MISSING}用量：${missing}` : "";
-    return [part.name || part.spec, part.manufacturer, part.mpn, use.board, use.qty ?? "", use.refs, note];
+    const notes = [use.qty === null ? `${PJE_QTY_UNKNOWN}：${missing}` : use.missingRefs.length > 0 ? `+${use.missingRefs.length} ${PROJECT_QTY_MISSING}用量：${missing}` : ""];
+    let physical = use.physicalNumbers.join("、");
+    if (use.physicalNumbers.length > 1) notes.push(`本板 BOM 給這顆料 ${use.physicalNumbers.length} 個實體料號`);
+    if (!physical && part.physicalNumbers.length > 0) {
+      const numbered = part.uses.filter(other => other.physicalNumbers.length > 0);
+      if (part.physicalNumbers.length === 1) {
+        physical = part.physicalNumbers[0];
+        notes.push(`${PJE_PHYSICAL_BORROWED}，取自 ${numbered.map(other => other.board).join("、")}`);
+      } else {
+        notes.push(`${PJE_PHYSICAL_BORROWED}，各板不同：${numbered.map(other => `${other.board}＝${other.physicalNumbers.join("、")}`).join("；")}`);
+      }
+    }
+    return [use.virtualNumbers.join("、"), physical, part.name || part.spec, part.manufacturer, part.mpn, use.board, use.qty ?? "", use.refs, notes.filter(Boolean).join("\n")];
   }));
 }
 
@@ -477,10 +517,13 @@ export function buildProjectPartsRows(parts: readonly ProjectPart[]): Array<Arra
 
 const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-/** Cell by cell: ExcelJS reads a plain array only when it comes from its own JavaScript realm. */
+/**
+ * Cell by cell: ExcelJS reads a plain array only when it comes from its own JavaScript realm. An empty text stays a
+ * blank cell (ExcelJS would store "" as a value, and Excel's blank-cell search would then skip the rows without a number).
+ */
 function writeRow(sheet: import("exceljs").Worksheet, values: ReadonlyArray<string | number>) {
   const row = sheet.getRow(sheet.rowCount + 1);
-  values.forEach((value, index) => { row.getCell(index + 1).value = value; });
+  values.forEach((value, index) => { if (value !== "") row.getCell(index + 1).value = value; });
   row.commit();
   return row;
 }
@@ -496,10 +539,10 @@ export function projectPartsFileName(projectName: string, kind: "總料表" | "P
 }
 
 /**
- * The PJE workbook. Header as in PJE's template: Calibri 7 bold dark blue (使用在哪個板子 in Microsoft JhengHei),
- * light blue fill, centred and wrapped, thin borders; widths B 21, C 22.125, D 27.375; first row frozen. Differences
- * on purpose: the template leaves Items at the default width, which would hide the part names; Ref Des (F) and 備註
- * (G, Microsoft JhengHei like the other Chinese header) are added in the same header style.
+ * The PJE workbook. Header as in PJE's template: Calibri 7 bold dark blue (Chinese headers in Microsoft JhengHei),
+ * light blue fill, centred and wrapped, thin borders; Vendor 21, PN 22.125, 使用在哪個板子 27.375 wide; first row
+ * frozen. Differences on purpose: the template leaves Items at the default width, which would hide the part names; the
+ * part numbers (A, B), Ref Des (H) and 備註 (I) are added in the same header style.
  */
 export async function buildPjeWorkbook(parts: readonly ProjectPart[], meta: { projectName: string; exportedBy: string; exportedAt: Date }) {
   const ExcelJS = await import("exceljs");
@@ -508,16 +551,11 @@ export async function buildPjeWorkbook(parts: readonly ProjectPart[], meta: { pr
   workbook.created = meta.exportedAt;
   workbook.title = `${meta.projectName} Key components list`;
   const sheet = workbook.addWorksheet(PJE_SHEET_NAME);
-  sheet.getColumn(1).width = 44;
-  sheet.getColumn(2).width = 21;
-  sheet.getColumn(3).width = 22.125;
-  sheet.getColumn(4).width = 27.375;
-  sheet.getColumn(6).width = 36;
-  sheet.getColumn(7).width = 30;
+  [18, 18, 44, 21, 22.125, 27.375, undefined, 36, 30].forEach((width, index) => { if (width) sheet.getColumn(index + 1).width = width; });
   const header = writeRow(sheet, PJE_HEADERS);
   const thin = { style: "thin" as const };
-  header.eachCell((cell, column) => {
-    cell.font = { name: column === 4 || column === 7 ? "Microsoft JhengHei" : "Calibri", size: 7, bold: true, color: { argb: "FF002060" } };
+  header.eachCell(cell => {
+    cell.font = { name: /[\u4e00-\u9fff]/.test(String(cell.value)) ? "Microsoft JhengHei" : "Calibri", size: 7, bold: true, color: { argb: "FF002060" } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFCAEDFB" } };
     cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
     cell.border = { top: thin, left: thin, bottom: thin, right: thin };

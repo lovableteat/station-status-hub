@@ -270,7 +270,7 @@ export function ProjectPartsView({ projectName, series: liveSeries, loadVersion,
       <Button type="button" variant="outline" size="sm" disabled={exporting === "pje"} aria-busy={exporting === "all" || undefined} onClick={() => void runExport("all")} title={`把目前篩選的 ${visible.length.toLocaleString()} 項料件匯出成 Excel，含每塊板子的用量與位號`} className="project-parts-export">
         {exporting === "all" ? <LoaderCircle className="project-parts-spinner" aria-hidden="true" /> : <Download aria-hidden="true" />}{exporting === "all" ? "匯出中…" : "匯出 Excel"}
       </Button>
-      <Button type="button" size="sm" disabled={exporting === "all"} aria-busy={exporting === "pje" || undefined} onClick={() => void runExport("pje")} title={selectedParts.length > 0 ? `把勾選的 ${selectedParts.length} 項料件轉成 PJE 備料表（Items、Vendor、PN、使用在哪個板子、Usage、Ref Des、備註）；用在幾塊板子就分成幾列，Usage 和 Ref Des 是該板的` : `沒有勾選時，把目前篩選的 ${visible.length.toLocaleString()} 項料件轉成 PJE 備料表，每塊板子一列；只想給部分料件請先勾選`} className="project-parts-pje">
+      <Button type="button" size="sm" disabled={exporting === "all"} aria-busy={exporting === "pje" || undefined} onClick={() => void runExport("pje")} title={selectedParts.length > 0 ? `把勾選的 ${selectedParts.length} 項料件轉成 PJE 備料表（虛擬料號、實體料號、Items、Vendor、PN、使用在哪個板子、Usage、Ref Des、備註）；用在幾塊板子就分成幾列，料號、Usage 和 Ref Des 是該板的（該板沒填實體料號時帶入其他板子同一顆料的，並寫在備註）` : `沒有勾選時，把目前篩選的 ${visible.length.toLocaleString()} 項料件轉成 PJE 備料表，每塊板子一列；只想給部分料件請先勾選`} className="project-parts-pje">
         {exporting === "pje" ? <LoaderCircle className="project-parts-spinner" aria-hidden="true" /> : <PackageCheck aria-hidden="true" />}{exporting === "pje" ? "產生中…" : <>轉給 PJE 備料表<span className="project-parts-pje-count">{pjeLabel}</span></>}
       </Button>
     </div>

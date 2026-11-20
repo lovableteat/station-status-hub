@@ -90,16 +90,19 @@ async function readBook(download, dir) {
     const pjeBook = await readBook(pjeDownload, dir);
     assert.deepEqual(pjeBook.worksheets.map((sheet) => sheet.name), ['Material list(PCBA)']);
     const sheet = pjeBook.worksheets[0];
-    assert.deepEqual(sheet.getRow(1).values.slice(1), ['Items', 'Vendor', 'PN', '使用在哪個板子', 'Usage', 'Ref Des', '備註']);
+    assert.deepEqual(sheet.getRow(1).values.slice(1), ['虛擬料號', '實體料號', 'Items', 'Vendor', 'PN', '使用在哪個板子', 'Usage', 'Ref Des', '備註']);
     assert.equal(sheet.getRow(1).getCell(1).fill.fgColor.argb, 'FFCAEDFB');
     // One row per board: both ticked parts sit on both boards, so each is two rows next to each other, each with that
-    // board's own quantity (子板 ×2, 主板 ×1).
+    // board's own quantity (子板 ×2, 主板 ×1). The part numbers come first; QA-MPN-7 has none on either board.
     assert.equal(sheet.rowCount, 5);
-    assert.deepEqual(sheet.getRow(2).values.slice(1, 7), ['RES 10K 1% 0402 J4', 'QA Vendor B', 'QA-MPN-7', 'QA 子板(僅隔離資料)', 2, 'J4']);
-    assert.deepEqual(sheet.getRow(3).values.slice(1, 7), ['RES 10K 1% 0402 J4', 'QA Vendor B', 'QA-MPN-7', 'QA 主板(僅隔離資料)', 1, 'J1']);
-    assert.deepEqual(sheet.getRow(4).values.slice(2, 7), ['QA Vendor A', 'QA-MPN-8', 'QA 子板(僅隔離資料)', 2, 'U3']);
-    assert.deepEqual(sheet.getRow(5).values.slice(2, 7), ['QA Vendor A', 'QA-MPN-8', 'QA 主板(僅隔離資料)', 1, 'U1']);
-    assert.ok([2, 3, 4, 5].every((line) => !sheet.getRow(line).getCell(7).value), 'no 備註 when every position wrote its quantity');
+    assert.deepEqual(sheet.getRow(2).values.slice(3, 9), ['RES 10K 1% 0402 J4', 'QA Vendor B', 'QA-MPN-7', 'QA 子板(僅隔離資料)', 2, 'J4']);
+    assert.deepEqual(sheet.getRow(3).values.slice(3, 9), ['RES 10K 1% 0402 J4', 'QA Vendor B', 'QA-MPN-7', 'QA 主板(僅隔離資料)', 1, 'J1']);
+    assert.ok([2, 3].every((line) => !sheet.getRow(line).getCell(1).value && !sheet.getRow(line).getCell(2).value), 'no number is made up for a part without one');
+    for (const [line, board, qty, ref] of [[4, 'QA 子板(僅隔離資料)', 2, 'U3'], [5, 'QA 主板(僅隔離資料)', 1, 'U1']]) {
+      assert.deepEqual(sheet.getRow(line).values.slice(1, 3), ['000-VIRTUAL', '000-PHYSICAL-8'], `row ${line}: the board's own part numbers in A and B`);
+      assert.deepEqual(sheet.getRow(line).values.slice(4, 9), ['QA Vendor A', 'QA-MPN-8', board, qty, ref]);
+    }
+    assert.ok([2, 3, 4, 5].every((line) => !sheet.getRow(line).getCell(9).value), 'no 備註 when every position wrote its quantity');
     assert.match(await view.getByTestId('project-parts-notice').innerText(), /已下載 PJE 備料表（2 項料件、每塊板子一列共 4 列）/);
     if (process.env.PROJECT_PARTS_SHOTS) await page.screenshot({ path: path.join(process.env.PROJECT_PARTS_SHOTS, 'desktop-refdes.png') });
 
@@ -221,8 +224,9 @@ async function readBook(download, dir) {
     if (process.env.PROJECT_PARTS_SHOTS) await phonePage.screenshot({ path: path.join(process.env.PROJECT_PARTS_SHOTS, 'phone-pje-notice.png') });
     const phoneSheet = (await readBook(phoneDownload, dir)).worksheets[0];
     const phoneRows = Array.from({ length: phoneSheet.rowCount - 1 }, (_, index) => phoneSheet.getRow(index + 2).values.slice(1));
-    assert.ok(phoneRows.length >= 1 && phoneRows.every((line) => !String(line[3]).includes('×') && (typeof line[4] === 'number' || line[4] === undefined || line[4] === '')), `one board per row with its Ref Des: ${JSON.stringify(phoneRows)}`);
-    assert.equal(new Set(phoneRows.map((line) => line[2])).size, 1, 'one ticked part');
+    assert.deepEqual(phoneSheet.getRow(1).values.slice(1, 3), ['虛擬料號', '實體料號'], 'the part numbers come first on the phone too');
+    assert.ok(phoneRows.length >= 1 && phoneRows.every((line) => !String(line[5]).includes('×') && (typeof line[6] === 'number' || line[6] === undefined || line[6] === '')), `one board per row with its Ref Des: ${JSON.stringify(phoneRows)}`);
+    assert.equal(new Set(phoneRows.map((line) => line[4])).size, 1, 'one ticked part');
     console.log('專案總料表 browser flow: passed');
   } finally {
     await browser.close();
