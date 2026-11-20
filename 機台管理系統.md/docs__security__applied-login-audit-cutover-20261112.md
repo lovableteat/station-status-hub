@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/security/applied-login-audit-cutover-20261112.md`；程式參考基準：`96656db6f6e0a577ede52fe7c3c493f1303aa3d7`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/security/applied-login-audit-cutover-20261112.md`；程式參考基準：`55d9d4b349e0951e1c07d83d3b4f0378fa0686b6`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Applied anonymous login-audit containment
 
@@ -12,7 +12,7 @@ This cutover closes only anonymous login-audit table access. It does not establi
 
 ## Exact repository history
 
-The [migration SQL](https://github.com/lovableteat/station-status-hub/blob/96656db6f6e0a577ede52fe7c3c493f1303aa3d7/supabase/migrations/20261112022029_restrict_anonymous_login_audit_access.sql) was copied from an independently read existing server ledger record and matched the retained applied SQL byte-for-byte:
+The [migration SQL](https://github.com/lovableteat/station-status-hub/blob/55d9d4b349e0951e1c07d83d3b4f0378fa0686b6/supabase/migrations/20261112022029_restrict_anonymous_login_audit_access.sql) was copied from an independently read existing server ledger record and matched the retained applied SQL byte-for-byte:
 
 - Version: `20261112022029`
 - Name: `restrict_anonymous_login_audit_access`

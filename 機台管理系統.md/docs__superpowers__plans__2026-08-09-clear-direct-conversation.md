@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-08-09-clear-direct-conversation.md`；程式參考基準：`96656db6f6e0a577ede52fe7c3c493f1303aa3d7`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-08-09-clear-direct-conversation.md`；程式參考基準：`55d9d4b349e0951e1c07d83d3b4f0378fa0686b6`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Clear Direct Conversation Implementation Plan
 
