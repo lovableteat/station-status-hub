@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/specs/2026-08-15-mobile-first-workspaces-design.md`；程式參考基準：`40b150ddf21bb7f56f10b5fd8263ac926b9e1d7e`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/specs/2026-08-15-mobile-first-workspaces-design.md`；程式參考基準：`d76054a6264cfe887c844c4bb5b5f8958a1b55e5`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Mobile-first workspaces design
 
@@ -30,6 +30,8 @@ Use one shared React application with responsive component variants. Do not crea
 ### Header
 
 The mobile header is a single compact row. It contains the platform logo/name and the account avatar. QR sharing, online status, desktop navigation, subtitles, and secondary account details are hidden from the always-visible row and remain available from existing menus where applicable.
+
+> 2026-11-22 更新：使用者要求手機右上角也要有網站二維碼按鈕（在外面直接給別人掃描打開網站），所以 QR 已回到手機頂部，順序是「線上人員 → 二維碼 → 帳號」，仍維持單列。不要再把它藏到 md 以下。
 
 Target height is 52px plus the top safe area. It must never become a two-row toolbar.
 
