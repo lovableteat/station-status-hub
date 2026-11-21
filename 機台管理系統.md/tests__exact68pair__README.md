@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`tests/exact68pair/README.md`；程式參考基準：`55d9d4b349e0951e1c07d83d3b4f0378fa0686b6`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`tests/exact68pair/README.md`；程式參考基準：`fb8f03f681b1cdfcf7813d95c66a21e1218a1b8c`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Exact current68 → security candidate study
 
