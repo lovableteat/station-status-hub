@@ -1,0 +1,22 @@
+name: Storage compatibility (isolated)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - tests/storageService.integration.cjs
+      - .github/workflows/storage-compatibility.yml
+      - docs/security-proposals/03-private-attachments.sql
+      - tests/fixtures/legacy-pcb-security/sequence-authorization-function.json
+permissions:
+  contents: read
+jobs:
+  storage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Real isolated Storage HTTP and permission matrix
+        run: timeout --signal=TERM --kill-after=10s 360s node --test tests/storageService.integration.cjs
