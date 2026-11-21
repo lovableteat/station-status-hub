@@ -311,7 +311,7 @@ export function CodeStorageManager({ workspaceKey = "station-status" }: { worksp
             </Button>
           </DialogTrigger>
           <DialogContent
-            className="mf-tool-dialog !flex h-[min(920px,calc(100dvh-1.5rem))] w-[calc(100vw-1.5rem)] max-w-5xl flex-col overflow-hidden p-0 border-[#2a526f] bg-[#071522]"
+            className="!flex h-[min(920px,calc(100dvh-1.5rem))] w-[calc(100vw-1.5rem)] max-w-5xl flex-col overflow-hidden p-0 border-[#2a526f] bg-[#071522] mf-tool-dialog"
             onPointerDownOutside={(event) => {
               const target = event.target as HTMLElement;
               if (target?.closest(".rich-text-editor") || target?.closest('input[type="file"]')) event.preventDefault();

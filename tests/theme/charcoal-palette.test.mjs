@@ -86,7 +86,7 @@ test("the 維修中心 palette survives compilation and covers every tab, not on
   assert.ok(navy.length >= 15, `found the tools tab's navy utilities (${navy.length})`);
   for (const name of ["CodeStorageManager", "CommandLibrary", "FileUploadDialog"]) {
     const source = await readFile(new URL(`../../src/components/tools/${name}.tsx`, import.meta.url), "utf8");
-    assert.match(source, /<DialogContent[^>]*className="mf-tool-dialog/, `${name}: its dialog takes the palette`);
+    assert.match(source, /<DialogContent[^>]*className="[^"]*\bmf-tool-dialog\b/, `${name}: its dialog takes the palette`);
   }
   const fault = await readFile(new URL("../../src/components/maintenance/maintenanceFaultLayout.css", import.meta.url), "utf8");
   assert.doesNotMatch(fault, /--mf-panel:|\.maintenance-shell:has/, "the fault tab no longer has a palette of its own");
