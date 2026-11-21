@@ -131,6 +131,17 @@ function useUnifiedDataSource() {
   const [stationContents, setStationContents] = useState<StationContent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+  // How many mounted components need the rows. The provider sits above every workspace, but only the legacy test
+  // tracker reads them: with nobody asking there is no snapshot, no realtime channel and no reload on window focus
+  // (it used to fetch five whole tables at every start and every return to the tab, whatever page was open).
+  const [demand, setDemand] = useState(0);
+  const enabled = demand > 0;
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
+  const acquire = useCallback(() => {
+    setDemand((count) => count + 1);
+    return () => setDemand((count) => count - 1);
+  }, []);
   const { toast } = useToast();
   const loadSequenceRef = useRef(0);
   const loadedProjectRef = useRef<string | null>(null);
@@ -151,6 +162,8 @@ function useUnifiedDataSource() {
   const stationStatuses = useStationStatus(systems, stations, progress);
 
   const loadAllData = useCallback(async () => {
+    // A refetch that arrives after the last reader left (a late callback) must not load rows nobody follows.
+    if (!enabledRef.current) return;
     const loadSequence = ++loadSequenceRef.current;
     const isCurrent = () => loadSequence === loadSequenceRef.current && scope === scopeRef.current;
     pendingChangesRef.current.clear();
@@ -486,6 +499,25 @@ function useUnifiedDataSource() {
   );
 
   useEffect(() => {
+    if (enabled) return;
+    // Nobody needs the rows (any more): back to the state of a provider that has not loaded, so the next reader starts
+    // from "loading" and never sees rows of the project that was open the last time someone asked.
+    loadSequenceRef.current += 1;
+    loadedProjectRef.current = null;
+    loadingSnapshotRef.current = false;
+    pendingChangesRef.current.clear();
+    const empty = <T,>(rows: T[]) => (rows.length ? [] : rows);
+    setSystems(empty);
+    setStations(empty);
+    setTestItems(empty);
+    setProgress(empty);
+    setStationContents(empty);
+    setIsLoading(true);
+    setIsUpdating(false);
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled) return;
     loadAllData();
 
     if (!userId || !activeProjectId) return;
@@ -546,6 +578,7 @@ function useUnifiedDataSource() {
     };
   }, [
     activeProjectId,
+    enabled,
     loadAllData,
     userId,
     updateProgressRecords,
@@ -567,6 +600,7 @@ function useUnifiedDataSource() {
     refetch: loadAllData,
     refreshProgress,
     updateProgress,
+    acquire,
   };
 }
 
@@ -580,12 +614,20 @@ export function UnifiedDataProvider({ children }: { children: ReactNode }) {
   return createElement(UnifiedDataContext.Provider, { value }, children);
 }
 
-export function useUnifiedData() {
+/**
+ * The project's test rows. Reading them is what makes the provider load and follow them: they are fetched when the
+ * first reader mounts and dropped when the last one unmounts. `demand: false` only watches (the shell's update
+ * indicator) and never causes a load.
+ */
+export function useUnifiedData({ demand = true }: { demand?: boolean } = {}) {
   const context = useContext(UnifiedDataContext);
 
   if (!context) {
     throw new Error("useUnifiedData must be used within a UnifiedDataProvider");
   }
+
+  const { acquire } = context;
+  useEffect(() => (demand ? acquire() : undefined), [acquire, demand]);
 
   return context;
 }

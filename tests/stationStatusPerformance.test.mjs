@@ -62,4 +62,10 @@ test('unrelated workspaces do not schedule a timed BOM preload', async () => {
   const index = await readFile(new URL('../src/pages/Index.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(index, /void loadMaterialRequestPage\(\)/);
   assert.match(index, /loadMaterialRequestPage\(\)\.then/);
+  // 2026-11-21: other workspaces are prepared in the background again, but only by downloading their files in idle
+  // time (requestCodePreload). Nothing outside a navigation may import, and so run, a workspace.
+  assert.doesNotMatch(index, /setTimeout\([^)]*(?:preload|loadMaterialRequestPage)/);
+  const imports = [...index.matchAll(/(\w+)\.preload\(\)|preloadWorkspace\(/g)].map((match) => index.slice(Math.max(0, index.lastIndexOf('\n', match.index) + 1), index.indexOf('\n', match.index)).trim());
+  for (const line of imports) assert.doesNotMatch(line, /scheduleIdleLoads|requestIdleCallback/, line);
+  assert.match(index, /scheduleIdleLoads\(keys\.map\(\(key\) => \(\) => requestCodePreload\(key\)\)\)/);
 });

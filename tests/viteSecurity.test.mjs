@@ -82,5 +82,11 @@ test("retains the intended Vite server, Pages, build, worker, and plugin source 
   assert.match(source, /worker:\s*\{\s*format:\s*"es",\s*\}/s);
   assert.match(source, /optimizeDeps:\s*\{\s*exclude:\s*\["occt-wasm"\],\s*\}/s);
   assert.match(source, /build:\s*\{\s*target:\s*"es2020",\s*\}/s);
-  assert.match(source, /plugins:\s*\[react\(\),\s*mode === "development" && componentTagger\(\)\]/);
+  // 2026-11-21 (load speed): index.html preloads the signed-in shell, and chunks are laid out so a deploy renames only
+  // changed files. Both plugins are this repository's own files (scripts/), not packages; nothing else may join.
+  assert.match(source, /plugins:\s*\[react\(\),\s*mode === "development" && componentTagger\(\),\s*bootPreloadPlugin\(\),\s*stableChunksPlugin\(\)\]\.filter\(Boolean\)/);
+  assert.match(source, /import \{ bootPreloadPlugin \} from "\.\/scripts\/bootPreloadPlugin\.ts";/);
+  assert.match(source, /import \{ stableChunksPlugin \} from "\.\/scripts\/stableChunks\.ts";/);
+  assert.deepEqual((source.match(/^import .*$/gm) ?? []).map((line) => line.match(/from "([^"]+)"/)[1]),
+    ["vite", "@vitejs/plugin-react-swc", "path", "lovable-tagger", "./scripts/bootPreloadPlugin.ts", "./scripts/stableChunks.ts"]);
 });

@@ -46,6 +46,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useUnifiedData } from "@/hooks/useUnifiedData";
 import { useUserPresence } from "@/hooks/useUserPresence";
 import { cn } from "@/lib/utils";
+import { requestCodePreload, scheduleIdleLoads } from "@/lib/idlePreload";
 import { MyAssessmentBackupsDialog } from "@/components/performance/MyAssessmentBackupsDialog";
 
 const AdminPanel = recoverableLazy(() =>
@@ -342,6 +343,14 @@ function preloadWorkspace(workspace: WorkspaceId | null, module?: string) {
   }
 }
 
+/**
+ * Starts loading the workspace named in the URL as soon as this page's code is in, before it renders. Rendering a
+ * workspace still waits for the permission check (PermissionGuard); its code is a public file and need not.
+ */
+export function prepareInitialWorkspace() {
+  void preloadWorkspace(getInitialWorkspace(), getInitialStationModule()).catch(() => undefined);
+}
+
 const Index = () => {
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId | null>(
     getInitialWorkspace
@@ -363,7 +372,8 @@ const Index = () => {
   const { logout, user } = useUser();
   const { updateCurrentModule } = useUserPresence();
   const { activeProjectId, isSwitchingProject } = useTestProject();
-  const { isUpdating } = useUnifiedData();
+  // Watches only: the test rows load when a page that shows them opens, not with every workspace.
+  const { isUpdating } = useUnifiedData({ demand: false });
   const { canViewModule, loading: permissionsLoading } = usePermissions();
   const isCompactLayout = useIsCompactLayout();
   const isDemoMode =
@@ -371,8 +381,8 @@ const Index = () => {
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("demo") === "admin";
 
-  // Load BOM only when selected. A timer preload competed with the active
-  // workspace's first render and downloaded spreadsheet code for unrelated pages.
+  // A workspace's code is imported when it is selected. A timer preload that imported the BOM page once competed with
+  // the active workspace's first render; the background preload further down only downloads, and only when idle.
 
   const workspaceCatalog = useMemo(
     () => [
@@ -499,6 +509,17 @@ const Index = () => {
       setActiveWorkspace(null);
     }
   }, [activeWorkspace, permissionsLoading, workspaceItems]);
+
+  // The code of the other workspaces this account may open is downloaded in the background, one workspace per idle
+  // period after the page on screen has settled, so switching does not wait for a download. Downloaded only: it runs
+  // when the workspace is opened, and no workspace data is fetched. Keyed by the list itself, because the catalog is
+  // rebuilt at every permission refresh and would restart the schedule for ever.
+  const preloadableWorkspaces = workspaceCatalog.filter((item) => item.visible).map((item) => item.id).join(",");
+  useEffect(() => {
+    if (permissionsLoading || !preloadableWorkspaces) return;
+    const keys = preloadableWorkspaces.split(",").map((id) => (id === "station-status" ? `station:${getInitialStationModule()}` : id));
+    return scheduleIdleLoads(keys.map((key) => () => requestCodePreload(key)));
+  }, [permissionsLoading, preloadableWorkspaces]);
 
   useEffect(() => {
     if (permissionsLoading) return;

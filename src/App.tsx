@@ -8,8 +8,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { UserProvider, useUser } from "@/components/auth/UserContext";
 
+// The shell resolves together with the page it shows first. Revealed one Suspense boundary at a time, React holds each
+// nested reveal back (its fallback throttle), and the providers' first requests wait behind that; with the page already
+// loaded there is one reveal. Still imported only after the session is verified.
 const AuthenticatedApplication = recoverableLazy(() =>
-  import("@/components/auth/AuthenticatedApplication")
+  import("@/components/auth/AuthenticatedApplication").then(async (module) => {
+    await module.prepareAuthenticatedShell?.();
+    return module;
+  })
 );
 
 const queryClient = new QueryClient({

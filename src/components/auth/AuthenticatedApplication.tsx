@@ -19,6 +19,25 @@ const ApiManagementPage = recoverableLazy(() =>
   }))
 );
 
+const routeTarget = (pathname: string) => (pathname === "/" ? Index
+  : pathname === "/test-tracker" ? TestTrackerPage
+  : pathname === "/api-management" ? ApiManagementPage : NotFound);
+
+/** How long the shell waits for its first page before it shows anyway (the page then appears through its own boundary). */
+const SHELL_PREPARE_LIMIT_MS = 2500;
+
+/**
+ * Loads the page of the current route before the shell is first rendered, and lets that page start loading the
+ * workspace named in the URL. Never rejects: a page that fails to load keeps its own retry screen when it is rendered.
+ */
+export function prepareAuthenticatedShell(): Promise<void> {
+  const pathname = typeof window === "undefined" ? "/" : window.location.hash.replace(/^#/, "").split("?")[0] || "/";
+  const page = routeTarget(pathname).preload()
+    .then((module) => { (module as { prepareInitialWorkspace?: () => void }).prepareInitialWorkspace?.(); })
+    .catch(() => undefined);
+  return Promise.race([page, new Promise<void>((resolve) => { setTimeout(resolve, SHELL_PREPARE_LIMIT_MS); })]);
+}
+
 function PreparedRoutes() {
   const location = useLocation();
   const routeTo = useNavigate();
@@ -26,9 +45,7 @@ function PreparedRoutes() {
   const { navigate, pending, retry, cancel } = useModuleNavigation();
   useEffect(() => {
     if (location === displayedLocation) return;
-    const target = location.pathname === "/" ? Index
-      : location.pathname === "/test-tracker" ? TestTrackerPage
-      : location.pathname === "/api-management" ? ApiManagementPage : NotFound;
+    const target = routeTarget(location.pathname);
     void navigate(() => target.preload(), () => {
       if (location.pathname !== displayedLocation.pathname && !window.dispatchEvent(new Event("workspace-before-navigate", { cancelable: true }))) {
         routeTo(displayedLocation, { replace: true });
