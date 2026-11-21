@@ -25,20 +25,22 @@ async function versionMetrics(center){
 }
 async function versionFlow(page,width,report){
  await page.goto('/versions');const center=page.getByTestId('bom-version-center');await center.waitFor();
- const list=center.getByTestId('bom-series-list'),detail=center.getByTestId('bom-series-detail'),search=list.getByRole('textbox',{name:'搜尋 BOM 系列',exact:true});
+ // Levels (2026-11-22): the window opens on the project of the board on screen; its boards are one-line table rows.
+ const list=center.getByTestId('bom-series-list'),detail=center.getByTestId('bom-series-detail'),search=center.getByRole('textbox',{name:'搜尋 BOM 系列',exact:true});
+ await list.locator('.bom-series-row').first().waitFor();
  const rows=await versionMetrics(center);report.seriesRows=rows;
- if(!baselineOnly){report.seriesTextBounds=await list.locator('.bom-series-row').evaluateAll(rows=>rows.map(row=>{const box=row.getBoundingClientRect(),meta=row.querySelector('.bom-series-metadata');const text=document.createRange();text.selectNodeContents(meta);const r=text.getBoundingClientRect();return{rowBottom:box.bottom,textBottom:r.bottom,textTop:r.top,metaHeight:meta.getBoundingClientRect().height}}));assert.ok(report.seriesTextBounds.every(x=>x.textBottom<=x.rowBottom-1),'Series metadata text must fit the 48px row: '+JSON.stringify(report.seriesTextBounds));}
+ if(!baselineOnly){report.seriesTextBounds=await list.locator('.bom-series-row').evaluateAll(rows=>rows.map(row=>{const box=row.getBoundingClientRect();const cells=[...row.querySelectorAll('.bom-level-name,.bom-level-cell')].filter(c=>c.getClientRects().length).map(c=>c.getBoundingClientRect());return{rowTop:box.top,rowBottom:box.bottom,textTop:Math.min(...cells.map(c=>c.top)),textBottom:Math.max(...cells.map(c=>c.bottom))}}));assert.ok(report.seriesTextBounds.every(x=>x.textBottom<=x.rowBottom-1&&x.textTop>=x.rowTop+1),'Board row text must fit its row: '+JSON.stringify(report.seriesTextBounds));}
  if(baselineOnly){await page.screenshot({path:path.join(evidence,'before-versions-'+width+'.png')});return;}
  await frame(page,center,width);
- if(width>=1024){assert.ok(rows.every(row=>row.height>=44&&row.height<=50),JSON.stringify(rows));
- const upload=await list.getByRole('button',{name:'匯入 BOM 檔案',exact:true}).boundingBox(),find=await search.boundingBox();assert.ok(Math.abs(upload.y-find.y)<=1,'Upload and search share a row');report.uploadSearch={upload,find};}
- // Levels (2026-11-21): 全部專案 lists the projects as one-line rows, opening one lists its boards again.
- const allProjects=list.getByRole('button',{name:'全部專案',exact:true});await allProjects.click();const projectRows=list.locator('.bom-project-row');await projectRows.first().waitFor();assert.equal(await list.locator('.bom-series-row').count(),0,'the project level lists projects, not boards');
+ if(width>=1024){assert.ok(rows.every(row=>row.height>=52&&row.height<=60),JSON.stringify(rows));
+ const upload=await center.getByRole('button',{name:'匯入 BOM 檔案',exact:true}).first().boundingBox(),find=await search.boundingBox(),table=await list.boundingBox();assert.ok(upload.y+upload.height<=find.y+1&&find.y+find.height<=table.y&&table.y-find.y-find.height<=16,'Import sits with the level heading; the search sits right above the list');report.uploadSearch={upload,find,table};}
+ // 全部專案 lists the projects as one-line rows; opening one lists its boards again.
+ const allProjects=center.locator('.bom-crumbs').getByRole('button',{name:'全部專案',exact:true});await allProjects.click();const projectRows=center.getByTestId('bom-project-list').locator('.bom-project-row');await projectRows.first().waitFor();assert.equal(await center.locator('.bom-series-row').count(),0,'the project level lists projects, not boards');
  report.projectRows=await projectRows.evaluateAll(rows=>rows.map(row=>row.getBoundingClientRect().height));assert.ok(report.projectRows.every(height=>height>=44&&height<=64),JSON.stringify(report.projectRows));
- await list.locator('.bom-project-row[data-active-project="false"]').first().press('Enter');await list.locator('.bom-series-row').first().waitFor();
+ await center.locator('.bom-project-row[data-active-project="false"]:not([data-archive])').first().press('Enter');await list.locator('.bom-series-row').first().waitFor();
  await search.fill('找不到的系列');await center.getByText('找不到符合條件的 BOM 系列',{exact:true}).waitFor();await search.fill('');
- await list.getByRole('button',{name:'匯入 BOM 檔案',exact:true}).click();assert.ok(await page.evaluate(()=>window.__bomUiFixture.calls.some(c=>c.name==='uploadNew')));
- await list.getByRole('button',{name:/超長系列名稱/}).click();await detail.waitFor();if(width<1024){await detail.getByRole('button',{name:'返回清單',exact:true}).click();await list.waitFor();}
+ await center.getByRole('button',{name:'匯入 BOM 檔案',exact:true}).first().click();assert.ok(await page.evaluate(()=>window.__bomUiFixture.calls.some(c=>c.name==='uploadNew')));
+ await list.getByRole('button',{name:/超長系列名稱/}).click();await detail.waitFor();await center.locator('.bom-crumbs li[data-crumb="parent"] button').click();await list.waitFor();
  await list.getByRole('button',{name:/Vera_CPU_Rack_E1\.S/}).first().click();await detail.waitFor();
  await detail.getByRole('button',{name:'上傳此系列新版',exact:true}).click();assert.ok(await page.evaluate(()=>window.__bomUiFixture.calls.some(c=>c.name==='uploadVersion')));
  await detail.getByRole('button',{name:'修改系列名稱',exact:true}).click();await detail.getByRole('textbox',{name:'系列名稱',exact:true}).fill('QA 單行版本管理');await detail.getByRole('button',{name:'儲存名稱',exact:true}).click();await detail.getByRole('heading',{name:'QA 單行版本管理',exact:true}).waitFor();

@@ -177,7 +177,7 @@ async function readBook(download, dir) {
     await page.waitForFunction(() => document.querySelector('[data-testid=project-parts-notice]')?.textContent.includes('已寫回 2 塊板子'));
     assert.match(await picker().innerText(), /其他 · 手動/);
     assert.equal(await sharedIc().getAttribute('data-selected'), tickedBefore, 'choosing a category does not tick or untick the row');
-    await view.getByRole('button', { name: '← 返回系列' }).click();
+    await view.getByRole('button', { name: '← 返回專案' }).click();
     await page.getByTestId('bom-project-parts-entry').click();
     await page.waitForFunction(() => document.querySelector('[data-testid=project-parts-count]')?.textContent.trim() === '11 / 11 項');
     assert.match(await picker().innerText(), /其他 · 手動/, 'saved, not only shown');
@@ -186,7 +186,7 @@ async function readBook(download, dir) {
     await page.waitForFunction(() => document.querySelector('[data-testid=project-parts-notice]')?.textContent.includes('依位號自動（IC）'));
     assert.match(await picker().innerText(), /^IC$/);
 
-    await view.getByRole('button', { name: '← 返回系列' }).click();
+    await view.getByRole('button', { name: '← 返回專案' }).click();
     await page.getByTestId('bom-series-list').waitFor();
 
     // A board that fails: the export says what is missing, 重試 brings it in.

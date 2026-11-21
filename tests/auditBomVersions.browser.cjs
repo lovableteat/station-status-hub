@@ -91,6 +91,8 @@ function startHarness() {
     assert.equal(await page.getByTestId('material-historical-banner').count(), 0, 'the new version is current, not historical');
 
     await page.getByRole('button', { name: /BOM 管理/ }).click();
+    // BOM 管理 opens on the board's project (2026-11-22 levels); the row marked 畫面中 opens its versions.
+    await page.getByTestId('bom-series-list').locator('.bom-series-row[aria-current="true"]').click();
     const table = page.getByTestId('bom-version-table');
     await table.waitFor();
     const versionRows = await table.locator('tr[data-version-id]').allTextContents();
@@ -154,6 +156,8 @@ function startHarness() {
     fix.on('pageerror', (error) => { throw error; });
     await fix.goto(`http://127.0.0.1:${PORT}/?qaRecarry`);
     await fix.getByRole('button', { name: /BOM 管理/ }).click();
+    // BOM 管理 opens on the board's project (2026-11-22 levels); the row marked 畫面中 opens its versions.
+    await fix.getByTestId('bom-series-list').locator('.bom-series-row[aria-current="true"]').click();
     await fix.getByTestId('bom-version-orphaned').first().click();
     await fix.getByTestId('bom-diff-summary').waitFor({ timeout: 15000 });
     const recarryBanner = fix.getByTestId('bom-diff-recarry');
@@ -178,6 +182,8 @@ function startHarness() {
     kept.on('pageerror', (error) => { throw error; });
     await kept.goto(`http://127.0.0.1:${PORT}/`);
     await kept.getByRole('button', { name: /BOM 管理/ }).click();
+    // BOM 管理 opens on the board's project (2026-11-22 levels); the row marked 畫面中 opens its versions.
+    await kept.getByTestId('bom-series-list').locator('.bom-series-row[aria-current="true"]').click();
     await kept.getByTestId('bom-version-orphaned').first().click();
     await kept.getByTestId('bom-diff-summary').waitFor({ timeout: 15000 });
     await kept.getByTestId('bom-diff-view').locator('tbody tr[data-diff-entry]').filter({ hasText: 'U9' }).getByRole('button', { name: '展開' }).click();
@@ -213,7 +219,7 @@ function startHarness() {
     await small.getByTestId('bom-series-list').waitFor();
     await small.getByTestId('bom-series-list').getByRole('button', { name: /QA 主板/ }).first().click();
     await small.getByTestId('bom-series-detail').waitFor();
-    await small.getByRole('button', { name: '返回清單' }).waitFor();
+    await small.locator('.bom-crumbs li[data-crumb="parent"] button').waitFor();
     const widths = await small.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: window.innerWidth, center: document.querySelector('[data-testid="bom-version-center"]').scrollWidth, centerClient: document.querySelector('[data-testid="bom-version-center"]').clientWidth }));
     assert.ok(widths.document <= widths.viewport, `no page overflow on a phone (${JSON.stringify(widths)})`);
     assert.ok(widths.center <= widths.centerClient, `the version center scrolls only inside its table (${JSON.stringify(widths)})`);

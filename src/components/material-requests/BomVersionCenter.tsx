@@ -1,6 +1,6 @@
 import { recoverableLazy } from "@/components/common/recoverableLazy";
-import { Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, ClipboardList, Download, FileArchive, FileText, GitCompareArrows, Layers3, LoaderCircle, MoreHorizontal, Pencil, Search, Trash2, Upload, X } from "lucide-react";
+import { Suspense, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, ClipboardList, Download, FileArchive, FileSpreadsheet, FileText, GitCompareArrows, Layers3, LoaderCircle, MoreHorizontal, Pencil, Search, Trash2, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -31,6 +31,14 @@ import "./bomVersionCenter.css";
 const UNASSIGNED_VALUE = "__unassigned__";
 /** The project group a board belongs to (the key `groupBomWorkspacesByProject` gives it). */
 const projectKeyOf = (series: BomSeries) => series.project?.projectId ?? "unassigned";
+/** 已封存 is a level of its own beside the projects: its boards are listed like a project's. */
+const ARCHIVE_KEY = "archive";
+const placeOf = (series: BomSeries) => (series.archive ? ARCHIVE_KEY : projectKeyOf(series));
+/**
+ * The whole window goes in levels (2026-11-22, 「不要微調，我要完整的 BOM 版本管理視窗要分層級，從專案再來專案中板子要分層設計」):
+ * every project → the boards of one project → one board's versions. Each level fills the window; the path on top joins them.
+ */
+type BomLevel = "projects" | "project" | "board";
 const NvBomCompare = recoverableLazy(() => import("./NvBomComparePanel"));
 export const BOM_SERIES_EMPTY_TEXT = "找不到符合條件的 BOM 系列";
 
@@ -201,8 +209,8 @@ function VersionEditor({ version, busy, saving, onSave, onCancel }: { version: B
 }
 
 /**
- * BOM 版本管理: series list on the left, the selected series' version timeline on
- * the right, and a full-width diff mode. Replaces the flat BOM 管理 list.
+ * BOM 版本管理: the whole window goes in levels — every project, one project's boards, one board's
+ * version timeline — joined by a path in the header, plus full-width diff, NV and 專案總料表 views.
  */
 export function BomVersionCenter(props: BomVersionCenterProps) {
   const {
@@ -213,15 +221,11 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const [tableScrollRef, tableOverflows] = useOverflowX<HTMLDivElement>();
   const compact = useCompact();
   const [query, setQuery] = useState("");
-  /**
-   * The list goes in levels (2026-11-21, 「BOM 版本管理視窗要分層級，從專案再來專案中板子要分層」): every project first,
-   * then the boards of the project that was opened, then that board's versions on the right. null is the project level.
-   */
+  const [level, setLevel] = useState<BomLevel>("projects");
+  /** The project (or 已封存) whose boards the project level lists, and the parent of the board level. */
   const [openProjectKey, setOpenProjectKey] = useState<string | null>(null);
   const projectGroupId = useId();
-  const [showArchived, setShowArchived] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
-  const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
   const [mode, setMode] = useState<"series" | "diff" | "nv" | "parts">("series");
   /** 專案總料表: the project whose boards are merged. */
   const [partsProjectId, setPartsProjectId] = useState<string | null>(null);
@@ -245,13 +249,22 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   const activeSeries = useMemo(() => findBomSeriesByWorkspace(seriesList, activeBomId), [seriesList, activeBomId]);
   const liveSeries = useMemo(() => seriesList.filter((series) => !series.archive), [seriesList]);
   const archivedSeries = useMemo(() => seriesList.filter((series) => Boolean(series.archive)), [seriesList]);
-  const selectedSeries = seriesList.find((series) => series.id === selectedSeriesId) ?? activeSeries?.series ?? liveSeries[0] ?? null;
+  const selectedSeries = seriesList.find((series) => series.id === selectedSeriesId) ?? null;
   const totalVersions = seriesList.reduce((sum, series) => sum + series.versions.length, 0);
-  const selectedProjectName = selectedSeries?.project
-    ? projectNames.get(selectedSeries.project.projectId) || selectedSeries.project.projectName || "未指定專案"
-    : "未指定專案";
+
+  // Every project with its boards, and 已封存 as a level of its own beside them.
+  const projectGroups = useMemo(() => groupBomWorkspacesByProject(liveSeries, { activeProjectId, activeProjectName, projectNames }), [liveSeries, activeProjectId, activeProjectName, projectNames]);
+  type BomGroup = (typeof projectGroups)[number];
+  const archiveGroup = useMemo<BomGroup | null>(() => archivedSeries.length > 0 ? { key: ARCHIVE_KEY, projectId: null, label: "已封存", isActive: false, workspaces: archivedSeries } : null, [archivedSeries]);
+  const findGroup = (key: string | null) => (key === ARCHIVE_KEY ? archiveGroup : projectGroups.find((group) => group.key === key)) ?? undefined;
+  const placeLabel = (series: BomSeries) => findGroup(placeOf(series))?.label ?? "未指定專案";
+  // What is on screen follows what exists: a deleted board falls back to its project, a project that is gone to every project.
+  const openGroup = findGroup(openProjectKey);
+  const shownLevel: BomLevel = level === "board" && selectedSeries ? "board" : level !== "projects" && openGroup ? "project" : "projects";
+  const parentGroup = shownLevel === "board" && selectedSeries ? findGroup(placeOf(selectedSeries)) : openGroup;
+
   const description = mode === "parts" ? "合併專案所有 BOM 的目前版本，篩選、匯出，並轉成 PJE 備料表。" : mode === "nv" ? "比較兩份 NV 原始 BOM，查看實際變更並定位目前料號申請表。"
-    : `工作區專案：${activeProjectName ?? "未選擇"} · 所選 BOM 專案：${selectedProjectName} · 全部 ${seriesList.length} 個系列 · ${totalVersions} 個版本${archivedSeries.length > 0 ? ` · 已封存 ${archivedSeries.length} 個` : ""} · 使用中：${activeSeries ? `${activeSeries.series.name} ${activeSeries.version.displayNumber}` : "未選擇"}`;
+    : `工作區專案：${activeProjectName ?? "未選擇"} · 全部 ${seriesList.length} 個系列 · ${totalVersions} 個版本${archivedSeries.length > 0 ? ` · 已封存 ${archivedSeries.length} 個` : ""} · 使用中：${activeSeries ? `${activeSeries.series.name} ${activeSeries.version.displayNumber}` : "未選擇"}`;
   const nvCompareButton = <Button type="button" variant="outline" size="sm" data-testid="bom-nv-compare-entry" onClick={() => { setNvBomTargetId(activeBomId); setNvVisited(true); setMode("nv"); }} title="另選兩份 NV 原始 Excel 比對，不受此系列版本數限制" className="bom-nv-compare-entry h-9 gap-2 border-primary/40 text-primary"><GitCompareArrows aria-hidden="true" className="h-4 w-4" />NV 原始 BOM 比對</Button>;
   const nvCanLocateCurrentBom = nvBomTargetId === activeBomId;
   const locateNvResult = (candidate: NvBomTableCandidate, session: NvBomCompareSession) => {
@@ -270,9 +283,12 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     setEditingVersionId(null);
     setRenaming(false);
     setFeedback(null);
-    setMobilePane("list");
-    // Opens on the project of the board on screen, so its boards are one look away; without one, on every project.
-    setOpenProjectKey(activeSeries && !activeSeries.series.archive ? projectKeyOf(activeSeries.series) : activeProjectId ?? null);
+    setQuery("");
+    // Opens on the project of the board on screen: its 專案總料表 and its boards, with that board marked 畫面中.
+    // Without a board on screen, on the workspace project; without that either, on every project.
+    const startKey = activeSeries ? placeOf(activeSeries.series) : activeProjectId ?? null;
+    setOpenProjectKey(startKey);
+    setLevel(startKey ? "project" : "projects");
     setSelectedSeriesId(activeSeries?.series.id ?? null);
     recordsCache.current.clear();
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -286,9 +302,10 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     if (!series?.versions.some((item) => item.workspace.id === diffRequest.before) || !series.versions.some((item) => item.workspace.id === diffRequest.after)) return;
     consumedDiffRequest.current = diffRequest.token;
     setSelectedSeriesId(series.id);
-    if (!series.archive) setOpenProjectKey(projectKeyOf(series));
-    // ← 返回系列 on a phone lands on this series' versions, not the series list.
-    setMobilePane("detail");
+    // ← 返回系列 lands on this board's versions, inside its project.
+    setQuery("");
+    setOpenProjectKey(placeOf(series));
+    setLevel("board");
     // Keep a finished result for the same pair; a failed one is retried through diffAttempt.
     setDiffLoad((current) => (current?.error ? null : current));
     setDiffAttempt((current) => current + 1);
@@ -297,36 +314,41 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     setMode("diff");
   }, [open, diffRequest, seriesList]);
 
-  // Every project with its boards (the project level), and the same grouping narrowed by the search box (search results).
-  const projectGroups = useMemo(() => groupBomWorkspacesByProject(liveSeries, { activeProjectId, activeProjectName, projectNames }), [liveSeries, activeProjectId, activeProjectName, projectNames]);
-  const groups = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    const matches = (series: BomSeries) => !keyword || [series.name, ...series.versions.flatMap((item) => [item.workspace.payload.sourceFile, item.workspace.payload.sheetName, item.version.label, item.version.note])].join(" ").toLowerCase().includes(keyword);
-    return projectGroups
-      .map((group) => ({ ...group, workspaces: group.label.toLowerCase().includes(keyword) && keyword ? group.workspaces : group.workspaces.filter(matches) }))
-      .filter((group) => group.workspaces.length > 0 || (!keyword && group.isActive));
-  }, [projectGroups, query]);
-  const openGroup = openProjectKey === null ? undefined : projectGroups.find((group) => group.key === openProjectKey);
-  // The left column follows the board shown on the right whenever that board changes or moves (picked from search
-  // results, moved to another project from 此 BOM 所屬專案, the fallback after a delete): a board inside a project opens
-  // that project; an archived board shows the project level with the archive open, where its row is.
-  const selectedProjectKey = selectedSeries ? (selectedSeries.archive ? "archive" : projectKeyOf(selectedSeries)) : null;
+  // A board that moves (此 BOM 所屬專案, 封存／解除封存) takes its level with it, so 上一層 and a later delete land where it now is.
+  const selectedPlace = selectedSeries ? placeOf(selectedSeries) : null;
   useEffect(() => {
-    if (!open || !selectedProjectKey) return;
-    if (selectedProjectKey === "archive") { setOpenProjectKey(null); setShowArchived(true); return; }
-    setOpenProjectKey((current) => current === null ? current : selectedProjectKey);
-  }, [open, selectedSeries?.id, selectedProjectKey]);
-  // Keyboard focus stays on the level it moved to: the 全部專案 button after opening a project, the project's own row
-  // after going back (the button that was pressed is gone from the page).
-  const levelFocus = useRef<string | null>(null);
-  const groupsRef = useRef<HTMLDivElement>(null);
+    if (open && level === "board" && selectedPlace) setOpenProjectKey(selectedPlace);
+  }, [open, level, selectedPlace]);
+
+  // The search box narrows the level on screen: every board of every project on the project list, the boards of the
+  // opened project on a project. It is a filter of that level, so changing level clears it.
+  const keyword = query.trim().toLowerCase();
+  const seriesMatches = useCallback((series: BomSeries) => !keyword || [series.name, ...series.versions.flatMap((item) => [item.workspace.payload.sourceFile, item.workspace.payload.sheetName, item.version.label, item.version.note])].join(" ").toLowerCase().includes(keyword), [keyword]);
+  const searchResults = useMemo(() => !keyword ? [] : projectGroups.flatMap((group) => group.label.toLowerCase().includes(keyword) ? group.workspaces : group.workspaces.filter(seriesMatches)), [projectGroups, keyword, seriesMatches]);
+
+  // Keyboard and screen-reader focus moves to the new level's heading (the button that was pressed is gone from the page).
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const navFocus = useRef(false);
   useEffect(() => {
-    const target = levelFocus.current;
-    levelFocus.current = null;
-    if (!target) return;
-    const node = target === "back" ? groupsRef.current?.querySelector<HTMLElement>(".bom-project-back") : groupsRef.current?.querySelector<HTMLElement>(`[data-project-key="${CSS.escape(target)}"]`);
-    node?.focus();
-  }, [openProjectKey]);
+    const lost = typeof document !== "undefined" && (document.activeElement === document.body || document.activeElement?.getAttribute("role") === "dialog");
+    if (!navFocus.current && !lost) return;
+    navFocus.current = false;
+    bodyRef.current?.querySelector<HTMLElement>("[data-level-heading]")?.focus({ preventScroll: true });
+  }, [shownLevel, openProjectKey, selectedSeriesId, mode]);
+  const leaveSubView = () => { setMode("series"); setFeedback(null); };
+  const backToLevels = () => { navFocus.current = true; setMode("series"); };
+  const goProjects = () => { navFocus.current = true; leaveSubView(); setQuery(""); setLevel("projects"); };
+  const goProject = (key: string) => { navFocus.current = true; leaveSubView(); setQuery(""); setOpenProjectKey(key); setLevel("project"); };
+  const goBoard = (series: BomSeries) => {
+    navFocus.current = true;
+    leaveSubView();
+    setQuery("");
+    setSelectedSeriesId(series.id);
+    setOpenProjectKey(placeOf(series));
+    setLevel("board");
+    setEditingVersionId(null);
+    setRenaming(false);
+  };
 
   const cachedRecords = (version: BomSeriesVersion) => {
     const key = `${version.workspace.id}:${version.workspace.updatedAt}`;
@@ -500,25 +522,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     }
   };
 
-  const selectSeries = (series: BomSeries) => {
-    setSelectedSeriesId(series.id);
-    setEditingVersionId(null);
-    setRenaming(false);
-    setFeedback(null);
-    // Picked from search results: clearing the search lands on this board's project, not on the level left before.
-    if (!series.archive) setOpenProjectKey(projectKeyOf(series));
-    if (compact) setMobilePane("detail");
-  };
-  const leaveProject = () => { levelFocus.current = openProjectKey; setOpenProjectKey(null); };
-  const openProject = (group: (typeof projectGroups)[number]) => {
-    levelFocus.current = "back";
-    setOpenProjectKey(group.key);
-    // A wide screen shows a board of the opened project beside it at once: the one on screen, else the first.
-    if (compact || group.workspaces.some((series) => series.id === selectedSeries?.id)) return;
-    const pick = group.workspaces.find((series) => series.id === activeSeries?.series.id) ?? group.workspaces[0];
-    if (pick) { setSelectedSeriesId(pick.id); setEditingVersionId(null); setRenaming(false); setFeedback(null); }
-  };
-  const renderPartsEntry = (group: (typeof projectGroups)[number]) => {
+  const renderPartsEntry = (group: BomGroup) => {
     const count = group.projectId ? liveSeriesByProject.get(group.projectId)?.length ?? 0 : 0;
     if (!group.projectId || count === 0) return null;
     return (
@@ -529,37 +533,103 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
       </button>
     );
   };
+  const latestUpdate = (boards: readonly BomSeries[]) => boards.reduce<string | null>((latest, series) => (!latest || Date.parse(series.updatedAt) > Date.parse(latest) ? series.updatedAt : latest), null);
+  const onScreenChip = (series: BomSeries) => activeSeries?.series.id === series.id
+    ? <span className={cn(CHIP, "flex-none", activeSeries.version.isCurrent ? CHIP_TONE.success : CHIP_TONE.warning)} title={activeSeries.version.isCurrent ? "料號表正在顯示這塊板的目前版本" : `料號表正在唯讀顯示 ${activeSeries.version.displayNumber}（歷史版本）`}>{activeSeries.version.isCurrent ? "畫面中" : `畫面中 ${activeSeries.version.displayNumber}`}</span>
+    : null;
+  const levelEmpty = (children: ReactNode) => <div className="bom-level-empty">{children}</div>;
 
-  const renderSeriesRow = (series: BomSeries, archived = false) => {
-    const isSelected = selectedSeries?.id === series.id;
-    const isActive = activeSeries?.series.id === series.id;
-    return (
-      <button
-        key={series.id}
-        type="button"
-        onClick={() => selectSeries(series)}
-        aria-current={isSelected ? "true" : undefined}
-        data-active={isActive}
-        className={cn(
-          "bom-series-row flex w-full flex-col gap-1 rounded-xl border px-3 py-2 text-left transition-colors",
-          isSelected ? "border-primary/50 bg-primary/10" : "border-border bg-background/40 hover:bg-accent/40",
-          archived && "opacity-75",
-        )}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground" title={series.name}>{series.name}</p>
-          <span className={cn(CHIP, "h-6 min-w-9 flex-none justify-center font-mono text-sm font-bold tabular-nums", CHIP_TONE.primary)}>{series.current.displayNumber}</span>
-          {isActive && <span className={cn(CHIP, "flex-none", activeSeries?.version.isCurrent ? CHIP_TONE.success : CHIP_TONE.warning)} title={activeSeries?.version.isCurrent ? "料號表正在顯示這個系列的目前版本" : `料號表正在唯讀顯示 ${activeSeries?.version.displayNumber}（歷史版本）`}>{activeSeries?.version.isCurrent ? "畫面中" : `畫面中 ${activeSeries?.version.displayNumber}`}</span>}
-          {archived && <span className={cn(CHIP, "flex-none", CHIP_TONE.neutral)}>已封存</span>}
-        </div>
-        <div className="bom-series-metadata"><span>{series.versions.length} 個版本</span><span>{series.recordCount.toLocaleString()} 筆</span><span>更新 {formatBomRelativeTime(series.updatedAt)}</span></div>
-      </button>
-    );
-  };
+  // 全部專案: one row per project (and 已封存), same table look as a project's boards and a board's versions.
+  const renderProjectTable = () => (
+    <section data-testid="bom-project-list" aria-label="專案清單" className="bom-level-table" data-kind="projects">
+      <div className="bom-level-table-head" aria-hidden="true"><span>專案</span><span>板子</span><span>版本</span><span>最近更新</span><span /></div>
+      {projectGroups.length === 0 && !archiveGroup && levelEmpty(<>
+        <strong>還沒有任何 BOM</strong>
+        <span>{canEdit ? "匯入第一份 Excel，就會依專案分好，之後的新版都在同一塊板裡比對。" : "請有編輯權限的同事匯入 BOM。"}</span>
+        {canEdit && <Button type="button" size="sm" disabled={!ready || busy} onClick={onUploadNew} className="bom-level-empty-action"><Upload aria-hidden="true" />匯入 BOM 檔案</Button>}
+      </>)}
+      <ul className="bom-level-rows">
+      {[...projectGroups, ...(archiveGroup ? [archiveGroup] : [])].map((group) => {
+        const archive = group.key === ARCHIVE_KEY;
+        const versions = group.workspaces.reduce((sum, series) => sum + series.versions.length, 0);
+        const updated = latestUpdate(group.workspaces);
+        const onScreen = group.workspaces.some((series) => series.id === activeSeries?.series.id);
+        const boards = `${group.workspaces.length} ${archive ? "個系列" : "塊板"}`;
+        return (
+          <li key={group.key}>
+            <button type="button" className="bom-level-row bom-project-row" data-project-key={group.key} data-active-project={group.isActive} data-archive={archive || undefined} data-on-screen={onScreen || undefined}
+              {...(archive ? { "data-testid": "bom-archive-section" } : {})}
+              onClick={() => goProject(group.key)} aria-current={onScreen ? "true" : undefined}
+              aria-label={`打開${archive ? "" : "專案："}${group.label}（${boards}${group.isActive ? "，工作區專案" : ""}${onScreen ? "，畫面中的板子在這裡" : ""}）`}
+              title={archive ? "打開已封存的系列：資料都保留，打開後可解除封存" : `打開「${group.label}」，看裡面的板子與專案總料表`}>
+              <span className="bom-level-cell-name">
+                {archive ? <FileArchive aria-hidden="true" /> : <Layers3 aria-hidden="true" />}
+                <span className="bom-level-name">{group.label}</span>
+                {group.isActive && <span className={cn(CHIP, "flex-none", CHIP_TONE.success)}>工作區專案</span>}
+                {onScreen && <span className={cn(CHIP, "flex-none", CHIP_TONE.primary)}>畫面中</span>}
+              </span>
+              <span className="bom-level-cell" data-label="板子">{boards}</span>
+              <span className="bom-level-cell" data-label="版本">{versions > 0 ? `${versions} 個版本` : "—"}</span>
+              <span className="bom-level-cell bom-level-cell-time" data-label="最近更新">{updated ? formatBomRelativeTime(updated) : "—"}</span>
+              <ChevronRight aria-hidden="true" className="bom-level-chevron" />
+            </button>
+          </li>
+        );
+      })}
+      </ul>
+    </section>
+  );
+
+  // A project's boards (or the search results of every project, with a 專案 column): open one to see its versions.
+  const renderBoardTable = (boards: readonly BomSeries[], options: { label: string; withProject?: boolean; empty: ReactNode }) => (
+    <section data-testid="bom-series-list" aria-label={options.label} className="bom-level-table" data-kind={options.withProject ? "search" : "boards"}>
+      <div className="bom-level-table-head" aria-hidden="true"><span>板子</span>{options.withProject && <span>專案</span>}<span>目前版本</span><span>版本</span><span>筆數</span><span>最近更新</span><span /></div>
+      {boards.length === 0 && levelEmpty(options.empty)}
+      <ul className="bom-level-rows">
+      {boards.map((series) => {
+        const onScreen = activeSeries?.series.id === series.id;
+        const updated = formatBomRelativeTime(series.updatedAt);
+        return (
+          <li key={series.id}>
+            <button type="button" className="bom-level-row bom-series-row" data-series-id={series.id} data-active={onScreen} data-on-screen={onScreen || undefined} data-archive={series.archive ? true : undefined}
+              onClick={() => goBoard(series)} aria-current={onScreen ? "true" : undefined}
+              aria-label={`${series.name}（${options.withProject ? `${placeLabel(series)}，` : ""}目前 ${series.current.displayNumber}，${series.versions.length} 個版本，${series.recordCount.toLocaleString()} 筆，更新 ${updated}${onScreen ? "，畫面中" : ""}）`}
+              title={`打開「${series.name}」，看它的版本與操作`}>
+              <span className="bom-level-cell-name">
+                <FileSpreadsheet aria-hidden="true" />
+                <span className="bom-level-name" title={series.name}>{series.name}</span>
+                {onScreenChip(series)}
+                {series.archive && <span className={cn(CHIP, "flex-none", CHIP_TONE.neutral)}>已封存</span>}
+              </span>
+              {options.withProject && <span className="bom-level-cell bom-level-cell-project" data-label="專案">{placeLabel(series)}</span>}
+              <span className="bom-level-cell" data-label="目前版本"><span className="bom-level-version">{series.current.displayNumber}</span></span>
+              <span className="bom-level-cell" data-label="版本">{series.versions.length} 個版本</span>
+              <span className="bom-level-cell bom-level-cell-count" data-label="筆數">{series.recordCount.toLocaleString()} 筆</span>
+              <span className="bom-level-cell bom-level-cell-time" data-label="最近更新">{updated}</span>
+              <ChevronRight aria-hidden="true" className="bom-level-chevron" />
+            </button>
+          </li>
+        );
+      })}
+      </ul>
+    </section>
+  );
+
+  // The search box with its visible, clearable condition, right above the list it narrows.
+  const renderFilterBar = (placeholder: string) => (
+    <div className="bom-level-filter">
+      <div className="bom-series-search relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={placeholder} title={placeholder} aria-label="搜尋 BOM 系列" className="h-10 rounded-lg pl-9 text-sm" />
+      </div>
+      {query && <div className="bom-series-filter-chips"><button type="button" aria-label="清除 BOM 系列搜尋" onClick={() => setQuery("")}><span>搜尋：{query}</span><X aria-hidden="true" /></button><Button type="button" variant="ghost" onClick={() => setQuery("")}>全部清除</Button></div>}
+    </div>
+  );
+  const importButton = canEdit && <Button type="button" variant="outline" size="sm" disabled={!ready || busy} aria-busy={busy || undefined} onClick={onUploadNew} title="先選擇 Excel，再確認建立新系列或加入既有系列；不會立即儲存" className="bom-upload-entry"><Upload aria-hidden="true" />匯入 BOM 檔案</Button>;
+  const searchEmpty = <><strong>{BOM_SERIES_EMPTY_TEXT}</strong><span>換個關鍵字，或清除搜尋看全部。</span><Button type="button" variant="outline" size="sm" onClick={() => setQuery("")} className="bom-level-empty-action">全部清除</Button></>;
 
   const detail = selectedSeries && (
     <section key={selectedSeries.id} data-testid="bom-series-detail" className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
-      {compact && <Button type="button" variant="ghost" size="sm" onClick={() => setMobilePane("list")} className="h-10 w-fit px-2 text-sm lg:hidden"><ArrowLeft className="mr-1 h-4 w-4" />返回清單</Button>}
       <div className="bom-series-summary flex flex-wrap items-start gap-2">
         <div className="min-w-0 flex-1">
           {renaming ? (
@@ -570,7 +640,8 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
             </div>
           ) : (
             <div className="flex min-w-0 items-center gap-2">
-              <h3 className="min-w-0 truncate text-lg font-bold text-foreground" title={selectedSeries.name}>{selectedSeries.name}</h3>
+              <FileSpreadsheet aria-hidden="true" className="bom-level-heading-icon" data-kind="board" />
+              <h3 data-level-heading tabIndex={-1} className="min-w-0 truncate text-lg font-bold text-foreground" title={selectedSeries.name}>{selectedSeries.name}</h3>
               {canEdit && <Button type="button" variant="ghost" size="sm" aria-label="修改系列名稱" title="修改系列名稱" onClick={() => { setRenameDraft(selectedSeries.name); setRenaming(true); }} className="h-8 w-8 p-0"><Pencil className="h-3.5 w-3.5" /></Button>}
             </div>
           )}
@@ -598,7 +669,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         {nvCompareButton}
         </div>
         <div className="ml-auto flex items-center gap-1">
-          <Button type="button" variant="ghost" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onSetArchived(selectedSeries, !selectedSeries.archive)} title={selectedSeries.archive ? "回到清單" : "整個系列移到封存區，資料保留"} className="bom-version-action-archive h-9 text-sm">{selectedSeries.archive ? "解除封存" : "封存系列"}</Button>
+          <Button type="button" variant="ghost" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onSetArchived(selectedSeries, !selectedSeries.archive)} title={selectedSeries.archive ? "移回原本的專案，資料都保留" : "整個系列移到封存區，資料保留"} className="bom-version-action-archive h-9 text-sm">{selectedSeries.archive ? "解除封存" : "封存系列"}</Button>
           <Button type="button" variant="ghost" size="sm" disabled={!canEdit || !ready || pending} onClick={() => onDeleteSeries(selectedSeries)} className="h-9 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive">刪除系列</Button>
         </div>
       </div>
@@ -715,24 +786,72 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
     </section>
   );
 
+  // The path on top: 全部專案 › 專案 › 板子 (› 比對 or 專案總料表). Every step but the last goes back to that level.
+  const shownMode = mode === "diff" && !(diffSeries && diffBefore && diffAfter) ? "series" : mode;
+  const crumbProject = mode === "parts" ? findGroup(partsProjectId) : shownMode === "diff" ? (diffSeries ? findGroup(placeOf(diffSeries)) : undefined) : shownLevel === "projects" ? undefined : parentGroup;
+  const crumbBoard = shownMode === "diff" ? diffSeries : shownMode === "series" && shownLevel === "board" ? selectedSeries : null;
+  const crumbTail = shownMode === "diff" && diffBefore && diffAfter ? `比對 ${diffBefore.displayNumber} → ${diffAfter.displayNumber}` : mode === "parts" ? "專案總料表" : null;
+  const crumbs: Array<{ key: string; label: string; icon?: ReactNode; title?: string; go?: () => void }> = [
+    { key: "projects", label: "全部專案", title: "回到全部專案，換另一個專案", go: goProjects },
+    ...(crumbProject ? [{
+      key: "project",
+      label: crumbProject.label,
+      icon: crumbProject.key === ARCHIVE_KEY ? <FileArchive aria-hidden="true" /> : <Layers3 aria-hidden="true" />,
+      title: crumbBoard ? `「${crumbBoard.name}」所屬：${crumbProject.label}。回到這裡看全部板子` : `回到「${crumbProject.label}」的板子`,
+      go: () => goProject(crumbProject.key),
+    }] : []),
+    ...(crumbBoard ? [{ key: "board", label: crumbBoard.name, icon: <FileSpreadsheet aria-hidden="true" />, title: `回到「${crumbBoard.name}」的版本`, go: () => goBoard(crumbBoard) }] : []),
+    ...(crumbTail ? [{ key: "tail", label: crumbTail }] : []),
+  ];
+  const crumbNav = mode !== "nv" && (
+    <nav className="bom-crumbs" aria-label="BOM 位置" data-depth={crumbs.length}>
+      <ol>
+        {crumbs.map((crumb, index) => {
+          const last = index === crumbs.length - 1;
+          return (
+            <li key={crumb.key} data-crumb={last ? "current" : index === crumbs.length - 2 ? "parent" : "ancestor"} data-kind={crumb.key}>
+              {index > 0 && <ChevronRight aria-hidden="true" className="bom-crumb-sep" />}
+              {last
+                ? <span aria-current="page" className="bom-crumb-current" title={crumb.label}>{crumb.icon}<span>{crumb.label}</span></span>
+                : <button type="button" onClick={crumb.go} title={crumb.title} className="bom-crumb-link"><ChevronLeft aria-hidden="true" className="bom-crumb-back" />{crumb.icon}<span>{crumb.label}</span></button>}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+
+  const levelHead = (heading: ReactNode, meta: string) => (
+    <div className="bom-level-head">
+      <div className="bom-level-heading">{heading}<p className="bom-level-meta">{meta}</p></div>
+      <div className="bom-level-actions">{nvCompareButton}{importButton}</div>
+    </div>
+  );
+  const projectBoards = openGroup ? openGroup.workspaces.filter(seriesMatches) : [];
+  const openGroupArchive = openGroup?.key === ARCHIVE_KEY;
+  const openGroupUpdated = openGroup ? latestUpdate(openGroup.workspaces) : null;
+  const partsGroup = findGroup(partsProjectId);
+  const openGroupVersions = openGroup ? openGroup.workspaces.reduce((sum, series) => sum + series.versions.length, 0) : 0;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="bom-version-center" data-view={mode} data-mobile-pane={mobilePane} className="bom-version-center flex flex-col overflow-hidden" onCloseAutoFocus={event => {
+      <DialogContent data-testid="bom-version-center" data-view={shownMode} data-level={shownLevel} className="bom-version-center flex flex-col overflow-hidden" onCloseAutoFocus={event => {
         if (!nvLocateClosing.current) return;
         nvLocateClosing.current = false;
         event.preventDefault();
       }}>
         <DialogHeader className="bom-version-header">
-          <div className="flex flex-wrap items-center gap-3"><DialogTitle className="text-xl">{mode === "nv" ? "NV 原始 BOM 比對" : mode === "parts" ? "專案總料表" : "BOM 版本管理"}</DialogTitle>{mode !== "nv" && mode !== "parts" && !selectedSeries && nvCompareButton}</div>
+          <DialogTitle className="text-xl">{mode === "nv" ? "NV 原始 BOM 比對" : mode === "parts" ? "專案總料表" : "BOM 版本管理"}</DialogTitle>
           <DialogDescription className="sr-only">{description}</DialogDescription>
-          {mode !== "nv" && mode !== "parts" && <div className="bom-version-overview">{selectedSeries && <span className="bom-version-project" title={`「${selectedSeries.name}」所屬專案：${selectedProjectName}`}><Layers3 aria-hidden="true" />所選 BOM 專案：{selectedProjectName}</span>}<span className="bom-version-workspace" title="目前工作區的導覽專案，不會改變所選 BOM 的專案歸屬">工作區專案：{activeProjectName ?? "未選擇"}</span><span>全部 {seriesList.length} 個系列</span><span>{totalVersions} 個版本</span>{archivedSeries.length > 0 && <span className="bom-version-archived">已封存 {archivedSeries.length} 個</span>}</div>}
+          {crumbNav}
+          {shownMode === "series" && <div className="bom-version-overview"><span className="bom-version-workspace" title="目前工作區的導覽專案（標成「工作區專案」），不會改變 BOM 的專案歸屬">工作區專案：{activeProjectName ?? "未選擇"}</span></div>}
         </DialogHeader>
         {feedback?.view === mode && <p role={feedback.tone === "ok" ? "status" : "alert"} data-testid="bom-version-feedback" data-tone={feedback.tone} className="bom-version-feedback">{feedback.tone === "ok" ? <CircleCheck aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}<span>{feedback.text}</span></p>}
         {pendingAction && mode === "series" && <VersionActivity>{ACTION_LABELS[pendingAction]}</VersionActivity>}
         {busy && mode === "series" && <VersionActivity>正在讀取 BOM 檔案…</VersionActivity>}
 
         {nvVisited && <Suspense fallback={mode === "nv" ? <VersionActivity>正在開啟 NV 原始 BOM 比對…</VersionActivity> : null}>
-          <NvBomCompare key={JSON.stringify([historyScope, nvBomTargetId])} active={open && mode === "nv"} onBack={() => setMode("series")} currentBomName={currentBomName}
+          <NvBomCompare key={JSON.stringify([historyScope, nvBomTargetId])} active={open && mode === "nv"} onBack={backToLevels} currentBomName={currentBomName}
             historyScope={historyScope}
             initialSession={nvCanLocateCurrentBom && nvSession?.scope === historyScope ? nvSession?.session : undefined}
             matchCurrentBom={nvCanLocateCurrentBom ? matchCurrentBom : undefined}
@@ -740,8 +859,10 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
         </Suspense>}
         {mode === "nv" ? null : mode === "parts" ? (
           partsSeries.length > 0
-            ? <ProjectPartsView key={partsProjectId ?? ""} projectName={partsProjectName} series={partsSeries} loadVersion={loadPartsVersion} exportedBy={exportedBy} compact={compact} onBack={() => setMode("series")} onSetCategory={canEdit && ready ? onSetProjectPartCategory : undefined} />
-            : <div className="project-parts-gone"><p>這個專案目前沒有可以合併的 BOM 系列（可能剛被封存或移到別的專案）。</p><Button type="button" variant="outline" size="sm" onClick={() => setMode("series")} title="回到 BOM 系列清單" className="h-11">← 返回系列</Button></div>
+            ? <ProjectPartsView key={partsProjectId ?? ""} projectName={partsProjectName} series={partsSeries} loadVersion={loadPartsVersion} exportedBy={exportedBy} compact={compact} onBack={backToLevels} onSetCategory={canEdit && ready ? onSetProjectPartCategory : undefined} />
+            : <div className="project-parts-gone"><p>這個專案目前沒有可以合併的 BOM 系列（可能剛被封存或移到別的專案）。</p>{partsGroup
+              ? <Button type="button" variant="outline" size="sm" onClick={() => goProject(partsGroup.key)} title="回到這個專案的板子" className="h-11">← 返回專案</Button>
+              : <Button type="button" variant="outline" size="sm" onClick={goProjects} title="這個專案已經沒有板子，回到全部專案" className="h-11">← 返回全部專案</Button>}</div>
         ) : mode === "diff" && diffSeries && diffBefore && diffAfter ? (
           <BomDiffView
             key={`diff:${diffViewSeed.token}`}
@@ -759,7 +880,7 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
             onPickBefore={(workspaceId) => setDiffPair((current) => ({ before: workspaceId, after: current?.after === workspaceId ? (current?.before ?? workspaceId) : (current?.after ?? workspaceId) }))}
             onPickAfter={(workspaceId) => setDiffPair((current) => ({ after: workspaceId, before: current?.before === workspaceId ? (current?.after ?? workspaceId) : (current?.before ?? workspaceId) }))}
             onSwap={() => setDiffPair((current) => (current ? { before: current.after, after: current.before } : current))}
-            onBack={() => setMode("series")}
+            onBack={backToLevels}
             onExport={(visible) => void exportDiff(visible)}
             compact={compact}
             onLocate={canLocateDiff ? locateDiffEntry : undefined}
@@ -767,96 +888,42 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
             recarry={recarryPair ? { run: recarryBlocked ? undefined : () => void recarry(), blocked: recarryBlocked, busy: recarrying } : undefined}
           />
         ) : (
-          <div className="bom-version-columns grid min-h-0 min-w-0 flex-1">
-            <aside data-testid="bom-series-list" className={cn("bom-series-sidebar flex min-h-0 min-w-0 flex-col", compact && mobilePane === "detail" && "hidden")}>
-              <div className="bom-series-tools-wrap"><div className="bom-series-tools">
-              {canEdit && <Button type="button" variant="outline" size="sm" disabled={!ready || busy} aria-busy={busy || undefined} onClick={onUploadNew} title="先選擇 Excel，再確認建立新系列或加入既有系列；不會立即儲存" className="bom-upload-entry h-9 justify-start"><Upload className="mr-1.5 h-4 w-4" />匯入 BOM 檔案</Button>}
-              <div className="bom-series-search relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋專案、系列或版本" title="搜尋系列、專案、來源檔或版本說明" aria-label="搜尋 BOM 系列" className="h-10 rounded-xl pl-9 text-sm lg:h-9" />
-              </div>
-              </div>{canEdit && <p className="bom-series-upload-hint">選檔後可建立系列或加入既有系列。</p>}</div>
-              {query && <div className="bom-series-filter-chips"><button type="button" aria-label="清除 BOM 系列搜尋" onClick={() => setQuery("")}><span>搜尋：{query}</span><X aria-hidden="true" /></button><Button type="button" variant="ghost" onClick={() => setQuery("")}>全部清除</Button></div>}
-              <div ref={groupsRef} className="bom-series-groups min-h-0 flex-1 overflow-y-auto" data-level={query ? "search" : openGroup ? "boards" : "projects"}>
-                {query ? (groups.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">{BOM_SERIES_EMPTY_TEXT}</p>
-                ) : groups.map((group) => (
-                  // Search results: the matching boards of every project, under the project they belong to. The project
-                  // heading opens the project itself (its 專案總料表 and all its boards).
-                  <section key={group.key} className="bom-project-group" aria-labelledby={`${projectGroupId}-${group.key}`}>
-                    <h4 id={`${projectGroupId}-${group.key}`}>
-                      <button type="button" className="bom-project-heading flex items-center gap-2" data-active-project={group.isActive} onClick={() => { setQuery(""); openProject(group); }}
-                        aria-label={`打開專案：${group.label}（符合 ${group.workspaces.length} 塊板）`} title={`打開「${group.label}」，看全部板子與專案總料表`}>
-                        <Layers3 className="h-3.5 w-3.5 flex-none" aria-hidden="true" />
-                        <span className="bom-project-name min-w-0 truncate text-sm font-bold">{group.label}</span>
-                        <span className="bom-project-count flex-none text-muted-foreground">{group.workspaces.length} 塊板</span>
-                        <ChevronRight aria-hidden="true" className="bom-project-heading-chevron h-4 w-4 flex-none" />
-                      </button>
-                    </h4>
-                    {group.workspaces.map((series) => renderSeriesRow(series))}
-                  </section>
-                ))) : openGroup ? (
-                  // A project opened: its 專案總料表, then its boards.
-                  <section className="bom-project-level" aria-label={`專案：${openGroup.label}`}>
-                    <nav className="bom-project-crumbs" aria-label="BOM 位置">
-                      <button type="button" className="bom-project-back" onClick={leaveProject} title="回到全部專案，換另一個專案">
-                        <ChevronLeft aria-hidden="true" />全部專案
-                      </button>
-                      <span aria-hidden="true">/</span>
-                      <h4 className="bom-project-current" data-active-project={openGroup.isActive} title={openGroup.label}><Layers3 aria-hidden="true" /><span>{openGroup.label}</span></h4>
-                      {openGroup.isActive && <span className={cn(CHIP, "flex-none", CHIP_TONE.success)}>工作區專案</span>}
-                    </nav>
-                    {renderPartsEntry(openGroup)}
-                    <p className="bom-level-title">這個專案的板子<span>{openGroup.workspaces.length} 塊</span></p>
-                    {openGroup.workspaces.length === 0
-                      ? <div className="bom-project-empty"><strong>尚無 BOM</strong><p>{canEdit ? "上傳 Excel，或將現有系列移入此專案。" : "請有編輯權限的同事上傳或指定專案。"}</p></div>
-                      : openGroup.workspaces.map((series) => renderSeriesRow(series))}
-                  </section>
-                ) : (
-                  // Every project: open one to see its boards.
-                  <section className="bom-project-level" aria-label="全部專案">
-                    <p className="bom-level-title">全部專案<span>{projectGroups.length} 個</span></p>
-                    {projectGroups.length === 0
-                      ? <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">{canEdit ? "還沒有任何 BOM。按「匯入 BOM 檔案」上傳第一份 Excel。" : "還沒有任何 BOM，請有編輯權限的同事上傳。"}</p>
-                      : projectGroups.map((group) => {
-                        const versions = group.workspaces.reduce((sum, series) => sum + series.versions.length, 0);
-                        const onScreen = group.workspaces.some((series) => series.id === activeSeries?.series.id);
-                        const holdsSelected = group.workspaces.some((series) => series.id === selectedSeries?.id);
-                        return <button key={group.key} type="button" className="bom-project-row" data-active-project={group.isActive} data-project-key={group.key} onClick={() => openProject(group)}
-                          aria-current={holdsSelected ? "true" : undefined}
-                          aria-label={`打開專案：${group.label}（${group.workspaces.length} 塊板${group.isActive ? "，工作區專案" : ""}${onScreen ? "，畫面中的板子在這裡" : ""}）`} title={`打開「${group.label}」，看裡面的板子與專案總料表`}>
-                          <Layers3 aria-hidden="true" />
-                          <span className="bom-project-row-main">
-                            <span className="bom-project-row-name">{group.label}</span>
-                            <span className="bom-project-row-meta">
-                              {group.isActive && <span className={cn(CHIP, "flex-none", CHIP_TONE.success)}>工作區專案</span>}
-                              {onScreen && <span className={cn(CHIP, "flex-none", CHIP_TONE.primary)}>畫面中</span>}
-                              <span className="bom-project-row-count">{group.workspaces.length} 塊板{versions > group.workspaces.length ? ` · ${versions} 個版本` : ""}</span>
-                            </span>
-                          </span>
-                          <ChevronRight aria-hidden="true" className="bom-project-row-chevron" />
-                        </button>;
-                      })}
-                  </section>
+          <div ref={bodyRef} key={`${shownLevel}:${shownLevel === "board" ? selectedSeries?.id : openGroup?.key ?? ""}`} className="bom-level-body" data-level={shownLevel}>
+            {shownLevel === "board" && detail ? detail : shownLevel === "project" && openGroup ? (
+              // One project: its 專案總料表, then its boards.
+              <section className="bom-level" aria-label={openGroupArchive ? "已封存的系列" : `專案：${openGroup.label}`}>
+                {levelHead(
+                  <div className="bom-level-title-row">
+                    {openGroupArchive ? <FileArchive aria-hidden="true" className="bom-level-heading-icon" data-kind="archive" /> : <Layers3 aria-hidden="true" className="bom-level-heading-icon" data-kind="project" />}
+                    <h3 data-level-heading tabIndex={-1} title={openGroup.label}>{openGroupArchive ? "已封存的系列" : openGroup.label}</h3>
+                    {openGroup.isActive && <span className={cn(CHIP, "flex-none", CHIP_TONE.success)}>工作區專案</span>}
+                  </div>,
+                  openGroupArchive
+                    ? `${openGroup.workspaces.length} 個系列 · 資料都保留，打開系列可以解除封存`
+                    : `${openGroup.workspaces.length} 塊板${openGroupVersions > 0 ? ` · ${openGroupVersions} 個版本` : ""}${openGroupUpdated ? ` · 最近更新 ${formatBomRelativeTime(openGroupUpdated)}` : ""}`,
                 )}
-                {!query && !openGroup && archivedSeries.length > 0 && (
-                  <section data-testid="bom-archive-section" className="pt-3">
-                    <button type="button" onClick={() => setShowArchived((current) => !current)} aria-expanded={showArchived} className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-left text-sm font-semibold text-foreground/80 hover:bg-accent/40">
-                      <FileArchive className="h-4 w-4 flex-none text-muted-foreground" aria-hidden="true" />
-                      已封存 {archivedSeries.length} 個系列
-                      <span className="ml-auto text-xs font-normal text-muted-foreground">{showArchived ? "收合" : "展開"}</span>
-                    </button>
-                    {showArchived && <div className="mt-1.5 space-y-1.5">{archivedSeries.map((series) => renderSeriesRow(series, true))}</div>}
-                  </section>
+                {renderPartsEntry(openGroup)}
+                {renderFilterBar(openGroupArchive ? "搜尋已封存的系列" : "搜尋板子、來源檔或版本說明")}
+                {renderBoardTable(projectBoards, {
+                  label: openGroupArchive ? "已封存的系列" : `${openGroup.label} 的板子`,
+                  empty: keyword ? searchEmpty : <>
+                    <strong>「{openGroup.label}」還沒有 BOM</strong>
+                    <span>{canEdit ? "匯入 Excel 時選這個專案，或在別塊板的「此 BOM 所屬專案」改成這個專案。" : "請有編輯權限的同事匯入 BOM 或指定專案。"}</span>
+                    {canEdit && <Button type="button" size="sm" disabled={!ready || busy} onClick={onUploadNew} className="bom-level-empty-action"><Upload aria-hidden="true" />匯入 BOM 檔案</Button>}
+                  </>,
+                })}
+              </section>
+            ) : (
+              // Every project: open one to see its boards.
+              <section className="bom-level" aria-label="全部專案">
+                {levelHead(
+                  <div className="bom-level-title-row"><Layers3 aria-hidden="true" className="bom-level-heading-icon" data-kind="project" /><h3 data-level-heading tabIndex={-1}>全部專案</h3></div>,
+                  `${projectGroups.length} 個專案 · ${liveSeries.length} 塊板 · ${totalVersions} 個版本${archivedSeries.length > 0 ? ` · 已封存 ${archivedSeries.length} 個系列` : ""}`,
                 )}
-              </div>
-            </aside>
-            <div className={cn("flex min-h-0 min-w-0 flex-col", compact && mobilePane === "list" && "hidden")}>
-              {/* A project opened with no boards: the right side says so instead of keeping another project's board. */}
-              {!compact && !query && openGroup && openGroup.workspaces.length === 0
-                ? <p className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">「{openGroup.label}」還沒有 BOM。{canEdit ? "按左上「匯入 BOM 檔案」上傳，或在別塊板的「此 BOM 所屬專案」選這個專案。" : "請有編輯權限的同事上傳或指定專案。"}</p>
-                : detail ?? <p className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">左側選一個 BOM 系列，這裡會列出它的版本與操作。</p>}
-            </div>
+                {renderFilterBar("搜尋專案、板子、來源檔或版本說明")}
+                {keyword ? renderBoardTable(searchResults, { label: "搜尋結果", withProject: true, empty: searchEmpty }) : renderProjectTable()}
+              </section>
+            )}
           </div>
         )}
       </DialogContent>

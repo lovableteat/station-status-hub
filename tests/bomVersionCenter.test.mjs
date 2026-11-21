@@ -48,14 +48,18 @@ test("the diff view keeps the persistent filter contract: bar above the table, c
   assert.match(diffView, /aria-label="交換新舊版本"/);
 });
 
-test("the version center is a two-pane series/version window with timeline actions and an archive section", () => {
+test("the version center goes in levels (全部專案 → 專案 → 板子) with timeline actions and an archive level", () => {
+  // 2026-11-22: 「不要微調，我要完整的 BOM 版本管理視窗要分層級，從專案再來專案中板子要分層設計」 — no left column, each level fills the window.
+  assert.match(center, /type BomLevel = "projects" \| "project" \| "board"/);
+  assert.match(center, /className="bom-crumbs" aria-label="BOM 位置"/);
+  assert.match(center, /data-testid="bom-project-list"/);
   assert.match(center, /data-testid="bom-series-list"/);
   assert.match(center, /data-testid="bom-series-detail"/);
   assert.match(center, /data-testid="bom-version-table"/);
-  assert.match(center, /data-testid="bom-archive-section"/);
-  assert.match(center, /className="bom-version-columns grid min-h-0 min-w-0 flex-1"/);
+  assert.match(center, /"data-testid": "bom-archive-section"/);
+  assert.doesNotMatch(center, /bom-version-columns|bom-series-sidebar/, "no left column: every level fills the window");
   assert.match(center, /aria-label="搜尋 BOM 系列"/);
-  for (const action of ["匯入 BOM 檔案", "上傳此系列新版", "比對版本", "設為目前版本", "檢視", "編輯說明", "刪除系列", "返回清單", "回到清單"]) assert.ok(center.includes(action), action);
+  for (const action of ["匯入 BOM 檔案", "上傳此系列新版", "比對版本", "設為目前版本", "檢視", "編輯說明", "刪除系列", "全部專案", "解除封存"]) assert.ok(center.includes(action), action);
   assert.match(center, /BOM_SERIES_EMPTY_TEXT = "找不到符合條件的 BOM 系列"/);
   assert.match(center, /歷史版本唯讀/);
   assert.match(center, /料件與追蹤在目前版本維護/);

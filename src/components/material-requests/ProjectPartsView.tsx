@@ -309,7 +309,7 @@ export function ProjectPartsView({ projectName, series: liveSeries, loadVersion,
   return (
     <section data-testid="project-parts-view" className="project-parts-view" data-compact={compact || undefined}>
       <div className="project-parts-toolbar">
-        <Button type="button" variant="outline" size="sm" onClick={onBack} title="回到 BOM 系列清單；勾選與篩選會清掉" className="project-parts-back">← 返回系列</Button>
+        <Button type="button" variant="outline" size="sm" onClick={onBack} title="回到這個專案的板子；勾選與篩選會清掉" className="project-parts-back">← 返回專案</Button>
         <div className="project-parts-title">
           <h3 title={`${projectName} 的專案總料表`}>{projectName}</h3>
           <p>合併 {series.length} 個系列的目前版本，同一顆料只列一次；已封存的系列不算在內。</p>
