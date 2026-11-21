@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-31-mobile-data-center-controls.md`；程式參考基準：`04ae86ac753ea14c36b9644f05d0058795e358d1`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-31-mobile-data-center-controls.md`；程式參考基準：`202f8b163774a9ef5662b9457155495f389ae084`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Data-center 手機操作區重排
 
