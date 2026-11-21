@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/specs/2026-08-03-dashboard-attention-panel-design.md`；程式參考基準：`202f8b163774a9ef5662b9457155495f389ae084`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/specs/2026-08-03-dashboard-attention-panel-design.md`；程式參考基準：`1b0292b903e989732f06f6813ae0f62978cb2164`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Dashboard supervisor attention panel redesign
 
