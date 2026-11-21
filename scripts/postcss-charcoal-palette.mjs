@@ -187,7 +187,7 @@ export default function charcoalPalette() {
       if (visited.has(declaration)) return;
       visited.add(declaration);
       // These workspaces define their own surface and accent colors.
-      if (/(?:^|[\\/])(?:diagramEditor|maintenanceFaultLayout)\.css$/.test(declaration.source?.input.file ?? "")) return;
+      if (/(?:^|[\\/])(?:diagramEditor|maintenanceFaultLayout|maintenancePalette)\.css$/.test(declaration.source?.input.file ?? "")) return;
       if (declaration.parent?.selector?.includes(".pcb-canvas .pcb-component-object")) return;
       for (let parent = declaration.parent; parent; parent = parent.parent) {
         if (parent.type === "atrule" && /^(?:media|page)$/i.test(parent.name) && /print/i.test(parent.params)) return;

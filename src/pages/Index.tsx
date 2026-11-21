@@ -39,6 +39,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingStatus } from "@/components/ui/loading-status";
 import { MaintenanceLoading as MaintenanceLoadingStatus } from "@/components/maintenance/MaintenanceFeedback";
 import "@/components/maintenance/maintenanceShell.css";
+import "@/components/maintenance/maintenancePalette.css";
 import { ProjectScopeBar } from "@/components/test-projects/ProjectScopeBar";
 import { useTestProject } from "@/components/test-projects/TestProjectProvider";
 import { useIsCompactLayout } from "@/hooks/use-mobile";

@@ -64,14 +64,42 @@ test("diagram editor preserves its requested Apple palette without changing the 
   assert.notEqual(surrounding.css, css);
 });
 
+test("the 維修中心 palette survives compilation and covers every tab, not only 故障清單", async () => {
+  const from = new URL("../../src/components/maintenance/maintenancePalette.css", import.meta.url);
+  const css = await readFile(from, "utf8");
+  const compiled = await postcss([charcoalPalette()]).process(css, { from: from.pathname });
+  assert.match(compiled.css, /--mf-panel: #1b2936/);
+  assert.match(compiled.css, /background: #0f171f/);
+  const outside = await postcss([charcoalPalette()]).process(css, { from: "src/index.css" });
+  assert.doesNotMatch(outside.css, /--mf-panel: #1b2936/, "the exemption is by file, not for every stylesheet");
+  // 2026-11-21: the frame was scoped to the 故障清單 tab, so the other three tabs were charcoal.
+  assert.doesNotMatch(css.replace(/\/\*[^]*?\*\//g, ""), /data-module=|data-mobile-maintenance-module=/, "no rule may depend on which tab is open");
+  const index = await readFile(new URL("../../src/pages/Index.tsx", import.meta.url), "utf8");
+  assert.match(index, /import "@\/components\/maintenance\/maintenancePalette\.css";/, "loaded with the shell, whatever tab opens first");
+  // 工具與資產 uses fixed navy utilities; every one it uses must be mapped, or it shows as charcoal in the slate frame.
+  const tools = (await Promise.all(["ToolsManagement", "CodeStorageManager", "CommandLibrary", "FileUploadDialog"]
+    .map((name) => readFile(new URL(`../../src/components/tools/${name}.tsx`, import.meta.url), "utf8")))).join("\n");
+  const navy = [...new Set(tools.match(/(?:hover:)?(?:bg|border)-\[#(?:0[0-9a-f]|1[0-2]|2[0-9a-f]|3[0-9a-f])[0-9a-f]{4}\](?!\/)/gi) ?? [])]
+    .filter((utility) => !/#(?:38d7ff|3c4c45)/i.test(utility));
+  const escape = (utility) => `.${utility.replace(/[:[\]#]/g, (char) => `\\${char}`)}`;
+  for (const utility of navy) assert.ok(css.includes(escape(utility)), `${utility} is mapped to the palette`);
+  assert.ok(navy.length >= 15, `found the tools tab's navy utilities (${navy.length})`);
+  for (const name of ["CodeStorageManager", "CommandLibrary", "FileUploadDialog"]) {
+    const source = await readFile(new URL(`../../src/components/tools/${name}.tsx`, import.meta.url), "utf8");
+    assert.match(source, /<DialogContent[^>]*className="mf-tool-dialog/, `${name}: its dialog takes the palette`);
+  }
+  const fault = await readFile(new URL("../../src/components/maintenance/maintenanceFaultLayout.css", import.meta.url), "utf8");
+  assert.doesNotMatch(fault, /--mf-panel:|\.maintenance-shell:has/, "the fault tab no longer has a palette of its own");
+});
+
 test("maintenance fault colors survive compilation within their own stylesheet", async () => {
   const from = new URL("../../src/components/maintenance/maintenanceFaultLayout.css", import.meta.url);
   const css = await readFile(from, "utf8");
   const compiled = await postcss([charcoalPalette()]).process(css, { from: from.pathname });
-  assert.match(compiled.css, /--mf-panel: #1b2936/);
-  assert.match(compiled.css, /--mf-teal: #75deca/);
+  assert.match(compiled.css, /background: #264c4d/);
+  assert.match(compiled.css, /linear-gradient\(100deg, #233c46/);
   const outside = await postcss([charcoalPalette()]).process(css, { from: "src/index.css" });
-  assert.doesNotMatch(outside.css, /--mf-panel: #1b2936/);
+  assert.doesNotMatch(outside.css, /background: #264c4d/);
 });
 
 test("solid action and destructive fills keep readable text across hover states", async () => {

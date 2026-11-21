@@ -337,7 +337,7 @@ export function CommandLibrary({ workspaceKey = "station-status" }: { workspaceK
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => setIsDialogOpen(open)}>
           <DialogTrigger asChild><Button size="sm" onClick={() => openEditor()}><Plus className="mr-2 h-4 w-4" />新增指令</Button></DialogTrigger>
-          <DialogContent className="max-h-[88vh] max-w-3xl overflow-y-auto border-[#2a526f] bg-[#071522]">
+          <DialogContent className="mf-tool-dialog max-h-[88vh] max-w-3xl overflow-y-auto border-[#2a526f] bg-[#071522]">
             <DialogHeader>
               <DialogTitle>{editingCommand ? "編輯指令" : "新增指令"}</DialogTitle>
               <DialogDescription>填寫可辨識的名稱、執行內容與適用平台，方便同仁搜尋與重複使用。</DialogDescription>
