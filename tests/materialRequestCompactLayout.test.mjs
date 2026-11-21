@@ -202,12 +202,15 @@ test("BOMs are grouped by project in BOM 管理 and in the header switcher", () 
   assert.match(source, /import \{ useTestProject \} from "@\/components\/test-projects\/TestProjectProvider"/);
   assert.match(source, /const bomSeriesGroups = useMemo\(\s*\(\) => groupBomWorkspacesByProject\(activeSeriesList, \{ activeProjectId, activeProjectName: activeProject\?\.name, projectNames \}\)/);
   assert.match(versionCenter, /groupBomWorkspacesByProject\(liveSeries, \{ activeProjectId, activeProjectName, projectNames \}\)/);
-  assert.match(versionCenter, /groups\.map\(\(group\) => \{/);
+  // Levels (2026-11-21): every project, then the boards of the opened project; search results stay grouped by project.
   assert.match(versionCenter, /<section key=\{group\.key\} className="bom-project-group"/);
-  assert.match(versionCenter, /aria-expanded=\{expanded\}/);
-  assert.match(versionCenter, /hidden=\{!expanded\}/);
+  assert.match(versionCenter, /className="bom-project-row" data-active-project=\{group\.isActive\} data-project-key=\{group\.key\} onClick=\{\(\) => openProject\(group\)\}/);
+  assert.match(versionCenter, /aria-label=\{`打開專案：\$\{group\.label\}/);
+  assert.match(versionCenter, /<ChevronLeft aria-hidden="true" \/>全部專案/);
+  assert.match(versionCenter, /\{renderPartsEntry\(openGroup\)\}/);
   assert.match(versionCenter, /請有編輯權限的同事上傳或指定專案/);
   assert.match(versionCenter, /group\.isActive && <span[^>]*>工作區專案<\/span>/);
+  assert.doesNotMatch(versionCenter, /collapsedProjects|aria-expanded=\{expanded\}/, "levels replace the collapsible project groups");
   assert.match(versionCenter, /所選 BOM 專案：/, "the selected BOM project stays distinct from navigation context");
   assert.match(versionCenter, /onAssignProject\(selectedSeries, value === UNASSIGNED_VALUE \? null : value\)/);
   assert.match(versionCenter, /尚無 BOM/);

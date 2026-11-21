@@ -41,6 +41,9 @@ async function contextActions(page, center, width, origin) {
   assert.equal(await list.getByRole('button',{name:/Vera_CPU_Rack_CPU_Module_超長系列名稱/,includeHidden:true}).getAttribute('aria-current'),'true');
   await page.screenshot({path:path.join(evidence,`context-${width}.png`)});
   await page.goto(origin+'/?qaUnassigned=1');await center.waitFor();
+  // The window opens on the project of the board on screen; the unassigned board is one level over, under 未指定專案.
+  await center.getByTestId('bom-series-list').getByRole('button',{name:'全部專案',exact:true}).click();
+  await center.getByTestId('bom-series-list').getByRole('button',{name:/^打開專案：未指定專案/}).click();
   await center.getByTestId('bom-series-list').getByRole('button',{name:/Vera_CPU_TPM_交付格式/}).click();await detail.waitFor();
   assert.equal((await center.locator('.bom-version-project').innerText()).trim(),'所選 BOM 專案：未指定專案');
   assert.match(await center.locator('.bom-version-workspace').innerText(),/工作區專案：Carlo-Next/);
@@ -68,25 +71,27 @@ async function run(browser, origin, width) {
     const active = list.getByRole('button',{name:/Vera_CPU_Rack_E1\.S/}).first();
     const other = list.getByRole('button',{name:/Vera_CPU_Baseboard/}).first();
     assert.match(await center.locator('.bom-version-project').innerText(), /所選 BOM 專案：Vera CPU/);
-    const projectGroup = list.locator('.bom-project-heading').filter({hasText:'Vera CPU'});
-    await projectGroup.tap();
-    assert.equal(await projectGroup.getAttribute('aria-expanded'),'false');
-    assert.equal(await active.isVisible(),false,'collapsed project hides its series without changing the selection');
-    await projectGroup.press('Enter');
-    assert.equal(await projectGroup.getAttribute('aria-expanded'),'true');
-    await active.waitFor();
-    await projectGroup.tap();
+    // Levels (2026-11-21): opens on the project of the board on screen; 全部專案 lists every project; opening one lists its boards.
+    const allProjects = list.getByRole('button',{name:'全部專案',exact:true});
+    const boardsProject = list.locator('.bom-project-row[data-active-project="false"]').first();
+    await active.waitFor(); assert.equal(await list.locator('.bom-project-current').count(),1);
+    await allProjects.tap(); await boardsProject.waitFor();
+    assert.equal(await active.isVisible(),false,'the project level lists projects, not boards');
+    assert.equal(await list.locator('.bom-project-row').count(),2,'the workspace project is listed even without boards');
+    await boardsProject.press('Enter'); await active.waitFor();
     await search.fill('Vera_CPU_Rack_E1.S'); await active.waitFor();
-    assert.equal(await list.getByRole('button',{name:/收合專案：Vera CPU/}).getAttribute('aria-expanded'),'true','search reveals matching series in a collapsed project');
+    assert.equal(await list.locator('.bom-project-heading').count(),1,'search results stay under the project they belong to');
     await search.fill(''); await active.waitFor();
     const tone = await active.evaluate(el=>getComputedStyle(el).backgroundColor), alternateTone=await other.evaluate(el=>getComputedStyle(el).backgroundColor);
     assert.notEqual(tone,alternateTone,'selected series should have a distinct surface');
     const titleFont = await active.locator('p').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize)); assert.ok(titleFont>=14,titleFont);
     await search.fill('找不到的系列'); await center.getByText('找不到符合條件的 BOM 系列',{exact:true}).waitFor();
     await search.fill(''); await active.waitFor();
+    await allProjects.tap();
     const archive = center.getByTestId('bom-archive-section').getByRole('button',{name:/已封存/}).first();
     await archive.tap(); await list.getByRole('button',{name:/已封存_工程驗證板/}).waitFor();
     await archive.tap(); assert.equal(await list.getByRole('button',{name:/已封存_工程驗證板/}).count(),0);
+    await boardsProject.tap(); await active.waitFor();
     await list.getByRole('button',{name:'匯入 BOM 檔案',exact:true}).tap(); assert.ok((await calls(page)).some(call=>call.name==='uploadNew'));
     await list.locator('.bom-series-groups').evaluate(el=>el.scrollTop=0); await page.screenshot({path:path.join(evidence,`series-${width}.png`)});
     await list.getByRole('button',{name:/超長系列名稱/}).tap();
@@ -126,13 +131,12 @@ async function run(browser, origin, width) {
     }
     await page.screenshot({path:path.join(evidence,`short-${width}.png`)});
     if(width<1024) { await detail.getByRole('button',{name:'返回清單',exact:true}).tap(); await list.waitFor(); }
-    await projectGroup.scrollIntoViewIfNeeded(); await projectGroup.tap();
-    assert.equal(await projectGroup.getAttribute('aria-expanded'),'false');
-    await projectGroup.tap(); await list.locator('.bom-series-row[aria-current="true"]').waitFor();
+    await allProjects.scrollIntoViewIfNeeded(); await allProjects.tap(); await boardsProject.waitFor();
+    await boardsProject.tap(); await list.locator('.bom-series-row[aria-current="true"]').waitFor();
     await page.screenshot({path:path.join(evidence,`groups-short-${width}.png`)});
     await center.locator('[data-ui="dialog-close"]').tap(); await center.waitFor({state:'hidden'});
     assert.deepEqual(errors,[]);
-    return {width,result:'passed',checks:['near-full-screen bounds','labeled current and series project roles','project collapse and keyboard expand','search reveals collapsed matching project','readable and distinct selected series','search and archive reveal','long names and phone back','upload callbacks','rename and version edit save/cancel','page tracker callback','diff open and return','short viewport group controls','no dialog horizontal overflow']};
+    return {width,result:'passed',checks:['near-full-screen bounds','labeled current and series project roles','project levels and keyboard open','search results under their project','readable and distinct selected series','search and archive reveal','long names and phone back','upload callbacks','rename and version edit save/cancel','page tracker callback','diff open and return','short viewport project levels','no dialog horizontal overflow']};
   } catch(error) { await page.screenshot({path:path.join(evidence,`failure-${width}.png`)}).catch(()=>{}); throw error; }
   finally { await context.close(); }
 }

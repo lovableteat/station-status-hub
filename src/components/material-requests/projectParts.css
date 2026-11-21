@@ -1,26 +1,35 @@
 /* 專案總料表 inside BOM 版本管理: black page, teal accents, one line per cell. */
+/* The entry reads as a button (2026-11-21, 「這根本不像是按鈕，一堆人找不到」): a raised card with an icon tile and an
+   explicit 打開 › pill, inside the project it merges. */
 .bom-project-parts-entry {
   display: flex;
   width: 100%;
-  min-height: 44px;
+  min-height: 60px;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 8px;
-  border: 1px solid hsl(var(--warning) / .42);
-  border-radius: 6px;
-  padding: 6px 10px;
-  background: hsl(var(--warning) / .1);
-  color: hsl(var(--warning));
-  font-size: 13px;
-  font-weight: 650;
+  gap: 10px;
+  margin-bottom: 14px;
+  border: 1px solid hsl(var(--warning) / .65);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: hsl(var(--warning) / .14);
+  box-shadow: 0 1px 0 hsl(0 0% 100% / .06) inset, 0 2px 6px hsl(0 0% 0% / .25);
+  color: hsl(var(--foreground));
   text-align: left;
+  cursor: pointer;
   transition: background-color 150ms ease-out, border-color 150ms ease-out;
 }
-.bom-project-parts-entry:hover { border-color: hsl(var(--warning) / .7); background: hsl(var(--warning) / .18); }
-.bom-project-parts-entry:active { background: hsl(var(--warning) / .26); }
-.bom-project-parts-entry:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
-.bom-project-parts-entry svg { width: 16px; height: 16px; flex: none; }
-.bom-project-parts-entry small { margin-left: auto; color: hsl(var(--muted-foreground)); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.bom-project-parts-entry:hover { border-color: hsl(var(--warning)); background: hsl(var(--warning) / .22); }
+.bom-project-parts-entry:active { background: hsl(var(--warning) / .3); }
+.bom-project-parts-entry:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.bom-project-parts-icon { display: grid; flex: none; width: 36px; height: 36px; place-items: center; border-radius: 8px; background: hsl(var(--warning) / .24); color: hsl(var(--warning)); }
+.bom-project-parts-icon svg { width: 19px; height: 19px; }
+.bom-project-parts-text { display: grid; min-width: 0; flex: 1; gap: 1px; }
+.bom-project-parts-text strong { color: hsl(var(--warning)); font-size: 15px; font-weight: 700; line-height: 20px; }
+.bom-project-parts-text small { overflow: hidden; color: hsl(var(--muted-foreground)); font-size: 12px; line-height: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.bom-project-parts-open { display: inline-flex; flex: none; height: 32px; align-items: center; gap: 2px; border-radius: 6px; padding: 0 6px 0 10px; background: hsl(var(--warning)); color: hsl(var(--background)); font-size: 13px; font-weight: 700; }
+.bom-project-parts-open svg { width: 15px; height: 15px; }
+@media (max-width: 1023px) { .bom-project-parts-open { height: 36px; } }
+@media (prefers-reduced-motion: reduce) { .bom-project-parts-entry { transition: none; } }
 
 .project-parts-view { display: flex; min-height: 0; min-width: 0; flex: 1; flex-direction: column; gap: 10px; }
 .project-parts-toolbar { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 8px 12px; }

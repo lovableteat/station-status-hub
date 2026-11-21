@@ -32,7 +32,10 @@ async function versionFlow(page,width,report){
  await frame(page,center,width);
  if(width>=1024){assert.ok(rows.every(row=>row.height>=44&&row.height<=50),JSON.stringify(rows));
  const upload=await list.getByRole('button',{name:'匯入 BOM 檔案',exact:true}).boundingBox(),find=await search.boundingBox();assert.ok(Math.abs(upload.y-find.y)<=1,'Upload and search share a row');report.uploadSearch={upload,find};}
- const group=list.locator('.bom-project-heading').filter({hasText:'Vera CPU'});await group.click();assert.equal(await group.getAttribute('aria-expanded'),'false');await group.press('Enter');assert.equal(await group.getAttribute('aria-expanded'),'true');
+ // Levels (2026-11-21): 全部專案 lists the projects as one-line rows, opening one lists its boards again.
+ const allProjects=list.getByRole('button',{name:'全部專案',exact:true});await allProjects.click();const projectRows=list.locator('.bom-project-row');await projectRows.first().waitFor();assert.equal(await list.locator('.bom-series-row').count(),0,'the project level lists projects, not boards');
+ report.projectRows=await projectRows.evaluateAll(rows=>rows.map(row=>row.getBoundingClientRect().height));assert.ok(report.projectRows.every(height=>height>=44&&height<=64),JSON.stringify(report.projectRows));
+ await list.locator('.bom-project-row[data-active-project="false"]').first().press('Enter');await list.locator('.bom-series-row').first().waitFor();
  await search.fill('找不到的系列');await center.getByText('找不到符合條件的 BOM 系列',{exact:true}).waitFor();await search.fill('');
  await list.getByRole('button',{name:'匯入 BOM 檔案',exact:true}).click();assert.ok(await page.evaluate(()=>window.__bomUiFixture.calls.some(c=>c.name==='uploadNew')));
  await list.getByRole('button',{name:/超長系列名稱/}).click();await detail.waitFor();if(width<1024){await detail.getByRole('button',{name:'返回清單',exact:true}).click();await list.waitFor();}

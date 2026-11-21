@@ -22,14 +22,40 @@
 .bom-series-filter-chips svg { flex: none; width: 14px; height: 14px; }
 .bom-series-filter-chips > button:last-child { min-height: 36px; padding-inline: 6px; font-size: 12px; }
 .bom-project-group + .bom-project-group { margin-top: 24px; }
-.bom-project-heading { width: 100%; min-height: 44px; gap: 7px; margin-bottom: 8px; padding: 8px 7px; border-bottom: 1px solid hsl(var(--info) / .32); border-radius: 6px 6px 0 0; background: hsl(var(--info) / .09); text-align: left; }
-.bom-project-heading:hover { background: hsl(var(--primary) / .05); }
-.bom-project-heading:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
+.bom-project-heading { width: 100%; min-height: 40px; gap: 7px; margin-bottom: 8px; padding: 8px 7px; border-bottom: 1px solid hsl(var(--info) / .32); border-radius: 6px 6px 0 0; background: hsl(var(--info) / .09); text-align: left; }
 .bom-project-heading .bom-project-name, .bom-project-heading > svg { color: hsl(var(--info)); }
 .bom-project-heading .bom-project-name { font-size: 14px; }
 .bom-project-heading .bom-project-count { margin-left: auto; font-size: 12px; white-space: nowrap; }
 .bom-project-heading[data-active-project="true"] .bom-project-name, .bom-project-heading[data-active-project="true"] > svg { color: hsl(var(--primary)); }
-.bom-project-heading[aria-expanded="false"] .bom-project-chevron { transform: rotate(-90deg); }
+/* In search results the project heading opens the project (its 專案總料表 and every board). */
+button.bom-project-heading:hover { background: hsl(var(--primary) / .1); }
+button.bom-project-heading:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.bom-project-heading > svg.bom-project-heading-chevron { color: hsl(var(--muted-foreground)); }
+
+/* Levels: every project → the boards of one project → that board's versions (on the right, or the next screen on a phone). */
+.bom-level-title { display: flex; align-items: baseline; gap: 8px; margin: 4px 2px 8px; color: hsl(var(--muted-foreground)); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+.bom-level-title > span { font-weight: 500; font-variant-numeric: tabular-nums; }
+.bom-project-row { display: flex; width: 100%; min-height: 52px; align-items: center; gap: 8px; margin-bottom: 6px; border: 1px solid hsl(var(--info) / .3); border-radius: 8px; padding: 6px 10px 6px 12px; background: hsl(var(--info) / .07); color: hsl(var(--foreground)); text-align: left; }
+.bom-project-row > svg:first-child { flex: none; width: 17px; height: 17px; color: hsl(var(--info)); }
+.bom-project-row[data-active-project="true"] { border-color: hsl(var(--primary) / .45); background: hsl(var(--primary) / .1); }
+.bom-project-row[data-active-project="true"] > svg:first-child { color: hsl(var(--primary)); }
+.bom-project-row-main { display: grid; min-width: 0; flex: 1; gap: 3px; }
+.bom-project-row-name { min-width: 0; overflow: hidden; font-size: 14px; font-weight: 650; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
+.bom-project-row-meta { display: flex; min-width: 0; align-items: center; gap: 6px; overflow: hidden; }
+.bom-project-row-meta > span:not(.bom-project-row-count) { height: 18px; min-height: 18px; padding: 0 5px; font-size: 11px; line-height: 16px; }
+.bom-project-row-count { flex: none; color: hsl(var(--muted-foreground)); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bom-project-row-chevron { flex: none; width: 18px; height: 18px; color: hsl(var(--muted-foreground)); }
+.bom-project-row:hover { border-color: hsl(var(--primary) / .6); background: hsl(var(--primary) / .14); }
+.bom-project-row:hover .bom-project-row-chevron { color: hsl(var(--primary)); translate: 2px 0; }
+.bom-project-row:focus-visible, .bom-project-back:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
+.bom-project-crumbs { display: flex; min-width: 0; align-items: center; gap: 6px; margin-bottom: 10px; color: hsl(var(--muted-foreground)); font-size: 13px; }
+.bom-project-back { display: inline-flex; flex: none; min-height: 36px; align-items: center; gap: 2px; border: 1px solid hsl(var(--border)); border-radius: 6px; padding: 0 10px 0 6px; color: hsl(var(--primary)); font-size: 13px; font-weight: 600; }
+.bom-project-back > svg { width: 16px; height: 16px; }
+.bom-project-back:hover { border-color: hsl(var(--primary) / .55); background: hsl(var(--primary) / .1); }
+.bom-project-current { display: flex; min-width: 0; flex: 1; align-items: center; gap: 6px; color: hsl(var(--info)); font-size: 15px; font-weight: 700; }
+.bom-project-current[data-active-project="true"] { color: hsl(var(--primary)); }
+.bom-project-current > svg { flex: none; width: 16px; height: 16px; }
+.bom-project-current > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bom-project-empty { margin-bottom: 12px; border-radius: 8px; padding: 12px; background: hsl(205 70% 65% / .05); font-size: 13px; line-height: 22px; }
 .bom-project-empty strong { color: hsl(var(--foreground)); font-weight: 500; }
 .bom-project-empty p { margin-top: 3px; color: hsl(var(--muted-foreground)); }
@@ -70,7 +96,9 @@
 .bom-version-table-scroll td:is(.bom-version-col-label, .bom-version-col-source) { max-width: 0; min-width: 7.5rem; }
 /* Below 1500px the uploader moves into the time's hover text so 標籤 and 來源檔 stay readable. */
 @media (max-width: 1499px) { .bom-version-table-scroll .bom-version-uploader { display: none; } }
-.bom-version-table-scroll thead { background: color-mix(in srgb, hsl(var(--card)), hsl(var(--info)) 16%); color: hsl(var(--info)); }
+/* The table sits on the dialog surface (--popover); the pinned 操作 column below paints the same colour so it reads as
+   part of the row (2026-11-21, 「操作那邊的顏色是怎樣??，很奇怪」: it was painted --card, a darker grey). */
+.bom-version-table-scroll thead { background: color-mix(in srgb, hsl(var(--popover)), hsl(var(--info)) 16%); color: hsl(var(--info)); }
 .bom-version-table-scroll tr[data-current="true"] { background: hsl(var(--success) / .11); }
 .bom-version-table-scroll tr[data-current="true"] > td:first-child { box-shadow: inset 3px 0 hsl(var(--success) / .7); }
 .bom-version-table-scroll tr[data-current="false"]:hover { background: hsl(var(--info) / .06); }
@@ -89,9 +117,12 @@
 /* Desktop: 操作 stays on screen while the wider columns scroll underneath it. On a phone the column is as wide
    as the screen, so it scrolls with the row and 版本 stays readable. */
 @media (min-width: 1024px) {
-  .bom-version-table-scroll table :is(thead th, tr[data-version-id] > td):last-child { position: sticky; right: 0; z-index: 1; background-color: hsl(var(--card)); box-shadow: inset 1px 0 hsl(var(--border)); }
-  .bom-version-table-scroll thead th:last-child { z-index: 11; background-color: color-mix(in srgb, hsl(var(--card)), hsl(var(--info)) 16%); }
+  .bom-version-table-scroll table :is(thead th, tr[data-version-id] > td):last-child { position: sticky; right: 0; z-index: 1; box-shadow: inset 1px 0 hsl(var(--border) / .6); }
+  .bom-version-table-scroll table tr[data-version-id] > td:last-child { background-color: hsl(var(--popover)); }
+  /* The header cell keeps the header row's colour (a more specific rule above used to paint it the body grey). */
+  .bom-version-table-scroll table thead th:last-child { z-index: 11; background-color: color-mix(in srgb, hsl(var(--popover)), hsl(var(--info)) 16%); }
   .bom-version-table-scroll tr[data-current="true"] > td:last-child { background-image: linear-gradient(hsl(var(--success) / .11), hsl(var(--success) / .11)); }
+  .bom-version-table-scroll tr[data-current="false"]:hover > td:last-child { background-image: linear-gradient(hsl(var(--info) / .06), hsl(var(--info) / .06)); }
 }
 /* Fixed slots so 檢視, 設為目前版本 and 比對 sit at the same place on every row; 更多 holds the rare and destructive actions. */
 .bom-version-table-scroll .bom-version-row-actions { display: grid; grid-template-columns: 3.25rem 6.75rem 4.75rem auto; align-items: center; gap: 4px; }
@@ -137,6 +168,7 @@
   .workspace-dialog-surface.bom-version-center[data-ui="dialog"][data-state="closed"] { animation: bom-version-window-out 110ms ease-out; }
   .bom-version-center :is([data-testid="bom-series-detail"], .bom-version-feedback) { animation: bom-version-content-in 150ms ease-out; }
   .bom-version-center[data-mobile-pane="list"] .bom-series-sidebar { animation: bom-version-content-in 150ms ease-out; }
+  .bom-version-center .bom-project-level { animation: bom-version-content-in 150ms ease-out; }
   .bom-version-feedback[data-tone="ok"] > svg { animation: bom-version-success-in 180ms ease-out; }
   .bom-version-spinner { animation: bom-version-spin .75s linear infinite; }
   .bom-version-center :where(button, .bom-project-chevron) { transition: scale 130ms ease-out, transform 150ms ease-out, color 150ms ease-out, background-color 150ms ease-out, border-color 150ms ease-out; }
@@ -159,6 +191,8 @@
   .bom-series-sidebar .bom-upload-entry { min-height: 44px; }
   .bom-series-filter-chips > button { min-height: 44px; }
   .bom-project-group + .bom-project-group { margin-top: 18px; }
+  .bom-project-back { min-height: 44px; }
+  .bom-project-row { min-height: 56px; }
   .bom-series-summary h3 { font-size: 18px; line-height: 26px; }
   .bom-series-project, .bom-series-project > button { width: 100%; }
   .bom-series-summary-meta { gap: 4px 12px; margin-top: 6px; }

@@ -34,7 +34,7 @@ async function openParts(page, query, phone = false) {
   } else await page.getByRole('button', { name: /BOM 管理/ }).click();
   const entry = page.getByTestId('bom-project-parts-entry');
   await entry.waitFor();
-  assert.match(await entry.innerText(), /專案總料表\s*合併 2 個系列/, 'the archived board is not counted');
+  assert.match(await entry.innerText(), /專案總料表\s*合併 2 塊板的目前版本/, 'the archived board is not counted');
   await entry.click();
   const view = page.getByTestId('project-parts-view');
   await view.waitFor();
