@@ -16,6 +16,10 @@ test("mobile header exposes a bundled website QR and a thumb-friendly workspace 
   ]);
 
   assert.match(header, /<WebsiteQrButton \/>/);
+  // 2026-11-22: phones show the QR as well, so people outside can scan it from the user's phone.
+  assert.doesNotMatch(header, /hidden md:block"><WebsiteQrButton/);
+  assert.match(qr, /md:hidden">請對方用手機相機掃描/);
+  assert.doesNotMatch(qr, /max-w-md overflow-hidden/, "the QR dialog must scroll on short phones instead of cutting off its buttons");
   assert.match(header, /hidden min-w-0 max-w-full[\s\S]*lg:flex 2xl:hidden/);
   assert.match(qr, /platform-mobile-qr\.svg/);
   assert.match(qr, /https:\/\/lovableteat\.github\.io\/station-status-hub\//);

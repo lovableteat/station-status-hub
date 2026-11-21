@@ -29,6 +29,8 @@ Use one shared React application with responsive component variants. Do not crea
 
 The mobile header is a single compact row. It contains the platform logo/name and the account avatar. QR sharing, online status, desktop navigation, subtitles, and secondary account details are hidden from the always-visible row and remain available from existing menus where applicable.
 
+> 2026-11-22 更新：使用者要求手機右上角也要有網站二維碼按鈕（在外面直接給別人掃描打開網站），所以 QR 已回到手機頂部，順序是「線上人員 → 二維碼 → 帳號」，仍維持單列。不要再把它藏到 md 以下。
+
 Target height is 52px plus the top safe area. It must never become a two-row toolbar.
 
 ### Workspace navigation

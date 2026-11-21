@@ -59,6 +59,7 @@ export function WebsiteQrButton() {
           type="button"
           variant="outline"
           aria-label="顯示手機開啟二維碼"
+          title="顯示網站二維碼，讓別人用手機相機掃描就能打開這個網站"
           data-platform-control="qr"
           className="interactive-lift h-11 w-11 shrink-0 rounded-xl border-cyan-200/35 bg-cyan-300/10 p-0 text-cyan-50 shadow-[0_16px_30px_-24px_rgba(34,211,238,0.8)] hover:border-cyan-200/60 hover:bg-cyan-300/20 hover:text-white sm:h-12 sm:w-12 sm:rounded-2xl 2xl:w-auto 2xl:px-4"
         >
@@ -66,14 +67,15 @@ export function WebsiteQrButton() {
           <span className="hidden text-sm font-bold 2xl:inline">手機開啟</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="w-[calc(100vw-24px)] max-w-md overflow-hidden rounded-[28px] border-cyan-200/35 bg-[radial-gradient(circle_at_10%_0%,rgba(34,211,238,0.22),transparent_17rem),radial-gradient(circle_at_90%_0%,rgba(190,242,100,0.14),transparent_16rem),#091827] p-0 text-slate-100">
+      <DialogContent className="w-[calc(100vw-24px)] max-w-md overflow-y-auto rounded-[28px] border-cyan-200/35 bg-[radial-gradient(circle_at_10%_0%,rgba(34,211,238,0.22),transparent_17rem),radial-gradient(circle_at_90%_0%,rgba(190,242,100,0.14),transparent_16rem),#091827] p-0 text-slate-100">
         <DialogHeader className="border-b border-cyan-200/15 px-5 pb-4 pt-5 pr-14 text-left">
           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#67e8f9,#bef264)] text-[#062230] shadow-[0_16px_35px_-18px_rgba(103,232,249,0.85)]">
             <Smartphone className="h-6 w-6" />
           </div>
           <DialogTitle className="text-2xl font-black tracking-tight text-white">用手機開啟平台</DialogTitle>
           <DialogDescription className="text-sm leading-6 text-slate-300">
-            開啟手機相機掃描，會直接前往目前的正式網站，不會連到這台電腦的測試網址。
+            <span className="md:hidden">請對方用手機相機掃描，就會直接打開正式網站。</span>
+            <span className="hidden md:inline">開啟手機相機掃描，會直接前往目前的正式網站，不會連到這台電腦的測試網址。</span>
           </DialogDescription>
         </DialogHeader>
 

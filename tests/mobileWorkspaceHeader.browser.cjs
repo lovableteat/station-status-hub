@@ -21,8 +21,9 @@ const out = path.resolve(process.env.MATERIAL_HEADER_EVIDENCE_DIR || '../materia
     const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
     browser = await chromium.launch({ channel: 'chrome' });
     const results = [];
-    for (const width of [700, 629, 390, 1543]) {
-      const context = await browser.newContext({ viewport: { width, height: 884 }, isMobile: width < 1024, hasTouch: width < 1024, reducedMotion: 'reduce' });
+    // 375×667 is a short phone (iPhone SE size): the QR dialog must scroll, not cut off its buttons.
+    for (const [width, height] of [[700, 884], [629, 884], [390, 884], [1543, 884], [375, 667]]) {
+      const context = await browser.newContext({ viewport: { width, height }, isMobile: width < 1024, hasTouch: width < 1024, reducedMotion: 'reduce' });
       await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
       const page = await context.newPage();
       const errors = [];
@@ -42,6 +43,31 @@ const out = path.resolve(process.env.MATERIAL_HEADER_EVIDENCE_DIR || '../materia
       assert.equal(geometry.button.width, width < 1024 ? 44 : 140);
       assert.ok(geometry.avatar.x >= geometry.button.x && geometry.avatar.right <= geometry.button.right, `avatar must fit account button: ${JSON.stringify(geometry)}`);
       assert.ok(geometry.controls.right <= width && geometry.brand.right <= geometry.controls.x, 'brand and controls must remain inside the viewport without overlap');
+      // The website QR is in the top-right on every width, phones included (2026-11-22).
+      const qr = page.locator('[data-platform-control="qr"]');
+      const qrBox = await qr.boundingBox();
+      assert.ok(qrBox && qrBox.height === 44 && qrBox.width >= 44 && qrBox.x + qrBox.width <= geometry.button.x, `QR button must sit beside the account button: ${JSON.stringify(qrBox)}`);
+      await qr.click();
+      const qrDialog = page.getByRole('dialog', { name: '用手機開啟平台' });
+      await qrDialog.waitFor();
+      await page.waitForFunction(() => { const img = document.querySelector('img[alt="工作平台網站二維碼"]'); return img && img.complete && img.naturalWidth > 0; });
+      const qrDialogState = await qrDialog.evaluate(dialog => {
+        dialog.getAnimations({ subtree: true }).forEach(animation => animation.finish());
+        const r = dialog.getBoundingClientRect();
+        const img = dialog.querySelector('img').getBoundingClientRect();
+        const share = [...dialog.querySelectorAll('button')].find(button => button.textContent.includes('分享'));
+        share.scrollIntoView({ block: 'nearest' });
+        const s = share.getBoundingClientRect();
+        const atShare = document.elementFromPoint(s.x + s.width / 2, s.y + s.height / 2);
+        return { x: r.x, right: r.right, top: r.top, bottom: r.bottom, qrSize: img.width, shareReachable: share.contains(atShare), text: dialog.textContent };
+      });
+      assert.ok(qrDialogState.x >= 0 && qrDialogState.right <= width && qrDialogState.top >= 0 && qrDialogState.bottom <= height, `QR dialog must fit the screen: ${JSON.stringify(qrDialogState)}`);
+      assert.ok(qrDialogState.qrSize >= 220, `QR must be large enough to scan: ${qrDialogState.qrSize}`);
+      assert.ok(qrDialogState.shareReachable, 'the share button must not be covered');
+      assert.match(qrDialogState.text, /lovableteat\.github\.io\/station-status-hub\//);
+      await page.screenshot({ path: path.join(out, `qr-${width}.png`) });
+      await page.keyboard.press('Escape');
+      await qrDialog.waitFor({ state: 'hidden' });
       await account.click();
       await page.locator('[data-platform-account-menu]').waitFor();
       const menu = await page.locator('[data-platform-account-menu]').boundingBox();

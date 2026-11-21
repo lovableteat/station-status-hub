@@ -156,7 +156,8 @@ export function MainWorkspaceHeader({
             <CollaborationIndicator showNotifications={showNotifications} showOnlineUsers={showOnlineUsers} />
           )}
 
-          <div className="hidden md:block"><WebsiteQrButton /></div>
+          {/* Phones show it too: people scan it from the user's phone to open the site. */}
+          <div className="shrink-0"><WebsiteQrButton /></div>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
