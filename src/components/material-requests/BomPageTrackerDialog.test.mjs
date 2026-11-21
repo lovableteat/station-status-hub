@@ -146,7 +146,7 @@ test("the page map selects a range for the batch tool and the filter keeps its h
     act(() => view.root.root.findByProps({ "aria-label": "篩選狀態" }).findAll(node => node.type === "button" && node.props["data-status"] === "pending")[0].props.onClick());
     assert.equal(view.root.root.findAllByProps({ "data-testid": "bom-page-tracker-row" }).length, 0);
     assert.ok(view.text().includes("目前篩選條件沒有符合的頁面"));
-    assert.equal(view.root.root.findAll(node => node.type === "th" && node.props.scope === "col").length, 4, "the column headers stay");
+    assert.equal(view.root.root.findAll(node => node.type === "th" && node.props.scope === "col").length, 5, "the column headers stay");
     assert.equal(view.root.root.findAll(node => node.type === "button" && String(node.props["aria-label"]).startsWith("移除篩選：")).map(node => node.props["aria-label"]).join(), "移除篩選：搜尋：power,移除篩選：狀態：待處理");
     // Jumping to a page that the filter hides shows it again instead of doing nothing.
     act(() => cell(3).props.onClick({ shiftKey: false }));
@@ -170,6 +170,108 @@ test("a 500-page map uses labelled ranges and keeps keyboard navigation across t
     assert.equal(view.current(), "52", "browsing ranges never changes the page that work reached");
     assert.equal(view.button("儲存頁數進度").props.disabled, true, "map navigation writes nothing");
   } finally { act(() => view.root.unmount()); }
+});
+
+// 2026-11-21: 「新增一欄叫做檢查完成的按鈕，提供檢查者進行標記，也讓畫的人知道檢查完的頁面不能再動了，這個按鈕可以被取消但取消前要說明原因留紀錄」
+test("檢查完成 locks a finished page; taking back an unsaved check needs nothing, cancelling a saved one needs a reason", async () => {
+  const checkButton = (view, number) => view.root.root.findAll(node => node.type === "button" && String(node.props["aria-label"]).startsWith(`第 ${number} 頁`) && String(node.props.className).includes("bom-tracker-check-button"))[0];
+  const statusButtons = (view, number) => view.root.root.findByProps({ "aria-label": `第 ${number} 頁狀態` }).findAll(node => node.type === "button");
+  const view = mount({ actor: { name: "檢查者甲", id: "u-1" } });
+  try {
+    assert.equal(view.root.root.findAll(node => node.type === "th" && node.props.scope === "col").map(textOf).join(), "頁碼,檢查完成,狀態,頁面標題,備註");
+    assert.equal(checkButton(view, 3).props.disabled, true, "a page still 待處理 cannot be checked");
+    act(() => checkButton(view, 1).props.onClick());
+    assert.ok(statusButtons(view, 1).every(button => button.props.disabled), "the checked page's status is locked");
+    assert.equal(view.field("第 1 頁備註").props.readOnly, true); assert.equal(view.field("第 1 頁標題").props.readOnly, true);
+    view.type("第 1 頁備註", "不該寫進去"); view.status(1, "pending");
+    assert.equal(view.field("第 1 頁備註").props.value, ""); assert.equal(view.pressed(1), "done");
+    assert.match(view.state(), /有尚未儲存的修改（1 頁）/);
+    // A check that was never saved is simply taken back: no reason, no record line.
+    act(() => checkButton(view, 1).props.onClick());
+    assert.equal(checkButton(view, 1).props["aria-pressed"], "false"); assert.match(view.state(), /已儲存/);
+    act(() => checkButton(view, 2).props.onClick());
+    // The batch tool leaves a checked page alone.
+    act(() => view.field("起始頁").props.onChange({ target: { value: "1" } })); act(() => view.field("結束頁").props.onChange({ target: { value: "4" } }));
+    assert.ok(view.text().includes("已檢查的 1 頁不會變更"));
+    const batch = view.root.root.findByProps({ "data-testid": "bom-page-tracker-batch" });
+    act(() => batch.findAll(node => node.type === "button" && node.props["data-status"] === "pending")[0].props.onClick());
+    assert.deepEqual([1, 2, 3, 4].map(view.pressed), ["pending", "done_missing", "pending", "pending"]);
+    await act(async () => { view.button("儲存頁數進度").props.onClick(); });
+    const [, , doc] = view.calls.find(call => call[0] === "save");
+    assert.equal(doc.pages[1].checked.by, "檢查者甲"); assert.equal(doc.pages[1].checked.byId, "u-1");
+    assert.equal(String(doc.checkLog.map(event => `${event.pageNumber}:${event.action}:${event.by}`)), String(["2:check:檢查者甲"]));
+  } finally { act(() => view.root.unmount()); }
+
+  // The checked page as stored: cancelling asks for a reason, and the reason is recorded.
+  const stored = saved(); stored.pages[1] = { ...page(2, "done_missing", "待料"), checked: { at: "2026-11-20T08:00:00.000Z", by: "檢查者甲" } };
+  stored.checkLog = [{ id: "c-1", pageNumber: 2, action: "check", at: "2026-11-20T08:00:00.000Z", by: "檢查者甲" }];
+  const locked = mount({ workspace: { id: "bom-a", name: "QA board", payload: { sheetName: "QA", recordCount: 47, records: [] }, pageTracker: stored }, actor: { name: "畫圖者乙" } });
+  try {
+    assert.ok(locked.text().includes("已檢查 1 頁· 紀錄 1"));
+    act(() => checkButton(locked, 2).props.onClick());
+    assert.ok(locked.text().includes("取消第 2 頁的檢查完成")); assert.ok(locked.text().includes("檢查者甲 在"));
+    const confirm = () => act(() => locked.button("取消檢查").props.onClick());
+    confirm();
+    assert.equal(checkButton(locked, 2).props["aria-pressed"], "true", "an empty reason cancels nothing");
+    assert.ok(locked.text().includes("寫下為什麼要取消"));
+    act(() => locked.root.root.findByProps({ id: "bom-uncheck-reason" }).props.onChange({ target: { value: "  客戶改線路，  要重畫 " } }));
+    assert.equal(locked.text().includes("寫下為什麼要取消"), false, "typing clears the error");
+    confirm();
+    assert.equal(checkButton(locked, 2).props["aria-pressed"], "false");
+    assert.equal(statusButtons(locked, 2).some(button => button.props.disabled), false, "the page can be edited again");
+    assert.ok(locked.text().includes("第 2 頁已取消檢查，原因已記下"));
+    const history = locked.root.root.findByProps({ "aria-label": "第 2 頁檢查紀錄，取消過 1 次" });
+    act(() => history.props.onClick());
+    assert.ok(locked.text().includes("原因：客戶改線路， 要重畫")); assert.ok(locked.text().includes("未儲存"));
+    await act(async () => { locked.button("儲存頁數進度").props.onClick(); });
+    const [, , doc] = locked.calls.find(call => call[0] === "save");
+    assert.equal(doc.pages[1].checked, undefined);
+    assert.equal(String(doc.checkLog.map(event => `${event.action}:${event.by}:${event.reason ?? ""}`)), String(["check:檢查者甲:", "uncheck:畫圖者乙:客戶改線路， 要重畫"]));
+  } finally { act(() => locked.root.unmount()); }
+
+  // A viewer sees who checked a page but is offered no check button.
+  const viewer = mount({ readOnly: true, workspace: { id: "bom-a", name: "QA board", payload: { sheetName: "QA", recordCount: 47, records: [] }, pageTracker: stored } });
+  try {
+    assert.equal(checkButton(viewer, 1), undefined); assert.equal(checkButton(viewer, 2), undefined);
+    assert.ok(viewer.text().includes("未檢查")); assert.ok(viewer.text().includes("已檢查檢查者甲"));
+  } finally { act(() => viewer.root.unmount()); }
+});
+
+test("a page a colleague checked while I was editing it goes back to what was checked, and I am told", async () => {
+  const view = mount();
+  try {
+    view.type("第 1 頁備註", "我在改第 1 頁");
+    const theirs = saved(); theirs.pages[0] = { ...theirs.pages[0], checked: { at: "2026-11-21T08:00:00.000Z", by: "檢查者甲" } };
+    theirs.checkLog = [{ id: "c-9", pageNumber: 1, action: "check", at: "2026-11-21T08:00:00.000Z", by: "檢查者甲" }];
+    view.update({ workspace: { ...view.workspace, pageTracker: theirs } });
+    assert.equal(view.field("第 1 頁備註").props.value, ""); assert.equal(view.field("第 1 頁備註").props.readOnly, true);
+    assert.ok(view.text().includes("第 1 頁剛被其他人檢查完成或取消檢查，已改成對方儲存的內容"));
+  } finally { act(() => view.root.unmount()); }
+  // The check arrives only when saving: the other pages are saved, the dialog stays open and says which edit was dropped.
+  const stored = saved(); stored.pages[2] = { ...page(3), checked: { at: "2026-11-21T08:00:00.000Z", by: "檢查者甲" } };
+  const late = mount({ loadLatest: async () => stored });
+  try {
+    late.type("第 3 頁備註", "我的第 3 頁"); late.type("第 4 頁備註", "我的第 4 頁");
+    await act(async () => { late.button("儲存頁數進度").props.onClick(); });
+    const [, , doc] = late.calls.find(call => call[0] === "save");
+    assert.equal(doc.pages[2].note, ""); assert.equal(doc.pages[3].note, "我的第 4 頁");
+    assert.equal(late.calls.some(call => call[0] === "open"), false, "the dialog stays open");
+    assert.ok(late.text().includes("第 3 頁剛被其他人檢查完成或取消檢查，你在這裡的修改沒有存入。其他修改都已儲存。"));
+    assert.match(late.state(), /已儲存/);
+  } finally { act(() => late.root.unmount()); }
+  // The cancel window was open while a colleague cancelled the same check: the reason was for a check that is gone.
+  const checkedDoc = saved(); checkedDoc.pages[0] = { ...checkedDoc.pages[0], checked: { at: "2026-11-21T08:00:00.000Z", by: "檢查者甲" } };
+  checkedDoc.checkLog = [{ id: "c-1", pageNumber: 1, action: "check", at: "2026-11-21T08:00:00.000Z", by: "檢查者甲" }];
+  const racing = mount({ workspace: { id: "bom-a", name: "QA board", payload: { sheetName: "QA", recordCount: 47, records: [] }, pageTracker: checkedDoc } });
+  try {
+    act(() => racing.root.root.findAll(node => node.type === "button" && String(node.props["aria-label"]).startsWith("第 1 頁已檢查完成"))[0].props.onClick());
+    act(() => racing.root.root.findByProps({ id: "bom-uncheck-reason" }).props.onChange({ target: { value: "我要改" } }));
+    const theirs = saved(); theirs.checkLog = [...checkedDoc.checkLog, { id: "u-1", pageNumber: 1, action: "uncheck", at: "2026-11-21T09:00:00.000Z", by: "同事", reason: "同事先取消" }];
+    racing.update({ workspace: { ...racing.workspace, pageTracker: theirs } });
+    act(() => racing.button("取消檢查").props.onClick());
+    assert.ok(racing.text().includes("第 1 頁的檢查剛被其他人改過，沒有取消"));
+    assert.equal(racing.text().includes("原因：我要改"), false, "no cancel line is written for a check that no longer exists");
+  } finally { act(() => racing.root.unmount()); }
 });
 
 test("a viewer can read every page but is offered nothing that would be refused", () => {

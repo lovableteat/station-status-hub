@@ -59,7 +59,7 @@ async function run(browser, origin, width) {
   try {
     await page.goto(origin + '/?qaMainRows&qaPages'); await page.getByTestId('material-table-card').waitFor();
     const tracker = await openTracker(page, width);
-    assert.deepEqual(await tracker.getByRole('columnheader').allTextContents(), ['頁碼', '狀態', '頁面標題', '備註']);
+    assert.deepEqual(await tracker.getByRole('columnheader').allTextContents(), ['頁碼', '檢查完成', '狀態', '頁面標題', '備註']);
     const original = await page.evaluate(() => structuredClone(window.__pdfAiFixture.tracker));
     await assertFrame(page, tracker, 884);
     await page.screenshot({ path: path.join(evidence, `initial-${width}.png`) });
@@ -83,7 +83,7 @@ async function run(browser, origin, width) {
     await tracker.getByLabel('搜尋頁面', { exact: true }).fill('沒有這個標題');
     assert.equal(await tracker.getByTestId('bom-page-tracker-row').count(), 0);
     assert.ok(await tracker.getByText('目前篩選條件沒有符合的頁面', { exact: true }).isVisible());
-    assert.equal(await tracker.getByRole('columnheader').count(), 4);
+    assert.equal(await tracker.getByRole('columnheader').count(), 5);
     const chips = tracker.getByTestId('bom-page-tracker-filters');
     assert.equal(await chips.getByRole('button', { name: /^移除篩選：/ }).count(), 2);
     await chips.getByRole('button', { name: '移除篩選：搜尋：沒有這個標題', exact: true }).tap();
@@ -204,7 +204,8 @@ async function run(browser, origin, width) {
     await page.screenshot({ path: path.join(evidence, `short-last-page-${width}.png`) });
     await tracker.getByRole('button', { name: '儲存頁數進度', exact: true }).tap(); await tracker.waitFor({ state: 'hidden' });
     const saved = await page.evaluate(() => structuredClone(window.__pdfAiFixture));
-    assert.equal(saved.saves, 1); assert.equal(saved.tracker.totalPages, 500); assert.equal(saved.tracker.pages.length, 500);
+    // 頁數進度 belongs to the board (1b0292b9): one save writes the same document to both of the QA board's versions.
+    assert.equal(saved.saves, 2); assert.equal(saved.tracker.totalPages, 500); assert.equal(saved.tracker.pages.length, 500);
     assert.equal(saved.tracker.pages[499].title, longTitle); assert.equal(saved.tracker.pages[499].note, longNote);
     assert.deepEqual(saved.tracker.pages.slice(0, 3).map(page => page.status), ['done_missing', 'done_missing', 'done_missing']);
     assert.equal(saved.tracker.pages[3].status, original.pages[3].status); assert.equal(saved.tracker.pages[3].note, original.pages[3].note);

@@ -6155,7 +6155,7 @@ export function MaterialRequestPage() {
       />
       <BomPageTrackerDialog workspace={pageTrackerDialogWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker}
         loadLatest={async (workspaceId) => { const stored = await loadPageTrackerMap(); return combineBomPageTrackers(boardWorkspaceIds(workspaceId).map((id) => stored.get(id))); }}
-        readOnly={!canManageBomPageTracker} versionLabel={pageTrackerVersionLabel} />
+        readOnly={!canManageBomPageTracker} versionLabel={pageTrackerVersionLabel} actor={{ name: user?.displayName || user?.username || "", id: user?.userId }} />
       <BomVersionCenter
         open={bomManagerOpen}
         onOpenChange={setBomManagerOpen}

@@ -15,6 +15,24 @@ import { normalizeBomVersion, type BomWorkspaceVersion } from "./bomVersioning";
 
 export type BomPageTrackerStatus = "done" | "pending" | "done_missing";
 
+/** 檢查完成: who signed the page off and when. A checked page is locked until the check is cancelled with a reason. */
+export interface BomPageCheck {
+  at: string;
+  by: string;
+  byId?: string;
+}
+
+/** One line of the page check record: a check, or a cancelled check and why. The record is only ever added to. */
+export interface BomPageCheckEvent {
+  id: string;
+  pageNumber: number;
+  action: "check" | "uncheck";
+  at: string;
+  by: string;
+  byId?: string;
+  reason?: string;
+}
+
 export interface BomPageTrackerPage {
   pageNumber: number;
   title?: string;
@@ -22,12 +40,14 @@ export interface BomPageTrackerPage {
   completed?: boolean;
   note: string;
   power?: boolean;
+  checked?: BomPageCheck;
 }
 
 export interface BomPageTracker {
   totalPages: number;
   currentPage?: number;
   pages: BomPageTrackerPage[];
+  checkLog?: BomPageCheckEvent[];
   updatedAt: string;
 }
 
@@ -387,16 +407,39 @@ function normalizePageTracker(raw: unknown, fallbackUpdatedAt: string) {
         note: typeof candidate.note === "string" ? candidate.note : "",
         ...(typeof candidate.title === "string" ? { title: candidate.title } : {}),
         ...(candidate.power === true ? { power: true } : {}),
+        ...(normalizePageCheck(candidate.checked) ? { checked: normalizePageCheck(candidate.checked) } : {}),
       });
     });
   }
+  const checkLog = Array.isArray(tracker.checkLog) ? tracker.checkLog.flatMap(normalizePageCheckEvent) : [];
 
   return {
     totalPages,
     currentPage: totalPages > 0 ? Math.min(totalPages, currentPage) : 0,
     pages: [...pageMap.values()].sort((left, right) => left.pageNumber - right.pageNumber),
+    ...(checkLog.length ? { checkLog } : {}),
     updatedAt: typeof tracker.updatedAt === "string" ? tracker.updatedAt : fallbackUpdatedAt,
   } satisfies BomPageTracker;
+}
+
+function normalizePageCheck(raw: unknown): BomPageCheck | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const check = raw as Partial<BomPageCheck>;
+  if (typeof check.at !== "string" || !check.at || typeof check.by !== "string" || !check.by) return undefined;
+  return { at: check.at, by: check.by, ...(typeof check.byId === "string" ? { byId: check.byId } : {}) };
+}
+
+function normalizePageCheckEvent(raw: unknown): BomPageCheckEvent[] {
+  if (!raw || typeof raw !== "object") return [];
+  const event = raw as Partial<BomPageCheckEvent>;
+  const pageNumber = Math.trunc(Number(event.pageNumber ?? 0));
+  if (typeof event.id !== "string" || !Number.isFinite(pageNumber) || pageNumber < 1 || (event.action !== "check" && event.action !== "uncheck")
+    || typeof event.at !== "string" || !event.at || typeof event.by !== "string") return [];
+  return [{
+    id: event.id, pageNumber, action: event.action, at: event.at, by: event.by,
+    ...(typeof event.byId === "string" ? { byId: event.byId } : {}),
+    ...(typeof event.reason === "string" ? { reason: event.reason } : {}),
+  }];
 }
 
 function normalizeTableColorTheme(raw: unknown) {

@@ -17,9 +17,16 @@ test("stored page tracker titles and POWER markers survive normalization with le
   const normalize = loader({ transform(source, file) {
     if (!file.endsWith("materialBomStorage.ts")) return source;
     const ast=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
-    const fn=ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==="normalizePageTracker");
-    return fn.getText(ast)+"\nexport { normalizePageTracker };";
+    const fns=ast.statements.filter(node=>ts.isFunctionDeclaration(node)&&["normalizePageTracker","normalizePageCheck","normalizePageCheckEvent"].includes(node.name?.text));
+    return fns.map(fn=>fn.getText(ast)).join("\n")+"\nexport { normalizePageTracker };";
   }})("src/components/material-requests/materialBomStorage.ts").normalizePageTracker;
+  // 檢查完成 and the check record survive a reload; malformed lines are dropped, never invented.
+  const checked=JSON.parse(JSON.stringify(normalize({totalPages:2,pages:[{pageNumber:1,status:"done",note:"",checked:{at:"2026-11-21T01:00:00Z",by:"甲",byId:"u1"}},{pageNumber:2,status:"done",note:"",checked:{by:"沒有時間"}}],
+    checkLog:[{id:"a",pageNumber:1,action:"check",at:"2026-11-21T01:00:00Z",by:"甲"},{id:"b",pageNumber:1,action:"uncheck",at:"2026-11-21T02:00:00Z",by:"乙",reason:"重畫"},{id:"c",pageNumber:0,action:"check",at:"x",by:"y"},{pageNumber:1,action:"check"}]},"2026-11-21")));
+  assert.deepEqual(checked.pages[0].checked,{at:"2026-11-21T01:00:00Z",by:"甲",byId:"u1"});
+  assert.equal("checked" in checked.pages[1],false);
+  assert.equal(checked.checkLog.map(event=>`${event.id}:${event.action}:${event.reason??""}`).join(),"a:check:,b:uncheck:重畫");
+  assert.equal("checkLog" in JSON.parse(JSON.stringify(normalize({totalPages:1,pages:[]},"2026-11-21"))),false,"a document without checks stays as it was");
   const value=JSON.parse(JSON.stringify(normalize({totalPages:3,currentPage:1,pages:[{pageNumber:1,title:"CPU POWER",status:"done",note:"Keep",power:true},{pageNumber:2,status:"pending",note:"Legacy"},{pageNumber:3,status:"pending",note:"",power:"true"}]},"2026-11-09")));
   assert.equal(value.pages[0].title,"CPU POWER");
   assert.equal(value.pages[0].power,true);

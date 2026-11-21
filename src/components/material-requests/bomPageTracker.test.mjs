@@ -131,6 +131,55 @@ test("combining keeps every copy's work: the newest finished status, the first t
   assert.equal(view(shrunk.pages), "1:done:: | 2:pending:: | 4:pending:第 4 頁備註:", "past the total only pages that hold something are kept");
 });
 
+test("檢查完成 merges on its own: a page someone checked is locked against my edits, and the record keeps every line", () => {
+  const check = (at, by = "檢查者甲") => ({ at, by });
+  const line = (id, pageNumber, action, at, by = "檢查者甲", reason) => ({ id, pageNumber, action, at, by, ...(reason ? { reason } : {}) });
+  const base = { ...draft(3, 1, [page(1, "done"), page(2, "done"), page(3)]), checkLog: [] };
+  // A colleague checked page 2 while I edited pages 2 and 3: page 2 keeps what was checked, page 3 keeps my edit.
+  const mine = { ...draft(3, 1, [page(1, "done"), page(2, "done", "我改的"), page(3, "done", "我的第 3 頁")]), checkLog: [] };
+  const theirs = { ...draft(3, 1, [page(1, "done"), { ...page(2, "done"), checked: check("2026-11-21T01:00:00.000Z") }, page(3)]), checkLog: [line("a", 2, "check", "2026-11-21T01:00:00.000Z")] };
+  const merged = tracker.mergeBomPageTracker(base, mine, theirs);
+  assert.equal(view(merged.pages), "1:done:: | 2:done:: | 3:done:我的第 3 頁:");
+  assert.equal(merged.pages[1].checked.by, "檢查者甲"); assert.equal(String(merged.lockedPages), String([2]));
+  assert.equal(String(merged.checkLog.map(event => event.id)), String(["a"]));
+  // My own check survives a colleague's change to another page, and both record lines are kept, oldest first.
+  const checkedByMe = { ...draft(3, 1, [{ ...page(1, "done"), checked: check("2026-11-21T02:00:00.000Z", "我") }, page(2, "done"), page(3)]), checkLog: [line("b", 1, "check", "2026-11-21T02:00:00.000Z", "我")] };
+  const both = tracker.mergeBomPageTracker(base, checkedByMe, theirs);
+  assert.equal(both.pages[0].checked.by, "我"); assert.equal(both.pages[1].checked.by, "檢查者甲");
+  assert.equal(String(both.checkLog.map(event => event.id)), String(["a", "b"])); assert.equal(String(both.lockedPages), String([]));
+  // Cancelling a check I saw is my change, so it wins over the stored check.
+  const seen = { ...theirs, checkLog: theirs.checkLog };
+  const cancelled = tracker.mergeBomPageTracker(seen, { ...draft(3, 1, [page(1, "done"), page(2, "done"), page(3)]), checkLog: [...theirs.checkLog, line("c", 2, "uncheck", "2026-11-21T03:00:00.000Z", "我", "要重畫")] }, theirs);
+  assert.equal(cancelled.pages[1].checked, undefined); assert.equal(cancelled.checkLog.at(-1).reason, "要重畫");
+  assert.equal(tracker.countBomPageTrackerChanges(base, { ...base, pages: [page(1, "done"), { ...page(2, "done"), checked: check("x") }, page(3)] }).pages, 1, "a check is an unsaved change");
+  // Both of us checked page 2 (my check not saved yet): the check saved first stays, and my line goes with my check,
+  // so the page and the record agree (reviewer's finding: a later take-back could otherwise cancel theirs with no reason).
+  const bothChecked = tracker.mergeBomPageTracker(base, { ...draft(3, 1, [page(1, "done"), { ...page(2, "done"), checked: check("2026-11-21T02:00:00.000Z", "我") }, page(3)]), checkLog: [line("m", 2, "check", "2026-11-21T02:00:00.000Z", "我")] }, theirs);
+  assert.equal(bothChecked.pages[1].checked.by, "檢查者甲"); assert.equal(String(bothChecked.lockedPages), "2");
+  assert.equal(String(bothChecked.checkLog.map(event => event.id)), "a");
+  // I cancelled the check I saw while they cancelled it and checked again: their new check stays, my cancel line goes.
+  const rechecked = { ...draft(3, 1, [page(1, "done"), { ...page(2, "done"), checked: check("2026-11-21T04:00:00.000Z", "乙") }, page(3)]), checkLog: [...theirs.checkLog, line("u", 2, "uncheck", "2026-11-21T03:00:00.000Z", "乙", "改"), line("r", 2, "check", "2026-11-21T04:00:00.000Z", "乙")] };
+  const lostCancel = tracker.mergeBomPageTracker(seen, { ...draft(3, 1, [page(1, "done"), page(2, "done"), page(3)]), checkLog: [...theirs.checkLog, line("c", 2, "uncheck", "2026-11-21T03:30:00.000Z", "我", "要重畫")] }, rechecked);
+  assert.equal(lostCancel.pages[1].checked.by, "乙"); assert.equal(String(lostCancel.checkLog.map(event => event.id)), "a,u,r");
+  // I checked page 2 as I saw it while a colleague set it back to 待處理: my check would sign off content I never saw.
+  const reworked = { ...draft(3, 1, [page(1, "done"), page(2, "pending", "要重做"), page(3)]), checkLog: [] };
+  const stale = tracker.mergeBomPageTracker(base, { ...draft(3, 1, [page(1, "done"), { ...page(2, "done"), checked: check("2026-11-21T02:00:00.000Z", "我") }, page(3)]), checkLog: [line("m", 2, "check", "2026-11-21T02:00:00.000Z", "我")] }, reworked);
+  assert.equal(view(stale.pages), "1:done:: | 2:pending:要重做: | 3:pending::"); assert.equal(stale.pages[1].checked, undefined);
+  assert.equal(String(stale.staleCheckPages), "2"); assert.equal(stale.checkLog.length, 0);
+  // Copies of the board: the newest copy decides a page's check (the record's order follows each person's own clock).
+  const older = { totalPages: 2, currentPage: 0, updatedAt: "2026-11-20T00:00:00.000Z", pages: [{ ...page(1, "done", "已檢查的內容"), checked: check("2026-11-21T05:00:00.000Z") }, page(2)], checkLog: [line("a", 1, "check", "2026-11-21T01:00:00.000Z"), line("b", 1, "uncheck", "2026-11-21T04:00:00.000Z", "我", "改圖"), line("d", 1, "check", "2026-11-21T05:00:00.000Z")] };
+  const newer = { totalPages: 2, currentPage: 0, updatedAt: "2026-11-21T00:00:00.000Z", pages: [page(1, "done", "沒檢查的內容"), page(2)], checkLog: [line("a", 1, "check", "2026-11-21T01:00:00.000Z"), line("b", 1, "uncheck", "2026-11-21T04:00:00.000Z", "我", "改圖")] };
+  const board = tracker.combineBomPageTrackers([older, newer]);
+  assert.equal(board.pages[0].checked, undefined); assert.equal(board.pages[0].note, "沒檢查的內容");
+  assert.equal(String(board.checkLog.map(event => event.id)), String(["a", "b", "d"]), "the record keeps every copy's lines");
+  const checkedNewest = tracker.combineBomPageTrackers([newer, { ...older, updatedAt: "2026-11-22T00:00:00.000Z" }]);
+  assert.equal(checkedNewest.pages[0].checked.at, "2026-11-21T05:00:00.000Z"); assert.equal(checkedNewest.pages[0].note, "已檢查的內容", "a checked page keeps the content it was checked with");
+  assert.equal(tracker.sameBomPageTracker(newer, { ...newer, checkLog: [] }), false, "a missing record line is a difference");
+  assert.equal(tracker.getBomPageTrackerSummary(older).checkedPages, 1);
+  assert.equal(tracker.filterBomTrackerPages(older.pages, 2, { query: "", status: "all", check: "unchecked" }).map(row => row.pageNumber).join(), "2");
+  assert.equal(tracker.filterBomTrackerPages(older.pages, 2, { query: "", status: "all", check: "checked" }).map(row => row.pageNumber).join(), "1");
+});
+
 test("two copies are the same when pages, total and current page match, whatever their saved time", () => {
   const one = { totalPages: 2, currentPage: 1, updatedAt: "2026-11-20T00:00:00.000Z", pages: [page(1, "done"), page(2)] };
   assert.equal(tracker.sameBomPageTracker(one, { ...one, updatedAt: "2026-01-01T00:00:00.000Z", pages: [page(1, "done")] }), true);
