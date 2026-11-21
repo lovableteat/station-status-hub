@@ -101,3 +101,40 @@ test("POWER additions and removals rebase independently from the same page's pro
   assert.equal(tracker.countBomPageTrackerChanges(tagged, starting).pages, 1);
   assert.equal(tracker.countBomPageTrackerChanges(starting, draft(1, 0, [{ ...page(1), power: false }])).pages, 0);
 });
+
+// 2026-11-21: the same board showed 90 % on V1 and 60 % on V2 with the same number of pages, because every version kept
+// its own copy. The board now has one page progress; copies that drifted apart are read as one.
+test("the board's versions read as one page progress: any finished page counts, the newest copy leads", () => {
+  const done = (count, total = 60) => Array.from({ length: total }, (_, index) => page(index + 1, index < count ? "done" : "pending"));
+  const v1 = { totalPages: 60, currentPage: 54, updatedAt: "2026-11-20T09:00:00.000Z", pages: done(54) };
+  const v2 = { totalPages: 60, currentPage: 36, updatedAt: "2026-11-17T07:31:00.000Z", pages: done(36) };
+  const board = tracker.combineBomPageTrackers([v2, v1]);
+  assert.equal(tracker.getBomPageTrackerSummary(board).completedPages, 54, "V1's 54 pages, not V2's 36");
+  assert.equal(board.totalPages, 60); assert.equal(board.currentPage, 54); assert.equal(board.updatedAt, v1.updatedAt);
+  assert.equal(tracker.combineBomPageTrackers([v1]), v1, "one copy is used as it is");
+  assert.equal(tracker.combineBomPageTrackers([undefined, v1, undefined]), v1);
+  assert.equal(tracker.combineBomPageTrackers([]), undefined);
+  assert.equal(tracker.combineBomPageTrackers([{ ...v1, updatedAt: "2026-11-01T00:00:00.000Z" }, v1]), v1, "copies that agree give back the newest object");
+});
+
+test("combining keeps every copy's work: the newest finished status, the first title and note, POWER from any copy", () => {
+  const newest = { totalPages: 4, currentPage: 2, updatedAt: "2026-11-20T00:00:00.000Z", pages: [page(1, "done_missing", "缺 U23"), page(2, "pending", "", "CLOCK"), page(3), page(4)] };
+  const older = { totalPages: 3, currentPage: 3, updatedAt: "2026-11-18T00:00:00.000Z", pages: [page(1, "done", "舊備註"), page(2, "done", "舊的第二頁", "舊標題"), { ...page(3, "done", "", "POWER IN"), power: true }] };
+  const board = tracker.combineBomPageTrackers([older, newest]);
+  assert.equal(view(board.pages), "1:done_missing:缺 U23: | 2:done:舊的第二頁:CLOCK | 3:done::POWER IN | 4:pending::");
+  assert.equal(board.pages[2].power, true);
+  assert.equal(board.totalPages, 4, "the newest copy's total");
+  assert.equal(board.currentPage, 3, "the furthest page work reached");
+  const noTotal = tracker.combineBomPageTrackers([{ totalPages: 0, currentPage: 0, updatedAt: "2026-11-21T00:00:00.000Z", pages: [] }, older]);
+  assert.equal(noTotal.totalPages, 3, "a newer copy without pages does not erase an older one");
+  const shrunk = tracker.combineBomPageTrackers([{ totalPages: 2, currentPage: 0, updatedAt: "2026-11-21T00:00:00.000Z", pages: [page(1, "done")] }, { totalPages: 5, currentPage: 0, updatedAt: "2026-11-01T00:00:00.000Z", pages: [page(1), page(2), page(3), page(4, "pending", "第 4 頁備註"), page(5)] }]);
+  assert.equal(view(shrunk.pages), "1:done:: | 2:pending:: | 4:pending:第 4 頁備註:", "past the total only pages that hold something are kept");
+});
+
+test("two copies are the same when pages, total and current page match, whatever their saved time", () => {
+  const one = { totalPages: 2, currentPage: 1, updatedAt: "2026-11-20T00:00:00.000Z", pages: [page(1, "done"), page(2)] };
+  assert.equal(tracker.sameBomPageTracker(one, { ...one, updatedAt: "2026-01-01T00:00:00.000Z", pages: [page(1, "done")] }), true);
+  assert.equal(tracker.sameBomPageTracker(one, { ...one, pages: [page(1, "done"), page(2, "done")] }), false);
+  assert.equal(tracker.sameBomPageTracker(one, undefined), false);
+  assert.equal(tracker.sameBomPageTracker(undefined, undefined), true);
+});

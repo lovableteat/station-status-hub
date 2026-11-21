@@ -98,7 +98,7 @@ import { useMaterialPersonalMarks } from "./useMaterialPersonalMarks";
 import { MaterialTableScroll } from "./MaterialTableScroll";
 import { MaterialMobileListRow } from "./MaterialMobileListRow";
 import { BomPageTrackerDialog } from "./BomPageTrackerDialog";
-import { getBomPageTrackerSummary } from "./bomPageTracker";
+import { combineBomPageTrackers, getBomPageTrackerSummary, sameBomPageTracker } from "./bomPageTracker";
 import { MaterialMobileBomPicker } from "./MaterialMobileBomPicker";
 import "./materialMobilePage.css";
 import "./materialMobileEditor.css";
@@ -3511,7 +3511,8 @@ export function MaterialRequestPage() {
   );
   const isCollaborativeReady = collaborationStatus === "remote";
   const personalMarks = useMaterialPersonalMarks(user?.userId, activeBomId, canViewModuleAccess && isCollaborativeReady);
-  const canManageBomPageTracker = canEdit && !["checking", "reconnecting", "error"].includes(collaborationStatus);
+  // 頁數進度 is the board's, shared by its versions: it stays editable while a historical version is on screen.
+  const canManageBomPageTracker = canEditModuleAccess && !["checking", "reconnecting", "error"].includes(collaborationStatus);
   // Anyone who may see this BOM may read its page progress (statuses, titles, notes); changing it still needs edit rights.
   const canOpenBomPageTracker = canViewModuleAccess && !["checking", "reconnecting", "error"].includes(collaborationStatus);
   const collaborationStatusMeta = useMemo(
@@ -3559,11 +3560,27 @@ export function MaterialRequestPage() {
     [activeWorkspace.tableColorTheme],
   );
   const pageTrackerWorkspace = bomWorkspaces.find((workspace) => workspace.id === (pageTrackerWorkspaceId ?? activeBomId)) ?? activeWorkspace;
-  const basePayload = activeWorkspace.payload;
-  const activePageTrackerSummary = useMemo(
-    () => getBomPageTrackerSummary(activeWorkspace.pageTracker),
-    [activeWorkspace.pageTracker],
+  // 頁數進度 belongs to the board (2026-11-21: V1 showed 90 %, V2 60 %, same number of pages). Every version of a board
+  // shows the versions' copies combined into one, and a save writes that one document to all of them, so opening another
+  // version or switching the current one never changes the number.
+  const boardWorkspaceIds = (workspaceId: string) =>
+    findBomSeriesByWorkspace(seriesList, workspaceId)?.series.versions.map((item) => item.workspace.id) ?? [workspaceId];
+  const combineBoardPageTracker = (workspace: BomWorkspace) => {
+    const found = findBomSeriesByWorkspace(seriesList, workspace.id);
+    if (!found || found.series.versions.length < 2) return workspace.pageTracker;
+    return combineBomPageTrackers([workspace.pageTracker, ...found.series.versions.filter((item) => item.workspace.id !== workspace.id).map((item) => item.workspace.pageTracker)]);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputed whenever the board's versions change (seriesList)
+  const pageTrackerBoardTracker = useMemo(() => combineBoardPageTracker(pageTrackerWorkspace), [seriesList, pageTrackerWorkspace]);
+  const pageTrackerDialogWorkspace = useMemo(
+    () => (pageTrackerBoardTracker === pageTrackerWorkspace.pageTracker ? pageTrackerWorkspace : { ...pageTrackerWorkspace, pageTracker: pageTrackerBoardTracker }),
+    [pageTrackerWorkspace, pageTrackerBoardTracker],
   );
+  const pageTrackerVersions = findBomSeriesByWorkspace(seriesList, pageTrackerWorkspace.id)?.series.versions ?? [];
+  const pageTrackerVersionLabel = pageTrackerVersions.length > 1 ? `${pageTrackerVersions.map((item) => item.displayNumber).join("、")} 共用` : undefined;
+  const basePayload = activeWorkspace.payload;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputed whenever the board's versions change (seriesList)
+  const activePageTrackerSummary = useMemo(() => getBomPageTrackerSummary(combineBoardPageTracker(activeWorkspace)), [seriesList, activeWorkspace]);
 
   const materialRecordCache = useMemo(
     () => new WeakMap<MaterialWorkbookRecord, MaterialRecord>(),
@@ -4626,6 +4643,9 @@ export function MaterialRequestPage() {
     // Every new version of an existing series is compared with the version it replaced; the result toast names each one.
     const comparisons: Array<{ seriesId: string; seriesName: string; before: string; beforeNumber: string; after: string; afterNumber: string; summary: ReturnType<typeof diffBomRecords>["summary"] }> = [];
     try {
+      // A new version starts from the board's page progress as stored now; the copies held on this page can lag behind a
+      // colleague's save. If it cannot be read, the copies on this page are used.
+      const storedPageTrackers = await loadPageTrackerMap().catch(() => null);
       for (const upload of uploads) {
         assertBomWriteCurrent(writeScope);
         const currentSeriesList = buildBomSeriesList(workspaces);
@@ -4658,7 +4678,8 @@ export function MaterialRequestPage() {
           id: workspaceId,
           name: seriesName,
           payload: { ...upload.payload, records, recordCount: records.length },
-          pageTracker: previous?.workspace.pageTracker,
+          // A new version joins the board's one page progress (its versions' copies combined).
+          pageTracker: series ? combineBomPageTrackers(series.versions.map((item) => storedPageTrackers?.get(item.workspace.id) ?? item.workspace.pageTracker)) : undefined,
           tableColorTheme: previous?.workspace.tableColorTheme,
           project: previous?.workspace.project ?? importProject,
           updatedAt: stamp,
@@ -4820,18 +4841,21 @@ export function MaterialRequestPage() {
       // its parts pair with the other version by vendor and MPN; nothing else in the rows changes.
       const targetRecords = hasSwappedVendorColumns(loadedTarget) ? swapVendorColumns(loadedTarget) : loadedTarget;
       if (targetRecords !== loadedTarget) repairedRows = targetRecords.length;
+      // Saving the whole version would also write the 頁數進度 copy held on this page, last, after every record; a colleague
+      // saving page progress meanwhile would be undone. The switch leaves page progress alone (pageTracker: undefined is
+      // skipped by saveBomWorkspace).
       if (carrying) {
         const previousRecords = await loadVersionRecords(previous.workspace.id);
         assertBomWriteCurrent(writeScope);
         // What was entered on the version being left while it was current reaches the target; nothing the target holds is
         // replaced (new tracking entries are added, blank fields filled, hand-added parts from that time appended).
         const filled = fillForwardBomTracking(previousRecords, targetRecords, previous.version.currentChangedAt);
-        await saveBomWorkspace({ ...version.workspace, payload: { ...version.workspace.payload, records: filled.records, recordCount: filled.records.length }, updatedAt: stamp }, () => assertBomWriteCurrent(writeScope));
+        await saveBomWorkspace({ ...version.workspace, pageTracker: undefined, payload: { ...version.workspace.payload, records: filled.records, recordCount: filled.records.length }, updatedAt: stamp }, () => assertBomWriteCurrent(writeScope));
         carriedRows = filled.filled;
         carriedManual = filled.manual;
         unmatchedRows = filled.unmatched;
       } else if (repairedRows > 0) {
-        await saveBomWorkspace({ ...version.workspace, payload: { ...version.workspace.payload, records: targetRecords, recordCount: targetRecords.length }, updatedAt: stamp }, () => assertBomWriteCurrent(writeScope));
+        await saveBomWorkspace({ ...version.workspace, pageTracker: undefined, payload: { ...version.workspace.payload, records: targetRecords, recordCount: targetRecords.length }, updatedAt: stamp }, () => assertBomWriteCurrent(writeScope));
       }
       if (!isBomWriteCurrent(writeScope)) return;
       for (const item of series.versions) {
@@ -5090,7 +5114,9 @@ export function MaterialRequestPage() {
     }
     setPendingDelete({
       title: `永久刪除 ${series.name} ${version.displayNumber}？`,
-      description: `這個版本的 ${version.workspace.payload.recordCount.toLocaleString()} 筆料件、頁數與追蹤資料會一併移除，這個動作無法復原。${series.versions.length > 1 ? "系列的其他版本不受影響。" : "這是系列的最後一個版本，整個系列會一起消失。"}`,
+      description: series.versions.length > 1
+        ? `這個版本的 ${version.workspace.payload.recordCount.toLocaleString()} 筆料件與追蹤資料會一併移除，這個動作無法復原。系列的其他版本不受影響，整塊板共用的頁數進度也會保留。`
+        : `這個版本的 ${version.workspace.payload.recordCount.toLocaleString()} 筆料件、頁數與追蹤資料會一併移除，這個動作無法復原。這是系列的最後一個版本，整個系列會一起消失。`,
       workspaceIds: [version.workspace.id],
     });
   };
@@ -5442,16 +5468,21 @@ export function MaterialRequestPage() {
       throw new Error(`Workspace ${workspaceId} not found.`);
     }
     const pageTrackerSummary = getBomPageTrackerSummary(pageTracker);
+    // The board's page progress: every version of the board gets the same document.
+    const boardIds = boardWorkspaceIds(workspaceId);
+    const boardWorkspaces = boardIds.flatMap((id) => {
+      const item = bomWorkspaces.find((candidate) => candidate.id === id);
+      return item ? [item] : [];
+    });
+    setBomWorkspaces((current) => current.map((item) => (boardIds.includes(item.id) ? { ...item, pageTracker } : item)));
 
-    const nextWorkspace: BomWorkspace = {
-      ...workspace,
-      pageTracker,
-    };
-    replaceBomWorkspace(nextWorkspace);
-
+    let savedVersions = 0;
     try {
-      await saveBomWorkspacePageTracker(workspaceId, pageTracker, () => assertBomWriteCurrent(writeScope));
-      if (!isBomWriteCurrent(writeScope)) return;
+      for (const item of boardWorkspaces) {
+        await saveBomWorkspacePageTracker(item.id, pageTracker, () => assertBomWriteCurrent(writeScope));
+        if (!isBomWriteCurrent(writeScope)) return;
+        savedVersions += 1;
+      }
       void logMaterialWorkspaceAction({
         action: "page_tracker.update",
         actor: user,
@@ -5459,19 +5490,23 @@ export function MaterialRequestPage() {
           completedPages: pageTrackerSummary.completedPages,
           currentPage: pageTrackerSummary.currentPage,
           totalPages: pageTrackerSummary.totalPages,
+          boardWorkspaceIds: boardWorkspaces.map((item) => item.id),
         },
         workspaceId,
       });
       toast({
         title: "頁數進度已儲存",
-        description: `${workspace.name} · ${pageTrackerSummary.currentPage > 0 ? `目前第 ${pageTrackerSummary.currentPage} / ${pageTrackerSummary.totalPages} 頁 · ` : ""}已完成 ${pageTrackerSummary.completedPages} 頁`,
+        description: `${workspace.name}${boardWorkspaces.length > 1 ? `（${boardWorkspaces.length} 個版本共用）` : ""} · ${pageTrackerSummary.currentPage > 0 ? `目前第 ${pageTrackerSummary.currentPage} / ${pageTrackerSummary.totalPages} 頁 · ` : ""}已完成 ${pageTrackerSummary.completedPages} 頁`,
       });
     } catch (error) {
       if (!isBomWriteCurrent(writeScope)) throw error;
       await reloadBomWorkspaces(activeBomId).catch(() => undefined);
       toast({
         title: "頁數進度儲存失敗",
-        description: "這次沒有存成功。你的修改還留在視窗裡，可以再按一次儲存。",
+        // Some versions may already hold the new document; saving again writes it to all of them.
+        description: savedVersions > 0
+          ? `只存進 ${savedVersions} / ${boardWorkspaces.length} 個版本，畫面可能還看到舊的頁面狀態。你的修改還留在視窗裡，請再按一次儲存。`
+          : "這次沒有存成功。你的修改還留在視窗裡，可以再按一次儲存。",
         variant: "destructive",
       });
       throw error;
@@ -5568,6 +5603,25 @@ export function MaterialRequestPage() {
     setPage(1);
   };
 
+  // 頁數進度 belongs to the board. While its versions' copies still differ (nobody has saved since they were combined), a
+  // deleted version would take the pages only its copy finished with it, and the number would change by itself again.
+  // The board's combined page progress, as stored now, is first written to the versions that stay.
+  const keepBoardPageProgressBeforeDelete = async (targetIds: string[], assertWrite: () => void) => {
+    const stored = await loadPageTrackerMap();
+    assertWrite();
+    for (const series of seriesList) {
+      const ids = series.versions.map((item) => item.workspace.id);
+      const kept = ids.filter((id) => !targetIds.includes(id));
+      if (kept.length === 0 || kept.length === ids.length) continue;
+      const board = combineBomPageTrackers(ids.map((id) => stored.get(id)));
+      if (!board) continue;
+      for (const id of kept) {
+        if (sameBomPageTracker(stored.get(id), board)) continue;
+        await saveBomWorkspacePageTracker(id, board, assertWrite);
+      }
+    }
+  };
+
   const deleteBomWorkspaceById = async (target: string | string[]) => {
     let writeScope;
     try {writeScope = captureBomWrite();} catch {return;}
@@ -5594,6 +5648,8 @@ export function MaterialRequestPage() {
     }
 
     try {
+      await keepBoardPageProgressBeforeDelete(targetIds, () => assertBomWriteCurrent(writeScope));
+      if (!isBomWriteCurrent(writeScope)) return;
       for (const targetWorkspace of targetWorkspaces) {
         await removeBomWorkspace(targetWorkspace.id, () => assertBomWriteCurrent(writeScope));
         if (!isBomWriteCurrent(writeScope)) return;
@@ -6097,8 +6153,9 @@ export function MaterialRequestPage() {
         canEditColors={canEdit && isCollaborativeReady}
         onApply={applyTableSettings}
       />
-      <BomPageTrackerDialog workspace={pageTrackerWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker}
-        loadLatest={async (workspaceId) => (await loadPageTrackerMap()).get(workspaceId)} readOnly={!canManageBomPageTracker} />
+      <BomPageTrackerDialog workspace={pageTrackerDialogWorkspace} open={pageTrackerDialogOpen} onOpenChange={setPageTrackerDialogOpen} onSave={saveBomPageTracker}
+        loadLatest={async (workspaceId) => { const stored = await loadPageTrackerMap(); return combineBomPageTrackers(boardWorkspaceIds(workspaceId).map((id) => stored.get(id))); }}
+        readOnly={!canManageBomPageTracker} versionLabel={pageTrackerVersionLabel} />
       <BomVersionCenter
         open={bomManagerOpen}
         onOpenChange={setBomManagerOpen}

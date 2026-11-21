@@ -6,6 +6,7 @@ import ts from 'typescript';
 import { mergeBomWorkspaceRecords } from '../src/components/material-requests/materialBomNoteSync.ts';
 import { canReuseBomPayloadReference } from '../src/components/material-requests/materialBomPerformance.ts';
 import { buildBomSeriesList, findBomSeriesByWorkspace } from '../src/components/material-requests/bomVersioning.ts';
+import { combineBomPageTrackers, sameBomPageTracker } from '../src/components/material-requests/bomPageTracker.ts';
 
 const source = fs.readFileSync(new URL('../src/components/material-requests/MaterialRequestPage.tsx', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('MaterialRequestPage.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -54,6 +55,7 @@ function pageHandler(name, overrides = {}) {
     showCollaborativeUnavailableToast: () => effects.push('offline'),
     switchActiveBom: value => { active = value; },
     removeBomWorkspace: async id => { writes.push(['delete', id]); },
+    keepBoardPageProgressBeforeDelete: async () => {},
     logMaterialWorkspaceAction: async () => effects.push('audit'),
     reloadBomWorkspaces: async () => effects.push('reload'), toast: () => effects.push('toast'),
     ...overrides,
@@ -158,6 +160,28 @@ test('deleting the version on screen lands on the same board current version, no
   await keep.action('qa-v1');
   assert.equal(keep.active, 'qa-v2', 'deleting another version leaves the screen where it was');
   assert.equal(reloadedWith, 'qa-v2', 'the reload keeps the version on screen instead of the first BOM');
+});
+
+// 2026-11-21: 頁數進度 belongs to the board. A deleted version must not take the pages only its copy finished with it.
+test('deleting a version first writes the board page progress to the versions that stay, and is checked before any delete', async () => {
+  const version = (number, isCurrent) => ({ seriesId: 'series:qa', seriesName: 'QA 主板', versionNumber: number, label: '', note: '', uploadedAt: '2026-01-0' + number + 'T00:00:00.000Z', uploadedBy: 'QA', isCurrent, currentChangedAt: '2026-01-05T00:00:00.000Z' });
+  const v1 = { ...workspace('qa-v1'), version: version(1, true) }, v2 = { ...workspace('qa-v2'), version: version(2, false) };
+  const pages = (done) => Array.from({ length: 4 }, (_, index) => ({ pageNumber: index + 1, status: index < done ? 'done' : 'pending', note: '' }));
+  const stored = new Map([['qa-v1', { totalPages: 4, currentPage: 3, pages: pages(3), updatedAt: '2026-11-20T00:00:00.000Z' }], ['qa-v2', { totalPages: 4, currentPage: 1, pages: pages(1), updatedAt: '2026-11-17T00:00:00.000Z' }]]);
+  const saved = [];
+  const page = pageHandler('keepBoardPageProgressBeforeDelete', {
+    seriesList: buildBomSeriesList([v1, v2]), combineBomPageTrackers, sameBomPageTracker,
+    loadPageTrackerMap: async () => stored, saveBomWorkspacePageTracker: async (id, tracker) => { saved.push([id, tracker.pages.filter(item => item.status === 'done').length]); },
+  });
+  await page.action(['qa-v1'], () => {});
+  assert.deepEqual(saved, [['qa-v2', 3]], "V1's three finished pages stay with V2");
+  saved.length = 0;
+  await page.action(['qa-v1', 'qa-v2'], () => {});
+  assert.deepEqual(saved, [], 'deleting the whole board writes nothing');
+  stored.set('qa-v2', stored.get('qa-v1'));
+  await page.action(['qa-v1'], () => {});
+  assert.deepEqual(saved, [], 'copies that already agree are left alone');
+  assert.match(source, /try \{\s*await keepBoardPageProgressBeforeDelete\(targetIds, \(\) => assertBomWriteCurrent\(writeScope\)\);\s*if \(!isBomWriteCurrent\(writeScope\)\) return;\s*for \(const targetWorkspace of targetWorkspaces\)/, 'the page progress is kept before any version is removed');
 });
 
 test('a failed remote read preserves existing UI data and never applies an empty fallback', async () => {

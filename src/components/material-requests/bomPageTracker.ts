@@ -133,6 +133,48 @@ export function mergeBomPageTracker(baseline: BomPageTrackerDraft, draft: BomPag
   return { totalPages, currentPage: totalPages > 0 ? Math.min(totalPages, currentPage) : 0, pages: extendBomTrackerPages(pages.sort((left, right) => left.pageNumber - right.pageNumber), totalPages) };
 }
 
+/**
+ * 頁數進度 belongs to the board, not to one BOM version: every version of a board shows and saves the same document
+ * (2026-11-21, the user saw V1 at 90 % and V2 at 60 % with the same number of pages). Until then each version kept its
+ * own copy and the copies drifted apart; they are read as one, newest copy first: a page counts as finished when any
+ * copy finished it (the newest finished status wins), an empty title or note comes from the next copy that has one,
+ * POWER from any copy, the total from the newest copy that has one, and the page work reached is the furthest one.
+ * Copies that already agree come back as the newest object itself.
+ */
+export function combineBomPageTrackers(trackers: ReadonlyArray<BomPageTracker | undefined>): BomPageTracker | undefined {
+  const time = (tracker: BomPageTracker) => { const value = Date.parse(tracker.updatedAt); return Number.isFinite(value) ? value : 0; };
+  const copies = trackers.filter((tracker): tracker is BomPageTracker => Boolean(tracker)).sort((left, right) => time(right) - time(left));
+  if (copies.length <= 1) return copies[0];
+  const drafts = copies.map(draftFromBomPageTracker);
+  if (drafts.every((draft) => { const moved = countBomPageTrackerChanges(drafts[0], draft); return !moved.pages && !moved.settings; })) return copies[0];
+  const totalPages = drafts.find((draft) => draft.totalPages > 0)?.totalPages ?? 0;
+  const maps = drafts.map((draft) => byNumber(draft.pages));
+  const pageNumbers = [...new Set(drafts.flatMap((draft) => draft.pages.map((page) => page.pageNumber)))].sort((left, right) => left - right);
+  const pages = pageNumbers.flatMap((pageNumber): BomPageTrackerPage[] => {
+    const entries = maps.flatMap((map) => { const page = map.get(pageNumber); return page ? [page] : []; });
+    const title = entries.find((entry) => entry.title?.trim())?.title;
+    const page: BomPageTrackerPage = {
+      pageNumber,
+      status: entries.find((entry) => entry.status !== "pending")?.status ?? "pending",
+      note: entries.find((entry) => entry.note.trim())?.note ?? "",
+      ...(title ? { title } : {}),
+      ...(entries.some(isPowerPage) ? { power: true } : {}),
+    };
+    // Past the total only pages that hold something are kept (an older copy with more pages lists blank ones).
+    return pageNumber <= totalPages || !samePage(page, blankPage(pageNumber)) ? [page] : [];
+  });
+  const currentPage = Math.min(totalPages, Math.max(0, ...drafts.map((draft) => draft.currentPage)));
+  return { totalPages, currentPage, pages: syncBomTrackerPages(pages, totalPages), updatedAt: copies[0].updatedAt };
+}
+
+/** Same pages, total and current page (the saved time is not compared). */
+export function sameBomPageTracker(left: BomPageTracker | undefined, right: BomPageTracker | undefined) {
+  if (left === right) return true;
+  if (!left || !right) return false;
+  const moved = countBomPageTrackerChanges(draftFromBomPageTracker(left), draftFromBomPageTracker(right));
+  return !moved.pages && !moved.settings;
+}
+
 /** Pages inside the total that match the status, POWER filter and search text. */
 export function filterBomTrackerPages(pages: BomPageTrackerPage[], totalPages: number, filters: { query: string; status: BomPageStatusFilter; powerOnly?: boolean }) {
   const needle = filters.query.trim().toLocaleLowerCase();

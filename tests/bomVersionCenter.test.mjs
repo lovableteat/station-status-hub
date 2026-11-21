@@ -91,6 +91,18 @@ test("uploads are staged and confirmed with an explicit series target instead of
   assert.match(page, /const carrying = carryOnSwitch && goingForward && previous\.workspace\.id !== version\.workspace\.id;/, "going back never carries");
   assert.match(page, /const filled = fillForwardBomTracking\(previousRecords, targetRecords, previous\.version\.currentChangedAt\);/, "going forward adds the updates made since the version being left became current");
   assert.match(page, /carried: carrying, carriedRows, carriedManual,/, "the log records what was actually carried");
+  // 頁數進度 belongs to the board (2026-11-21: V1 90 %, V2 60 %, same pages): every version shows the copies combined, a save
+  // writes all versions, a new version starts from it, and the switch never writes back an old copy held on the page.
+  assert.equal((page.match(/saveBomWorkspace\(\{ \.\.\.version\.workspace, pageTracker: undefined,/g) ?? []).length, 2, "the switch never writes the page progress copy held on the page");
+  assert.match(page, /const storedPageTrackers = await loadPageTrackerMap\(\)\.catch\(\(\) => null\);/, "an upload reads the stored copies");
+  assert.match(page, /const canManageBomPageTracker = canEditModuleAccess && /, "the board's page progress stays editable on a historical version");
+  assert.match(page, /只存進 \$\{savedVersions\} \/ \$\{boardWorkspaces\.length\} 個版本/, "a partly failed save says how many versions hold it");
+  assert.match(page, /const activePageTrackerSummary = useMemo\(\(\) => getBomPageTrackerSummary\(combineBoardPageTracker\(activeWorkspace\)\)/);
+  assert.match(page, /<BomPageTrackerDialog workspace=\{pageTrackerDialogWorkspace\}/);
+  assert.match(page, /return combineBomPageTrackers\(boardWorkspaceIds\(workspaceId\)\.map\(\(id\) => stored\.get\(id\)\)\);/, "saving rebases onto the board's stored copies");
+  assert.match(page, /for \(const item of boardWorkspaces\) \{\s*await saveBomWorkspacePageTracker\(item\.id, pageTracker,/, "a save writes every version of the board");
+  assert.match(page, /pageTracker: series \? combineBomPageTrackers\(series\.versions\.map\(\(item\) => storedPageTrackers\?\.get\(item\.workspace\.id\) \?\? item\.workspace\.pageTracker\)\) : undefined,/, "a new version starts from the board's page progress");
+  assert.doesNotMatch(page, /fillForwardBomPageTracker|bom-current-pages/);
   assert.match(page, /setCarryOnSwitch\(false\);/, "carrying is never pre-ticked");
   assert.match(page, /const landingId = sameSeries\?\.current\.workspace\.id \?\? nextWorkspaces\[0\]\.id;/, "deleting the version on screen lands on the same board");
   assert.match(guide, /同一塊板再上傳即成為新版本/);

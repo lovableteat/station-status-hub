@@ -95,7 +95,7 @@ function VersionMoreMenu({ item, canEdit, ready, pending, onPages, onDownload, o
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="bom-version-menu">
-        <DropdownMenuItem disabled={!canEdit} onSelect={onPages} title={`記錄 ${item.displayNumber} 每一頁的建料進度`}><FileText aria-hidden="true" />頁數進度</DropdownMenuItem>
+        <DropdownMenuItem disabled={!canEdit} onSelect={onPages} title="記錄這塊板每一頁的建料進度（所有版本共用一份）"><FileText aria-hidden="true" />頁數進度</DropdownMenuItem>
         <DropdownMenuItem disabled={!source} onSelect={onDownload} title={source ? `下載上傳時的原始 Excel：${source.name}` : "這個版本上傳時沒有保存原始 Excel"}><Download aria-hidden="true" />{source ? "下載原檔" : "下載原檔（沒有保存）"}</DropdownMenuItem>
         {canEdit && <DropdownMenuItem disabled={!ready || pending} onSelect={onEdit} title={`修改 ${item.displayNumber} 的版本標籤與說明`}><Pencil aria-hidden="true" />編輯說明</DropdownMenuItem>}
         <DropdownMenuSeparator />

@@ -34,7 +34,7 @@ function execute(name,h,overrides={}){
   BOM_SERIES_NAME_LIMIT:120,BOM_VERSION_LABEL_LIMIT:60,BOM_VERSION_NOTE_LIMIT:500,
   saveBomWorkspace:async w=>{writes.push(w);},saveBomWorkspaceRecord:async(w,r)=>{writes.push(w);return {updatedAt:'new'};},
   saveBomWorkspaceVersion:async()=>{writes.push('version');},uploadBomSourceFile:async()=>({name:'x.xlsx',path:'p',size:1,mimeType:'m'}),
-  saveBomWorkspacePageTracker:async()=>{writes.push('tracker');},removeBomWorkspace:async()=>{writes.push('delete');},saveBomWorkspaceTableColorTheme:async()=>{writes.push('theme');},
+  saveBomWorkspacePageTracker:async()=>{writes.push('tracker');},loadPageTrackerMap:async()=>new Map(),combineBomPageTrackers:()=>undefined,sameBomPageTracker:()=>true,removeBomWorkspace:async()=>{writes.push('delete');},saveBomWorkspaceTableColorTheme:async()=>{writes.push('theme');},
   logMaterialWorkspaceAction:async()=>effects.push('audit'),logMaterialRecordChange:async()=>effects.push('audit'),
   reloadBomWorkspaces:async()=>effects.push('reload'),switchActiveBom:effect('selection'),
   recentLocalRecordIdsRef:{current:new Map()},loadDefaultBomWorkspace:async()=>workspace,createDefaultBomWorkspace:()=>workspace,

@@ -23,7 +23,7 @@ const statusOfCode = (code: string): BomPageTrackerStatus => code === "d" ? "don
  * 頁數進度. Changes stay a draft until 儲存頁數進度 is pressed: closing with unsaved changes asks first, a colleague's
  * save or record edit never resets the draft, and saving rebases the draft onto what is stored at that moment.
  */
-export function BomPageTrackerDialog({ workspace, open, onOpenChange, onSave, loadLatest, readOnly = false }: {
+export function BomPageTrackerDialog({ workspace, open, onOpenChange, onSave, loadLatest, readOnly = false, versionLabel }: {
   workspace: BomWorkspace | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -31,6 +31,8 @@ export function BomPageTrackerDialog({ workspace, open, onOpenChange, onSave, lo
   /** The document as stored right now, read just before saving. */
   loadLatest: (workspaceId: string) => Promise<BomPageTracker | undefined>;
   readOnly?: boolean;
+  /** 「V1、V2 共用」 when the board has several versions: they all show and save this one document. */
+  versionLabel?: string;
 }) {
   const [totalPagesInput, setTotalPagesInput] = useState("0");
   const [currentPageInput, setCurrentPageInput] = useState("0");
@@ -190,7 +192,7 @@ export function BomPageTrackerDialog({ workspace, open, onOpenChange, onSave, lo
   };
 
   if (!workspace) return null;
-  const dialogDescription = `${workspace.name} · ${workspace.payload.sheetName} · ${workspace.payload.recordCount.toLocaleString()} 筆料件`;
+  const dialogDescription = `${workspace.name}${versionLabel ? ` · ${versionLabel}` : ""} · ${workspace.payload.sheetName} · ${workspace.payload.recordCount.toLocaleString()} 筆料件`;
   const activeChips = [
     ...(filters.query ? [{ key: "query" as const, label: `搜尋：${filters.query}`, reset: "" }] : []),
     ...(filters.status !== "all" ? [{ key: "status" as const, label: `狀態：${BOM_PAGE_STATUS_LABELS[filters.status]}`, reset: "all" }] : []),

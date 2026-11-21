@@ -112,6 +112,15 @@ const previousWorkspace = {
   payload: { ...seed, sourceFile: 'QA_主板_v1.xlsx', sheetName: 'QA', records: [], recordCount: previousRecords.length }, recordMeta: {},
   version: { seriesId, seriesName: 'QA 主板（僅隔離資料）', versionNumber: 1, label: 'EVT rev A', note: '', uploadedAt: stamp(9), uploadedBy: 'QA 目前使用者', isCurrent: false, currentChangedAt: stamp(1) },
 };
+// ?qaPagesSplit (2026-11-21, V1 90 % / V2 60 %): the copies saved before 頁數進度 became the board's: V1 (current) moved on
+// to 54/60 while V2 kept the 36/60 it copied at upload. Both versions must show 54/60, and a save writes both.
+if (new URLSearchParams(window.location.search).has('qaPagesSplit')) {
+  const pages = (done) => Array.from({ length: 60 }, (_, index) => ({ pageNumber: index + 1, status: index < done ? 'done' : 'pending', note: '' }));
+  previousWorkspace.version = { ...previousWorkspace.version, isCurrent: true, currentChangedAt: stamp(0.9) };
+  workspace.version = { ...workspace.version, isCurrent: false, currentChangedAt: stamp(0.9) };
+  previousWorkspace.pageTracker = { totalPages: 60, currentPage: 54, pages: pages(54), updatedAt: stamp(0.5) };
+  workspace.pageTracker = { totalPages: 60, currentPage: 36, pages: pages(36), updatedAt: stamp(1) };
+}
 const legacyWorkspace = {
   id: 'bom:qa-legacy', name: 'QA 舊格式 BOM.xlsx', updatedAt: stamp(20), project: undefined,
   payload: { ...seed, sourceFile: 'QA 舊格式 BOM.xlsx', sheetName: 'Sheet1', records: [], recordCount: 3 }, recordMeta: {},
