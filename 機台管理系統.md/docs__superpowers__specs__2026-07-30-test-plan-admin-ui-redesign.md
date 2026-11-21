@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/specs/2026-07-30-test-plan-admin-ui-redesign.md`；程式參考基準：`fb8f03f681b1cdfcf7813d95c66a21e1218a1b8c`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/specs/2026-07-30-test-plan-admin-ui-redesign.md`；程式參考基準：`04ae86ac753ea14c36b9644f05d0058795e358d1`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Test_Plan 與後台管理一致化設計
 
