@@ -21,7 +21,7 @@ const out = path.resolve(process.env.MATERIAL_HEADER_EVIDENCE_DIR || '../materia
     const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
     browser = await chromium.launch({ channel: 'chrome' });
     const results = [];
-    // 375×667 is a short phone (iPhone SE size): the QR dialog must scroll, not cut off its buttons.
+    // 375×667 is a short phone (iPhone SE size): the whole QR dialog fits on screen, close button included.
     for (const [width, height] of [[700, 884], [629, 884], [390, 884], [1543, 884], [375, 667]]) {
       const context = await browser.newContext({ viewport: { width, height }, isMobile: width < 1024, hasTouch: width < 1024, reducedMotion: 'reduce' });
       await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
@@ -54,13 +54,16 @@ const out = path.resolve(process.env.MATERIAL_HEADER_EVIDENCE_DIR || '../materia
       const qrDialogState = await qrDialog.evaluate(dialog => {
         dialog.getAnimations({ subtree: true }).forEach(animation => animation.finish());
         const r = dialog.getBoundingClientRect();
+        const fitsWithoutScroll = dialog.scrollHeight <= dialog.clientHeight + 1;
         const img = dialog.querySelector('img').getBoundingClientRect();
         const share = [...dialog.querySelectorAll('button')].find(button => button.textContent.includes('分享'));
         share.scrollIntoView({ block: 'nearest' });
         const s = share.getBoundingClientRect();
         const atShare = document.elementFromPoint(s.x + s.width / 2, s.y + s.height / 2);
-        return { x: r.x, right: r.right, top: r.top, bottom: r.bottom, qrSize: img.width, shareReachable: share.contains(atShare), text: dialog.textContent };
+        return { x: r.x, right: r.right, top: r.top, bottom: r.bottom, qrSize: img.width, fitsWithoutScroll, shareReachable: share.contains(atShare), text: dialog.textContent };
       });
+      // A short phone (375×667) shows the whole dialog, so its close button never scrolls away.
+      if (width < 768) assert.ok(qrDialogState.fitsWithoutScroll, `the phone QR dialog fits without scrolling at ${width}×${height}`);
       assert.ok(qrDialogState.x >= 0 && qrDialogState.right <= width && qrDialogState.top >= 0 && qrDialogState.bottom <= height, `QR dialog must fit the screen: ${JSON.stringify(qrDialogState)}`);
       assert.ok(qrDialogState.qrSize >= 220, `QR must be large enough to scan: ${qrDialogState.qrSize}`);
       assert.ok(qrDialogState.shareReachable, 'the share button must not be covered');

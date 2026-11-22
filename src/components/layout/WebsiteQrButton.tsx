@@ -69,7 +69,7 @@ export function WebsiteQrButton() {
       </DialogTrigger>
       <DialogContent className="w-[calc(100vw-24px)] max-w-md overflow-y-auto rounded-[28px] border-cyan-200/35 bg-[radial-gradient(circle_at_10%_0%,rgba(34,211,238,0.22),transparent_17rem),radial-gradient(circle_at_90%_0%,rgba(190,242,100,0.14),transparent_16rem),#091827] p-0 text-slate-100">
         <DialogHeader className="border-b border-cyan-200/15 px-5 pb-4 pt-5 pr-14 text-left">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#67e8f9,#bef264)] text-[#062230] shadow-[0_16px_35px_-18px_rgba(103,232,249,0.85)]">
+          <div className="mb-3 hidden h-12 w-12 items-center justify-center rounded-2xl md:flex bg-[linear-gradient(135deg,#67e8f9,#bef264)] text-[#062230] shadow-[0_16px_35px_-18px_rgba(103,232,249,0.85)]">
             <Smartphone className="h-6 w-6" />
           </div>
           <DialogTitle className="text-2xl font-black tracking-tight text-white">用手機開啟平台</DialogTitle>
@@ -80,7 +80,7 @@ export function WebsiteQrButton() {
         </DialogHeader>
 
         <div className="space-y-4 px-5 pb-5 pt-4">
-          <div className="mx-auto grid aspect-square w-full max-w-[272px] place-items-center overflow-hidden rounded-[26px] border-4 border-white/90 bg-white p-3 shadow-[0_24px_60px_-30px_rgba(103,232,249,0.9)]">
+          <div className="mx-auto grid aspect-square w-full max-w-[256px] place-items-center md:max-w-[272px] overflow-hidden rounded-[26px] border-4 border-white/90 bg-white p-3 shadow-[0_24px_60px_-30px_rgba(103,232,249,0.9)]">
             {qrFailed ? (
               <div className="px-5 text-center text-sm font-bold leading-6 text-slate-700">
                 二維碼暫時無法載入，請改用下方「複製連結」或「分享」。
@@ -109,7 +109,8 @@ export function WebsiteQrButton() {
               <Share2 className="mr-2 h-4 w-4" />分享
             </Button>
           </div>
-          <a href={siteUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 text-sm font-bold text-violet-200 hover:text-violet-100">
+          {/* On a phone the site is already open, so the test link and the icon tile give way: the dialog fits a short phone and its close button stays on screen. */}
+          <a href={siteUrl} target="_blank" rel="noreferrer" className="hidden items-center justify-center gap-2 text-sm font-bold text-violet-200 hover:text-violet-100 md:flex">
             在新視窗測試連結 <ExternalLink className="h-4 w-4" />
           </a>
         </div>

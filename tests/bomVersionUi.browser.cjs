@@ -108,7 +108,16 @@ async function run(browser, origin, width) {
     await search.fill('Baseboard'); await other.waitFor();
     assert.equal(await list.getAttribute('data-kind'),'search');
     assert.equal((await list.locator('.bom-level-cell-project').first().innerText()).trim(),VERA);
-    await search.fill('');
+    await search.fill('工程驗證板'); await list.getByRole('button',{name:/已封存_工程驗證板/}).waitFor();
+    assert.equal((await list.locator('.bom-level-cell-project').first().innerText()).trim(),`已封存（${VERA}）`,'searching every project also finds archived boards, with the project they were filed under');
+    // The project name also finds that project's archived boards; a result opens under 已封存.
+    await search.fill('工程驗證與長專案'); await list.getByRole('button',{name:/已封存_工程驗證板/}).waitFor();
+    await list.getByRole('button',{name:/已封存_工程驗證板/}).tap(); await detail.waitFor();
+    assert.equal((await center.locator('.bom-crumbs li[data-kind="project"]').textContent()).trim(),'已封存','an archived board sits under 已封存 in the path');
+    assert.equal(await search.count(),0,'the board level has no search box');
+    await crumbButton(center,'已封存').tap(); await center.getByRole('heading',{level:3,name:'已封存的系列',exact:true}).waitFor();
+    assert.equal(await search.inputValue(),'','changing level clears the search');
+    await backToProjects.tap(); await projectList.waitFor();
     // 已封存 is a level of its own beside the projects.
     await center.getByTestId('bom-archive-section').tap(); await center.getByRole('heading',{level:3,name:'已封存的系列',exact:true}).waitFor();
     await list.getByRole('button',{name:/已封存_工程驗證板/}).waitFor();

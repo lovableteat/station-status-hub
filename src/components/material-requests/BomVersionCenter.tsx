@@ -257,7 +257,9 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   type BomGroup = (typeof projectGroups)[number];
   const archiveGroup = useMemo<BomGroup | null>(() => archivedSeries.length > 0 ? { key: ARCHIVE_KEY, projectId: null, label: "已封存", isActive: false, workspaces: archivedSeries } : null, [archivedSeries]);
   const findGroup = (key: string | null) => (key === ARCHIVE_KEY ? archiveGroup : projectGroups.find((group) => group.key === key)) ?? undefined;
-  const placeLabel = (series: BomSeries) => findGroup(placeOf(series))?.label ?? "未指定專案";
+  /** The project a board was filed under, archived or not (an archived board keeps its project). */
+  const originLabel = (series: BomSeries) => series.project ? projectNames.get(series.project.projectId) || series.project.projectName || "未指定專案" : "未指定專案";
+  const placeLabel = (series: BomSeries) => series.archive ? `已封存（${originLabel(series)}）` : findGroup(placeOf(series))?.label ?? "未指定專案";
   // What is on screen follows what exists: a deleted board falls back to its project, a project that is gone to every project.
   const openGroup = findGroup(openProjectKey);
   const shownLevel: BomLevel = level === "board" && selectedSeries ? "board" : level !== "projects" && openGroup ? "project" : "projects";
@@ -324,7 +326,11 @@ export function BomVersionCenter(props: BomVersionCenterProps) {
   // opened project on a project. It is a filter of that level, so changing level clears it.
   const keyword = query.trim().toLowerCase();
   const seriesMatches = useCallback((series: BomSeries) => !keyword || [series.name, ...series.versions.flatMap((item) => [item.workspace.payload.sourceFile, item.workspace.payload.sheetName, item.version.label, item.version.note])].join(" ").toLowerCase().includes(keyword), [keyword]);
-  const searchResults = useMemo(() => !keyword ? [] : projectGroups.flatMap((group) => group.label.toLowerCase().includes(keyword) ? group.workspaces : group.workspaces.filter(seriesMatches)), [projectGroups, keyword, seriesMatches]);
+  // Searching every project also finds archived boards, by their own text or by the project they were filed under; their
+  // 專案 column says 已封存（原專案）, so an old board is not "missing".
+  const searchResults = useMemo(() => !keyword ? [] : [...projectGroups, ...(archiveGroup ? [archiveGroup] : [])].flatMap((group) => group.label.toLowerCase().includes(keyword)
+    ? group.workspaces
+    : group.workspaces.filter((series) => seriesMatches(series) || (group.key === ARCHIVE_KEY && originLabel(series).toLowerCase().includes(keyword)))), [projectGroups, archiveGroup, keyword, seriesMatches]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard and screen-reader focus moves to the new level's heading (the button that was pressed is gone from the page).
   const bodyRef = useRef<HTMLDivElement>(null);

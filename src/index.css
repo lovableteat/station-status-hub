@@ -2473,7 +2473,8 @@ body {
 *::-webkit-scrollbar-thumb, *::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / .4); background-clip: padding-box; }
 @media (max-width: 767px) {
   [data-mobile-app-header='true'] > div { padding-block: .5rem; }
-  [data-platform-brand='top-left'] { max-width: calc(100% - 7.5rem); gap: .625rem; }
+  /* Three 44px controls on the right since 2026-11-22 (線上人員, 二維碼, 帳號): the brand stops before them. */
+  [data-platform-brand='top-left'] { max-width: calc(100% - 11.5rem); gap: .625rem; }
   [data-platform-brand='top-left'] > svg { width: 2rem; height: 2rem; }
   [data-platform-brand='top-left'] > div > div:first-child { font-size: 1rem; line-height: 1.35; font-weight: 650; letter-spacing: -.02em; }
   [data-ui='dialog'], [data-ui='alert-dialog'] { max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); width: calc(100vw - 1.5rem); }
