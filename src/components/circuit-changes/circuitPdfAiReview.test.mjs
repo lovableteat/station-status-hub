@@ -82,16 +82,16 @@ test('annotation coordinates survive reload and invalid sides stay unlocated',()
   assert.ok(['certainty','officialBox','workingBox'].every(key=>!Object.hasOwn(legacyFinding,key)));
 });
 
-function adapter(payloadFactory=()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(analysis())}}]}), {status=200, headers=new Headers()}={}) {
+function adapter(payloadFactory=()=>({choices:[{finish_reason:'stop',message:{content:JSON.stringify(analysis())}}]}), {status=200, headers=new Headers(), model='gpt-5.4'}={}) {
   const sent=[],renders=[];
   const canvas={width:0,height:0,getContext:()=>null,toBlob(done){done(new Blob(['PNG'],{type:'image/png'}));}};
   class Reader {readAsDataURL(){this.result='data:image/png;base64,UE5H';Promise.resolve().then(()=>this.onload());}}
   const k=loader({globals:{document:{createElement:()=>({...canvas})},FileReader:Reader},mocks:{
-    '../api-management/apiKeyHelpers':{normalizeApiKeyPermissions:()=>({read:true,metadata:{provider:'openai',baseUrl:'https://api.openai.com/v1',model:'gpt-5.4'}})},
+    '../api-management/apiKeyHelpers':{normalizeApiKeyPermissions:()=>({read:true,metadata:{provider:'openai',baseUrl:'https://api.openai.com/v1',model}})},
     '../api-management/aiUsageTelemetry':{trackedProviderFetch:async request=>{sent.push(request);return{ok:status>=200&&status<300,status,headers,json:async()=>payloadFactory()};}},
   }})('src/components/circuit-changes/circuitPdfAiReview.ts');
   const pdf={numPages:3000,getPage:async page=>({cleanup(){},getViewport:({scale})=>({width:1000*scale,height:700*scale,convertToViewportPoint:(x,y)=>[x*scale,(700-y)*scale]}),render:options=>{renders.push({page,width:options.canvas.width,height:options.canvas.height});return{promise:Promise.resolve(),cancel(){}};},getTextContent:async()=>({items:[{str:'PCIE_RX_P',transform:[1,0,0,1,10,20]}]})})};
-  const input={official:{id:'official',name:'官方.pdf',page:2,pdf},working:{id:'working',name:'工作.pdf',page:3,pdf},model:{id:'model-key::gpt-5.4',label:'QA GPT',record:{id:'model-key',api_key:'qa-test-secret',is_active:true}},userName:'RD 工程師',signal:new AbortController().signal};
+  const input={official:{id:'official',name:'官方.pdf',page:2,pdf},working:{id:'working',name:'工作.pdf',page:3,pdf},model:{id:`model-key::${model}`,label:'QA GPT',record:{id:'model-key',api_key:'qa-test-secret',is_active:true}},userName:'RD 工程師',signal:new AbortController().signal};
   return {k,input,sent,renders};
 }
 
@@ -106,6 +106,18 @@ test('real provider adapter sends both full-page images at high detail and coord
   assert.equal(body.response_format.type,'json_schema');assert.equal(body.response_format.json_schema.strict,true);assert.equal(body.reasoning_effort,'low');
   assert.equal(result.source,'ai');
   assert.match(result.id,/^[0-9a-f-]{36}$/);assert.equal(result.createdAt,result.updatedAt);assert.equal(result.generatedBy,'RD 工程師');assert.equal(result.findings[0].decision,'pending');
+});
+
+test('selected GPT-6.2 Sol sends PDF images and tracks the exact model with the saved key',async()=>{
+  const {k,input,sent}=adapter(undefined,{model:'gpt-6.2-sol'});
+  await k.runCircuitPdfAiReview(input);
+  const [request]=sent;
+  const body=JSON.parse(request.init.body);
+  assert.equal(request.url,'https://api.openai.com/v1/chat/completions');
+  assert.equal(request.apiKeyId,'model-key');
+  assert.equal(request.model,'gpt-6.2-sol');
+  assert.equal(body.model,request.model);
+  assert.equal(body.messages.flatMap(message=>message.content).filter(part=>part.type==='image_url').length,2);
 });
 
 test('provider truncation/refusal, invalid target and cancellation never return a report',async()=>{

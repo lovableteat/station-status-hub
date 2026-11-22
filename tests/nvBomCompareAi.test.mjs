@@ -17,7 +17,7 @@ const { compareNvBomSheets } = loader({})("src/components/material-requests/nvBo
 const comparison = { beforeMapping: mapping, afterMapping: mapping, diff: compareNvBomSheets(before, after, mapping, mapping) };
 const geminiModel = (id, supportedGenerationMethods = ["generateContent"]) => ({ name: `models/${id}`, supportedGenerationMethods });
 const geminiDiscovery = () => new Response(JSON.stringify({ models: ["gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash"].map(id => geminiModel(id)) }));
-function load({ records = rows, queryError = null, discoveredModels = ["gpt-5.4", "gpt-6.1-sol"], discoverGemini = geminiDiscovery, transport = async () => { throw new Error("Unexpected provider call"); } } = {}) {
+function load({ records = rows, queryError = null, discoveredModels = ["gpt-5.4", "gpt-6.1-sol", "gpt-6.2-sol"], discoverGemini = geminiDiscovery, transport = async () => { throw new Error("Unexpected provider call"); } } = {}) {
   const fetchAiProvider = async (provider, url, init, apiKeyId) => provider === "gemini" ? discoverGemini(url, init, apiKeyId)
     : new Response(JSON.stringify({ data: discoveredModels.map(id => ({ id })) }));
   return loader({ globals: { Response, Headers, TextEncoder, TextDecoder }, mocks: {
@@ -42,8 +42,8 @@ function response(provider, content) {
 test("NV model choices expand chat targets while retaining key identity, permissions and saved choices", async () => {
   const original = JSON.stringify(rows);
   const models = await load().loadNvBomModels();
-  assert.equal(models.length, 7);
-  assert.equal(new Set(models.map(item => item.id)).size, 7);
+  assert.equal(models.length, 8);
+  assert.equal(new Set(models.map(item => item.id)).size, 8);
   assert.deepEqual(Array.from(new Set(models.map(item => item.record.id))), ["openai", "gemini", "claude", "custom"]);
   for (const saved of rows.slice(0, 4)) assert.ok(models.some(item => item.id === saved.id && item.record.permissions.metadata.model === saved.permissions.metadata.model));
   for (const model of models) {
@@ -54,6 +54,7 @@ test("NV model choices expand chat targets while retaining key identity, permiss
     assert.equal(model.availability, undefined);
   }
   assert.ok(models.some(item => item.record.permissions.metadata.model === "gpt-6.1-sol"));
+  assert.ok(models.some(item => item.record.permissions.metadata.model === "gpt-6.2-sol"));
   assert.ok(models.some(item => item.record.permissions.metadata.model === "gemini-3.8-flash"));
   assert.equal(models.filter(item => item.record.permissions.metadata.model === "gemini-2.5-flash").length, 1);
   assert.equal(JSON.stringify(rows), original, "adding choices must not rewrite saved key settings");
@@ -162,7 +163,7 @@ test("each NV choice sends only confirmed differences for review using its own m
     return response(call.provider, { items: input.items.map(item => ({ id: item.id, action: `核對 ${item.kind}`, note: "來源列核對" })) });
   } });
   const models = await service.loadNvBomModels();
-  assert.equal(models.length, 7);
+  assert.equal(models.length, 8);
   for (const model of models) {
     const start = calls.length, partial = [];
     const result = await service.runNvBomComparison({ comparison, model, signal: new AbortController().signal, onProgress() {}, onResult: value => partial.push(value) });

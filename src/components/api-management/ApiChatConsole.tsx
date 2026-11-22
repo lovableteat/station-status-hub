@@ -91,7 +91,8 @@ import {
   ApiKeyRecord,
   buildApiKeyModelTargetId,
   normalizeApiKeyPermissions,
-  OPENAI_ON_DEMAND_MODEL,
+  OPENAI_ON_DEMAND_MODELS,
+  isOpenAiOnDemandTarget,
   OPENAI_STANDARD_CHAT_MODEL,
 } from "./apiKeyHelpers";
 import { trackedProviderFetch } from "./aiUsageTelemetry";
@@ -1122,13 +1123,21 @@ export function ApiChatConsole({
       : null;
   }, [selectedApiKey]);
 
+  const usingOnDemandTarget = selectedApiKey ? isOpenAiOnDemandTarget({ model, record: selectedApiKey }) : false;
+
   const findConversationTarget = useCallback(
-    (conversation: SavedConversation) =>
-      availableApiKeyTargets.find(
-        (target) =>
-          target.record.key_name === conversation.keyLabel &&
-          target.model === (conversation.model === OPENAI_ON_DEMAND_MODEL ? OPENAI_STANDARD_CHAT_MODEL : conversation.model),
-      ),
+    (conversation: SavedConversation) => {
+      const exact = availableApiKeyTargets.find(target =>
+        target.record.key_name === conversation.keyLabel && target.model === conversation.model,
+      );
+      if (exact && !isOpenAiOnDemandTarget(exact)) return exact;
+      if (!OPENAI_ON_DEMAND_MODELS.includes(conversation.model)) return undefined;
+      return availableApiKeyTargets.find(target =>
+        target.record.key_name === conversation.keyLabel
+        && target.model === OPENAI_STANDARD_CHAT_MODEL
+        && isOpenAiOnDemandTarget({ model: conversation.model, record: target.record }),
+      );
+    },
     [availableApiKeyTargets],
   );
 
@@ -1144,10 +1153,10 @@ export function ApiChatConsole({
     const nextTargetId = selectedApiKeyTargetId ?? selectedApiKey.id;
     const previousTargetId = previousSelectedApiKeyTargetIdRef.current;
     const switchedTarget = Boolean(previousTargetId && previousTargetId !== nextTargetId);
-    const standardTargetId = buildApiKeyModelTargetId(selectedApiKey.id, OPENAI_STANDARD_CHAT_MODEL);
-    const onDemandTargetId = buildApiKeyModelTargetId(selectedApiKey.id, OPENAI_ON_DEMAND_MODEL);
-    const sameKeyModeSwitch = (previousTargetId === standardTargetId && nextTargetId === onDemandTargetId)
-      || (previousTargetId === onDemandTargetId && nextTargetId === standardTargetId);
+    const openAiTargetIds = [OPENAI_STANDARD_CHAT_MODEL, ...OPENAI_ON_DEMAND_MODELS]
+      .map(modelId => buildApiKeyModelTargetId(selectedApiKey.id, modelId));
+    const sameKeyModeSwitch = switchedTarget && previousTargetId !== null
+      && openAiTargetIds.includes(previousTargetId) && openAiTargetIds.includes(nextTargetId);
 
     setApiKey(selectedApiKey.api_key);
     setProvider(selectedMetadata?.provider || "gemini");
@@ -1494,7 +1503,7 @@ export function ApiChatConsole({
           !record.is_active ||
           !record.api_key.trim() ||
           !sameProvider ||
-          (target.model === OPENAI_ON_DEMAND_MODEL && target.id !== selectedApiKeyTargetId) ||
+          (isOpenAiOnDemandTarget(target) && target.id !== selectedApiKeyTargetId) ||
           (candidatePreset.id === 'gemini' && !safeGeminiFallback && record.id !== selectedApiKey?.id) ||
           (!sameModel && !safeGeminiFallback) ||
           (record.expires_at && Date.parse(record.expires_at) <= Date.now()) ||
@@ -1742,7 +1751,7 @@ export function ApiChatConsole({
               messages: buildProviderMessages(history, target.provider, ephemeralSystemContext, !options?.presentation),
             });
             if (options?.presentation && providerRequest.url === "https://api.openai.com/v1/chat/completions"
-              && (target.model === OPENAI_STANDARD_CHAT_MODEL || target.model === OPENAI_ON_DEMAND_MODEL)) {
+              && (target.model === OPENAI_STANDARD_CHAT_MODEL || OPENAI_ON_DEMAND_MODELS.includes(target.model))) {
               providerRequest.body = {
                 ...providerRequest.body,
                 response_format: { type: "json_object" },
@@ -1785,11 +1794,11 @@ export function ApiChatConsole({
     } finally { if (isCurrentRequest()) setRequestProgress(''); }
   };
   const resetOnDemandModel = () => {
-    if (model !== OPENAI_ON_DEMAND_MODEL || !selectedApiKey) return;
+    if (!usingOnDemandTarget || !selectedApiKey) return;
     const standardTargetId = buildApiKeyModelTargetId(selectedApiKey.id, OPENAI_STANDARD_CHAT_MODEL);
-    const standardTarget = availableApiKeyTargets.find(target => target.id === standardTargetId)
-      ?? availableApiKeyTargets.find(target => target.model === OPENAI_STANDARD_CHAT_MODEL);
-    if (standardTarget) onSelectApiKeyTarget?.(standardTarget.id);
+    if (availableApiKeyTargets.some(target => target.id === standardTargetId)) {
+      onSelectApiKeyTarget?.(standardTargetId);
+    }
   };
 
   const canGeneratePresentation = Boolean(apiKey.trim() && model.trim() && baseUrl.trim() && provider.trim());
@@ -1981,7 +1990,7 @@ export function ApiChatConsole({
     } catch (error) {
       if (requestGenerationRef.current !== requestGeneration) return;
       const errorMessage = error instanceof Error ? error.message : "資料查詢失敗";
-      const queryError = model === OPENAI_ON_DEMAND_MODEL && onSelectApiKeyTarget && availableApiKeyTargets.some(target => target.model === OPENAI_STANDARD_CHAT_MODEL) && error instanceof AiRequestFailure && error.kind === "model-access"
+      const queryError = usingOnDemandTarget && error instanceof AiRequestFailure && error.kind === "model-access"
         ? `${model}：此 API Key 尚未開通模型權限。\n\n本次單次使用已結束。重新提問會使用上方目前選擇的模型。`
         : `API 呼叫失敗：${errorMessage}`;
       if (retrievingMaintenance) {
@@ -3184,7 +3193,7 @@ export function ApiChatConsole({
                     const metadata = normalizeApiKeyPermissions(target.record.permissions).metadata;
                     return (
                       <SelectItem key={target.id} value={target.id}>
-                        {target.record.key_name} · {metadata.provider || "-"} / {target.model}{target.model === OPENAI_ON_DEMAND_MODEL ? "（單次使用）" : ""}
+                        {target.record.key_name} · {metadata.provider || "-"} / {target.model}{isOpenAiOnDemandTarget(target) ? "（單次使用）" : ""}
                       </SelectItem>
                     );
                   })}
@@ -3718,7 +3727,7 @@ export function ApiChatConsole({
                     const metadata = normalizeApiKeyPermissions(target.record.permissions).metadata;
                     return (
                       <SelectItem key={target.id} value={target.id} className="min-h-11">
-                        {target.record.key_name} · {metadata.provider || "-"} / {target.model}{target.model === OPENAI_ON_DEMAND_MODEL ? "（單次使用）" : ""}
+                        {target.record.key_name} · {metadata.provider || "-"} / {target.model}{isOpenAiOnDemandTarget(target) ? "（單次使用）" : ""}
                       </SelectItem>
                     );
                   })}

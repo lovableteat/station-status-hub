@@ -220,6 +220,35 @@ try {
     "concurrent and cross-user attempts increment the shared legacy count atomically",
   );
 
+  for (const filename of ["20261106100924_allow_openai_sol_usage_tracking.sql", "20261122052635_allow_openai_gpt_6_2_sol_usage_tracking.sql"]) {
+    await db.exec(await fs.readFile(new URL(`../supabase/migrations/${filename}`, import.meta.url), "utf8"));
+  }
+  const officialKey = { metadata: { provider: "openai", model: "gpt-5.4", baseUrl: "https://api.openai.com/v1" } };
+  await query("insert into workspace.api_keys(id,permissions) values ($1,$2::jsonb)", [id(101), JSON.stringify(officialKey)]);
+  const startOpenAi = (event, model) => query(
+    "select workspace.start_ai_model_usage_attempt($1,$2,'openai',$3,'ai-chat',1) as result",
+    [id(event), id(101), model],
+  );
+  await actor(1);
+  check((await startOpenAi(10, "gpt-6.2-sol"))[0].result.duplicate, false, "GPT-6.2 Sol is authorized on the official key");
+  check((await startOpenAi(10, "gpt-6.2-sol"))[0].result.duplicate, true, "retrying the same Sol attempt is idempotent");
+  check((await startOpenAi(11, "gpt-6.1-sol"))[0].result.duplicate, false, "existing GPT-6.1 Sol remains authorized");
+  await rejects(() => startOpenAi(12, "gpt-6.2-astra"), /API key is unavailable/, "arbitrary GPT-6.2 models remain disallowed");
+
+  const deniedKeyConfigurations = [
+    ["outside the official endpoint", { ...officialKey.metadata, baseUrl: "https://fixture.invalid/v1" }, true, null],
+    ["with a different stored model", { ...officialKey.metadata, model: "gpt-4.1" }, true, null],
+    ["with a disabled key", officialKey.metadata, false, null],
+    ["with an expired key", officialKey.metadata, true, "2000-01-01T00:00:00Z"],
+  ];
+  for (const [description, metadata, active, expiresAt] of deniedKeyConfigurations) {
+    await root();
+    await query("update workspace.api_keys set permissions=$1::jsonb, is_active=$2, expires_at=$3 where id=$4",
+      [JSON.stringify({ metadata }), active, expiresAt, id(101)]);
+    await actor(1);
+    await rejects(() => startOpenAi(12, "gpt-6.2-sol"), /API key is unavailable/, `GPT-6.2 Sol is denied ${description}`);
+  }
+
   console.log(`PASS ai model usage telemetry integration (${checks} checks)`);
 } finally {
   await db.close();

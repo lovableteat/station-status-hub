@@ -67,18 +67,22 @@ test('proxy uses the stored key, fixes the upstream URL and preserves HTTP error
   assert.equal(f.permissions[0].p_action, 'view');
 });
 
-test('only the official saved GPT-5.4 key can request the one alternate GPT-6.1 Sol model', async () => {
+test('only the official saved GPT-5.4 key can request either approved Sol model', async () => {
   const request = model => ({ operation: 'chat', apiKeyId: 'key', request: { model, messages: [{ role: 'user', content: 'hello' }] } });
   const f = fixture();
   assert.equal((await f.run(request('gpt-6.1-sol'))).status, 200);
   assert.equal(JSON.parse(f.calls[0].init.body).model, 'gpt-6.1-sol');
   assert.equal(f.calls[0].init.headers.Authorization, 'Bearer fixture-openai-secret');
   assert.equal(f.permissions[0].p_action, 'view');
-  assert.equal((await f.run(request('gpt-6.1-astra'))).status, 400);
-  assert.equal(f.calls.length, 1);
+  assert.equal((await f.run(request('gpt-6.2-sol'))).status, 200);
+  assert.equal(JSON.parse(f.calls[1].init.body).model, 'gpt-6.2-sol');
+  assert.equal((await f.run(request('gpt-6.2-astra'))).status, 400);
+  assert.equal(f.calls.length, 2);
 
   const otherModel = fixture({ keyPatch: { permissions: { metadata: { provider: 'openai', model: 'gpt-5.2', baseUrl: 'https://api.openai.com/v1' } } } });
-  assert.equal((await otherModel.run(request('gpt-6.1-sol'))).status, 400);
+  for (const model of ['gpt-6.1-sol', 'gpt-6.2-sol']) {
+    assert.equal((await otherModel.run(request(model))).status, 400);
+  }
   assert.equal(otherModel.calls.length, 0);
 });
 
@@ -90,4 +94,19 @@ test('model discovery and unsaved-key verification require editing permission an
   assert.equal(f.calls[0].url, 'https://api.openai.com/v1/models');
   assert.equal(f.calls[0].init.body, undefined);
   assert.equal(f.calls[0].init.headers.Authorization, 'Bearer new-fixture-key');
+});
+
+test('front end, relay and both usage checks allow the same Sol aliases', () => {
+  const modelNames = text => [...text.matchAll(/gpt-\d+\.\d+-sol/g)].map(match => match[0]);
+  const helpers = fs.readFileSync('src/components/api-management/apiKeyHelpers.ts', 'utf8');
+  const frontendSol = modelNames(helpers.match(/export const OPENAI_ON_DEMAND_MODELS.*;/)[0]);
+  const relaySol = modelNames(source.match(/!\[[^\]]+\]\.includes\(chat.model\)/)[0]);
+  const migrations = 'supabase/migrations';
+  const filename = fs.readdirSync(migrations).find(file => file.endsWith('_allow_openai_gpt_6_2_sol_usage_tracking.sql'));
+  assert.ok(filename);
+  const usage = fs.readFileSync(`${migrations}/${filename}`, 'utf8');
+  const usageChecks = [...usage.matchAll(/btrim\(p_model\) in \(('gpt-[^)]*)\)/g)];
+  assert.deepEqual(frontendSol, ['gpt-6.1-sol', 'gpt-6.2-sol']);
+  assert.deepEqual(relaySol, frontendSol);
+  assert.deepEqual(usageChecks.map(check => modelNames(check[1])), [frontendSol, frontendSol]);
 });

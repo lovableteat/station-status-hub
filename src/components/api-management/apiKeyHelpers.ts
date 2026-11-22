@@ -34,7 +34,7 @@ export interface ApiKeyModelTarget {
 }
 
 export const OPENAI_STANDARD_CHAT_MODEL = "gpt-5.4";
-export const OPENAI_ON_DEMAND_MODEL = "gpt-6.1-sol";
+export const OPENAI_ON_DEMAND_MODELS: readonly string[] = ["gpt-6.1-sol", "gpt-6.2-sol"];
 
 export const defaultApiKeyMetadata: ApiKeyMetadata = {
   provider: "",
@@ -70,6 +70,16 @@ export function buildApiKeyModelTargetId(keyId: string, model: string) {
   return `${keyId}::${model}`;
 }
 
+function isOpenAiStandardKey(metadata: ApiKeyMetadata) {
+  return metadata.provider.trim().toLowerCase() === "openai"
+    && metadata.model.trim() === OPENAI_STANDARD_CHAT_MODEL
+    && metadata.baseUrl.trim().replace(/\/+$/, "") === "https://api.openai.com/v1";
+}
+
+export function isOpenAiOnDemandTarget({ model, record }: Pick<ApiKeyModelTarget, "model" | "record">) {
+  return OPENAI_ON_DEMAND_MODELS.includes(model) && isOpenAiStandardKey(normalizeApiKeyPermissions(record.permissions).metadata);
+}
+
 export function buildApiKeyModelTargets(
   records: readonly ApiKeyRecord[],
   geminiModels: readonly string[],
@@ -78,11 +88,8 @@ export function buildApiKeyModelTargets(
     const metadata = normalizeApiKeyPermissions(record.permissions).metadata;
     const provider = metadata.provider.trim().toLowerCase();
     const savedModel = metadata.model.trim();
-    const offersOpenAiUpgrade =
-      provider === "openai" && savedModel === OPENAI_STANDARD_CHAT_MODEL
-      && metadata.baseUrl.trim().replace(/\/+$/, "") === "https://api.openai.com/v1";
     const models = provider === "gemini" ? geminiModels
-      : offersOpenAiUpgrade ? [savedModel, OPENAI_ON_DEMAND_MODEL]
+      : isOpenAiStandardKey(metadata) ? [savedModel, ...OPENAI_ON_DEMAND_MODELS]
       : [savedModel];
 
     return Array.from(new Set(models.map((model) => model.trim())))

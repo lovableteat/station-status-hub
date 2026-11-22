@@ -13,7 +13,7 @@ import {
   ApiKeyRecord,
   type ApiKeyModelTarget,
   normalizeApiKeyPermissions,
-  OPENAI_ON_DEMAND_MODEL,
+  isOpenAiOnDemandTarget,
   OPENAI_STANDARD_CHAT_MODEL,
 } from "./apiKeyHelpers";
 import { loadApiKeyModelTargets } from "./apiKeyModelTargets";
@@ -119,7 +119,7 @@ export function ApiChatWorkspacePage() {
   const defaultTarget = apiKeyTargets.find(target =>
     target.model === OPENAI_STANDARD_CHAT_MODEL
     && normalizeApiKeyPermissions(target.record.permissions).metadata.provider.trim().toLowerCase() === "openai"
-  ) ?? apiKeyTargets.find(target => target.model !== OPENAI_ON_DEMAND_MODEL) ?? null;
+  ) ?? apiKeyTargets.find(target => !isOpenAiOnDemandTarget(target)) ?? null;
 
   useEffect(() => {
     if (!apiKeyTargets.length) {

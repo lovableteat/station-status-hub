@@ -41,7 +41,7 @@ test("restoring a supported conversation restores its historical key and model t
 
   assert.match(source, /target\.record\.key_name === conversation\.keyLabel/);
   // A conversation that used the one-use model comes back on the standard model of the same key.
-  assert.match(source, /target\.model === \(conversation\.model === OPENAI_ON_DEMAND_MODEL \? OPENAI_STANDARD_CHAT_MODEL : conversation\.model\)/);
+  assert.match(source, /if \(exact && !isOpenAiOnDemandTarget\(exact\)\) return exact;[\s\S]*target\.model === OPENAI_STANDARD_CHAT_MODEL/);
   assert.match(source, /onSelectApiKeyTarget\?\.\(historicalTarget\.id\)/);
   assert.match(source, /setModel\(historicalTarget\.model\)/);
   assert.doesNotMatch(source, /setModel\(conversation\.model\)/, "restoring must select the matched target, never a saved one-use model directly");

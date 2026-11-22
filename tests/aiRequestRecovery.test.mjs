@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import test from 'node:test';
-import ts from 'typescript';
-
-const source = await readFile(new URL('../src/components/api-management/aiRequestRecovery.ts', import.meta.url), 'utf8');
-const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { AiRequestFailure, classifyAiFailure, requestAiWithRecovery, readAiCooldowns, writeAiCooldowns, nextPacificMidnight } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+const { loader } = createRequire(import.meta.url)('./support/renderHarness.cjs');
+const { AiRequestFailure, classifyAiFailure, requestAiWithRecovery, readAiCooldowns, writeAiCooldowns, nextPacificMidnight } =
+  loader()('src/components/api-management/aiRequestRecovery.ts');
 const targets = ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'].map(model => ({ id: `key::${model}`, model, cooldownUntil: 0 }));
 
 test('503 switches to another model once, records cooldown and exposes the actual successful model', async () => {
@@ -34,8 +32,8 @@ test('cooldown survives reopening and prevents requests until expiry', async () 
   const requests = [];
   await requestAiWithRecovery({ targets: targets.map(target => ({ ...target, cooldownUntil: restored[target.id] || 0 })), now: () => 1_000, execute: async target => { requests.push(target.model); return 'answer'; } });
   assert.deepEqual(requests, ['gemini-3.5-flash-lite']);
-  assert.deepEqual(readAiCooldowns({ getItem: () => stored }, 92_000), {});
-  assert.deepEqual(readAiCooldowns({ getItem: () => '{invalid' }), {});
+  assert.deepEqual(Object.keys(readAiCooldowns({ getItem: () => stored }, 92_000)), []);
+  assert.deepEqual(Object.keys(readAiCooldowns({ getItem: () => '{invalid' })), []);
   await assert.rejects(requestAiWithRecovery({ targets: targets.map(target => ({ ...target, cooldownUntil: 91_000 })), now: () => 1_000, execute: async () => assert.fail('cooled model must not be called') }), /未重送請求/);
 });
 
@@ -110,23 +108,25 @@ test('stalled models have one overall budget and no more than three attempts', a
   assert.equal(time, 90_000);
 });
 
-test('selected GPT-6.1 Sol has time to reason with or without attachments', async () => {
-  const sol = { id: 'openai::gpt-6.1-sol', model: 'gpt-6.1-sol', cooldownUntil: 0 };
-  for (const hasAttachments of [false, true]) {
-    let time = 0;
-    const reply = await requestAiWithRecovery({
-      targets: [sol], hasAttachments, now: () => time,
-      execute: async (target, attempt, timeout) => {
-        assert.equal(target, sol);
-        assert.equal(attempt, 1);
-        assert.equal(timeout, 110_000);
-        time += 60_000;
-        return 'reasoned answer';
-      },
-    });
-    assert.equal(reply.target, sol);
-    assert.equal(reply.result, 'reasoned answer');
-    assert.equal(reply.durationMs, 60_000);
+test('each selected Sol model has time to reason with or without attachments', async () => {
+  for (const model of ['gpt-6.1-sol', 'gpt-6.2-sol']) {
+    const sol = { id: `openai::${model}`, model, cooldownUntil: 0 };
+    for (const hasAttachments of [false, true]) {
+      let time = 0;
+      const reply = await requestAiWithRecovery({
+        targets: [sol], hasAttachments, now: () => time,
+        execute: async (target, attempt, timeout) => {
+          assert.equal(target, sol);
+          assert.equal(attempt, 1);
+          assert.equal(timeout, 110_000);
+          time += 60_000;
+          return 'reasoned answer';
+        },
+      });
+      assert.equal(reply.target, sol);
+      assert.equal(reply.result, 'reasoned answer');
+      assert.equal(reply.durationMs, 60_000);
+    }
   }
 });
 

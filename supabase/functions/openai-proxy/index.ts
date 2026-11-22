@@ -151,7 +151,8 @@ Deno.serve(async (request: Request) => {
       model = typeof metadata.model === 'string' ? metadata.model.trim() : '';
       if (body.operation === 'chat' && chat.model !== model) {
         // GPT-5.4 remains the stored default. The official key can also be used for a single explicitly selected Sol request.
-        if (model !== 'gpt-5.4' || chat.model !== 'gpt-6.1-sol') return respond('模型與已儲存的設定不一致。', 400);
+        if (model !== 'gpt-5.4' || typeof chat.model !== 'string' || !['gpt-6.1-sol', 'gpt-6.2-sol'].includes(chat.model))
+          return respond('模型與已儲存的設定不一致。', 400);
         model = chat.model;
       }
     } else {

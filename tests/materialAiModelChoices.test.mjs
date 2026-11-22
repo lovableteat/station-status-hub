@@ -8,7 +8,7 @@ const rows = [record("openai", "openai", "gpt-5.4", "https://api.openai.com/v1")
   record("claude", "anthropic", "qa-claude", "https://api.anthropic.com/v1"), record("custom", "openai-compatible", "qa-vision", "https://example.invalid/v1"),
   record("off", "openai", "qa", "https://example.invalid", { is_active: false }), record("old", "openai", "qa", "https://example.invalid", { expires_at: "2000-01-01" }),
   record("denied", "openai", "qa", "https://example.invalid", { permissions: { read: false } }), record("empty", "openai", "", "https://example.invalid")];
-function load(discoveredModels = ["gpt-5.4", "gpt-6.1-sol"]) { return loader({ transform: source => source.replaceAll("import.meta.url", '"file:///qa/"'), mocks: {
+function load(discoveredModels = ["gpt-5.4", "gpt-6.1-sol", "gpt-6.2-sol"]) { return loader({ transform: source => source.replaceAll("import.meta.url", '"file:///qa/"'), mocks: {
   "@/integrations/supabase/client": { supabase: database(() => ({ data: rows, error: null })) },
   "./aiProviderTransport": { fetchAiProvider: async () => new Response(JSON.stringify({ data: discoveredModels.map(id => ({ id })) })) },
 } })("src/components/material-requests/materialSpecFillService.ts"); }
@@ -16,6 +16,7 @@ test("image-only PDF tools offer configured providers and chat model choices wit
   const models = await load().loadSpecFillModels({ imagesOnly: true });
   assert.ok(models.some(item => item.id === "custom"));
   assert.ok(models.some(item => item.label.includes("gpt-6.1-sol")));
+  assert.ok(models.some(item => item.label.includes("gpt-6.2-sol")));
   assert.ok(models.some(item => item.label.includes("gemini-3.8-flash")));
   assert.equal(models.filter(item => item.label.includes("gemini-2.5-flash")).length, 1);
   assert.deepEqual([...new Set(models.map(item => item.record.id))], ["openai", "gemini", "claude", "custom"]);

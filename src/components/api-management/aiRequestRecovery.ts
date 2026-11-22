@@ -1,3 +1,5 @@
+import { OPENAI_ON_DEMAND_MODELS } from './apiKeyHelpers';
+
 export type AiFailureKind = 'busy' | 'minute-quota' | 'daily-quota' | 'billing' | 'timeout' | 'network' | 'auth' | 'model-access' | 'invalid' | 'tracking';
 export class AiRequestFailure extends Error {
     constructor(message: string, public kind: AiFailureKind, public retryAfterMs = 0, public status?: number) {
@@ -99,7 +101,7 @@ export async function requestAiWithRecovery<T extends {
 }) {
     const started = now();
     const candidates = targets.filter(target => target.cooldownUntil <= now()).slice(0, 3);
-    const needsLongResponse = longRequest || candidates[0]?.model === 'gpt-6.1-sol';
+    const needsLongResponse = longRequest || OPENAI_ON_DEMAND_MODELS.includes(candidates[0]?.model ?? '');
     const budget = needsLongResponse ? 120_000 : hasAttachments ? 90000 : 75000;
     const attemptTimeout = needsLongResponse ? 110_000 : hasAttachments ? 45000 : 25000;
     if (!candidates.length) {

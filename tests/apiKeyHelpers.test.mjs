@@ -112,12 +112,16 @@ test("other OpenAI models keep one stored-model target", () => {
   assert.strictEqual(targets[0].record, record);
 });
 
-test("an active official GPT-5.4 key offers GPT-6.1 Sol after the saved default", () => {
+test("an active official GPT-5.4 key offers both Sol models after the saved default", () => {
   const metadata = { provider: "openai", model: "gpt-5.4", baseUrl: "https://api.openai.com/v1/" };
   const record = { id: "key-openai", permissions: { metadata }, is_active: true };
   const targets = helpers.buildApiKeyModelTargets([record], []);
-  assert.deepEqual(targets.map(target => target.id), ["key-openai::gpt-5.4", "key-openai::gpt-6.1-sol"]);
+  assert.deepEqual(targets.map(target => target.id), ["key-openai::gpt-5.4", "key-openai::gpt-6.1-sol", "key-openai::gpt-6.2-sol"]);
   targets.forEach(target => assert.strictEqual(target.record, record));
+  assert.deepEqual(targets.map(helpers.isOpenAiOnDemandTarget), [false, true, true]);
+  const explicit = { ...record, permissions: { metadata: { ...metadata, model: "gpt-6.2-sol" } } };
+  const [explicitTarget] = helpers.buildApiKeyModelTargets([explicit], []);
+  assert.equal(helpers.isOpenAiOnDemandTarget(explicitTarget), false);
 
   const otherEndpoint = { ...record, permissions: { metadata: { ...metadata, baseUrl: "https://custom.invalid/v1" } } };
   assert.deepEqual(helpers.buildApiKeyModelTargets([otherEndpoint], []).map(target => target.model), ["gpt-5.4"]);

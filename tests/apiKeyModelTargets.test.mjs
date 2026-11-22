@@ -33,6 +33,15 @@ test("Sol is offered only when the saved key model list explicitly contains its 
   assert.deepEqual(models(await missing.loadApiKeyModelTargets([record, gemini, custom], geminiModels)), ["gpt-5.4", ...geminiModels, "qa-custom"]);
 });
 
+test("both Sol targets share one list request and each requires its exact model ID", async () => {
+  for (const enabled of [["gpt-6.2-sol"], ["gpt-6.1-sol"], ["gpt-6.1-sol", "gpt-6.2-sol"]]) {
+    let calls = 0;
+    const load = service(async () => { calls++; return json(["gpt-5.4", ...enabled]); }).loadApiKeyModelTargets;
+    assert.deepEqual(models(await load([key()], [])), ["gpt-5.4", ...enabled]);
+    assert.equal(calls, 1);
+  }
+});
+
 test("failed or malformed discovery preserves saved models and the other providers", async () => {
   for (const transport of [async () => { throw new Error("QA network unavailable"); }, async () => json([], 403), async () => new Response("not-json"), async () => new Response(JSON.stringify({ data: null }))]) {
     const targets = await service(transport).loadApiKeyModelTargets([key(), gemini, custom], geminiModels);
