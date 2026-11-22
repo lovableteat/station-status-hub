@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/specs/2026-08-08-test-plan-spreadsheet-fidelity-design.md`；程式參考基準：`d76054a6264cfe887c844c4bb5b5f8958a1b55e5`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/specs/2026-08-08-test-plan-spreadsheet-fidelity-design.md`；程式參考基準：`3c91a672b858277ddeb171f85a124379461f5d73`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Test_Plan 試算表顯示與延伸設計
 
