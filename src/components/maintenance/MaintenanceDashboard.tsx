@@ -37,7 +37,7 @@ export function MaintenanceDashboard({ onNavigate }: { onNavigate: (module: stri
       </header>
       <div className="mf-dashboard-summary" aria-label="專案故障統計" aria-busy={loading}>
         <div><span>累計故障</span><strong>{loading || error ? '—' : data.issues.length}</strong></div>
-        <div data-tone={!loading && !error && openCount > 0 ? "open" : undefined}><span>未解決</span><strong>{loading || error ? '—' : openCount}</strong></div>
+        <div data-tone={!loading && !error && openCount > 0 ? 'open' : undefined}><span>未解決</span><strong>{loading || error ? '—' : openCount}</strong></div>
         <div data-tone="closed"><span>已解決</span><strong>{loading || error ? '—' : data.issues.length - openCount}</strong></div>
         {stats.unidentified > 0 && !loading && !error ? (
           <button type="button" onClick={() => navigate('machine', '未記錄機台')} title="查看未記錄機台的故障">

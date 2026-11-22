@@ -1,8 +1,19 @@
 /* The palette (frame, theme tokens, --mf-* tokens) is shared by all four 維修中心 tabs: maintenancePalette.css. */
 
 .maintenance-fault-center :is(.mf-filter-controls select, .mf-detail-controls select, .mf-composer textarea),
-:is(.mf-report-dialog, .mf-action-dialog) :is(input:not([type="checkbox"]), textarea) {
+:is(.mf-report-dialog, .mf-action-dialog) :is(input:not([type="checkbox"], [type="file"]), textarea) {
   --secondary: var(--mf-input-tone);
+}
+
+.maintenance-fault-center :is(.mf-detail-controls select, .mf-composer textarea, .mf-detail-assignee),
+:is(.mf-report-dialog, .mf-action-dialog) :is(input:not([type="checkbox"], [type="file"]), textarea) {
+  border-color: var(--mf-control-line, var(--mf-line));
+}
+
+.maintenance-fault-center :is(.mf-detail-controls select, .mf-composer textarea):focus,
+.maintenance-fault-center .mf-detail-controls > .mf-detail-assignee:enabled:focus-visible,
+:is(.mf-report-dialog, .mf-action-dialog) :is(input:not([type="checkbox"], [type="file"]), textarea):focus {
+  border-color: var(--mf-teal);
 }
 
 .maintenance-fault-center .mf-page-head {

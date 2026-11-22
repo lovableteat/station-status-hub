@@ -78,7 +78,7 @@ export function MaintenanceDetail({ actorId, projectId, issue, data, canEdit, on
         <h2>{issue.title}</h2>
         <div className="mf-detail-meta"><span>建立 {timestamp(issue.created_at)}</span>{issue.category && <span>{issue.category}</span>}{!issue.maintenance_status && <span>原狀態：{issue.status === 'closed' ? '已關閉' : faultStatusLabel(status)}</span>}</div>
       </div>
-      <div className="mf-detail-controls"><button type="button" disabled={!canEdit || busy} onClick={openAssign}><UserRound size={16}/><span>{ownerNames(issue, data.people).join('、') || (canEdit ? '指派負責人' : '未分派')}</span></button>
+      <div className="mf-detail-controls"><button type="button" className="mf-detail-assignee" disabled={!canEdit || busy} onClick={openAssign}><UserRound size={16}/><span>{ownerNames(issue, data.people).join('、') || (canEdit ? '指派負責人' : '未分派')}</span></button>
         {canEdit && (status === 'resolved' ? <Button variant="outline" disabled={busy} onClick={() => void mutate({ maintenance_status: 'pending' }, '故障已重新開啟')}>重新開啟</Button> : <><label className="mf-select"><select aria-label="更新故障狀態" title="更新故障狀態" value={status} disabled={busy} onChange={event => void mutate({ maintenance_status: event.target.value }, '故障狀態已更新')}>{FAULT_STATUSES.filter(item => item.value !== 'resolved').map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select><ChevronDown size={14} aria-hidden="true"/></label><Button disabled={busy} onClick={() => { setCategory(issue.category || ''); openModal('resolve'); }}><CheckCircle2 size={16}/>解決</Button></>)}
       </div>
       {pending === 'update' && !modalOpen && <MaintenanceLoading label="更新故障中…" />}
