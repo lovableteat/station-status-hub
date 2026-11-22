@@ -143,15 +143,19 @@ test("material pagination belongs to both result views and never overrides a cho
   assert.doesNotMatch(source, /if \(!isCompactLayout \|\| pageSize <= 25\) return/);
 });
 
-test("direct chat becomes full-screen on phones and respects the keyboard safe area", async () => {
-  const [center, panel] = await Promise.all([
+test("direct chat fits above mobile navigation and the visible keyboard", async () => {
+  const [center, panel, css] = await Promise.all([
     read("src/components/collaboration/CollaborationCenter.tsx"),
     read("src/components/collaboration/DirectMessagesPanel.tsx"),
+    read("src/index.css"),
   ]);
 
-  assert.match(center, /fixed inset-0 flex h-\[100dvh\] w-screen/);
+  assert.match(center, /fixed inset-x-0 flex/);
+  assert.match(center, /viewport\.addEventListener\("resize", fit\)/);
+  assert.match(css, /--mobile-shell-bottom: calc\(var\(--mobile-dock-height\) \+ env\(safe-area-inset-bottom\)\)/);
+  assert.match(css, /\[data-floating-direct-messages='true'\]\s*\{\s*top: var\(--chat-visible-top, 0px\);\s*bottom: max\(var\(--mobile-shell-bottom\), var\(--chat-obscured-bottom, 0px\)\)/);
   assert.match(center, /bottom-\[calc\(var\(--mobile-shell-bottom\)\+0\.5rem\)\]/);
-  assert.match(panel, /env\(safe-area-inset-bottom\)/);
+  assert.match(panel, /min-h-11 items-center justify-between sm:min-h-7[\s\S]{0,450}aria-label="更新對話"/);
   assert.match(panel, /aria-label="加入附件"/);
   assert.match(panel, /accept=\{CHAT_MEDIA_ACCEPT\}/);
   assert.match(panel, /multiple/);

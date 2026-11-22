@@ -6,12 +6,11 @@ const readSource = (path) =>
   readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("the workspace keeps direct messages exclusively in the bottom-right floating panel", async () => {
-  const [indexSource, headerSource, centerSource, indicatorSource, css] = await Promise.all([
+  const [indexSource, headerSource, centerSource, indicatorSource] = await Promise.all([
     readSource("src/pages/Index.tsx"),
     readSource("src/components/layout/MainWorkspaceHeader.tsx"),
     readSource("src/components/collaboration/CollaborationCenter.tsx"),
     readSource("src/components/common/OnlineUsersIndicator.tsx"),
-    readSource("src/index.css"),
   ]);
 
   assert.match(indexSource, /<CollaborationCenter\s*\/>/);
@@ -37,7 +36,6 @@ test("the workspace keeps direct messages exclusively in the bottom-right floati
   assert.match(centerSource, /data-chat-dock="detached"/);
   assert.match(centerSource, /pointer-events-none fixed bottom-\[calc\(var\(--mobile-shell-bottom\)\+0\.5rem\)\] right-2/);
   assert.match(centerSource, /fixed inset-x-0 flex/);
-  assert.match(css, /\[data-floating-direct-messages='true'\]\s*\{\s*top: var\(--chat-visible-top, 0px\);\s*bottom: max\(var\(--mobile-shell-bottom\), var\(--chat-obscured-bottom, 0px\)\)/);
   assert.match(centerSource, /sm:absolute sm:inset-auto sm:bottom-0 sm:right-0/);
   assert.match(centerSource, /lg:bottom-4 lg:right-4/);
   assert.doesNotMatch(centerSource, /lg:bottom-5 lg:right-5/);
