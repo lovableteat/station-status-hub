@@ -3,7 +3,7 @@ import {
   buildPerformanceReturnActionUrl,
   PERFORMANCE_RETURN_NOTIFICATION_TYPE,
 } from "@/components/performance/performanceNotifications.mjs";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import {
   AlertCircle,
   Bell,
@@ -302,6 +302,7 @@ export function CollaborationCenter() {
   const [directMessageUnreadCount, setDirectMessageUnreadCount] = useState(0);
   const [launcherPosition, setLauncherPosition] = useState<ChatLauncherPosition | null>(null);
   const messageReturnFocus = useRef<HTMLElement | null>(null);
+  const messageDockRef = useRef<HTMLDivElement>(null);
   const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>("all");
   const [memberQuery, setMemberQuery] = useState("");
   const [directoryMembers, setDirectoryMembers] = useState<CollaborationDirectoryMember[]>([]);
@@ -310,6 +311,41 @@ export function CollaborationCenter() {
   const [deletingNotificationId, setDeletingNotificationId] = useState<string | null>(null);
   const [clearingRead, setClearingRead] = useState(false);
   const autoAnnouncementShownRef = useRef(false);
+
+  useLayoutEffect(() => {
+    const dock = messageDockRef.current;
+    const viewport = window.visualViewport;
+    if (!messageFloatOpen || !isRealtimeAuthenticated || !dock || !viewport) return;
+
+    const reset = () => {
+      dock.style.removeProperty("--chat-visible-top");
+      dock.style.removeProperty("--chat-visible-height");
+      dock.style.removeProperty("--chat-obscured-bottom");
+    };
+    const fit = () => {
+      // Keep native pinch zoom independent of the keyboard layout.
+      if (Math.abs(viewport.scale - 1) > 0.02) {
+        reset();
+        return;
+      }
+      const top = Math.max(0, viewport.offsetTop);
+      const obscuredBottom = Math.max(0, window.innerHeight - viewport.height - top);
+      dock.style.setProperty("--chat-visible-top", `${top}px`);
+      dock.style.setProperty("--chat-visible-height", `${viewport.height}px`);
+      dock.style.setProperty("--chat-obscured-bottom", `${obscuredBottom}px`);
+    };
+
+    fit();
+    viewport.addEventListener("resize", fit);
+    viewport.addEventListener("scroll", fit);
+    window.addEventListener("resize", fit);
+    return () => {
+      viewport.removeEventListener("resize", fit);
+      viewport.removeEventListener("scroll", fit);
+      window.removeEventListener("resize", fit);
+      reset();
+    };
+  }, [messageFloatOpen, isRealtimeAuthenticated]);
 
   const showReturnedNotification = useCallback((notification: NotificationRow) => toast({
     title: notification.title || "績效自評已退回補充",
@@ -737,6 +773,7 @@ export function CollaborationCenter() {
 
       {isRealtimeAuthenticated ? (
         <div
+          ref={messageDockRef}
           data-chat-dock="detached"
           className="pointer-events-none fixed bottom-[calc(var(--mobile-shell-bottom)+0.5rem)] right-2 z-40 w-auto sm:w-[min(480px,calc(100vw-1rem))] lg:bottom-4 lg:right-4"
         >
@@ -747,7 +784,7 @@ export function CollaborationCenter() {
             data-floating-direct-messages="true"
             data-chat-surface="detached-card"
             className={cn(
-              "fixed inset-0 flex h-[100dvh] w-screen origin-bottom-right flex-col overflow-hidden border-0 border-cyan-100/40 bg-card pt-[env(safe-area-inset-top)] shadow-[var(--app-floating-shadow)] ring-1 ring-white/[0.06] transition-[opacity,transform,visibility] duration-200 ease-out sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[min(700px,calc(100dvh-6rem))] sm:w-full sm:rounded-[24px] sm:border sm:pt-0",
+              "fixed inset-x-0 flex origin-bottom-right flex-col overflow-hidden border-0 border-cyan-100/40 bg-card pt-[env(safe-area-inset-top)] shadow-[var(--app-floating-shadow)] ring-1 ring-white/[0.06] transition-[opacity,transform,visibility] duration-200 ease-out sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[min(700px,calc(100dvh-6rem))] sm:w-full sm:rounded-[24px] sm:border sm:pt-0",
               messageFloatOpen
                 ? "visible pointer-events-auto translate-y-0 scale-100 opacity-100"
                 : "invisible pointer-events-none translate-y-3 scale-[0.98] opacity-0",

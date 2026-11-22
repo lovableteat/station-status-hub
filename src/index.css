@@ -2566,6 +2566,30 @@ body {
 [data-floating-direct-messages='true'] .text-base { font-size: 17px; }
 [data-floating-direct-messages='true'] :is(input, textarea) { font-size: 15px; }
 
+@media (max-width: 639px) {
+  [data-floating-direct-messages='true'] {
+    top: var(--chat-visible-top, 0px);
+    bottom: max(var(--mobile-shell-bottom), var(--chat-obscured-bottom, 0px));
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  [data-chat-dock='detached']:has([data-floating-direct-messages][aria-hidden='false']) {
+    --chat-card-gap: calc(var(--mobile-shell-bottom) + 0.5rem);
+    bottom: max(var(--chat-card-gap), var(--chat-obscured-bottom, 0px));
+  }
+
+  [data-floating-direct-messages='true'] {
+    max-height: max(0px, calc(
+      var(--chat-visible-height, 100dvh) - max(0px, var(--chat-card-gap, 0px) - var(--chat-obscured-bottom, 0px)) - 0.5rem
+    ));
+  }
+}
+
+@media (max-width: 1023px) {
+  [data-floating-direct-messages='true'] :is(input, textarea) { font-size: 16px; }
+}
+
 /* ===== Mobile shell: feedback placement and shared phone components (2026-11-04) ===== */
 /* From 640px the AI chat page keeps a 12px gutter under the composer (sm:py-3 on its wrapper), so its toasts sit that much higher. */
 @media (min-width: 640px) and (max-width: 1023px) {

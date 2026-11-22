@@ -1058,7 +1058,7 @@ export function DirectMessagesPanel({
           }}
           onDrop={handleComposerDrop}
           className={cn(
-            "border-t border-white/8 bg-[linear-gradient(180deg,rgba(8,18,29,0.95),rgba(8,18,29,1))] px-2.5 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 sm:p-3",
+            "shrink-0 border-t border-white/8 bg-[linear-gradient(180deg,rgba(8,18,29,0.95),rgba(8,18,29,1))] p-2.5 sm:p-3",
             isDraggingFiles && "ring-2 ring-inset ring-cyan-300 bg-cyan-300/10",
           )}
         >
@@ -1177,7 +1177,7 @@ export function DirectMessagesPanel({
               disabled={isSendingMedia}
               placeholder={selectedMediaFiles.length > 0 ? "可以補一句文字再送出" : "輸入訊息"}
               rows={1}
-              className="min-h-11 max-h-28 flex-1 resize-none rounded-2xl border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-sm leading-5 text-slate-100 placeholder:text-slate-500"
+              className="min-h-11 max-h-28 min-w-0 flex-1 resize-none rounded-2xl border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-sm leading-5 text-slate-100 placeholder:text-slate-500"
               onChange={(event) => {
                 updateDraft(event.target.value);
                 sendTyping(Boolean(event.target.value));
@@ -1203,8 +1203,11 @@ export function DirectMessagesPanel({
               <span className="sr-only">{isSendingMedia ? "訊息傳送中" : "送出訊息"}</span>
             </Button>
           </div>
-          <div className="mt-1.5 flex items-center justify-between px-1 text-[9px] font-medium text-slate-600">
-            <span>拖入檔案或 Ctrl+V 貼上截圖 · Enter 送出 · Shift + Enter 換行</span>
+          <div className={cn(
+            "mt-1.5 items-center justify-end px-1 text-[9px] font-medium text-slate-600 sm:justify-between",
+            draft.length > 4_400 ? "flex" : "hidden sm:flex",
+          )}>
+            <span className="hidden sm:inline">拖入檔案或 Ctrl+V 貼上截圖 · Enter 送出 · Shift + Enter 換行</span>
             {draft.length > 4_400 ? <span>{draft.length} / 4800</span> : null}
           </div>
         </form>
@@ -1457,7 +1460,7 @@ export function DirectMessagesPanel({
         ) : null}
 
         <section>
-          <div className="mb-1.5 flex h-7 items-center justify-between">
+          <div className="mb-1.5 flex min-h-11 items-center justify-between sm:min-h-7">
             <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">最近對話</span>
             <Button
               variant="ghost"
@@ -1465,7 +1468,7 @@ export function DirectMessagesPanel({
               aria-label="更新對話"
               title="更新對話"
               onClick={() => void reload()}
-              className="h-11 w-11 rounded-lg border border-violet-300/15 bg-violet-400/[0.07] text-violet-200 hover:bg-violet-400/16 hover:text-white sm:h-7 sm:w-7"
+              className="h-11 w-11 shrink-0 rounded-lg border border-violet-300/15 bg-violet-400/[0.07] text-violet-200 hover:bg-violet-400/16 hover:text-white sm:h-7 sm:w-7"
             >
               <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             </Button>
