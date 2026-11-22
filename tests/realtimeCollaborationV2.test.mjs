@@ -308,7 +308,8 @@ test("conversation rows can clear all locally visible messages without affecting
   assert.match(hook, /return \{ threads, unreadCount, loading, error, reload, startDirectChat, clearDirectChat \}/);
 
   assert.match(panel, /const \[deletingThreadIds, setDeletingThreadIds\] = useState<Set<string>>/);
-  assert.match(panel, /aria-label=\{`刪除與 \$\{displayName\} 的對話`\}/);
+  assert.match(panel, /清除自己的聊天紀錄.*刪除與 \$\{displayName\} 的對話/);
+  assert.match(panel, /aria-label=\{clearLabel\}/);
   assert.match(panel, /這只會清除目前聊天列表中的顯示內容，刪除後無法復原。/);
   assert.match(panel, /await clearDirectChat\(thread\.threadId\)/);
   assert.match(panel, /deletingThreadIds\.has\(thread\.threadId\)/);

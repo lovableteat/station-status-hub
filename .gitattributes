@@ -11,3 +11,4 @@ docs/security-proposals/pcb-rpc-cutover-PENDING.sql -text whitespace=blank-at-eo
 docs/security-proposals/legacy-pcb/*.sql text eol=lf
 supabase/migrations/20261112073038_restrict_anonymous_test_progress_audit_access.sql text eol=lf
 supabase/migrations/20261112073518_restrict_anonymous_tasks_access.sql text eol=lf
+supabase/migrations/20261122045545_enable_direct_self_chat.sql text eol=lf

@@ -10,6 +10,7 @@ import {
 import {
   ArrowLeft,
   Check,
+  ChevronRight,
   ClipboardCopy,
   CornerUpLeft,
   ExternalLink,
@@ -159,6 +160,7 @@ function shortTime(value: string | null) {
 
 function ThreadRow({
   thread,
+  isSelfChat,
   onlineUser,
   pinned,
   draft,
@@ -168,6 +170,7 @@ function ThreadRow({
   onDelete,
 }: {
   thread: DirectThread;
+  isSelfChat: boolean;
   onlineUser?: OnlineUser;
   pinned: boolean;
   draft: string;
@@ -176,7 +179,9 @@ function ThreadRow({
   onTogglePin: () => void;
   onDelete: () => void;
 }) {
-  const displayName = thread.otherDisplayName || thread.otherUsername;
+  const contactName = thread.otherDisplayName || thread.otherUsername;
+  const displayName = isSelfChat ? "傳給自己" : contactName;
+  const clearLabel = isSelfChat ? "清除自己的聊天紀錄" : `刪除與 ${displayName} 的對話`;
   const previewText = draft.trim()
     ? draft.trim()
     : getDirectMessageDisplayPreview(thread.lastMessageBody, "開始一段新對話");
@@ -201,19 +206,21 @@ function ThreadRow({
         onClick={onOpen}
         className="flex h-full w-full min-w-0 items-center gap-2.5 px-3 pr-[74px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300/60"
       >
-        <span className="relative shrink-0">
+        <span className="relative shrink-0" aria-hidden={isSelfChat || undefined}>
           <UserAvatar
             avatarPath={avatarPath}
-            displayName={displayName}
+            displayName={contactName}
             className="h-8 w-8 rounded-lg border border-cyan-200/15"
             fallbackClassName="rounded-lg text-xs font-black tracking-[0.04em]"
           />
-          <span
-            className={cn(
-              "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0d1b2c]",
-              online ? "bg-emerald-400" : "bg-slate-500",
-            )}
-          />
+          {!isSelfChat ? (
+            <span
+              className={cn(
+                "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0d1b2c]",
+                online ? "bg-emerald-400" : "bg-slate-500",
+              )}
+            />
+          ) : null}
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-2 leading-none">
@@ -221,9 +228,11 @@ function ThreadRow({
               {displayName}
             </span>
             {pinned ? <Pin className="h-3 w-3 shrink-0 fill-amber-200 text-amber-200" aria-label="已置頂" /> : null}
-            <span className={cn("shrink-0 text-[10px] font-semibold", online ? "text-emerald-300" : "text-slate-500")}>
-              {online ? "在線" : "離線"}
-            </span>
+            {!isSelfChat ? (
+              <span className={cn("shrink-0 text-[10px] font-semibold", online ? "text-emerald-300" : "text-slate-500")}>
+                {online ? "在線" : "離線"}
+              </span>
+            ) : null}
             {thread.unreadCount > 0 ? (
               <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-cyan-300 px-1.5 py-0.5 text-[10px] font-black text-[#06111f]">
                 {thread.unreadCount > 99 ? "99+" : thread.unreadCount}
@@ -247,8 +256,8 @@ function ThreadRow({
       </button>
       <button
         type="button"
-        aria-label={`刪除與 ${displayName} 的對話`}
-        title={`刪除與 ${displayName} 的對話`}
+        aria-label={clearLabel}
+        title={clearLabel}
         disabled={deleting}
         onClick={onDelete}
         className="absolute right-1.5 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg border border-rose-300/10 bg-rose-400/[0.06] text-rose-200/55 transition-colors hover:border-rose-300/35 hover:bg-rose-400/16 hover:text-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rose-300/70 disabled:cursor-wait disabled:opacity-40"
@@ -272,6 +281,7 @@ export function DirectMessagesPanel({
   const { user, isRealtimeAuthenticated } = useUser();
   const { threads, unreadCount, loading, error, reload, startDirectChat, clearDirectChat } = useDirectMessageThreads();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [startingSelfChat, setStartingSelfChat] = useState(false);
   const [draft, setDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [threadFilter, setThreadFilter] = useState<ThreadFilter>("all");
@@ -333,6 +343,7 @@ export function DirectMessagesPanel({
     () => new Map(onlineUsers.map((onlineUser) => [onlineUser.userId, onlineUser])),
     [onlineUsers],
   );
+  const isSelfChat = Boolean(user && selectedThread?.otherUserId === user.userId);
   const selectedOnlineUser = selectedThread
     ? onlineUserById.get(selectedThread.otherUserId)
     : undefined;
@@ -584,7 +595,9 @@ export function DirectMessagesPanel({
     if (deletingThreadIdsRef.current.has(thread.threadId)) return;
     const displayName = thread.otherDisplayName || thread.otherUsername;
     const confirmed = window.confirm(
-      `要刪除和「${displayName}」的整段對話嗎？\n\n這只會清除目前聊天列表中的顯示內容，刪除後無法復原。`,
+      thread.otherUserId === user?.userId
+        ? "要清除自己傳給自己的聊天紀錄嗎？清除後無法復原。"
+        : `要刪除和「${displayName}」的整段對話嗎？\n\n這只會清除目前聊天列表中的顯示內容，刪除後無法復原。`,
     );
     if (!confirmed) return;
     deletingThreadIdsRef.current = setPendingDirectThread(
@@ -632,6 +645,7 @@ export function DirectMessagesPanel({
             variant="ghost"
             size="icon"
             className="h-11 w-11 rounded-2xl border border-white/8 bg-white/[0.03] text-slate-200 hover:bg-white/[0.08] sm:h-10 sm:w-10"
+            aria-label="返回對話清單"
             onClick={() => setSelectedThreadId(null)}
           >
             <ArrowLeft className="h-4 w-4" />
@@ -644,21 +658,23 @@ export function DirectMessagesPanel({
                 className="h-10 w-10 border border-cyan-200/20"
                 fallbackClassName="text-sm font-black"
               />
-              <span
-                aria-label={selectedOnlineUser ? "在線" : "離線"}
-                className={cn(
-                  "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0b1826]",
-                  selectedOnlineUser ? "bg-emerald-400" : "bg-slate-500",
-                )}
-              />
+              {!isSelfChat ? (
+                <span
+                  aria-label={selectedOnlineUser ? "在線" : "離線"}
+                  className={cn(
+                    "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0b1826]",
+                    selectedOnlineUser ? "bg-emerald-400" : "bg-slate-500",
+                  )}
+                />
+              ) : null}
             </span>
           ) : null}
           <div className="min-w-0 flex-1">
             <div className="truncate text-[15px] font-black tracking-[0.01em] text-white">
-              {selectedThread?.otherDisplayName || "未命名對話"}
+              {isSelfChat ? "傳給自己" : selectedThread?.otherDisplayName || "未命名對話"}
             </div>
             <div className="mt-1 text-xs text-slate-400">
-              {typingUsers.length > 0 ? "對方正在輸入…" : "可傳送圖片、影片、Office 與工程檔案。"}
+              {isSelfChat ? "只有你能看到" : typingUsers.length > 0 ? "對方正在輸入…" : "可傳送圖片、影片、Office 與工程檔案。"}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -1008,7 +1024,7 @@ export function DirectMessagesPanel({
                           {message.editedAt ? <span> · 已編輯</span> : null}
                           {message.delivery === "sending" ? <span> · 傳送中</span> : null}
                           {message.delivery === "sent" && own ? (
-                            <span className={read ? "font-bold text-emerald-300" : undefined} title={read ? `對方已於 ${new Date(readByOtherAt).toLocaleString("zh-TW")} 閱讀` : "訊息已送出，等待對方閱讀"}>
+                            <span className={read ? "font-bold text-emerald-300" : undefined} title={isSelfChat ? "已儲存到自己的對話" : read ? `對方已於 ${new Date(readByOtherAt).toLocaleString("zh-TW")} 閱讀` : "訊息已送出，等待對方閱讀"}>
                               {" · "}{read ? "對方已讀" : "已送出"}
                             </span>
                           ) : null}
@@ -1263,7 +1279,7 @@ export function DirectMessagesPanel({
   const searchedThreads = threads.filter((thread) => {
     if (!normalizedSearch) return true;
     return [
-      thread.otherDisplayName,
+      thread.otherUserId === user?.userId ? "傳給自己" : thread.otherDisplayName,
       thread.otherUsername,
       getDirectMessageDisplayPreview(thread.lastMessageBody, ""),
       threadDrafts[thread.threadId],
@@ -1326,6 +1342,44 @@ export function DirectMessagesPanel({
         </div>
       </div>
       <ScrollArea className="min-h-0 flex-1 px-3 py-2.5">
+        {user ? (
+          <Button
+            type="button"
+            variant="outline"
+            aria-label="傳給自己"
+            aria-busy={startingSelfChat}
+            disabled={startingSelfChat}
+            onClick={async () => {
+              const existing = threads.find((thread) => thread.otherUserId === user.userId);
+              if (existing) {
+                setSelectedThreadId(existing.threadId);
+                return;
+              }
+              setStartingSelfChat(true);
+              try {
+                const threadId = await startDirectChat(user.userId);
+                if (threadId) setSelectedThreadId(threadId);
+              } finally {
+                setStartingSelfChat(false);
+              }
+            }}
+            className="mb-3 flex h-auto min-h-11 w-full justify-start gap-2.5 rounded-xl border-cyan-300/30 bg-cyan-400/10 px-3 py-2 text-left text-cyan-50 hover:border-cyan-300/50 hover:bg-cyan-400/20 hover:text-white"
+          >
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-cyan-300/15 text-cyan-200">
+              {startingSelfChat ? <LoaderCircle className="size-4 animate-spin" /> : <MessageCircle className="size-4" />}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-bold">傳給自己</span>
+              <span className="block text-[11px] text-cyan-100/75">{startingSelfChat ? "開啟中…" : "只有你能看到"}</span>
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-cyan-200" aria-hidden="true" />
+          </Button>
+        ) : null}
+        {error ? (
+          <p role="alert" className="mb-3 rounded-xl border border-amber-300/25 bg-amber-300/10 p-3 text-xs text-amber-100">
+            {error}
+          </p>
+        ) : null}
         {availableContacts.length > 0 || contactsLoading || contactsError ? (
           <section className="mb-3">
             <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -1416,11 +1470,7 @@ export function DirectMessagesPanel({
               <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
             </Button>
           </div>
-          {error ? (
-            <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4 text-sm leading-6 text-amber-100">
-              {error}
-            </div>
-          ) : threads.length === 0 ? (
+          {error ? null : threads.length === 0 ? (
             <div className="flex h-44 flex-col items-center justify-center text-center text-slate-500">
               <MessageCircle className="mb-3 h-9 w-9 opacity-50" />
               <p className="font-semibold text-slate-300">還沒有任何對話</p>
@@ -1444,6 +1494,7 @@ export function DirectMessagesPanel({
                 <ThreadRow
                   key={thread.threadId}
                   thread={thread}
+                  isSelfChat={thread.otherUserId === user?.userId}
                   onlineUser={onlineUserById.get(thread.otherUserId)}
                   pinned={pinnedThreadIds.has(thread.threadId)}
                   draft={threadDrafts[thread.threadId] ?? ""}

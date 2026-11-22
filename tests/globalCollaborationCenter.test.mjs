@@ -213,3 +213,10 @@ test("collaboration directory exposes active accounts without exposing sensitive
   assert.doesNotMatch(migration, /password_hash/i);
   assert.doesNotMatch(migration, /permissions/i);
 });
+
+test("floating chat offers a private self conversation even without a contact list", async () => {
+  const panel = await readSource("src/components/collaboration/DirectMessagesPanel.tsx");
+  assert.match(panel, /傳給自己[\s\S]{0,130}只有你能看到/);
+  assert.match(panel, /startDirectChat\(user\.userId\)/);
+  assert.match(panel, /aria-label="返回對話清單"/);
+});
