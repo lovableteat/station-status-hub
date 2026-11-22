@@ -64,19 +64,19 @@ test("diagram editor preserves its requested Apple palette without changing the 
   assert.notEqual(surrounding.css, css);
 });
 
-test("the 維修中心 palette survives compilation and covers every tab, not only 故障清單", async () => {
+test("all Maintenance Center tabs use the platform surfaces after compilation", async () => {
   const from = new URL("../../src/components/maintenance/maintenancePalette.css", import.meta.url);
   const css = await readFile(from, "utf8");
   const compiled = await postcss([charcoalPalette()]).process(css, { from: from.pathname });
-  assert.match(compiled.css, /--mf-panel: #1b2936/);
-  assert.match(compiled.css, /background: #0f171f/);
-  const outside = await postcss([charcoalPalette()]).process(css, { from: "src/index.css" });
-  assert.doesNotMatch(outside.css, /--mf-panel: #1b2936/, "the exemption is by file, not for every stylesheet");
-  // 2026-11-21: the frame was scoped to the 故障清單 tab, so the other three tabs were charcoal.
+  assert.equal(compiled.css, css);
+  assert.match(compiled.css, /--mf-panel: hsl\(var\(--card\)\)/);
+  assert.match(compiled.css, /background-color: hsl\(var\(--background\)\)/);
+  assert.match(compiled.css, /--mf-teal: hsl\(var\(--primary\)\)/);
+  assert.match(compiled.css, /--sidebar-accent-foreground: var\(--primary\)/);
   assert.doesNotMatch(css.replace(/\/\*[^]*?\*\//g, ""), /data-module=|data-mobile-maintenance-module=/, "no rule may depend on which tab is open");
   const index = await readFile(new URL("../../src/pages/Index.tsx", import.meta.url), "utf8");
   assert.match(index, /import "@\/components\/maintenance\/maintenancePalette\.css";/, "loaded with the shell, whatever tab opens first");
-  // 工具與資產 uses fixed navy utilities; every one it uses must be mapped, or it shows as charcoal in the slate frame.
+  // Legacy tools and their portalled dialogs still use arbitrary color utilities.
   const tools = (await Promise.all(["ToolsManagement", "CodeStorageManager", "CommandLibrary", "FileUploadDialog"]
     .map((name) => readFile(new URL(`../../src/components/tools/${name}.tsx`, import.meta.url), "utf8")))).join("\n");
   const navy = [...new Set(tools.match(/(?:hover:)?(?:bg|border)-\[#(?:0[0-9a-f]|1[0-2]|2[0-9a-f]|3[0-9a-f])[0-9a-f]{4}\](?!\/)/gi) ?? [])]
@@ -92,14 +92,17 @@ test("the 維修中心 palette survives compilation and covers every tab, not on
   assert.doesNotMatch(fault, /--mf-panel:|\.maintenance-shell:has/, "the fault tab no longer has a palette of its own");
 });
 
-test("maintenance fault colors survive compilation within their own stylesheet", async () => {
-  const from = new URL("../../src/components/maintenance/maintenanceFaultLayout.css", import.meta.url);
-  const css = await readFile(from, "utf8");
-  const compiled = await postcss([charcoalPalette()]).process(css, { from: from.pathname });
-  assert.match(compiled.css, /background: #264c4d/);
-  assert.match(compiled.css, /linear-gradient\(100deg, #233c46/);
-  const outside = await postcss([charcoalPalette()]).process(css, { from: "src/index.css" });
-  assert.doesNotMatch(outside.css, /background: #264c4d/);
+test("maintenance faults and statistics use shared surfaces with distinct status colors", async () => {
+  const fault = new URL("../../src/components/maintenance/maintenanceFaultLayout.css", import.meta.url);
+  const stats = new URL("../../src/components/maintenance/maintenanceOverviewLayout.css", import.meta.url);
+  const [faultCss, statsCss] = await Promise.all([fault, stats].map(async (from) =>
+    (await postcss([charcoalPalette()]).process(await readFile(from, "utf8"), { from: from.pathname })).css
+  ));
+  assert.match(faultCss, /\.mf-page-head\s*\{[^}]*background: var\(--mf-panel\)/);
+  assert.match(faultCss, /\.mf-list-heading\s*\{[^}]*background: var\(--mf-input\)/);
+  assert.match(faultCss, /\.mf-fault-unresolved\[data-open="true"\]\s*\{ color: hsl\(var\(--danger\)\)/);
+  assert.match(statsCss, /\[data-tone="open"\] strong\s*\{ color: hsl\(var\(--danger\)\)/);
+  assert.match(statsCss, /\[data-tone="closed"\] strong\s*\{ color: var\(--mf-teal\)/);
 });
 
 test("solid action and destructive fills keep readable text across hover states", async () => {

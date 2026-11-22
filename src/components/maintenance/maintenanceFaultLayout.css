@@ -10,7 +10,7 @@
   padding: 14px 16px;
   border: 1px solid var(--mf-line);
   border-radius: 12px;
-  background: linear-gradient(100deg, #233c46, var(--mf-panel) 66%);
+  background: var(--mf-panel);
 }
 
 .maintenance-fault-center .mf-heading-group {
@@ -28,9 +28,9 @@
   place-items: center;
   width: 44px;
   height: 44px;
-  border: 1px solid #42746e;
+  border: 1px solid color-mix(in srgb, var(--mf-teal) 34%, var(--mf-line));
   border-radius: 10px;
-  background: #264c4d;
+  background: color-mix(in srgb, var(--mf-teal) 12%, var(--mf-panel));
   color: var(--mf-teal);
 }
 
@@ -58,19 +58,18 @@
   white-space: nowrap;
 }
 
-.maintenance-fault-center .mf-fault-unresolved[data-open="true"] { color: var(--mf-amber); }
+.maintenance-fault-center .mf-fault-unresolved[data-open="true"] { color: hsl(var(--danger)); }
 
 .maintenance-fault-center .mf-report-trigger {
   flex: none;
   min-height: 44px;
   padding-inline: 16px;
   background: var(--mf-teal);
-  color: #102a29;
+  color: hsl(var(--primary-foreground));
   font-size: 14px;
-  box-shadow: 0 2px 8px #0b252759;
 }
 
-.maintenance-fault-center .mf-report-trigger:hover { background: #a1ecdd; }
+.maintenance-fault-center .mf-report-trigger:hover { background: color-mix(in srgb, var(--mf-teal) 86%, white); }
 
 .maintenance-fault-center .mf-layout {
   --mf-list-columns: minmax(0, 1fr) 76px minmax(74px, 18%) 38px;
@@ -154,7 +153,7 @@
   grid-template-columns: var(--mf-list-columns);
   padding-inline: var(--mf-list-gutter);
 }
-.maintenance-fault-center .mf-list-heading { overflow-y: hidden; scrollbar-gutter: stable; background: #223340; color: var(--mf-text); font-size: 12px; font-weight: 600; }
+.maintenance-fault-center .mf-list-heading { overflow-y: hidden; scrollbar-gutter: stable; background: var(--mf-input); color: var(--mf-text); font-size: 12px; font-weight: 600; }
 .maintenance-fault-center .mf-list-heading small { color: var(--mf-muted); font-weight: 400; }
 .maintenance-fault-center .mf-result-list {
   flex: 1;
@@ -169,7 +168,7 @@
   min-height: 88px;
   margin: 0;
   padding-block: 5px;
-  border-color: #2d4152;
+  border-color: var(--mf-line);
 }
 .maintenance-fault-center .mf-fault-row[data-active="true"] {
   background: color-mix(in srgb, var(--mf-teal) 10%, var(--mf-bg));
@@ -184,7 +183,7 @@
 .maintenance-fault-center .mf-row-open:focus-visible { outline-offset: 2px; border-radius: 4px; }
 .maintenance-fault-center .mf-row-open > strong {
   align-self: center;
-  color: #b6d0e2;
+  color: var(--mf-muted);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -234,7 +233,7 @@
 
 .maintenance-fault-center .mf-detail-placeholder {
   padding: 24px;
-  background: radial-gradient(ellipse at 50% 28%, #28434e, var(--mf-panel) 74%);
+  background: var(--mf-panel);
 }
 .maintenance-fault-center .mf-detail-invitation {
   display: grid;
@@ -244,17 +243,17 @@
   padding: 26px 18px;
   border: 1px solid var(--mf-line);
   border-radius: 12px;
-  background: #182631;
+  background: var(--mf-bg);
 }
 .maintenance-fault-center .mf-detail-invitation h2 { margin-top: 3px; font-size: 19px; }
 .maintenance-fault-center .mf-detail-invitation p { color: var(--mf-muted); font-size: 13px; line-height: 1.65; }
 
 .maintenance-fault-center .mf-composer,
-.maintenance-fault-center .mf-note { background: #20303c; }
+.maintenance-fault-center .mf-note { background: var(--mf-input); }
 .maintenance-fault-center .mf-detail-title h2 { color: var(--mf-text); }
-.maintenance-fault-center .mf-chips > button:not(.mf-clear) { border-color: #42746e; background: #203e43; }
+.maintenance-fault-center .mf-chips > button:not(.mf-clear) { border-color: color-mix(in srgb, var(--mf-teal) 40%, var(--mf-line)); background: color-mix(in srgb, var(--mf-teal) 11%, var(--mf-panel)); }
 
-.maintenance-fault-center .mf-detail-head { padding-inline: var(--mf-detail-gutter); border-radius: 11px 11px 0 0; background: #233643; }
+.maintenance-fault-center .mf-detail-head { padding-inline: var(--mf-detail-gutter); border-radius: 11px 11px 0 0; background: var(--mf-input); }
 .maintenance-fault-center .mf-detail-scroll { padding: 18px var(--mf-detail-gutter); scroll-padding-top: 56px; }
 .maintenance-fault-center .mf-detail-identity { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .maintenance-fault-center .mf-detail-identity .mf-eyebrow { margin: 0; overflow-wrap: anywhere; }

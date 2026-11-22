@@ -1,103 +1,52 @@
-/*
- * 維修中心 palette: one slate palette for all four tabs (故障清單, 問題儀表板, 工具與資產, 舊測試紀錄).
- *
- * 故障清單 got this palette on 2026-11-15 (d9fbc452) with selectors that applied only while that tab was open
- * (.maintenance-shell:has([data-module="issues"])) and in a stylesheet only that tab loads, so the frame turned back to
- * the site's charcoal on the other three tabs (user, 2026-11-21: 「維修中心顏色怎麼不同???」).
- *
- * This file is imported with the shell (src/pages/Index.tsx), so whichever tab opens first has it, and it is exempt
- * from the site's charcoal pass (scripts/postcss-charcoal-palette.mjs), which would turn these colours grey again.
- * Selectors are one class more specific than the rules they replace (maintenanceShell.css, maintenance.css, the token
- * block of src/index.css), so the result does not depend on which stylesheet the browser happens to load last.
- */
-
-.maintenance-shell.maintenance-workspace {
-  background: #0f171f;
-  /* Theme tokens for what inside uses them: 工具與資產, the sidebar, the project bar, buttons and inputs. */
-  --background: 210 35% 9%;
-  --card: 207 31% 14%;
-  --secondary: 206 30% 20%;
-  --muted: 206 30% 20%;
-  --accent: 206 28% 24%;
-  --border: 207 25% 29%;
-  --input: 207 22% 36%;
-  --muted-foreground: 206 25% 75%;
-  --sidebar-background: 207 31% 14%;
-  --sidebar-border: 207 25% 29%;
-  --sidebar-accent: 176 31% 21%;
-  --sidebar-accent-foreground: 168 65% 68%;
-}
-
-/* On a phone the page scrolls as a whole: under a short tab (工具與資產 with no assets) the space down to the dock is
- * the page's main element, which was still charcoal. The header and the dock stay the platform's. */
+/* Use the platform's dark surfaces across all Maintenance Center tabs and their dialogs. */
+.maintenance-shell.maintenance-workspace,
 [data-mobile-workspace-main="true"]:has(> .maintenance-shell) {
-  background: #0f171f;
+  background-color: hsl(var(--background));
 }
 
 .maintenance-shell.maintenance-workspace :is(.maintenance-project-bar, .maintenance-sidebar, [data-mobile-maintenance-nav]) {
-  border-color: #354959;
-  background: #18242e;
+  border-color: hsl(var(--border));
+  background-color: hsl(var(--card));
+}
+
+.maintenance-shell.maintenance-workspace {
+  --sidebar-accent: 171 23% 17%;
+  --sidebar-accent-foreground: var(--primary);
 }
 
 .maintenance-shell.maintenance-workspace [data-maintenance-project-picker] {
-  background: #22323f;
+  background-color: hsl(var(--secondary));
 }
 
-/* The overlays of 工具與資產 open outside the shell (portals): they get the same theme tokens. */
-body .mf-tool-dialog {
-  --background: 210 35% 9%;
-  --card: 207 31% 14%;
-  --secondary: 206 30% 20%;
-  --muted: 206 30% 20%;
-  --accent: 206 28% 24%;
-  --border: 207 25% 29%;
-  --input: 207 22% 36%;
-  --muted-foreground: 206 25% 75%;
-  border-color: #384d5e;
-  /* Shorthand: also clears the navy gradient of the asset preview. */
-  background: #18242e;
-}
-
-/*
- * 工具與資產 (and its dialogs) was written with fixed navy colours (Tailwind bg-[#…] / border-[#…]). The site's charcoal
- * pass turns those into charcoal, which showed as dark grey blocks inside the slate frame (程式碼 / 指令 lists, previews,
- * description boxes). Here they become the palette's surfaces and lines. Cyan and amber accents are left as they are.
- */
-:is(.maintenance-shell, .mf-tool-dialog) :is(.bg-\[\#020913\], .bg-\[\#06111f\], .bg-\[\#091725\], .bg-\[\#091a2a\]) { background-color: #141e28; }
-:is(.maintenance-shell, .mf-tool-dialog) :is(.bg-\[\#071522\], .bg-\[\#081827\], .bg-\[\#091827\], .bg-\[\#082033\]) { background-color: #18242e; }
-:is(.maintenance-shell, .mf-tool-dialog) .bg-\[\#0b1b2d\] { background-color: #1b2936; }
-:is(.maintenance-shell, .mf-tool-dialog) :is(.bg-\[\#10263a\], .bg-\[\#123149\]) { background-color: #22323f; }
-:is(.maintenance-shell, .mf-tool-dialog) :is(.hover\:bg-\[\#0b1f31\], .hover\:bg-\[\#10263a\]):hover { background-color: #22323f; }
-:is(.maintenance-shell, .mf-tool-dialog) .from-\[\#0b3b55\] { background-image: linear-gradient(to right, #233c46, #22323f); }
-:is(.maintenance-shell, .mf-tool-dialog) :is(.border-\[\#2a526f\], .border-\[\#274a64\], .border-\[\#315975\], .border-\[\#315d79\], .border-\[\#3a6884\]) { border-color: #384d5e; }
-:is(.maintenance-shell, .mf-tool-dialog) :is(.border-\[\#23445d\], .border-\[\#24465e\]) { border-color: #354959; }
-:is(.maintenance-shell, .mf-tool-dialog) .hover\:border-\[\#2a526f\]:hover { border-color: #4a6375; }
-:is(.maintenance-shell, .mf-tool-dialog) .divide-\[\#24465e\] > :not([hidden]) ~ :not([hidden]) { border-color: #354959; }
-
-/* Scrollbars inside the shell (src/index.css draws them navy, which the charcoal pass turns grey). */
-.maintenance-shell.maintenance-workspace * {
-  scrollbar-color: #384d5e #141e28;
-}
-.maintenance-shell.maintenance-workspace *::-webkit-scrollbar-track {
-  background: #141e28;
-}
-.maintenance-shell.maintenance-workspace *::-webkit-scrollbar-thumb {
-  border-color: #141e28;
-  background: #384d5e;
-}
-
-/* The tabs' own tokens (maintenance.css defines the charcoal ones). Dialogs open outside the shell. */
-.maintenance-shell .maintenance-center,
-body .mf-report-dialog,
-body .mf-action-dialog {
-  --mf-bg: #141e28;
-  --mf-panel: #1b2936;
-  --mf-input-tone: 206 30% 20%;
+body :is(.mf-report-dialog, .mf-action-dialog, .mf-tool-dialog),
+.maintenance-shell,
+.maintenance-shell .maintenance-center {
+  --mf-bg: hsl(var(--background));
+  --mf-panel: hsl(var(--card));
+  --mf-input-tone: var(--secondary);
   --mf-input: hsl(var(--mf-input-tone));
-  --mf-line: #384d5e;
-  --mf-control-line: #627d90;
-  --mf-muted: #adc0cf;
-  --mf-text: #edf5fb;
-  --mf-teal: #75deca;
-  --mf-amber: #ffd091;
+  --mf-line: hsl(var(--border));
+  --mf-control-line: hsl(240 4% 49%);
+  --mf-muted: hsl(var(--muted-foreground));
+  --mf-text: hsl(var(--foreground));
+  --mf-teal: hsl(var(--primary));
+}
+
+body .mf-tool-dialog {
+  border-color: var(--mf-line);
+  background: var(--mf-panel);
+}
+
+/* Map older asset surfaces to the same tokens, including content in portalled dialogs. */
+:is(.maintenance-shell, .mf-tool-dialog) :is(.bg-\[\#020913\], .bg-\[\#06111f\], .bg-\[\#091725\], .bg-\[\#091a2a\]) { background-color: var(--mf-bg); }
+:is(.maintenance-shell, .mf-tool-dialog) :is(.bg-\[\#071522\], .bg-\[\#081827\], .bg-\[\#091827\], .bg-\[\#082033\], .bg-\[\#0b1b2d\]) { background-color: var(--mf-panel); }
+:is(.maintenance-shell, .mf-tool-dialog) :is(.bg-\[\#10263a\], .bg-\[\#123149\]) { background-color: var(--mf-input); }
+:is(.maintenance-shell, .mf-tool-dialog) :is(.hover\:bg-\[\#0b1f31\], .hover\:bg-\[\#10263a\]):hover { background-color: var(--mf-input); }
+:is(.maintenance-shell, .mf-tool-dialog) .from-\[\#0b3b55\] { background: var(--mf-input); }
+:is(.maintenance-shell, .mf-tool-dialog) :is(.border-\[\#2a526f\], .border-\[\#274a64\], .border-\[\#315975\], .border-\[\#315d79\], .border-\[\#3a6884\], .border-\[\#23445d\], .border-\[\#24465e\]) { border-color: var(--mf-line); }
+:is(.maintenance-shell, .mf-tool-dialog) .hover\:border-\[\#2a526f\]:hover { border-color: var(--mf-control-line); }
+:is(.maintenance-shell, .mf-tool-dialog) .divide-\[\#24465e\] > :not([hidden]) ~ :not([hidden]) { border-color: var(--mf-line); }
+
+.maintenance-shell.maintenance-workspace * {
+  scrollbar-color: var(--mf-control-line) var(--mf-bg);
 }

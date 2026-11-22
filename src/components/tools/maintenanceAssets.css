@@ -71,6 +71,7 @@
   height: 40px;
   border-radius: 8px;
   padding-left: 36px;
+  border-color: var(--mf-control-line, hsl(var(--input)));
   background: hsl(var(--secondary));
 }
 .ma-asset-filter .mobile-filter-bar__input { padding-right: 12px; }
@@ -81,6 +82,7 @@
   min-width: 130px;
   height: 40px;
   border-radius: 8px;
+  border-color: var(--mf-control-line, hsl(var(--input)));
   background: hsl(var(--secondary));
   box-shadow: none;
 }
