@@ -28,6 +28,25 @@ export interface CircuitLocalPageDiff {
   regions: CircuitGraphicRegion[];
   /** The two pages have different proportions (another sheet size), so the drawings were not laid over each other. */
   sizeChanged: boolean;
+  /**
+   * The same circuit drawn differently (2026-11-24, 公版 vs one's own drawing: 「600多項不同每頁都這樣子」): "layout" when
+   * most strings sit somewhere else (redrawn, another layout), "style" when the strings stay but most lines differ (another
+   * line width, colour or PDF printer). Such pages are compared by content: which Ref Des and net names each side has.
+   */
+  redrawn?: "layout" | "style";
+  /** Ref Des, net names and other words one side has more often than the other (filled for redrawn pages). */
+  contentChanges?: CircuitContentChange[];
+  /** Page numbers compared, for looking up a Ref Des or net that moved to another sheet. */
+  pages?: { base: number; work: number };
+  /** The Ref Des and net names of each side, for the same look-up across sheets. */
+  contents?: { base: string[]; work: string[] };
+}
+export type CircuitContentType = "refdes" | "net" | "other";
+/** One word one side has more often than the other; `item` is where it is on the side that has it. */
+export interface CircuitContentChange {
+  side: "base" | "work"; token: string; type: CircuitContentType; count: number; item?: CircuitDiffText;
+  /** Every occurrence the other side lacks is in the frame (title block, border): not part of the circuit. */
+  frame?: boolean;
 }
 
 const SAME = 0.004;      // the same string within 0.4 % of the page is the same text
@@ -59,8 +78,11 @@ function commonShift(before: readonly CircuitDiffText[], after: readonly Circuit
   return agree >= dx.length * 0.6 ? { dx: mx, dy: my } : { dx: 0, dy: 0 };
 }
 
-/** Matches the strings of two pages: the same string at the same place is unchanged; the rest is changed, removed, added or moved. */
-export function diffCircuitPageTexts(beforeItems: readonly CircuitDiffText[], afterItems: readonly CircuitDiffText[]): { changes: CircuitTextChange[]; shift: { dx: number; dy: number } } {
+/**
+ * Matches the strings of two pages: the same string at the same place is unchanged; the rest is changed, removed, added or
+ * moved. `unchanged` / `totals` say how much of the page stayed in place (low on a redrawn sheet).
+ */
+export function diffCircuitPageTexts(beforeItems: readonly CircuitDiffText[], afterItems: readonly CircuitDiffText[]): { changes: CircuitTextChange[]; shift: { dx: number; dy: number }; unchanged: number; totals: { before: number; after: number } } {
   const clean = (items: readonly CircuitDiffText[]) => items.map(item => ({ ...item, str: collapse(item.str) })).filter(item => item.str);
   const before = clean(beforeItems), after = clean(afterItems);
   const shift = commonShift(before, after);
@@ -101,7 +123,101 @@ export function diffCircuitPageTexts(beforeItems: readonly CircuitDiffText[], af
   added.forEach((item, index) => { if (!usedAdded.has(index)) changes.push({ kind: "added", after: item }); });
   const where = (change: CircuitTextChange) => center((change.after ?? change.before)!);
   changes.sort((left, right) => { const l = where(left), r = where(right); return Math.abs(l.y - r.y) > 0.01 ? l.y - r.y : l.x - r.x; });
-  return { changes, shift };
+  const unchanged = after.length - changes.filter(change => change.after).length;
+  return { changes, shift, unchanged, totals: { before: before.length, after: after.length } };
+}
+
+/** Fewer strings than this and a page is too sparse to tell a redraw from an edit by its text. */
+const REDRAW_MIN_STRINGS = 20;
+/** Under this share of strings still in place, the sheet was redrawn (or laid out again). */
+const REDRAW_LAYOUT_SHARE = 0.5;
+/** Over this share of ink differing, the lines themselves are drawn differently (width, colour, PDF printer). */
+export const REDRAW_STYLE_SHARE = 0.3;
+/**
+ * A redrawn sheet: most of its strings sit somewhere else. Strings matched by place, so a redraw makes almost every one
+ * "moved" and every line "changed", which says nothing about the circuit (2026-11-24: 600+ differences on every page).
+ */
+export function isCircuitLayoutRedrawn(result: { unchanged: number; totals: { before: number; after: number } }) {
+  const fewer = Math.min(result.totals.before, result.totals.after);
+  return fewer >= REDRAW_MIN_STRINGS && result.unchanged / fewer < REDRAW_LAYOUT_SHARE;
+}
+
+const REFDES = /^[A-Z]{1,4}\d{1,5}[A-Z]?$/;
+const NET = /_|^[+-]?\d+(?:\.\d+)?V\d*$|^P\d+V\d*|^V(?:CC|DD|SS|IN|OUT)|^GND|^\+/;
+/** What a word on a sheet is: a reference designator (location), a net name, or another word (value, pin name, note). */
+export function circuitTokenType(token: string): CircuitContentType | null {
+  const word = token.trim().toUpperCase();
+  if (word.length < 2 || !/[A-Z]/.test(word) || /^\d+(?:\.\d+)?$/.test(word)) return null;
+  if (REFDES.test(word)) return "refdes";
+  return NET.test(word) ? "net" : "other";
+}
+
+/**
+ * The words of a page, each marked when it sits in the frame (title block, border). Frame words still count, so a word
+ * drawn just inside the frame on one sheet and just outside it on the other is not a difference.
+ */
+function pageTokens(items: readonly CircuitDiffText[]) {
+  const tokens: Array<{ token: string; type: CircuitContentType; item: CircuitDiffText; frame: boolean }> = [];
+  for (const item of items) {
+    const frame = inFrame(center(item));
+    for (const word of collapse(item.str).split(" ")) {
+      const type = circuitTokenType(word);
+      if (type) tokens.push({ token: word.toUpperCase(), type, item, frame });
+    }
+  }
+  return tokens;
+}
+
+/**
+ * Compares two sheets by what is on them, not where: every Ref Des, net name and other word one side has more often than
+ * the other. On a redrawn sheet this is what can be trusted: a missing part or a renamed net, wherever it was drawn.
+ */
+export function diffCircuitPageContents(beforeItems: readonly CircuitDiffText[], afterItems: readonly CircuitDiffText[]) {
+  const before = pageTokens(beforeItems), after = pageTokens(afterItems);
+  const tally = (tokens: typeof before) => { const map = new Map<string, typeof before>(); for (const entry of tokens) map.set(entry.token, [...(map.get(entry.token) ?? []), entry]); return map; };
+  const b = tally(before), a = tally(after);
+  const changes: CircuitContentChange[] = [];
+  for (const token of new Set([...b.keys(), ...a.keys()])) {
+    const olds = b.get(token) ?? [], news = a.get(token) ?? [];
+    if (olds.length === news.length) continue;
+    const more = olds.length > news.length ? olds : news, fewer = olds.length > news.length ? news : olds;
+    // The occurrences the other side lacks: those in the drawing first, so a frame copy never hides a real one.
+    const extra = [...more].sort((left, right) => Number(left.frame) - Number(right.frame)).slice(0, more.length - fewer.length);
+    const inDrawing = extra.find(entry => !entry.frame);
+    changes.push({ side: olds.length > news.length ? "base" : "work", token, type: more[0].type, count: extra.length, item: (inDrawing ?? extra[0]).item, ...(inDrawing ? {} : { frame: true }) });
+  }
+  const rank = { refdes: 0, net: 1, other: 2 };
+  changes.sort((left, right) => rank[left.type] - rank[right.type] || left.token.localeCompare(right.token));
+  const named = (tokens: typeof before) => [...new Set(tokens.filter(entry => entry.type !== "other" && !entry.frame).map(entry => entry.token))];
+  return { changes, contents: { base: named(before), work: named(after) } };
+}
+
+/** Which sheets of each PDF hold every Ref Des and net name, from the pages a batch compared. */
+export interface CircuitContentIndex { base: ReadonlyMap<string, number[]>; work: ReadonlyMap<string, number[]> }
+export function indexCircuitPageContents(diffs: readonly CircuitLocalPageDiff[]): CircuitContentIndex {
+  const base = new Map<string, number[]>(), work = new Map<string, number[]>();
+  for (const diff of diffs) {
+    if (!diff.contents || !diff.pages) continue;
+    for (const token of diff.contents.base) base.set(token, [...(base.get(token) ?? []), diff.pages.base]);
+    for (const token of diff.contents.work) work.set(token, [...(work.get(token) ?? []), diff.pages.work]);
+  }
+  return { base, work };
+}
+
+/** Share of the ink of two drawings that differs (lines moved by a rounding step tolerated). */
+export function circuitInkDifferenceShare(base: Uint8Array, work: Uint8Array, width: number, height: number, shift: { dx: number; dy: number } = { dx: 0, dy: 0 }) {
+  if (base.length !== width * height || work.length !== width * height || !width || !height) return 0;
+  const at = (x: number, y: number) => { const sx = x - shift.dx, sy = y - shift.dy; return sx >= 0 && sx < width && sy >= 0 && sy < height ? base[sy * width + sx] : 0; };
+  const near = (mask: (x: number, y: number) => number, x: number, y: number) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (mask(x + dx, y + dy)) return true; return false; };
+  const workAt = (x: number, y: number) => x >= 0 && x < width && y >= 0 && y < height ? work[y * width + x] : 0;
+  let ink = 0, differs = 0;
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const b = at(x, y), w = work[y * width + x];
+    if (!b && !w) continue;
+    ink++;
+    if (b && !w ? !near(workAt, x, y) : w && !b ? !near(at, x, y) : false) differs++;
+  }
+  return ink ? differs / ink : 0;
 }
 
 /** Grows ink by one pixel in every direction, so lines that only moved by a rounding step do not count as changed. */
@@ -255,8 +371,67 @@ const clip = (value: string, max = 180) => value.length > max ? `${value.slice(0
 const textBox = (item: CircuitDiffText | undefined) => item ? pad({ x: item.x, y: item.y, width: Math.max(item.width, 0.006), height: Math.max(item.height, 0.006) }, 0.004) : null;
 const COMMON_NOTE = "很多頁同一個圖框位置都有這個變更（通常是標題欄的日期、版次或頁數），確認一次即可。";
 
-/** The differences of one page as findings a person can check, most telling first; at most `limit`. */
-export function summarizeCircuitLocalDiff(diff: CircuitLocalPageDiff, common?: CircuitCommonChanges | null, limit = 40): CircuitLocalSummary {
+const TYPE_WORDS: Record<CircuitContentType, string> = { refdes: "零件位號", net: "網路名稱", other: "其他文字" };
+/**
+ * A redrawn sheet as findings: the Ref Des and net names only one side has, each named, with where it is on that side.
+ * One the other PDF has on another sheet moved sheet (listed, not this sheet's difference). Other words (values, pin
+ * names, notes, which a redraw changes freely) are one line with examples, so they never bury the parts and nets.
+ */
+function summarizeRedrawn(diff: CircuitLocalPageDiff, limit: number, cross?: CircuitContentIndex | null): CircuitLocalSummary {
+  const counts = { changed: 0, removed: 0, added: 0, moved: 0, graphic: 0 };
+  const findings: Array<CircuitLocalFinding & { rank: number; own: boolean }> = [];
+  const others: CircuitContentChange[] = [], frames: CircuitContentChange[] = [];
+  for (const change of diff.contentChanges ?? []) {
+    if (change.frame) { frames.push(change); continue; }
+    if (change.type === "other") { others.push(change); continue; }
+    const words = TYPE_WORDS[change.type], here = change.side === "base" ? "基準版" : "比對版", there = change.side === "base" ? "比對版" : "基準版";
+    const otherPages = (change.side === "base" ? cross?.work : cross?.base)?.get(change.token)?.filter(page => page !== (change.side === "base" ? diff.pages?.work : diff.pages?.base)) ?? [];
+    const times = change.count > 1 ? `（多 ${change.count} 個）` : "";
+    const box = textBox(change.item), place = change.item ? describeCircuitDiffPlace(change.item) : "這一頁";
+    const category: CircuitDiffCategory = change.type === "refdes" ? "label-name" : "net-name";
+    if (otherPages.length) {
+      findings.push({ rank: 6, own: false, category, priority: "low", certainty: "suspected", title: clip(`${words}換頁：${change.token} 在${there}第 ${otherPages.slice(0, 3).join("、")} 頁`, 280), location: place,
+        officialEvidence: change.side === "base" ? `${change.token}（${place}）` : `基準版在第 ${otherPages.slice(0, 3).join("、")} 頁`, workingEvidence: change.side === "work" ? `${change.token}（${place}）` : `比對版在第 ${otherPages.slice(0, 3).join("、")} 頁`,
+        suggestion: `${there}把 ${change.token} 畫在另一頁，不算少了；確認那一頁的接法相同即可。`, officialBox: change.side === "base" ? box : null, workingBox: change.side === "work" ? box : null });
+      continue;
+    }
+    if (change.side === "base") counts.removed += change.count; else counts.added += change.count;
+    findings.push({ rank: change.type === "refdes" ? 0 : 1, own: true, category, priority: change.type === "refdes" ? "high" : "medium", certainty: "suspected",
+      title: clip(`${words}只在${here}：${change.token}${times}`, 280), location: place,
+      officialEvidence: change.side === "base" ? `${change.token}（${place}）` : `基準版${cross ? "整份" : "這一頁"}沒有 ${change.token}`,
+      workingEvidence: change.side === "work" ? `${change.token}（${place}）` : `比對版${cross ? "整份" : "這一頁"}沒有 ${change.token}`,
+      suggestion: change.side === "base"
+        ? (change.type === "refdes" ? `基準版有 ${change.token}，比對版沒有：確認是刻意拿掉，還是漏畫或位號寫錯。` : `基準版有網路 ${change.token}，比對版沒有：確認是改名、合併，還是漏接。`)
+        : (change.type === "refdes" ? `比對版多了 ${change.token}：確認是新增的零件，還是位號寫錯。` : `比對版多了網路 ${change.token}：確認是新增或改名，接到的腳位正確。`),
+      officialBox: change.side === "base" ? box : null, workingBox: change.side === "work" ? box : null });
+  }
+  if (others.length) {
+    const sample = others.slice(0, 8).map(change => `${change.token}（${change.side === "base" ? "基準版" : "比對版"}多 ${change.count}）`).join("、");
+    findings.push({ rank: 7, own: false, category: "label-name", priority: "low", certainty: "unclear", title: clip(`其他文字不同 ${others.length} 個（數值、接腳名稱或註解）`, 280), location: "整頁",
+      officialEvidence: clip(others.filter(change => change.side === "base").map(change => change.token).join("、") || "—", 1900),
+      workingEvidence: clip(others.filter(change => change.side === "work").map(change => change.token).join("、") || "—", 1900),
+      suggestion: `重畫的圖常改寫數值、接腳名稱或註解，例如：${sample}。需要時再逐一核對。`, officialBox: null, workingBox: null });
+  }
+  if (frames.length) {
+    // The frame of a redrawn sheet (title block, company, drawer, date) differs by nature: one line, listed, never hidden.
+    findings.push({ rank: 8, own: false, category: "label-name", priority: "low", certainty: "unclear", title: clip(`圖框／標題欄文字不同 ${frames.length} 個`, 280), location: "圖框與標題欄",
+      officialEvidence: clip(frames.filter(change => change.side === "base").map(change => change.token).join("、") || "—", 1900),
+      workingEvidence: clip(frames.filter(change => change.side === "work").map(change => change.token).join("、") || "—", 1900),
+      suggestion: "只出現在圖框或標題欄（日期、版次、繪圖者、公司名稱等），不是電路內容。", officialBox: null, workingBox: null });
+  }
+  findings.sort((left, right) => left.rank - right.rank);
+  const kept = findings.slice(0, limit);
+  return { findings: kept.map(({ rank: _rank, own: _own, ...finding }) => finding), omitted: findings.length - kept.length, common: 0,
+    own: findings.filter(item => item.own).length, counts };
+}
+
+/**
+ * The differences of one page as findings a person can check, most telling first; at most `limit`. A redrawn page is
+ * summarised by content (summarizeRedrawn); `cross` tells which sheets of each PDF hold every Ref Des and net name.
+ */
+export function summarizeCircuitLocalDiff(diff: CircuitLocalPageDiff, common?: CircuitCommonChanges | null, limit = 40, cross?: CircuitContentIndex | null): CircuitLocalSummary {
+  // Both kinds of redraw: places and lines say nothing about the circuit there, names do.
+  if (diff.redrawn && diff.contentChanges) return summarizeRedrawn(diff, limit, cross);
   const counts = { changed: 0, removed: 0, added: 0, moved: 0, graphic: diff.regions.length };
   const order: Record<CircuitTextChangeKind, number> = { changed: 0, removed: 1, added: 2, moved: 4 };
   const findings: Array<CircuitLocalFinding & { rank: number; shared: boolean }> = diff.textChanges.map(change => {

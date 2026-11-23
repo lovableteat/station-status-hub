@@ -122,7 +122,7 @@ export function CircuitPdfPanel({ onUploaded, mode = "review", captureSide = "be
         : state === "diff" ? `基準版第 ${basePage} 頁 · 找到 ${result!.live.length} 處不同，${result!.pending} 處待判讀`
         : state === "confirmed" ? `基準版第 ${basePage} 頁 · ${result!.confirmed} 處差異已確認`
           // A page settled by 本機比對 was never read by an AI; it says so.
-          : `基準版第 ${basePage} 頁 · ${result!.report.source === "local" ? "兩版相同（本機比對）" : "AI 未見差異"}`;
+          : `基準版第 ${basePage} 頁 · ${result!.report.source !== "local" ? "AI 未見差異" : result!.report.local?.redrawn ? "重畫的圖：位號與網路一致（本機比對）" : "兩版相同（本機比對）"}`;
       return { state, words };
     });
     return { cells, title: `已比對 ${compared} / ${active.pages} 頁，${differing} 頁有差異（紅：待判讀，青：已確認，空心：未見差異，橘框：基準版沒有這頁）。拖曳白色標記換頁；點一格直接跳頁，也可以按方向鍵換頁` };

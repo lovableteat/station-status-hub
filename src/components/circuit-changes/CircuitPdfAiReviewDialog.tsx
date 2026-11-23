@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { loadSpecFillModels, type SpecFillModel } from "../material-requests/materialSpecFillService";
 import { buildCircuitLocalReport, CIRCUIT_AI_CATEGORY_LABELS, circuitPdfAiReviewKey, isCircuitReportIdentical, runCircuitPdfAiReview, type CircuitPdfAiFinding, type CircuitPdfAiReviewReport, type CircuitPdfReviewPage } from "./circuitPdfAiReview";
 import { buildCircuitPdfAiBatchPages, CIRCUIT_PDF_AI_BATCH_CONCURRENCY, CircuitPdfAiBatchStop, parseCircuitPdfAiPageSelection, restoreCircuitPdfAiBatchPages, runCircuitPdfAiBatchReview, type CircuitPdfAiBatchPage, type CircuitPdfAiBatchPolicy, type CircuitPdfAiBatchWait } from "./circuitPdfAiBatchReview";
-import { findCircuitCommonChanges, summarizeCircuitLocalDiff, type CircuitCommonChanges, type CircuitLocalPageDiff } from "./circuitPdfLocalDiff";
+import { findCircuitCommonChanges, indexCircuitPageContents, summarizeCircuitLocalDiff, type CircuitCommonChanges, type CircuitContentIndex, type CircuitLocalPageDiff } from "./circuitPdfLocalDiff";
 import { compareCircuitPdfPages } from "./circuitPdfLocalDiffReader";
 import { describeCircuitAiPage, type CircuitAiReportPage } from "./circuitPdfAiReport";
 import { CircuitPdfAiAnnotations } from "./CircuitPdfAiAnnotations";
@@ -116,6 +116,8 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
   const savedChecked = useRef(false);
   const exportRequest = useRef<AbortController | null>(null);
   const commonRef = useRef<CircuitCommonChanges | null>(null);
+  // Which sheets of each PDF hold every Ref Des and net name, from the last batch: a part a redraw put on another sheet is not "missing".
+  const crossRef = useRef<CircuitContentIndex | null>(null);
   const [loadingPage, setLoadingPage] = useState(false);
   const [deadline, setDeadline] = useState<number | null>(null);
   const [retryAt, setRetryAt] = useState<number | null>(null);
@@ -281,17 +283,21 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
       const diffs = [...localRef.current.values()];
       const common = diffs.length >= 4 ? findCircuitCommonChanges(diffs.map(diff => diff.textChanges)) : null;
       commonRef.current = common;
+      const cross = indexCircuitPageContents(diffs);
+      crossRef.current = cross;
       pages = batchRef.current.map(page => {
         if (page.status !== "pending" && page.status !== "failed") return page;
         const diff = localRef.current.get(page.workingPage);
         if (!diff) return aiModel ? { ...page, status: "pending" as const, error: undefined } : { ...page, status: "failed" as const, error: unreadable.get(page.workingPage) ?? "這一頁無法在本機比對，請選擇 AI 服務後再試。" };
-        const summary = summarizeCircuitLocalDiff(diff, common);
+        const summary = summarizeCircuitLocalDiff(diff, common, 40, cross);
         // Settled here: the drawings were laid over each other and the page has no difference of its own (changes that
-        // many sheets share, like the title block date, are listed but need no AI).
-        const settled = summary.own === 0 && summary.omitted === 0 && diff.graphicsComparable;
+        // many sheets share, like the title block date, are listed but need no AI). A redrawn sheet (公版 vs one's own
+        // drawing) is always settled here: its parts and nets were compared by name, and an AI reading the picture would
+        // only add the drawing-style differences back (2026-11-24: 「600多項不同每頁都這樣子」).
+        const settled = Boolean(diff.redrawn && diff.contentChanges) || (summary.own === 0 && summary.omitted === 0 && diff.graphicsComparable);
         // Only pages that really differ are worth an AI explanation; the rest are finished here.
         if (aiModel && !settled) return { ...page, status: "pending" as const, error: undefined };
-        return { ...page, status: "unsaved" as const, error: undefined, report: buildCircuitLocalReport({ ...pageSource(page.workingPage, page.officialPage!), userName, diff, common }) };
+        return { ...page, status: "unsaved" as const, error: undefined, report: buildCircuitLocalReport({ ...pageSource(page.workingPage, page.officialPage!), userName, diff, common, cross }) };
       });
       batchRef.current = pages; setBatch(pages);
       setPhase("ai");
@@ -383,10 +389,10 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
       try { diff = await compareCircuitPdfPages({ pdf: official.pdf, page: official.page }, { pdf: working.pdf, page: working.page }, controller.signal); }
       catch (failure) { if (controller.signal.aborted) return; if (!model || !useAi) throw failure instanceof Error ? failure : new Error("這一頁無法在本機比對。"); }
       if (!active.current || current.current !== captured || controller.signal.aborted) return;
-      const summary = diff ? summarizeCircuitLocalDiff(diff, commonRef.current) : null;
-      const settled = Boolean(diff && summary && summary.own === 0 && summary.omitted === 0 && diff.graphicsComparable);
+      const summary = diff ? summarizeCircuitLocalDiff(diff, commonRef.current, 40, crossRef.current) : null;
+      const settled = Boolean(diff && summary && ((diff.redrawn && diff.contentChanges) || (summary.own === 0 && summary.omitted === 0 && diff.graphicsComparable)));
       const report = diff && (settled || !model || !useAi)
-        ? buildCircuitLocalReport({ official, working, userName, diff, common: commonRef.current })
+        ? buildCircuitLocalReport({ official, working, userName, diff, common: commonRef.current, cross: crossRef.current })
         : await runCircuitPdfAiReview({ official, working, model: model!, userName, signal: controller.signal, local: diff ? { diff, common: commonRef.current } : undefined,
           onRequestStart: timeoutMs => { if (request.current === controller && !controller.signal.aborted) setDeadline(performance.now() + timeoutMs); } });
       if (!active.current || current.current !== captured || controller.signal.aborted) return;

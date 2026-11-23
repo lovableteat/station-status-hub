@@ -52,3 +52,14 @@ test("the report counts the pages, lists every difference with its judgement and
   assert.equal(data.findingHeader.length, data.findingRows[0].length);
   assert.equal(data.pageHeader.length, data.pageRows[0].length);
 });
+
+// 2026-11-24: a redrawn sheet counts only the parts and nets one side lacks.
+test("a redrawn sheet is labelled by its parts and nets, not by every word that differs", () => {
+  const redrawn = contentChanges => ({ textComparable: true, graphicsComparable: false, sizeChanged: false, textChanges: [], regions: [], redrawn: "layout", contentChanges, pages: { base: 7, work: 7 }, contents: { base: [], work: [] } });
+  const value = { side: "work", token: "4.7K", type: "other", count: 1, item: item("4.7K", 0.4, 0.4) };
+  const frame = { side: "work", token: "REV", type: "other", count: 1, item: item("REV", 0.9, 0.95), frame: true };
+  const clean = local(7, redrawn([value, frame]));
+  assert.deepEqual(plain(k.describeCircuitAiPage({ workingPage: 7, officialPage: 7, report: clean })), { outcome: "clean", label: "重畫的圖：位號與網路一致", method: "本機比對" });
+  const missing = local(7, redrawn([{ side: "base", token: "R99", type: "refdes", count: 1, item: item("R99", 0.5, 0.5) }, value, frame]));
+  assert.deepEqual(plain(k.describeCircuitAiPage({ workingPage: 7, officialPage: 7, report: missing })), { outcome: "different", label: "重畫的圖：1 個位號／網路不同", method: "本機比對" });
+});

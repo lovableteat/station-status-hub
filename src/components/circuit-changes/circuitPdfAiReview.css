@@ -57,7 +57,9 @@
 .circuit-pdf-ai-batch-pages button:disabled { cursor: default; }
 .circuit-pdf-ai-batch-pages button[data-status="unmatched"] { border-style: dashed; color: hsl(var(--muted-foreground)); }
 .circuit-pdf-ai-batch-pages small { display: block; color: hsl(var(--muted-foreground)); font-size: 11px; }
-.circuit-pdf-ai-batch-pages strong { font-size: 11px; font-weight: 500; color: hsl(var(--muted-foreground)); }
+/* The page numbers never break (「比對 / 版 2」); a long result such as 重畫的圖：… wraps on its own side instead. */
+.circuit-pdf-ai-batch-pages button > span { flex: none; white-space: nowrap; }
+.circuit-pdf-ai-batch-pages strong { min-width: 0; text-align: right; font-size: 11px; font-weight: 500; color: hsl(var(--muted-foreground)); }
 .circuit-pdf-ai-batch-pages [data-status="complete"] strong { color: hsl(var(--primary)); }
 .circuit-pdf-ai-batch-pages [data-status="failed"] strong, .circuit-pdf-ai-batch-pages [data-status="unsaved"] strong { color: hsl(var(--destructive)); }
 .circuit-pdf-ai-batch-pages [data-status="analysing"] strong, .circuit-pdf-ai-batch-pages [data-status="saving"] strong { color: hsl(var(--warning)); }

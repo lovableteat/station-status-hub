@@ -1,7 +1,7 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { SpecFillModel } from "../material-requests/materialSpecFillService";
 import { CIRCUIT_PDF_MAX_PAGES, type CircuitCropRect } from "./circuitPdf";
-import { circuitDiffWindows, describeCircuitDiffPlace, isCircuitPageIdentical, summarizeCircuitLocalDiff, type CircuitCommonChanges, type CircuitLocalPageDiff, type CircuitLocalSummary } from "./circuitPdfLocalDiff";
+import { circuitDiffWindows, describeCircuitDiffPlace, isCircuitPageIdentical, summarizeCircuitLocalDiff, type CircuitCommonChanges, type CircuitContentIndex, type CircuitLocalPageDiff, type CircuitLocalSummary } from "./circuitPdfLocalDiff";
 
 export interface CircuitPdfReviewPage { id: string; name: string; page: number; pdf: PDFDocumentProxy }
 export interface CircuitPdfAiReviewTarget { officialVersionId: string; workingVersionId: string; officialPage: number; workingPage: number }
@@ -17,7 +17,11 @@ export interface CircuitPdfAiFinding {
   decision: "pending" | "confirmed" | "dismissed"; reviewNote: string; reviewedBy: string; reviewedAt: string;
 }
 /** What 本機比對 counted on the page (text matched string by string, drawings laid over each other). */
-export interface CircuitPdfLocalInfo { identical: boolean; changed: number; removed: number; added: number; moved: number; graphic: number; omitted: number; common: number }
+export interface CircuitPdfLocalInfo {
+  identical: boolean; changed: number; removed: number; added: number; moved: number; graphic: number; omitted: number; common: number;
+  /** The page was the same circuit drawn differently and was compared by content (2026-11-24); absent on older reports. */
+  redrawn?: "layout" | "style";
+}
 /** Tokens the provider billed for this page, when it reports them. */
 export interface CircuitPdfAiUsage { input: number; output: number }
 export interface CircuitPdfAiReviewReport extends CircuitPdfAiReviewTarget {
@@ -127,7 +131,8 @@ function parseLocalInfo(value: unknown): CircuitPdfLocalInfo | null {
   const numbers = (["changed", "removed", "added", "moved", "graphic", "omitted", "common"] as const).map(key => count(data[key]));
   if (typeof data.identical !== "boolean" || numbers.some(item => item === null)) return null;
   const [changed, removed, added, moved, graphic, omitted, common] = numbers as number[];
-  return { identical: data.identical, changed, removed, added, moved, graphic, omitted, common };
+  if ("redrawn" in data && data.redrawn !== "layout" && data.redrawn !== "style") return null;
+  return { identical: data.identical, changed, removed, added, moved, graphic, omitted, common, ...(data.redrawn === "layout" || data.redrawn === "style" ? { redrawn: data.redrawn } : {}) };
 }
 function parseUsage(value: unknown): CircuitPdfAiUsage | null {
   const data = object(value), input = count(data.input), output = count(data.output);
@@ -161,10 +166,22 @@ export function normalizeCircuitPdfAiReviewReport(value: unknown): CircuitPdfAiR
 export const isCircuitReportIdentical = (report: CircuitPdfAiReviewReport) => report.source === "local" && report.local?.identical === true;
 
 const localInfo = (diff: CircuitLocalPageDiff, summary: CircuitLocalSummary): CircuitPdfLocalInfo => ({ identical: isCircuitPageIdentical(diff),
-  changed: summary.counts.changed, removed: summary.counts.removed, added: summary.counts.added, moved: summary.counts.moved, graphic: summary.counts.graphic, omitted: summary.omitted, common: summary.common });
+  changed: summary.counts.changed, removed: summary.counts.removed, added: summary.counts.added, moved: summary.counts.moved, graphic: summary.counts.graphic, omitted: summary.omitted, common: summary.common,
+  ...(diff.redrawn ? { redrawn: diff.redrawn } : {}) });
 
 function describeLocal(diff: CircuitLocalPageDiff, summary: CircuitLocalSummary, common?: CircuitCommonChanges | null) {
   const { counts } = summary, total = counts.changed + counts.removed + counts.added + counts.moved + counts.graphic;
+  if (diff.redrawn && diff.contentChanges) {
+    // A redrawn sheet (公版 vs one's own drawing, or another line style): no lines or places compared, only what is on it.
+    const moved = summary.findings.filter(finding => finding.title.includes("換頁：")).length;
+    const head = diff.redrawn === "layout"
+      ? "本機比對：兩版這一頁的畫法與版面不同（重畫的圖），所以不比圖形與文字位置，只比零件位號與網路名稱。"
+      : "本機比對：兩版線條的畫法不同（線寬、顏色或輸出 PDF 的方式），整頁線條都會不一樣，所以不逐點比對圖形，只比零件位號與網路名稱。";
+    const body = summary.own
+      ? `只出現在一邊的有 ${summary.own} 個（基準版多 ${counts.removed}、比對版多 ${counts.added}）。`
+      : "兩版的零件位號與網路名稱都一致。";
+    return `${head}${body}${moved ? `另有 ${moved} 個畫在另一頁，不算少。` : ""}這種頁面不送 AI（AI 看圖判斷接線不可靠）。這不是電氣驗證：同名網路是否接到同一個腳位，請放大核對。`.slice(0, 3900);
+  }
   const example = common?.examples[0] ? `，例如${common.examples[0].slice(0, 80)}` : "";
   const shared = summary.common ? `另有 ${summary.common} 處是很多頁同一個圖框位置都有的變更（通常是標題欄的日期、版次或頁數${example}），列在清單最後。` : "";
   const unlaid = diff.graphicsComparable ? "" : "兩版頁面大小不同，沒有做圖形疊合比對，接線請人工核對。";
@@ -179,6 +196,19 @@ function describeLocal(diff: CircuitLocalPageDiff, summary: CircuitLocalSummary,
 }
 
 function localChecks(diff: CircuitLocalPageDiff, summary: CircuitLocalSummary): CircuitPdfAiCheck[] {
+  if (diff.redrawn && diff.contentChanges) {
+    return CIRCUIT_AI_CATEGORIES.map(category => {
+      if (category === "connectivity") return { category, state: "unverifiable" as const, note: diff.redrawn === "layout" ? "重畫的圖不做圖形比對；請以零件位號與網路名稱是否一致為準，接到哪個腳位請放大核對。" : "兩版線條畫法不同，沒有逐點比對圖形；請以零件位號與網路名稱是否一致為準，接線請放大核對。" };
+      const label = CIRCUIT_AI_CATEGORY_LABELS[category];
+      // Only differences this sheet really has count (a part drawn on another sheet, other words are listed but low).
+      const listed = summary.findings.filter(item => item.category === category), found = listed.filter(item => item.priority !== "low").length;
+      if (found) return { category, state: "possible-issue" as const, note: `${label}有 ${found} 個只出現在一邊，請核對。` };
+      // Listed for reference only (drawn on another sheet, other words, the title block): never "no visible issue" while
+      // something is listed under it, which a stored report may not say.
+      if (listed.length) return { category, state: "unverifiable" as const, note: `兩版的${label}沒有只出現在一邊的；另列 ${listed.length} 項僅供參考（換頁、其他文字或圖框），需要時再核對。` };
+      return { category, state: "no-visible-issue" as const, note: `兩版的${label}一致（只比名稱，不比位置與畫法）。` };
+    });
+  }
   return CIRCUIT_AI_CATEGORIES.map(category => {
     const found = summary.findings.filter(item => item.category === category).length;
     if (category === "connectivity") {
@@ -194,13 +224,15 @@ function localChecks(diff: CircuitLocalPageDiff, summary: CircuitLocalSummary): 
 }
 
 /** The report of a page settled by 本機比對 alone: no AI request, no tokens. */
-export function buildCircuitLocalReport({ official, working, userName, diff, common }: {
+export function buildCircuitLocalReport({ official, working, userName, diff, common, cross }: {
   official: Pick<CircuitPdfReviewPage, "id" | "name" | "page">; working: Pick<CircuitPdfReviewPage, "id" | "name" | "page">; userName: string;
   diff: CircuitLocalPageDiff; common?: CircuitCommonChanges | null;
+  /** Which sheets of each PDF hold every Ref Des and net name (a batch), so a part drawn on another sheet is not "missing". */
+  cross?: CircuitContentIndex | null;
 }): CircuitPdfAiReviewReport {
   const target = { officialVersionId: official.id, workingVersionId: working.id, officialPage: official.page, workingPage: working.page };
   if (!validTarget(target)) throw new Error("請選擇不同的基準版與比對版，以及有效的對應頁碼。");
-  const summary = summarizeCircuitLocalDiff(diff, common);
+  const summary = summarizeCircuitLocalDiff(diff, common, 40, cross);
   const createdAt = new Date().toISOString();
   return storable({ version: 1, id: crypto.randomUUID(), key: circuitPdfAiReviewKey(target), ...target, officialName: official.name, workingName: working.name, createdAt, updatedAt: createdAt,
     generatedBy: userName.trim() || "目前使用者", modelLabel: CIRCUIT_LOCAL_MODEL_LABEL, summary: describeLocal(diff, summary, common), checks: localChecks(diff, summary),

@@ -179,3 +179,72 @@ test("a net renamed to a longer name is one change: it keeps the end it is ancho
   const apart = k.diffCircuitPageTexts([{ str: "TP1", x: 0.10, y: 0.10, width: 0.03, height: 0.02 }], [{ str: "TP9", x: 0.60, y: 0.70, width: 0.03, height: 0.02 }]);
   assert.deepEqual(plain(apart.changes.map(change => change.kind)).sort(), ["added", "removed"]);
 });
+
+// 2026-11-24: 「600多項不同每頁都這樣子」 — 公版 against one's own redrawn sheet was compared place by place and line by line.
+const grid = (names, offset = 0, scale = 1) => names.map((name, index) => item(name, 0.1 + ((index % 8) * 0.1 + offset) * scale, 0.15 + (Math.floor(index / 8) * 0.12 + offset) * scale));
+const sheetNames = Array.from({ length: 24 }, (_, index) => index % 3 === 0 ? `R${index + 1}` : index % 3 === 1 ? `NET_${index}` : `C${index + 1}`);
+
+test("a sheet laid out again is told apart from a sheet nudged by the export or one with a few edits", () => {
+  const k = service();
+  const before = grid(sheetNames);
+  const redrawn = k.diffCircuitPageTexts(before, grid(sheetNames, 0.013, 0.97));
+  assert.equal(redrawn.totals.before, 24); assert.equal(redrawn.totals.after, 24);
+  assert.ok(redrawn.unchanged < 12, "almost every string sits somewhere else");
+  assert.equal(k.isCircuitLayoutRedrawn(redrawn), true);
+  const nudged = k.diffCircuitPageTexts(before, before.map(entry => ({ ...entry, x: entry.x + 0.01, y: entry.y + 0.006 })));
+  assert.equal(nudged.unchanged, 24); assert.equal(k.isCircuitLayoutRedrawn(nudged), false, "the whole sheet moved together is not a redraw");
+  const edited = before.map((entry, index) => index < 5 ? { ...entry, str: `${entry.str}_X` } : entry);
+  assert.equal(k.isCircuitLayoutRedrawn(k.diffCircuitPageTexts(before, edited)), false, "five strings rewritten is an edit");
+  const sparse = grid(sheetNames.slice(0, 10));
+  assert.equal(k.isCircuitLayoutRedrawn(k.diffCircuitPageTexts(sparse, grid(sheetNames.slice(0, 10), 0.013, 0.97))), false, "too few strings to tell");
+});
+
+test("words are parts, nets or other words: values and pin numbers never pass for a part", () => {
+  const k = service();
+  assert.deepEqual(["R12", "C5", "U1A", "CON2", "TP7"].map(k.circuitTokenType), ["refdes", "refdes", "refdes", "refdes", "refdes"]);
+  assert.deepEqual(["USB_DP", "+3V3", "P3V3_AUX", "VCC", "GND", "12V"].map(k.circuitTokenType), ["net", "net", "net", "net", "net", "net"]);
+  assert.deepEqual(["10K", "SDA", "NC"].map(k.circuitTokenType), ["other", "other", "other"]);
+  assert.deepEqual(["1", "0.1", "A", ""].map(k.circuitTokenType), [null, null, null, null]);
+});
+
+test("a redrawn sheet is compared by what is on it: a missing part and a new net are named, wherever they were drawn", () => {
+  const k = service();
+  const before = [...grid(sheetNames), item("R99", 0.5, 0.5), item("10K", 0.52, 0.5)];
+  const after = [...grid(sheetNames, 0.02, 0.95), item("NEW_NET", 0.3, 0.7), item("4.7K", 0.4, 0.4), item("REV B", 0.9, 0.95)];
+  const { changes, contents } = k.diffCircuitPageContents(before, after);
+  const plainChanges = plain(changes.map(change => [change.side, change.type, change.token, change.count, Boolean(change.frame)]));
+  assert.deepEqual(plainChanges, [["base", "refdes", "R99", 1, false], ["work", "net", "NEW_NET", 1, false], ["base", "other", "10K", 1, false], ["work", "other", "4.7K", 1, false], ["work", "other", "REV", 1, true]]);
+  assert.ok(contents.base.includes("R99") && !contents.work.includes("R99"));
+  assert.ok(!contents.work.includes("REV"), "frame words are no part of what a sheet holds");
+
+  const diff = { textComparable: true, graphicsComparable: false, sizeChanged: false, textChanges: [], regions: [], redrawn: "layout", contentChanges: changes, pages: { base: 4, work: 4 }, contents };
+  const summary = k.summarizeCircuitLocalDiff(diff);
+  assert.deepEqual(plain(summary.findings.map(finding => [finding.priority, finding.title])), [
+    ["high", "零件位號只在基準版：R99"], ["medium", "網路名稱只在比對版：NEW_NET"],
+    ["low", "其他文字不同 2 個（數值、接腳名稱或註解）"], ["low", "圖框／標題欄文字不同 1 個"]]);
+  assert.equal(summary.own, 2, "values and the title block are listed but are not this sheet's own differences");
+  assert.deepEqual(plain(summary.counts), { changed: 0, removed: 1, added: 1, moved: 0, graphic: 0 });
+  assert.ok(summary.findings[0].officialBox && !summary.findings[0].workingBox, "the part is boxed where it is, on the side that has it");
+});
+
+test("a part the redraw put on another sheet is listed as drawn there, not as missing", () => {
+  const k = service();
+  const page = (base, work, baseNames, workNames) => ({ textComparable: true, graphicsComparable: false, sizeChanged: false, textChanges: [], regions: [], redrawn: "layout", pages: { base, work }, contents: { base: baseNames, work: workNames } });
+  const cross = k.indexCircuitPageContents([page(4, 4, ["R99", "R1"], ["R1"]), page(5, 6, ["R2"], ["R2", "R99"])]);
+  assert.deepEqual(plain(cross.work.get("R99")), [6]);
+  const { changes, contents } = k.diffCircuitPageContents([...grid(sheetNames), item("R99", 0.5, 0.5)], grid(sheetNames, 0.02, 0.95));
+  const summary = k.summarizeCircuitLocalDiff({ ...page(4, 4, contents.base, contents.work), contentChanges: changes }, null, 40, cross);
+  assert.deepEqual(plain(summary.findings.map(finding => [finding.priority, finding.title])), [["low", "零件位號換頁：R99 在比對版第 6 頁"]]);
+  assert.equal(summary.own, 0); assert.equal(summary.counts.removed, 0);
+});
+
+test("lines drawn another way all over the sheet are measured as such; a single changed wire is not", () => {
+  const k = service(), width = 200, height = 100, draw = sheet(width, height);
+  const lines = Array.from({ length: 8 }, (_, index) => [10, 10 + index * 10, 190, 10 + index * 10]);
+  const base = draw(lines);
+  assert.equal(k.circuitInkDifferenceShare(base, base.slice(), width, height), 0);
+  const restyled = draw(lines.map(([x0, y0, x1, y1]) => [x0, y0 + 4, x1, y1 + 5]));
+  assert.ok(k.circuitInkDifferenceShare(base, restyled, width, height) > k.REDRAW_STYLE_SHARE, "every line elsewhere");
+  const oneWire = draw([...lines, [100, 5, 101, 95]]);
+  assert.ok(k.circuitInkDifferenceShare(base, oneWire, width, height) < k.REDRAW_STYLE_SHARE, "one wire added is a real, small difference");
+});

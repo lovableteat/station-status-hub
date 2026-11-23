@@ -219,3 +219,21 @@ test('a finding the model returned that cannot be kept never leaves a check clea
   assert.ok(merged.summary.length<=4000&&merged.summary===merged.summary.trim());
   assert.deepEqual(JSON.parse(JSON.stringify(service2.normalizeCircuitPdfAiReviewReport(JSON.parse(JSON.stringify(merged))))),JSON.parse(JSON.stringify(merged)));
 });
+
+// 2026-11-24: 「600多項不同每頁都這樣子」 — a redrawn sheet is settled by names, says what it did not compare, and keeps that when stored.
+test('a redrawn sheet is reported by its parts and nets, never claims the wiring was checked, and reopens unchanged',()=>{
+  const k=service();
+  const diff={textComparable:true,graphicsComparable:false,sizeChanged:false,textChanges:[],regions:[],redrawn:'layout',pages:{base:2,work:3},contents:{base:['R99'],work:['NEW_NET']},
+    contentChanges:[{side:'base',token:'R99',type:'refdes',count:1,item:item('R99',.5,.5)},{side:'work',token:'NEW_NET',type:'net',count:1,item:item('NEW_NET',.3,.7)},{side:'work',token:'4.7K',type:'other',count:1,item:item('4.7K',.4,.4)}]};
+  const result=k.buildCircuitLocalReport({official:side('official',2),working:side('working',3),userName:'RD',diff});
+  assert.equal(result.source,'local');assert.equal(result.local.redrawn,'layout');assert.equal(result.local.identical,false);
+  assert.match(result.summary,/重畫的圖/);assert.match(result.summary,/不比圖形與文字位置/);assert.match(result.summary,/不是電氣驗證/);
+  assert.deepEqual(Object.fromEntries(result.checks.map(check=>[check.category,check.state])),{connectivity:'unverifiable','net-name':'possible-issue','label-name':'possible-issue'});
+  assert.deepEqual([...result.findings.map(finding=>finding.title)],['零件位號只在基準版：R99','網路名稱只在比對版：NEW_NET','其他文字不同 1 個（數值、接腳名稱或註解）']);
+  const reopened=k.normalizeCircuitPdfAiReviewReport(JSON.parse(JSON.stringify(result)));
+  assert.deepEqual(JSON.parse(JSON.stringify(reopened)),JSON.parse(JSON.stringify(result)),'the redraw mark survives a save and reopen');
+  assert.equal(k.normalizeCircuitPdfAiReviewReport({...JSON.parse(JSON.stringify(result)),local:{...result.local,redrawn:'guess'}}),null);
+  const style=k.buildCircuitLocalReport({official:side('official',2),working:side('working',3),userName:'RD',diff:{...diff,redrawn:'style',contentChanges:[]}});
+  assert.match(style.summary,/線條的畫法不同/);
+  assert.deepEqual(Object.fromEntries(style.checks.map(check=>[check.category,check.state])),{connectivity:'unverifiable','net-name':'no-visible-issue','label-name':'no-visible-issue'});
+});

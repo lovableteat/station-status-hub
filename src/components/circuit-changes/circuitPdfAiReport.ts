@@ -27,6 +27,15 @@ export function describeCircuitAiPage(page: CircuitAiReportPage): { outcome: Cir
   if (!report) return page.error ? { outcome: "failed", label: "比對失敗", method: "" } : { outcome: "pending", label: "尚未比對", method: "" };
   const method = report.source === "local" ? "本機比對" : report.local ? "本機比對＋AI" : "AI";
   if (isCircuitReportIdentical(report)) return { outcome: "identical", label: "相同", method };
+  if (report.source === "local" && report.local?.redrawn) {
+    // A redrawn sheet counts only the parts and nets one side lacks; other words and the title block are listed, not counted
+    // (2026-11-24: a count of every word that differs read as hundreds of differences on every page).
+    const own = report.findings.filter(finding => finding.priority !== "low").length;
+    const count = own + (own === report.findings.length ? report.local.omitted : 0);
+    return count
+      ? { outcome: "different", label: `重畫的圖：${count} 個位號／網路不同`, method }
+      : { outcome: "clean", label: "重畫的圖：位號與網路一致", method };
+  }
   const count = report.findings.length + (report.local?.omitted ?? 0);
   // Only changes that many sheets share at the same frame spot (the title block): listed, but not this page's own change.
   if (report.source === "local" && report.local && report.local.common > 0 && report.local.common === count) return { outcome: "common", label: `只有多頁共通的變更（${count} 處）`, method };
@@ -75,14 +84,14 @@ export function buildCircuitAiReportData({ officialName, workingName, pages, gen
   const summary: CircuitAiReportData["summary"] = [
     ["基準版", officialName], ["比對版", workingName], ["報告產生時間（台北）", taipei(generatedAt)], ["產生者", generatedBy],
     ["比對範圍", `比對版 ${pages.length} 頁`], ["已比對", `${compared} 頁`],
-    ["相同", `${totals.identical} 頁`], ["只有多頁共通的變更（標題欄等）", `${totals.common} 頁`], ["有差異", `${totals.different} 頁`], ["未見差異（AI 判讀）", `${totals.clean} 頁`],
+    ["相同", `${totals.identical} 頁`], ["只有多頁共通的變更（標題欄等）", `${totals.common} 頁`], ["有差異", `${totals.different} 頁`], ["未見差異（AI 判讀，或重畫的圖位號與網路一致）", `${totals.clean} 頁`],
     ["比對失敗", `${totals.failed} 頁`], ["尚未比對", `${totals.pending} 頁`], ["無對應頁（沒有比對）", `${totals.unmatched} 頁`],
     ["差異總數", `${totals.findings} 處（連接性 ${categories.connectivity}、Net 名稱 ${categories["net-name"]}、元件／接腳名稱 ${categories["label-name"]}）`],
     ["人工判讀", `未判讀 ${decisions.pending}、已確認 ${decisions.confirmed}、不採用 ${decisions.dismissed}`],
     ["比對方式", [...models].join("、") || "尚無結果"],
     ["AI token 用量", totals.inputTokens + totals.outputTokens ? `輸入 ${totals.inputTokens.toLocaleString()}、輸出 ${totals.outputTokens.toLocaleString()}（服務商回報的數字；相同的頁沒有送 AI）` : "沒有使用 AI，或服務商沒有回報用量"],
     ...(note ? [["本次比對提早停止", note] as [string, string]] : []),
-    ["說明", "「本機比對」是在瀏覽器裡把兩版的文字逐一比對、圖形疊合比對，結果是確定的差異，不是 AI 判斷。這份報告只代表畫面上看得到的不同，不是電氣驗證；正式結論仍須人工 Review。"],
+    ["說明", "「本機比對」是在瀏覽器裡把兩版的文字逐一比對、圖形疊合比對，結果是確定的差異，不是 AI 判斷。版面或線條畫法不同的頁（重畫的圖，例如公版對自己畫的圖）只比零件位號與網路名稱，不比位置與圖形。這份報告只代表畫面上看得到的不同，不是電氣驗證；正式結論仍須人工 Review。"],
   ];
   return { title: `線路圖新舊版比對報告：${workingName}`, summary,
     pageHeader: ["比對版頁", "基準版頁", "結果", "方式", "摘要", "連接性", "Net 名稱", "元件／接腳名稱", "差異數", "模型", "比對時間（台北）", "操作者", "失敗原因"], pageRows,

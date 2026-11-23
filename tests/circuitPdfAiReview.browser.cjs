@@ -273,6 +273,49 @@ async function runLocalFirst(browser,origin,width) {
   } finally { await context.close(); }
 }
 
+// 2026-11-24 (「明明不是有問題的東西，他卻一樣標出來…600多項不同每頁都這樣子」): the same circuit drawn again elsewhere on every
+// sheet is compared by its parts and nets, without AI; a part drawn on another sheet is not missing.
+async function runRedrawn(browser,origin,width) {
+  const phone=width<768;
+  const context=await browser.newContext({viewport:{width,height:884},isMobile:phone,hasTouch:phone,reducedMotion:'reduce'});
+  await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+  try {
+    const page=await context.newPage(),errors=[];
+    page.on('pageerror',error=>errors.push(error.message));
+    page.setDefaultTimeout(30000);
+    await page.goto(origin+'/?redrawn');
+    await page.getByRole('button',{name:'開啟本頁 AI 初審',exact:true}).click();
+    const dialog=page.getByTestId('circuit-pdf-ai-review');
+    await dialog.getByRole('combobox',{name:'AI 初審服務',exact:true}).selectOption('qa-vision');
+    const progress=dialog.getByRole('region',{name:'全部頁面比對進度'});
+    const chip=number=>progress.getByRole('button',{name:`查看比對版第 ${number} 頁初審`,exact:true});
+    const press=async locator=>{if(phone)await locator.tap();else await locator.click();};
+    await dialog.getByRole('button',{name:'全部頁面比對',exact:true}).click();
+    await progress.getByText('全部頁面比對已結束',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>window.__circuitAiQA.calls.length),0,'a redrawn sheet is never sent to the AI');
+    assert.deepEqual(await page.evaluate(()=>window.__circuitAiQA.saveRecords.map(row=>[row.workingPage,row.source]).sort()),[[1,'local'],[2,'local'],[3,'local'],[4,'local']]);
+    const labels=[];
+    for(const number of [1,2,3,4]) labels.push([await chip(number).getAttribute('data-outcome'),(await chip(number).locator('strong').innerText()).trim()]);
+    assert.deepEqual(labels,[['clean','重畫的圖：位號與網路一致'],['different','重畫的圖：1 個位號／網路不同'],['clean','重畫的圖：位號與網路一致'],['clean','重畫的圖：位號與網路一致']]);
+    assert.match(await progress.getByRole('status').innerText(),/有差異 1 頁/);
+    await page.screenshot({path:path.join(evidence,`redrawn-${width}.png`)});
+
+    await press(chip(2));
+    await dialog.getByRole('heading',{name:'比對版第 2 頁 · 基準版第 2 頁初審摘要',exact:true}).waitFor();
+    const summary=await dialog.locator('.circuit-pdf-ai-results > header p').innerText();
+    assert.match(summary,/^本機比對：兩版這一頁的畫法與版面不同（重畫的圖）/);assert.match(summary,/不是電氣驗證/);
+    assert.match(await dialog.locator('.circuit-pdf-ai-finding summary').first().innerText(),/F1 · 零件位號只在基準版：R204/);
+    assert.equal(await dialog.locator('.circuit-pdf-ai-finding').count(),1,'one part left out is one item, not a list of every moved word and line');
+    await page.screenshot({path:path.join(evidence,`redrawn-page2-${width}.png`)});
+    await press(chip(3));
+    await dialog.getByRole('heading',{name:'比對版第 3 頁 · 基準版第 3 頁初審摘要',exact:true}).waitFor();
+    assert.match(await dialog.locator('.circuit-pdf-ai-finding summary').first().innerText(),/零件位號換頁：U30 在比對版第 4 頁/);
+    assert.ok(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth+1));
+    assert.deepEqual(errors,[]);
+    return {width,checks:['redrawn sheets settled by parts and nets without AI','a part left out is one located item','a part drawn on another sheet is not missing']};
+  } finally { await context.close(); }
+}
+
 async function runStopLoss(browser,origin) {
   const context=await browser.newContext({viewport:{width:1440,height:884},reducedMotion:'reduce'});
   await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
@@ -319,8 +362,10 @@ const selectedBatch=[];
 for(const width of [1440,390])selectedBatch.push(await runSelectedBatch(browser,origin,width));
 const localFirst=[];
 for(const width of [1440,390])localFirst.push(await runLocalFirst(browser,origin,width));
+const redrawn=[];
+for(const width of [1440,390])redrawn.push(await runRedrawn(browser,origin,width));
 const stopLoss=await runStopLoss(browser,origin);
-fs.writeFileSync(path.join(evidence,'browser-report.json'),JSON.stringify({result:'passed',checks:results,parallelBatch,selectedBatch,localFirst,stopLoss},null,2));console.log(JSON.stringify({checks:results,parallelBatch,selectedBatch,localFirst,stopLoss}));
+fs.writeFileSync(path.join(evidence,'browser-report.json'),JSON.stringify({result:'passed',checks:results,parallelBatch,selectedBatch,localFirst,redrawn,stopLoss},null,2));console.log(JSON.stringify({checks:results,parallelBatch,selectedBatch,localFirst,redrawn,stopLoss}));
 }finally{if(browser)await browser.close();await server.close()}})().catch(error=>{console.error(error);process.exitCode=1});
 
 

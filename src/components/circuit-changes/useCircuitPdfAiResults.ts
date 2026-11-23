@@ -49,7 +49,10 @@ export function useCircuitPdfAiResults({ open, seriesId, baselineId, workingId, 
       if (!officialPage) continue;
       const report = latest.get(circuitPdfAiReviewKey({ officialVersionId: baselineId, workingVersionId: workingId, officialPage, workingPage: page }));
       if (!report) continue;
-      const live = report.findings.filter(item => item.decision !== "dismissed");
+      // A redrawn sheet's reference lines (a part drawn on another sheet, other words, the title block) stay listed in the
+      // review but are not the page's differences: the overview would turn every redrawn sheet red (2026-11-24).
+      const counted = report.source === "local" && report.local?.redrawn ? report.findings.filter(item => item.priority !== "low") : report.findings;
+      const live = counted.filter(item => item.decision !== "dismissed");
       result.set(page, { report, live, pending: live.filter(item => item.decision === "pending").length, confirmed: live.filter(item => item.decision === "confirmed").length });
     }
     return result;
