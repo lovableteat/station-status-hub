@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/audits/2026-10-03-permission-boundary-rollout.md`；程式參考基準：`00c7b1902a1ad3ffee3ae0ad0175383ed070dc5a`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/audits/2026-10-03-permission-boundary-rollout.md`；程式參考基準：`1313326c2249c9ec2f8a1b3dc1389dee9e8bc99a`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Permission Boundary Rollout and Containment
 
