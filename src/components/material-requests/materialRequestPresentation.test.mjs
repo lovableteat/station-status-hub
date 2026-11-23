@@ -206,3 +206,18 @@ test("pending materials are classified by reference prefix with connectors and I
   ]);
   assert.deepEqual(presentation.groupPendingMaterials([{ displayRef: "U9" }]).map((category) => category.key), ["ic"]);
 });
+
+test("待處理料 version note: added here, unchanged since the previous version, or what changed (E1.s V16, 2026-11-23)", async () => {
+  const { describePendingLineHistory } = await import("./materialRequestPresentation.ts");
+  assert.deepEqual(describePendingLineHistory({ added: true, previousLabel: "V15", changes: [] }, "V16").text, "V16 新增");
+  const same = describePendingLineHistory({ added: false, since: "V3", previousLabel: "V15", changes: [] }, "V16");
+  assert.equal(same.kind, "same");
+  assert.equal(same.text, "自 V3 · V15→V16 沒變");
+  const changed = describePendingLineHistory({ added: false, since: "V3", previousLabel: "V15", changes: [
+    { label: "實體料號", before: "071.1", after: "" }, { label: "Ref Des", before: "U1", after: "U1, U2" }, { label: "Qty", before: "1", after: "2" },
+  ] }, "V16");
+  assert.equal(changed.kind, "changed");
+  assert.equal(changed.text, "自 V3 · V15→V16 改 實體料號、Ref Des 等 3 項");
+  assert.match(changed.detail, /實體料號：071\.1 → （空白）/);
+  assert.match(changed.detail, /Qty：1 → 2/);
+});

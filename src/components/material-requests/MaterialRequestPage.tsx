@@ -159,7 +159,7 @@ import type { NvBomChange } from "./nvBomCompare";
 import { BomUploadDialog, NEW_BOM_SERIES_TARGET, type BomUploadMeta, type PendingBomUpload } from "./BomUploadDialog";
 import { checkBomUploadRows } from "./bomUploadChecks";
 import type { BomUploadReview } from "./BomUploadDialog";
-import { carryBomTracking, classifyRetainedApplications, diffBomRecords, fillForwardBomTracking, linkBomVersions, recarryBomTracking } from "./bomDiff";
+import { carryBomTracking, classifyRetainedApplications, describeBomLineHistories, diffBomRecords, fillForwardBomTracking, linkBomVersions, recarryBomTracking, type BomLineHistory } from "./bomDiff";
 import {
   BOM_SERIES_NAME_LIMIT, BOM_VERSION_LABEL_LIMIT, BOM_VERSION_NOTE_LIMIT, bomFileBaseName, buildBomSeriesList, createBomSeriesId,
   bomVersionComparePair, createBomVersionWorkspaceId, findBomSeriesByWorkspace, inferBomSeriesForFile, nextBomVersionNumber, readBomDiffLocation, readBomLocateLocation, writeBomLocateLocation,
@@ -226,6 +226,7 @@ import {
   resizeMaterialColumnWidths,
   shouldApplyBomWorkspaceCache,
   describeRetainedSource,
+  describePendingLineHistory,
   explainRetainedSource,
 } from "./materialRequestPresentation";
 import { useMaterialBomPresence } from "./useMaterialBomPresence";
@@ -1886,6 +1887,8 @@ export function PendingMaterialsDialog({
   markedGroupKeys,
   onToggleMarked,
   marksReady = true,
+  lineHistories,
+  versionLabel,
 }: {
   canEdit: boolean;
   canEditNote?: boolean;
@@ -1894,8 +1897,15 @@ export function PendingMaterialsDialog({
   /** Applications made on earlier versions that this version does not hold; listed read-only at the bottom, one group per version. */
   retainedGroups?: MaterialGroup[];
   onOpenRetained?: (record: MaterialRecord) => void;
-  /** Reading the board's other versions: still loading, the ones that could not be read, and lines 帶入舊版資料 fills. */
-  otherVersions?: { loading: boolean; failed: string[]; onRetry: () => void; recarry: number; recarryFrom?: string; onRecarry?: () => void };
+  /**
+   * Reading the board's other versions: still loading, the ones that could not be read, and rows 帶入舊版資料 fills
+   * (`recarryFields` of them get 料號, Schematic_Part, Footprint… back). `onFill` runs it here; `onRecarry` opens the comparison.
+   */
+  otherVersions?: { loading: boolean; failed: string[]; onRetry: () => void; recarry: number; recarryFields?: number; recarryFrom?: string; onRecarry?: () => void; onFill?: () => void; filling?: boolean };
+  /** Per row of this version: added here, or since which version, and what changed since the previous version. */
+  lineHistories?: ReadonlyMap<string, BomLineHistory>;
+  /** "V16": the version on screen. */
+  versionLabel?: string;
   open: boolean;
   addedRecordId?: string;
   /** Reopened after editing one of its items: keep the tab, search and scroll position. */
@@ -1964,14 +1974,30 @@ export function PendingMaterialsDialog({
       .filter(group => group.records.length > 0);
   }, [applications, groups]);
   const keyword = query.trim().toLowerCase();
+  // The version note of every listed line of this version; searching "V16 新增" or "實體料號" finds them.
+  const lineNotes = useMemo(() => {
+    const notes = new Map<string, ReturnType<typeof describePendingLineHistory>>();
+    if (!lineHistories) return notes;
+    for (const application of currentApplications) {
+      const history = lineHistories.get(application.record.id);
+      if (history) notes.set(application.record.id, describePendingLineHistory(history, versionLabel));
+    }
+    return notes;
+  }, [currentApplications, lineHistories, versionLabel]);
+  const matchesKeyword = (application: (typeof applications)[number]) => {
+    if (!keyword || application.searchText.includes(keyword)) return true;
+    const note = lineNotes.get(application.record.id);
+    return Boolean(note && `${note.text}\n${note.detail}`.toLowerCase().includes(keyword));
+  };
   // One category at a time keeps long BOMs from becoming one endless scroll; the tabs carry the counts.
   const selectedCategory = activeCategory === "marked" || categories.some((category) => category.key === activeCategory) ? activeCategory : "all";
   const visibleCategories = useMemo(() => (
     categories
       .filter((category) => selectedCategory === "all" || selectedCategory === "marked" || category.key === selectedCategory)
-      .map((category) => ({ ...category, groups: category.groups.filter(application => (!keyword || application.searchText.includes(keyword)) && (selectedCategory !== "marked" || markedGroupKeys.has(application.group.key))) }))
+      .map((category) => ({ ...category, groups: category.groups.filter(application => matchesKeyword(application) && (selectedCategory !== "marked" || markedGroupKeys.has(application.group.key))) }))
       .filter((category) => category.groups.length > 0)
-  ), [categories, keyword, markedGroupKeys, selectedCategory]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesKeyword reads keyword and lineNotes
+  ), [categories, keyword, lineNotes, markedGroupKeys, selectedCategory]);
   const listRef = useRef<HTMLDivElement | null>(null);
   const scrollTopRef = useRef(0);
   useEffect(() => {
@@ -2018,7 +2044,8 @@ export function PendingMaterialsDialog({
       : category.key === "completed"
         ? PENDING_MATERIAL_CATEGORIES.find(item => item.key === resolvePendingMaterialCategory(application).category)?.label
         : category.label;
-    return { category: materialCategory ?? category.label, displayRef: application.displayRef, record: toWorkbookRecord(application.record) };
+    const history = retained ? undefined : lineNotes.get(application.record.id);
+    return { category: materialCategory ?? category.label, displayRef: application.displayRef, record: toWorkbookRecord(application.record), version: history ? (history.kind === "changed" ? `${history.text}\n${history.detail.split("\n").slice(1).join("\n")}` : history.text) : "" };
   }));
   const exportVisible = async () => {
     if (exporting || !exportRows.length) return;
@@ -2079,9 +2106,27 @@ export function PendingMaterialsDialog({
             {!otherVersions.loading && otherVersions.failed.length > 0 && (
               <span className="pending-other-versions-line text-destructive">{otherVersions.failed.join("、")} 的資料讀取失敗，最下面的其他版本分組可能不完整。<Button type="button" variant="outline" size="sm" onClick={otherVersions.onRetry} className="h-8 px-3 text-xs">重試</Button></span>
             )}
-            {!otherVersions.loading && otherVersions.recarry > 0 && (
-              <span className="pending-other-versions-line">{otherVersions.recarryFrom ?? "前一版"} 有 {otherVersions.recarry.toLocaleString()} 筆申請在這一版有同一顆料，但沒帶過來。{otherVersions.onRecarry && canEdit ? <Button type="button" size="sm" onClick={otherVersions.onRecarry} title="打開 BOM 版本管理的比對，按「帶入舊版資料」把申請補到這一版的同一顆料" className="h-8 px-3 text-xs">到比對帶入</Button> : <span className="text-muted-foreground">請有編輯權限的同事到 BOM 版本管理的比對按「帶入舊版資料」。</span>}</span>
-            )}
+            {!otherVersions.loading && otherVersions.recarry > 0 && (() => {
+              const from = otherVersions.recarryFrom ?? "前一版";
+              const fields = otherVersions.recarryFields ?? 0;
+              const what = fields > 0 ? `料號、Schematic_Part、Footprint 等欄位${fields < otherVersions.recarry ? "或申請" : ""}` : "申請";
+              return (
+                <span data-testid="pending-recarry-line" className="pending-other-versions-line">
+                  {versionLabel ?? "這一版"} 有 {otherVersions.recarry.toLocaleString()} 顆料的{what}是空的，但 {from} 同一顆料已經填好。
+                  {canEdit && otherVersions.onFill ? (
+                    <Button type="button" size="sm" data-testid="pending-recarry-fill" disabled={otherVersions.filling} aria-busy={otherVersions.filling || undefined} onClick={otherVersions.onFill} title={`把 ${from} 同一顆料的內容補到 ${versionLabel ?? "這一版"} 空白的地方；這一版已經填的不會被蓋掉`} className="h-8 gap-1.5 px-3 text-xs">
+                      {otherVersions.filling ? <Loader2 aria-hidden="true" className="h-3.5 w-3.5 motion-safe:animate-spin" /> : <History aria-hidden="true" className="h-3.5 w-3.5" />}
+                      {otherVersions.filling ? "補回中…" : `從 ${from} 補回 ${otherVersions.recarry.toLocaleString()} 筆`}
+                    </Button>
+                  ) : otherVersions.onRecarry && canEdit ? (
+                    <Button type="button" size="sm" onClick={otherVersions.onRecarry} title="打開 BOM 版本管理的比對，按「帶入舊版資料」補到這一版的同一顆料" className="h-8 px-3 text-xs">到比對帶入</Button>
+                  ) : <span className="text-muted-foreground">請有編輯權限的同事按「從 {from} 補回」。</span>}
+                  {canEdit && otherVersions.onFill && otherVersions.onRecarry && (
+                    <Button type="button" size="sm" variant="ghost" onClick={otherVersions.onRecarry} title={`打開 ${from} → ${versionLabel ?? "這一版"} 的比對，逐筆看哪些沒帶過來`} className="h-8 px-2 text-xs">看差異</Button>
+                  )}
+                </span>
+              );
+            })()}
           </div>
         )}
         <PendingMailDialog groups={mailGroups} open={mailOpen} workspaceName={workspaceName} exportedBy={exportedBy} onOpenChange={setMailOpen} />
@@ -2143,7 +2188,17 @@ export function PendingMaterialsDialog({
                   <Button type="button" variant="ghost" size="icon" data-testid="pending-mark-toggle" disabled={!marksReady || Boolean(retained)} aria-pressed={marked} aria-label={`${marked ? '取消特別標記' : '特別標記'} ${group.displayRef}`} title={retained ? `這筆屬於 ${retained.label}，不能在這一版特別標記` : "個人標記只對目前帳號可見"} onClick={() => onToggleMarked(group.key)} className={cn("pending-row-mark relative h-9 w-8", marked ? "bg-warning/15 text-warning hover:text-warning" : "text-muted-foreground hover:text-warning")}><Star className={cn("h-4 w-4", marked && "fill-current")} aria-hidden="true" />{stale && <span className="material-blink absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-destructive" aria-hidden="true" />}</Button>
                   <span className="pending-row-reference min-w-0 truncate font-mono text-sm font-semibold text-foreground" title={group.displayRef}>{group.displayRef}</span>
                   <PendingCategoryPicker group={group} record={record} disabled={!canEdit || Boolean(retained)} onChange={(next) => onSetCategory(group, next)} />
-                  <span className="pending-row-name min-w-0 text-sm text-foreground" title={application.name}>{application.name || "未命名料件"}{retained && <span data-testid="pending-retained-badge" className="pending-retained-note" title={explainRetainedSource(retained)}>{describeRetainedSource(retained)}</span>}</span>
+                  <span className="pending-row-name min-w-0 text-sm text-foreground" title={application.name}>{application.name || "未命名料件"}{retained && <span data-testid="pending-retained-badge" className="pending-retained-note" title={explainRetainedSource(retained)}>{describeRetainedSource(retained)}</span>}{!retained && (() => {
+                    const note = lineNotes.get(record.id);
+                    if (!note) return null;
+                    return <span data-testid="pending-version-badge" data-version-kind={note.kind} className={cn("pending-version-note", note.kind === "added" && "pending-version-note--added", note.kind === "changed" && "pending-version-note--changed")} title={note.detail}>{note.text}</span>;
+                  })()}{!retained && !hasMaterialPartNumber(record) && (() => {
+                    // 「同一顆但是不同廠商，為何會上去」: an alternate vendor of a position whose other vendor already has a number.
+                    const numbered = group.records.find((other) => other.id !== record.id && hasMaterialPartNumber(other));
+                    if (!numbered) return null;
+                    const maker = numbered.manufacturer?.trim() || "另一家廠商";
+                    return <span data-testid="pending-alternate-note" className="pending-version-note" title={`同一個位號的 ${maker} 已有料號 ${numbered.partNumber?.trim() || numbered.virtualAlternative?.trim() || ""}；這列是另一家廠商（替代料），${isTrackedMaterialApplication(record) ? "已經有人在申請，所以列出" : "只有勾選「含缺料號的替代廠商」才會列出"}`}>替代廠商 · {maker} 已有料號</span>;
+                  })()}</span>
                   <div className="pending-row-mpn min-w-0 font-mono text-sm text-foreground/85">
                     {record.manufacturerPartNumber?.trim() ? <button type="button" data-testid="pending-mpn-copy" className="group/mpn flex min-h-9 w-full min-w-0 items-center gap-1 rounded px-0.5 text-left hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`複製廠商料號 ${record.manufacturerPartNumber}`} title={`複製完整廠商料號：${record.manufacturerPartNumber}`} onClick={() => onCopy(record.manufacturerPartNumber)}>
                       <span className="min-w-0 select-text truncate">{record.manufacturerPartNumber}</span><Copy className="h-3 w-3 shrink-0 text-primary opacity-70 group-hover/mpn:opacity-100" aria-hidden="true" />
@@ -4375,6 +4430,10 @@ export function MaterialRequestPage() {
     return [...bySource].flatMap(([workspaceId, records]) => buildMaterialDataset({ sourceFile: "", sheetName: "", generatedAt: "", recordCount: records.length, records }).groups
       .map((group) => ({ ...group, key: `retained:${workspaceId}:${group.key}` })));
   }, [retained]);
+  // 待處理料 says for every line of this version: added here, or since which version, and what changed since the previous one.
+  const lineHistories = useMemo(() => (
+    otherVersionLinks.length > 0 ? describeBomLineHistories(otherVersionLinks, basePayload.records, previousWorkspaceId) : new Map<string, BomLineHistory>()
+  ), [otherVersionLinks, basePayload.records, previousWorkspaceId]);
   const previousVersionLabel = activeVersionInfo?.series.versions.find((item) => item.workspace.id === previousWorkspaceId)?.displayNumber;
   const openRecarryComparison = activeVersionInfo && previousWorkspaceId && activeVersionInfo.series.versions.some((item) => item.workspace.id === previousWorkspaceId)
     ? () => {
@@ -4632,6 +4691,8 @@ export function MaterialRequestPage() {
     const actor = user?.displayName || user?.username || "";
     const importProject = toBomWorkspaceProject(activeProject);
     const report: string[] = [];
+    // Not warnings: what the upload kept from the previous version (料號 and the like the new Excel left blank).
+    const keptNotes: string[] = [];
     const createdSeriesIds = new Set<string>();
     let workspaces = bomWorkspaces;
     let lastWorkspaceId = activeBomId;
@@ -4668,6 +4729,9 @@ export function MaterialRequestPage() {
           assertBomWriteCurrent(writeScope);
           const carried = carryBomTracking(previousRecords, upload.payload.records);
           records = carried.records;
+          if (carried.fieldsKept > 0) {
+            keptNotes.push(`${uploads.length > 1 ? `${upload.file.name}：` : ""}新 Excel 有 ${carried.fieldsKept.toLocaleString()} 顆料的料號、Schematic_Part、Footprint 等欄位是空的，已沿用 ${previous.displayNumber} 同一顆料填好的內容（新 Excel 有寫的以新 Excel 為準）`);
+          }
           carry = { matched: carried.matched, tracked: carried.tracked, orphaned: carried.orphaned.length, manual: carried.manual };
           orphanedTotal += carried.orphaned.length;
           trackedTotal += carried.tracked;
@@ -4780,6 +4844,7 @@ export function MaterialRequestPage() {
           {newSeriesCount > 0 && <span>建立新系列 {newSeriesCount} 個，{newSeriesRecords.toLocaleString()} 筆廠商料明細{importProject ? `，歸入「${importProject.projectName}」` : ""}</span>}
           {newVersionCount > 0 && trackedTotal > 0 && <span>已帶入舊版的追蹤、Note、負責人與 SPEC 附件 {trackedTotal.toLocaleString()} 筆</span>}
           {newVersionCount > 0 && trackedTotal === 0 && orphanedTotal === 0 && <span>舊版沒有需要帶入的追蹤、Note、負責人或 SPEC 附件</span>}
+          {keptNotes.map((note, index) => <span key={`kept-${index}`} data-testid="bom-upload-fields-kept">{note}</span>)}
           {report.map((warning, index) => <span key={index}>{warning}</span>)}
         </span>,
         action: openComparison ? <ToastAction altText={`查看「${comparisonResult!.seriesName}」${comparisonResult!.beforeNumber} 與 ${comparisonResult!.afterNumber} 的差異`} onClick={openComparison} title={`打開 BOM 版本管理，直接比對「${comparisonResult!.seriesName}」${comparisonResult!.beforeNumber} → ${comparisonResult!.afterNumber}`}>{nameSeries ? `查看「${comparisonResult!.seriesName}」差異` : "查看差異"}</ToastAction> : undefined,
@@ -4971,6 +5036,30 @@ export function MaterialRequestPage() {
     }
     return { filled: saved, remaining: result.remaining };
   };
+
+  // 待處理料's 「從 V15 補回」: the same 帶入舊版資料, run on the version on screen without a detour through the comparison.
+  const [fillingFromPrevious, setFillingFromPrevious] = useState(false);
+  const previousVersionItem = activeVersionInfo && previousWorkspaceId ? activeVersionInfo.series.versions.find((item) => item.workspace.id === previousWorkspaceId) : undefined;
+  const fillFromPreviousVersion = activeVersionInfo && previousVersionItem && activeVersionInfo.version.isCurrent && canEditModuleAccess
+    ? async () => {
+      if (fillingFromPrevious) return;
+      setFillingFromPrevious(true);
+      try {
+        const { filled, remaining } = await recarryBomVersion({ series: activeVersionInfo.series, before: previousVersionItem, after: activeVersionInfo.version });
+        toast({
+          variant: "success",
+          title: filled > 0 ? `已從 ${previousVersionItem.displayNumber} 補回 ${filled.toLocaleString()} 筆` : "沒有需要補回的資料",
+          description: filled > 0
+            ? `${activeVersionInfo.version.displayNumber} 空白的料號、Schematic_Part、Footprint 等欄位與沒帶過來的申請，已補成 ${previousVersionItem.displayNumber} 同一顆料的內容；${activeVersionInfo.version.displayNumber} 自己填的都沒有被蓋掉。${remaining > 0 ? `另有 ${remaining.toLocaleString()} 筆在這一版找不到同一顆料，列在最下面的「${previousVersionItem.displayNumber} 的料」。` : ""}`
+            : `${activeVersionInfo.version.displayNumber} 的同一顆料都已經有自己的資料。`,
+        });
+      } catch (error) {
+        toast({ variant: "destructive", title: "補回失敗", description: error instanceof Error ? error.message : "資料沒有變更，請稍後再試。" });
+      } finally {
+        setFillingFromPrevious(false);
+      }
+    }
+    : undefined;
 
   // 專案總料表: a hand-picked category for one part, written to its rows on every board (each board's current version,
   // on screen or not). Rows someone changed in the meantime are not overwritten (record revisions, as 帶入舊版資料).
@@ -6105,10 +6194,15 @@ export function MaterialRequestPage() {
           loading: !otherVersionsReady,
           failed: otherVersionRecords?.failed ?? [],
           onRetry: () => setOtherVersionsAttempt((current) => current + 1),
-          recarry: retained.recarry,
+          recarry: retained.recarryRows ?? retained.recarry,
+          recarryFields: retained.fieldRows ?? 0,
           recarryFrom: previousVersionLabel,
           onRecarry: openRecarryComparison,
+          onFill: fillFromPreviousVersion,
+          filling: fillingFromPrevious,
         }}
+        lineHistories={lineHistories}
+        versionLabel={activeVersionInfo?.version.displayNumber}
         open={pendingDialogOpen}
         addedRecordId={addedPendingRecordId}
         restoreView={pendingRestoreView}

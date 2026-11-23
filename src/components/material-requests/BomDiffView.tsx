@@ -277,9 +277,9 @@ export function BomDiffView({
       {recarry && recarryCount > 0 && (
         <div data-testid="bom-diff-recarry" className="bom-diff-recarry">
           <History aria-hidden="true" className="bom-diff-recarry-icon" />
-          <p role="status"><strong>{recarryCount.toLocaleString()} 筆舊版資料在新版找得到同一顆料，但沒有帶過去。</strong><span>{recarry.blocked ?? "帶入後會補到新版那顆料；新版已經填過的不會被覆蓋。"}</span></p>
+          <p role="status"><strong>{recarryCount.toLocaleString()} 筆舊版資料在新版找得到同一顆料，但沒有帶過去。</strong><span>{recarry.blocked ?? "帶入後會補到新版那顆料（追蹤、Note、負責人、SPEC 附件，以及新版空白的料號、Schematic_Part、Footprint 等欄位）；新版已經填過的不會被覆蓋。"}</span></p>
           {recarry.run && (
-            <Button type="button" size="sm" disabled={recarry.busy} aria-busy={recarry.busy || undefined} onClick={recarry.run} title={`把 ${before.displayNumber} 的追蹤、Note、負責人與 SPEC 附件補到 ${after.displayNumber} 的同一顆料`} className="bom-diff-recarry-action h-9 shrink-0 gap-1.5">
+            <Button type="button" size="sm" disabled={recarry.busy} aria-busy={recarry.busy || undefined} onClick={recarry.run} title={`把 ${before.displayNumber} 的追蹤、Note、負責人、SPEC 附件與料號等欄位補到 ${after.displayNumber} 同一顆料空白的地方`} className="bom-diff-recarry-action h-9 shrink-0 gap-1.5">
               {recarry.busy ? <LoaderCircle className="bom-diff-spinner h-4 w-4" aria-hidden="true" /> : <History className="h-4 w-4" aria-hidden="true" />}
               {recarry.busy ? "帶入中…" : `帶入舊版資料 ${recarryCount.toLocaleString()} 筆`}
             </Button>

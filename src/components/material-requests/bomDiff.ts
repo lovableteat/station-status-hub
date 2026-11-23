@@ -657,11 +657,11 @@ function markMovedAndUncarriedLines(entries: BomDiffEntry[], before: readonly Ma
     old.line.movedTo = target.entry.displayRef;
     old.line.movedRecord = pair.after.record;
     target.line.movedFrom = fromEntry.get(pair.before.record)?.displayRef ?? "";
-    if (needsRecarry(pair.before.record, pair.after.record)) old.line.notCarried = true;
+    if (needsRecarry(pair.before.record, pair.after.record) || hasFieldFills(pair.before.record, pair.after.record)) old.line.notCarried = true;
   }
   for (const entry of entries) {
     for (const line of entry.lines) {
-      if ((line.kind === "same" || line.kind === "changed") && line.before && line.after && needsRecarry(line.before, line.after)) line.notCarried = true;
+      if ((line.kind === "same" || line.kind === "changed") && line.before && line.after && (needsRecarry(line.before, line.after) || hasFieldFills(line.before, line.after))) line.notCarried = true;
     }
     entry.trackingLost = entry.lines.filter((line) => isLostLine(line)).length;
   }
@@ -714,6 +714,45 @@ export function mergeBomTrackingHistories(previous: MaterialTrackingHistoryEntry
 const filled = (value: string | undefined) => (normalizeBomText(value) ? (value as string) : "");
 
 /**
+ * CE columns a new Excel often leaves blank although the previous version already holds them, filled in on the website
+ * (CE 料件編輯器) or in an earlier file: 虛擬／實體料號, Part Name, Spec, Schematic_Part, PCB_Footprint and the status columns.
+ * E1.s V16 (2026-11-23): every part the CE had finished on V15 came back without its 料號 and was listed as needing an
+ * application again. The same vendor part at the same position keeps them; a value the new Excel writes always wins.
+ * Name, Qty, Ref Des, 廠商 and MPN are the part itself and always come from the new Excel.
+ */
+export const BOM_CARRIED_WORKBOOK_FIELDS = [
+  "virtualAlternative", "partNumber", "partName", "partSpec", "schematicPart", "pcbFootprint", "sourcingStatus", "phaseOutStatus", "partUsageStatus",
+] as const;
+export type BomCarriedWorkbookField = (typeof BOM_CARRIED_WORKBOOK_FIELDS)[number];
+
+/** "N/A", "-", "TBD": a cell written out as empty. */
+const EMPTY_CELL = /^(?:N\/?A|NONE|TBD|TBC|NULL|[-—–_/.]+|無)$/i;
+const isBlankCell = (value: unknown) => {
+  const text = normalizeBomText(value);
+  return !text || EMPTY_CELL.test(text);
+};
+const isTemporaryNumber = (value: unknown) => /^TEMP-/i.test(normalizeBomText(value));
+
+/**
+ * The previous version's values for CE columns the new row leaves blank. A TEMP- number in the new Excel also gives way
+ * to a real 料號 the previous version holds (PLM hands out TEMP- numbers while an application is still running).
+ */
+export function bomWorkbookFieldFills(previous: MaterialWorkbookRecord, next: MaterialWorkbookRecord): Partial<Record<BomCarriedWorkbookField, string>> {
+  const fills: Partial<Record<BomCarriedWorkbookField, string>> = {};
+  for (const field of BOM_CARRIED_WORKBOOK_FIELDS) {
+    const before = previous[field];
+    if (isBlankCell(before)) continue;
+    const after = next[field];
+    const number = field === "partNumber" || field === "virtualAlternative";
+    const takes = isBlankCell(after) || (number && isTemporaryNumber(after) && !isTemporaryNumber(before));
+    if (takes && normalizeBomText(before) !== normalizeBomText(after)) fills[field] = before as string;
+  }
+  return fills;
+}
+
+const hasFieldFills = (previous: MaterialWorkbookRecord, next: MaterialWorkbookRecord) => Object.keys(bomWorkbookFieldFills(previous, next)).length > 0;
+
+/**
  * Website-only fields never come from an imported workbook (Note, 負責人, SPEC files),
  * so they always follow the matched line; the newer copy wins when both have one.
  */
@@ -729,7 +768,10 @@ function carryWebsiteFields(primary: MaterialWorkbookRecord, fallback: MaterialW
   };
 }
 
-/** A new Excel upload: tracking typed into the workbook is refreshed, everything else follows from the old version. */
+/**
+ * A new Excel upload: tracking typed into the workbook is refreshed, everything else follows from the old version, and
+ * CE columns the new Excel leaves blank keep the old version's value (bomWorkbookFieldFills).
+ */
 function carryLine(previous: MaterialWorkbookRecord, next: MaterialWorkbookRecord): MaterialWorkbookRecord {
   const importedHasTracking = Boolean(normalizeBomText(next.trackingStatus) || (next.trackingHistory ?? []).some(hasEntryContent));
   const previousHadImported = (previous.trackingHistory ?? []).some(isImportedEntry);
@@ -739,6 +781,7 @@ function carryLine(previous: MaterialWorkbookRecord, next: MaterialWorkbookRecor
     normalizeBomText(own) ? (own as string) : normalizeBomText(fromLatest) ? (fromLatest as string) : previousHadImported ? "" : fromPrevious ?? "";
   return {
     ...next,
+    ...bomWorkbookFieldFills(previous, next),
     trackingStatus: importedHasTracking
       ? (normalizeBomText(next.trackingStatus) || "新增追蹤")
       : (normalizeBomText(latest?.status) || (previousHadImported ? "" : normalizeBomText(previous.trackingStatus)) || ""),
@@ -824,6 +867,8 @@ export interface BomCarryResult {
   tracked: number;
   /** Of those, lines found by vendor part at another location (renumbered or regrouped). */
   moved: number;
+  /** New lines whose blank 料號, Schematic_Part, Footprint… were kept from the previous version. */
+  fieldsKept: number;
   orphaned: MaterialWorkbookRecord[];
   manual: number;
 }
@@ -877,6 +922,7 @@ export function carryBomTracking(previous: readonly MaterialWorkbookRecord[], ne
   const { pairs, usedPrevious: matchedPrevious } = pairBomLines(previous, next);
   let tracked = 0;
   let moved = 0;
+  let fieldsKept = 0;
   for (const pair of pairs) {
     // Switching back replaces the target's Note, 負責人 and SPEC files; a part found at another location
     // only fills a target row that has nothing of its own.
@@ -884,6 +930,7 @@ export function carryBomTracking(previous: readonly MaterialWorkbookRecord[], ne
     carried.set(pair.after, carryOne(pair.before, pair.after));
     if (bomRecordHasTracking(pair.before)) tracked += 1;
     if (pair.moved) moved += 1;
+    if (!fromCurrent && hasFieldFills(pair.before, pair.after)) fieldsKept += 1;
   }
   const nextIds = new Set(next.map((record) => record.id));
   const manualRecords = previous.filter((record) => record.id.startsWith(MANUAL_RECORD_PREFIX) && !matchedPrevious.has(record) && !nextIds.has(record.id));
@@ -893,6 +940,7 @@ export function carryBomTracking(previous: readonly MaterialWorkbookRecord[], ne
     matched: matchedPrevious.size,
     tracked,
     moved,
+    fieldsKept,
     orphaned,
     manual: manualRecords.length,
   };
@@ -911,14 +959,20 @@ export interface BomRecarryResult {
  * 帶入舊版資料: fills website data that an earlier upload left behind (an older matching rule, or
  * a part that moved to another location). Only rows that have no website data of their own are
  * filled, so anything entered on this version since stays as it is; running it twice changes nothing.
- * Manual rows are never re-added: one missing here was deleted on purpose.
+ * CE columns (料號, Schematic_Part, Footprint…) this version left blank are filled on every matched row,
+ * blank ones only. Manual rows are never re-added: one missing here was deleted on purpose.
  */
 export function recarryBomTracking(previous: readonly MaterialWorkbookRecord[], current: readonly MaterialWorkbookRecord[]): BomRecarryResult {
   const { pairs } = pairBomLines(previous, current);
   const replacements = new Map<MaterialWorkbookRecord, MaterialWorkbookRecord>();
   for (const pair of pairs) {
-    if (!needsRecarry(pair.before, pair.after)) continue;
-    replacements.set(pair.after, carryLine(pair.before, pair.after));
+    if (replacements.has(pair.after)) continue;
+    if (needsRecarry(pair.before, pair.after)) {
+      replacements.set(pair.after, carryLine(pair.before, pair.after));
+      continue;
+    }
+    const fills = bomWorkbookFieldFills(pair.before, pair.after);
+    if (Object.keys(fills).length > 0) replacements.set(pair.after, { ...pair.after, ...fills });
   }
   const records = current.map((record) => replacements.get(record) ?? record);
   return {
@@ -963,7 +1017,11 @@ export function fillForwardBomTracking(previous: readonly MaterialWorkbookRecord
       replacements.set(pair.after, carryLine(pair.before, pair.after));
       continue;
     }
-    if (!bomRecordHasWebsiteData(pair.before)) continue;
+    const fieldFills = bomWorkbookFieldFills(pair.before, pair.after);
+    if (!bomRecordHasWebsiteData(pair.before)) {
+      if (Object.keys(fieldFills).length > 0) replacements.set(pair.after, { ...pair.after, ...fieldFills });
+      continue;
+    }
     const own = pair.after.trackingHistory ?? [];
     const ownIds = new Set(own.map((entry) => entry.id));
     const added = (pair.before.trackingHistory ?? [])
@@ -979,10 +1037,11 @@ export function fillForwardBomTracking(previous: readonly MaterialWorkbookRecord
       || fields.pendingCategory !== pair.after.pendingCategory
       || (fields.specDocuments?.length ?? 0) !== getMaterialSpecDocuments(pair.after).length
       || applicationRequired !== pair.after.applicationRequired;
-    if (added.length === 0 && !fieldsChanged) continue;
+    if (added.length === 0 && !fieldsChanged && Object.keys(fieldFills).length === 0) continue;
     const latest = latestEntry(added);
     replacements.set(pair.after, {
       ...pair.after,
+      ...fieldFills,
       ...fields,
       ...(typeof applicationRequired === "boolean" ? { applicationRequired } : {}),
       ...(latest ? {
@@ -1059,6 +1118,13 @@ export interface BomRetainedResult {
   retained: BomRetainedApplication[];
   /** Applications whose part is on screen without them, that 帶入舊版資料 from the previous version fills; not listed twice. */
   recarry: number;
+  /**
+   * Rows on screen that 帶入舊版資料 from the previous version would fill: the applications above plus rows whose
+   * 料號, Schematic_Part, Footprint… this version left blank while the previous version holds them.
+   */
+  recarryRows?: number;
+  /** Of those, rows that get CE columns back (料號 and the like). */
+  fieldRows?: number;
 }
 
 /**
@@ -1114,7 +1180,90 @@ export function classifyRetainedApplications(
       });
     }
   }
-  return { retained, recarry };
+  const recarryRowIds = new Set<string>();
+  const fieldRowIds = new Set<string>();
+  for (const [record, currentId] of links.find((link) => link.workspaceId === previousWorkspaceId)?.toCurrent ?? []) {
+    const partner = currentById.get(currentId);
+    if (!partner) continue;
+    const fields = hasFieldFills(record, partner);
+    if (fields) fieldRowIds.add(currentId);
+    if (fields || needsRecarry(record, partner)) recarryRowIds.add(currentId);
+  }
+  return { retained, recarry, recarryRows: recarryRowIds.size, fieldRows: fieldRowIds.size };
+}
+
+/** Field by field, what changed on one vendor line between two versions (group columns compared on the line itself). */
+export function bomRecordChanges(before: MaterialWorkbookRecord, after: MaterialWorkbookRecord): BomFieldChange[] {
+  const changes: BomFieldChange[] = [];
+  for (const field of BOM_DIFF_FIELDS) {
+    if (field.key === "grouping") continue;
+    const left = bomDiffFieldValue(before, field.key);
+    const right = bomDiffFieldValue(after, field.key);
+    if (!sameFieldValue(field.key, left, right)) changes.push({ field: field.key, label: field.label, before: left, after: right });
+  }
+  return changes;
+}
+
+/** Where a line of the version on screen comes from, for the 待處理料 list. */
+export interface BomLineHistory {
+  /** No line of the previous version is this part: added in the version on screen. */
+  added: boolean;
+  /** The oldest version this line goes back to without a gap ("V3"); absent when added. */
+  since?: string;
+  /** The version compared with ("V15"), when there is one. */
+  previousLabel?: string;
+  /** What changed since that version; empty when nothing did. */
+  changes: BomFieldChange[];
+}
+
+/**
+ * For every row on screen: added in this version, or since which version it has been on the board, and what changed
+ * since the previous version (the one it was uploaded over, else the next older one). Uses the links the page already
+ * holds, so nothing is paired again. Rows of a board with no older version get no entry.
+ */
+export function describeBomLineHistories(
+  links: readonly BomVersionLink[],
+  current: readonly MaterialWorkbookRecord[],
+  previousWorkspaceId?: string,
+): Map<string, BomLineHistory> {
+  const older = links.filter((link) => !link.newer);
+  const histories = new Map<string, BomLineHistory>();
+  if (older.length === 0) return histories;
+  const previous = older.find((link) => link.workspaceId === previousWorkspaceId) ?? older[0];
+  const invert = (pairs: Iterable<[MaterialWorkbookRecord, string]>) => {
+    const inverse = new Map<string, MaterialWorkbookRecord>();
+    for (const [record, id] of pairs) if (!inverse.has(id)) inverse.set(id, record);
+    return inverse;
+  };
+  const previousById = invert(previous.toCurrent);
+  // The chain runs from the closest older version back: each one's rows to their copy in the next newer one.
+  const chainStart = invert(older[0].toCurrent);
+  const backwards = older.map((link) => {
+    const inverse = new Map<MaterialWorkbookRecord, MaterialWorkbookRecord>();
+    for (const [record, newer] of link.toNewer ?? []) if (!inverse.has(newer)) inverse.set(newer, record);
+    return inverse;
+  });
+  for (const record of current) {
+    const before = previousById.get(record.id);
+    let line = chainStart.get(record.id);
+    let since: string | undefined;
+    if (line) {
+      since = older[0].label;
+      for (let index = 1; index < older.length; index += 1) {
+        const back = backwards[index].get(line);
+        if (!back) break;
+        line = back;
+        since = older[index].label;
+      }
+    }
+    histories.set(record.id, {
+      added: !before,
+      ...(since ? { since } : {}),
+      previousLabel: previous.label,
+      changes: before ? bomRecordChanges(before, record) : [],
+    });
+  }
+  return histories;
 }
 
 /** linkBomVersions and classifyRetainedApplications in one call. */

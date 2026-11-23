@@ -100,6 +100,11 @@ if (new URLSearchParams(window.location.search).has('qaRecarry')) {
 if (new URLSearchParams(window.location.search).has('qaManualV2')) {
   records.push(makeRecord('J9', 60, { id: 'manual-qa-j9', name: 'CONN 手動新增 J9', manufacturer: 'QA Vendor M', manufacturerPartNumber: 'QA-MANUAL-J9', partNumber: '', virtualAlternative: '', isGroupStart: true }));
 }
+// ?qaWiped (E1.s V16, 2026-11-23): V2's Excel left 料號, Schematic_Part and Footprint blank on PR1 and LB48, which V1 holds;
+// an upload before the fix wiped them, so finished parts were listed as needing an application again.
+if (new URLSearchParams(window.location.search).has('qaWiped')) {
+  for (const index of [2, 5]) records[index] = { ...records[index], partNumber: '', virtualAlternative: '', schematicPart: '', pcbFootprint: '' };
+}
 const seriesId = 'series:qa';
 const stamp = (daysAgo) => new Date(Date.now() - daysAgo * 86400000).toISOString();
 const workspace = {

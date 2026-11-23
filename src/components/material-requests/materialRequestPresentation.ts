@@ -21,6 +21,38 @@ export function explainRetainedSource(from: { label: string; reason: RetainedRea
   return `${from.label} 的申請；這一版有這顆料，但無法自動帶入（這一版那列已有自己的資料，或申請來自更早的版本），請在料號表更新這一版那列`;
 }
 
+const PENDING_HISTORY_FIRST = ["實體料號", "虛擬料號", "Manufacturer Part Number", "Manufacturer", "Ref Des", "Qty"];
+
+/** A line of the version on screen: added there, or since which version, and what changed since the previous one. */
+export interface PendingLineHistory {
+  added: boolean;
+  since?: string;
+  previousLabel?: string;
+  changes: ReadonlyArray<{ label: string; before: string; after: string }>;
+}
+
+/**
+ * The version note under a 待處理料 line (E1.s V16, 2026-11-23: 「沒有標註每顆料是哪個版本，差異等訊息」):
+ * "V16 新增", "自 V3 · 沒變", "自 V3 · V15→V16 改 實體料號、Ref Des". `detail` lists every change for the hover text and exports.
+ */
+export function describePendingLineHistory(history: PendingLineHistory, versionLabel = "這一版"): { kind: "added" | "changed" | "same"; text: string; detail: string } {
+  if (history.added) {
+    return { kind: "added", text: `${versionLabel} 新增`, detail: `${history.previousLabel ?? "上一版"} 沒有這顆料（位號、廠商或 MPN 不同），是 ${versionLabel} 才加入的` };
+  }
+  const since = history.since ? `自 ${history.since}` : "";
+  const step = `${history.previousLabel ?? "上一版"}→${versionLabel}`;
+  if (history.changes.length === 0) {
+    return { kind: "same", text: [since, `${step} 沒變`].filter(Boolean).join(" · "), detail: `${since ? `${since} 起就在這塊板子上；` : ""}${step} 這顆料沒有變更` };
+  }
+  // 料號 first: it decides whether a part still needs an application, so it must never hide behind "等 N 項".
+  const rank = (label: string) => { const index = PENDING_HISTORY_FIRST.indexOf(label); return index < 0 ? PENDING_HISTORY_FIRST.length : index; };
+  const ordered = [...history.changes].sort((left, right) => rank(left.label) - rank(right.label));
+  const labels = [...new Set(ordered.map((change) => change.label))];
+  const shown = labels.slice(0, 2).join("、") + (labels.length > 2 ? ` 等 ${labels.length} 項` : "");
+  const lines = ordered.map((change) => `${change.label}：${change.before || "（空白）"} → ${change.after || "（空白）"}`);
+  return { kind: "changed", text: [since, `${step} 改 ${shown}`].filter(Boolean).join(" · "), detail: `${since ? `${since} 起就在這塊板子上。` : ""}${step} 的變更：\n${lines.join("\n")}` };
+}
+
 export interface CompactValueSummary {
   fullText: string;
   isTruncated: boolean;

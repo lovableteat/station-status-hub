@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   bomDiffEntryPreview, bomRecordHasTracking, bomRecordHasWebsiteData, bomRefTokens, buildBomDiffGroups, carryBomTracking, describeBomWebsiteData, diffBomRecords,
-  findRetainedApplications, matchBomVendorLines, mergeBomTrackingHistories, normalizeBomText, recarryBomTracking,
+  describeBomLineHistories, findRetainedApplications, linkBomVersions, matchBomVendorLines, mergeBomTrackingHistories, normalizeBomText, recarryBomTracking,
 } from "../src/components/material-requests/bomDiff.ts";
 
 let counter = 0;
@@ -697,4 +697,91 @@ test("a part added by hand on V2 and deleted on V3 is not listed on V1, and the 
   const onV2 = findRetainedApplications(v2, [{ workspaceId: "bom:v3", label: "V3", records: v3, newer: true }, { workspaceId: "bom:v1", label: "V1", records: v1 }], "bom:v1");
   assert.equal(onV2.recarry, 1, "V1's application is offered for 帶入");
   assert.deepEqual(onV2.retained.map((item) => item.fromLabel), ["V3"]);
+});
+
+// E1.s V16 (2026-11-23): 「我有些前一版改好的新增料了，但最新版全部沒看直接歸0」 — the CE had filled 料號, Schematic_Part
+// and Footprint on V15 (website editor); V16's Excel left them blank and the upload wiped them, so finished parts were
+// listed as needing an application again.
+test("a new upload keeps CE columns the new Excel leaves blank; a value the new Excel writes wins; the part itself always comes from the new Excel", () => {
+  const blank = { partNumber: "", virtualAlternative: "", partName: "", partSpec: "", schematicPart: "", pcbFootprint: "", sourcingStatus: "", phaseOutStatus: "", partUsageStatus: "" };
+  const v15 = [
+    row({ id: "u1", refDes: "U1", name: "PMIC", manufacturerPartNumber: "TPS1", manufacturer: "TI", partNumber: "071.12345.0001", virtualAlternative: "V-PMIC", partName: "PMIC TPS1", partSpec: "QFN16 5V", schematicPart: "TPS1_SYM", pcbFootprint: "QFN16", phaseOutStatus: "ACTIVE", partUsageStatus: "不建議使用", ...applying("tracking-u1", "已完成") }),
+    row({ id: "r1", refDes: "R1", manufacturerPartNumber: "RC0402", manufacturer: "YAGEO", partNumber: "064.00001.0001", schematicPart: "RES" }),
+    row({ id: "c1", refDes: "C1", manufacturerPartNumber: "GRM155", manufacturer: "MURATA", partNumber: "078.11111.0001" }),
+  ];
+  const v16Excel = [
+    row({ id: "s-u1", refDes: "U1", name: "PMIC 5V", qty: "1", manufacturerPartNumber: "TPS1", manufacturer: "TI", ...blank }),
+    row({ id: "s-r1", refDes: "R1", manufacturerPartNumber: "RC0402", manufacturer: "YAGEO", ...blank, partNumber: "TEMP-0001", schematicPart: "N/A" }),
+    row({ id: "s-c1", refDes: "C1", manufacturerPartNumber: "GRM155", manufacturer: "MURATA", ...blank, partNumber: "078.22222.0002", pcbFootprint: "C0402" }),
+  ];
+  const carried = carryBomTracking(v15, v16Excel).records;
+  const u1 = carried.find((record) => record.id === "s-u1")!;
+  assert.deepEqual(
+    [u1.partNumber, u1.virtualAlternative, u1.partName, u1.partSpec, u1.schematicPart, u1.pcbFootprint, u1.phaseOutStatus, u1.partUsageStatus],
+    ["071.12345.0001", "V-PMIC", "PMIC TPS1", "QFN16 5V", "TPS1_SYM", "QFN16", "ACTIVE", "不建議使用"],
+    "every CE column V16 left blank keeps V15's value",
+  );
+  assert.equal(u1.name, "PMIC 5V", "Name is the part itself: always the new Excel's");
+  assert.equal(u1.trackingStatus, "已完成");
+  const r1 = carried.find((record) => record.id === "s-r1")!;
+  assert.equal(r1.partNumber, "064.00001.0001", "a TEMP- number gives way to the real 料號 the previous version holds");
+  assert.equal(r1.schematicPart, "RES", "N/A is an empty cell written out");
+  const c1 = carried.find((record) => record.id === "s-c1")!;
+  assert.equal(c1.partNumber, "078.22222.0002", "a 料號 the new Excel writes wins");
+  assert.equal(c1.pcbFootprint, "C0402");
+  // A different part at the same position (new MPN) is not the same line: nothing of the old one is copied.
+  const swapped = carryBomTracking(v15, [row({ id: "s-u1b", refDes: "U1", manufacturerPartNumber: "LT8000", manufacturer: "ADI", ...blank })]).records[0];
+  assert.equal(swapped.partNumber, "");
+  assert.equal(swapped.schematicPart, "");
+});
+
+test("帶入舊版資料 gives an already uploaded version its blank CE columns back, also on rows with data of their own, once", () => {
+  const v15 = [
+    row({ id: "u1", refDes: "U1", manufacturerPartNumber: "TPS1", partNumber: "071.12345.0001", schematicPart: "TPS1_SYM", pcbFootprint: "QFN16", ...applying("tracking-u1", "已完成") }),
+    row({ id: "u2", refDes: "U2", manufacturerPartNumber: "TPS2", partNumber: "071.12345.0002", schematicPart: "TPS2_SYM" }),
+  ];
+  // V16 as the old upload stored it: application carried, CE columns wiped; U2 got a Note on V16 since.
+  const v16 = [
+    row({ id: "s-u1", refDes: "U1", manufacturerPartNumber: "TPS1", partNumber: "", schematicPart: "", pcbFootprint: "", ...applying("tracking-u1", "已完成") }),
+    row({ id: "s-u2", refDes: "U2", manufacturerPartNumber: "TPS2", partNumber: "", schematicPart: "TPS2_NEW", note: "V16 的 Note" }),
+  ];
+  const before = diffBomRecords(v15, v16).summary;
+  assert.equal(before.recarry, 2, "both rows are offered for 帶入");
+  const retained = findRetainedApplications(v16, [{ workspaceId: "bom:v15", label: "V15", records: v15 }], "bom:v15");
+  assert.equal(retained.recarryRows, 2);
+  assert.equal(retained.fieldRows, 2);
+  const result = recarryBomTracking(v15, v16);
+  assert.deepEqual(result.filled.map((record) => record.id).sort(), ["s-u1", "s-u2"]);
+  const u1 = result.records.find((record) => record.id === "s-u1")!;
+  assert.deepEqual([u1.partNumber, u1.schematicPart, u1.pcbFootprint], ["071.12345.0001", "TPS1_SYM", "QFN16"]);
+  const u2 = result.records.find((record) => record.id === "s-u2")!;
+  assert.equal(u2.partNumber, "071.12345.0002");
+  assert.equal(u2.schematicPart, "TPS2_NEW", "what V16 filled itself stays");
+  assert.equal(u2.note, "V16 的 Note");
+  assert.equal(diffBomRecords(v15, result.records).summary.recarry, 0);
+  assert.equal(recarryBomTracking(v15, result.records).filled.length, 0, "running it again changes nothing");
+  assert.equal(findRetainedApplications(result.records, [{ workspaceId: "bom:v15", label: "V15", records: v15 }], "bom:v15").recarryRows, 0);
+});
+
+test("待處理料 line history: added in this version, since which version without a gap, and what changed since the previous one", () => {
+  const v14 = [row({ id: "v14-u1", refDes: "U1", manufacturerPartNumber: "TPS1" }), row({ id: "v14-r9", refDes: "R9", manufacturerPartNumber: "RES-9" })];
+  const v15 = [row({ id: "v15-u1", refDes: "U1", manufacturerPartNumber: "TPS1" }), row({ id: "v15-c5", refDes: "C5", manufacturerPartNumber: "CAP-5" })];
+  const v16 = [
+    row({ id: "u1", refDes: "U1, U2", qty: "2", manufacturerPartNumber: "TPS1" }),
+    row({ id: "c5", refDes: "C5", manufacturerPartNumber: "CAP-5" }),
+    row({ id: "r9", refDes: "R9", manufacturerPartNumber: "RES-9" }),
+    row({ id: "j1", refDes: "J1", manufacturerPartNumber: "CONN-1" }),
+  ];
+  const links = linkBomVersions(v16, [{ workspaceId: "bom:v15", label: "V15", records: v15 }, { workspaceId: "bom:v14", label: "V14", records: v14 }]);
+  const histories = describeBomLineHistories(links, v16, "bom:v15");
+  const u1 = histories.get("u1")!;
+  assert.equal(u1.added, false);
+  assert.equal(u1.since, "V14");
+  assert.equal(u1.previousLabel, "V15");
+  assert.deepEqual(u1.changes.map((change) => [change.label, change.before, change.after]), [["Ref Des", "U1", "U1, U2"]]);
+  assert.deepEqual(histories.get("c5"), { added: false, since: "V15", previousLabel: "V15", changes: [] });
+  assert.equal(histories.get("r9")!.added, true, "R9 left in V15 and came back: added again, not 自 V14");
+  assert.equal(histories.get("r9")!.since, undefined);
+  assert.equal(histories.get("j1")!.added, true);
+  assert.equal(describeBomLineHistories([], v16).size, 0, "a board with no older version gets no note");
 });
