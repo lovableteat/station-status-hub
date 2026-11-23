@@ -159,8 +159,8 @@ async function managerFits(page, label) {
       assert.equal(fixture.state.pdfOfficials.get('series:qa').documentId, baselineId);
       // AI 比對 shows the official version beside the new one; 線路 Review shows the drawing alone.
       await dialog(page).getByRole('tab', { name: /^AI 比對/ }).click();
-      await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').waitFor();
-      assert.match(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), /Official_20261101\.pdf/);
+      await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas[role="img"]').waitFor();
+      assert.match(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas[role="img"]').getAttribute('aria-label'), /Official_20261101\.pdf/);
       await dialog(page).getByRole('tab', { name: /^線路 Review/ }).click();
       await panel(page).locator('.circuit-pdf-page[data-pane="compare"]').waitFor({ state: 'detached' });
     }
@@ -198,15 +198,15 @@ async function managerFits(page, label) {
     report.checks.push('official original cannot be archived; working version archive and restore preserve originals and baseline');
 
     await dialog(page).getByRole('tab', { name: /^AI 比對/ }).click();
-    await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').waitFor();
+    await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas[role="img"]').waitFor();
     await panel(page).getByLabel('目前頁碼', { exact: true }).fill('5'); await panel(page).getByLabel('目前頁碼', { exact: true }).press('Enter'); await rendered(page);
     // The baseline page is typed where it is shown; from this page on the pages pair that way, earlier pages stay.
     const basePage = panel(page).getByLabel('基準版頁碼', { exact: true });
     await basePage.fill('6'); await basePage.press('Enter'); await rendered(page);
-    assert.equal(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), 'Official_20261101.pdf 第 6 頁');
+    assert.equal(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas[role="img"]').getAttribute('aria-label'), 'Official_20261101.pdf 第 6 頁');
     await panel(page).getByRole('button', { name: '改回自動對齊', exact: true }).waitFor();
     await panel(page).getByLabel('目前頁碼', { exact: true }).fill('4'); await panel(page).getByLabel('目前頁碼', { exact: true }).press('Enter'); await rendered(page);
-    assert.equal(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), 'Official_20261101.pdf 第 4 頁', 'Pages before the pinned page keep their own match');
+    assert.equal(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas[role="img"]').getAttribute('aria-label'), 'Official_20261101.pdf 第 4 頁', 'Pages before the pinned page keep their own match');
     await panel(page).getByLabel('目前頁碼', { exact: true }).fill('5'); await panel(page).getByLabel('目前頁碼', { exact: true }).press('Enter'); await rendered(page);
     report.checks.push('official comparison supports an explicitly matched page from that page on, without moving earlier pages');
 
@@ -241,7 +241,7 @@ async function managerFits(page, label) {
     await strip.focus(); await page.keyboard.press('End');
     await page.waitForFunction(() => document.querySelector('input[aria-label="目前頁碼"]').value === '500'); await rendered(page);
     await panel(page).getByLabel('基準版頁碼', { exact: true }).fill('500'); await panel(page).getByLabel('基準版頁碼', { exact: true }).press('Enter'); await rendered(page);
-    assert.equal(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), 'Official_20261101.pdf 第 500 頁');
+    assert.equal(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas[role="img"]').getAttribute('aria-label'), 'Official_20261101.pdf 第 500 頁');
     const aiButton = panel(page).getByTestId('circuit-pdf-ai-bar').getByRole('button', { name: 'AI 比對新舊版', exact: true });
     assert.equal(await aiButton.isEnabled(), true, 'Matching the last official page must resolve the out-of-range offset and enable review');
     await aiButton.click();
@@ -269,7 +269,7 @@ async function managerFits(page, label) {
     assert.equal(await dialog(page).getByRole('tab', { name: /^AI 比對/ }).getAttribute('aria-selected'), 'true', 'the window reopens on the task used last');
     assert.match(await panel(page).locator('select[aria-label="選擇基準版 PDF"]').getAttribute('title'), /Official_20261101\.pdf/);
     assert.deepEqual(fixture.state.pdfOfficials.get('series:qa').document, baselineSnapshot, 'Legacy registry metadata cannot mutate the official file snapshot');
-    assert.match(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas').getAttribute('aria-label'), /Official_20261101\.pdf/);
+    assert.match(await panel(page).locator('.circuit-pdf-page[data-pane="compare"] canvas[role="img"]').getAttribute('aria-label'), /Official_20261101\.pdf/);
     report.checks.push('official baseline survives a modification-group switch and closing/reopening the workspace');
     report.checks.push('protected official file snapshot remains independent of later legacy registry edits');
 

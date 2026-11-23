@@ -316,3 +316,21 @@ test("an answer that cannot be stored because the connection is gone waits for i
   assert.ok([...kept.values()].every(page => page.status === "unsaved" ? page.report.id === `report-${page.workingPage}` : page.status === "pending"), JSON.stringify([...kept.values()].map(page => page.status)));
   assert.ok([...kept.values()].some(page => page.status === "unsaved"));
 });
+
+// 2026-11-23 「我在另一個電腦比對完成，為何換一個電腦看不到了」: the list must come from what is stored, not from this window.
+test("opening the review lists every stored result of the pair, also one saved against another baseline page", () => {
+  const { restoreCircuitPdfAiBatchPages: restore } = service();
+  const key = (officialPage, workingPage) => `A>B:${officialPage}:${workingPage}`;
+  const saved = (officialPage, workingPage, createdAt, id = `${officialPage}:${workingPage}:${createdAt}`) => ({ id, key: key(officialPage, workingPage), officialPage, workingPage, createdAt });
+  const reports = [
+    saved(1, 1, "2026-11-23T01:00:00Z", "old"), saved(1, 1, "2026-11-23T02:00:00Z", "new"),
+    saved(2, 2, "2026-11-23T01:00:00Z"),
+    // Page 3 was compared with baseline page 4 on a computer whose pin said so; here the match says 3.
+    saved(4, 3, "2026-11-23T01:00:00Z", "pinned"),
+  ];
+  const pages = plain(restore(5, 5, page => page, reports, key));
+  assert.deepEqual(pages.map(page => [page.workingPage, page.officialPage, page.status, page.report?.id ?? null]), [
+    [1, 1, "complete", "new"], [2, 2, "complete", "2:2:2026-11-23T01:00:00Z"], [3, 4, "complete", "pinned"], [4, 4, "pending", null], [5, 5, "pending", null],
+  ]);
+  assert.deepEqual(plain(restore(3, 3, page => page, [], key)).map(page => page.status), ["pending", "pending", "pending"], "nothing stored: nothing complete");
+});

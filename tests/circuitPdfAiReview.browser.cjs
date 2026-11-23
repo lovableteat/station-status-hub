@@ -27,7 +27,8 @@ async function verifyAnnotations(dialog,page,width) {
     assert.ok(placement.error<=1.1,`annotation coordinate error ${placement.error}px at viewport ${width}px`);
     assert.equal(placement.labelOverlaps,false);
   }
-  assert.equal(await unclear.evaluate(node=>getComputedStyle(node).borderTopStyle),'dashed');
+  // 2026-11-23 (「標註蓋掉導致看不到原本是甚麼」): marks no longer draw on the area; 證據不足 keeps a dashed line just outside it.
+  assert.deepEqual(await unclear.evaluate(node=>{const style=getComputedStyle(node);return {outline:style.outlineStyle,offset:parseFloat(style.outlineOffset)>0,border:style.borderTopStyle,fill:style.backgroundColor};}),{outline:'dashed',offset:true,border:'none',fill:'rgba(0, 0, 0, 0)'});
   assert.equal(await region.getByRole('button',{name:/^(基準版|比對版) F3：/}).count(),0);
   assert.equal(await region.getByRole('button',{name:/^(基準版|比對版) F1：文字改了：PCIE_RX_P → PCIE_RX_N$/}).count(),2,'the difference found without AI is boxed on both drawings');
   assert.equal(await region.getByText('位置未能確認',{exact:true}).count(),2);
@@ -38,8 +39,8 @@ async function verifyAnnotations(dialog,page,width) {
   if(width<768) {
     await working.scrollIntoViewIfNeeded();
     await page.screenshot({path:path.join(evidence,`annotations-working-${width}.png`)});
-    await working.tap();
-  } else await working.click();
+    await working.locator('span').first().tap();
+  } else await working.locator('span').first().click(); // only the number tag takes clicks (2026-11-23)
   await first.locator('textarea').waitFor();
   assert.equal(await first.getAttribute('open'),'');
 }
@@ -189,6 +190,7 @@ async function runLocalFirst(browser,origin,width) {
     await all.click();await finished();
     assert.equal(await qa(()=>window.__circuitAiQA.calls.length),2);assert.equal(await qa(()=>window.__circuitAiQA.saves),6);assert.ok(await qa(()=>window.__circuitAiQA.loadAll)>=2);
 
+
     // The renamed net is one difference with its place, in front of what the model added.
     if(phone)await chip(2).tap();else await chip(2).click();
     await dialog.getByRole('heading',{name:'比對版第 2 頁 · 基準版第 2 頁初審摘要',exact:true}).waitFor();
@@ -256,6 +258,15 @@ async function runLocalFirst(browser,origin,width) {
     await all.click();await finished();
     assert.equal(await qa(()=>window.__circuitAiQA.calls.length),0);
     assert.deepEqual(await qa(()=>window.__circuitAiQA.saveRecords.slice(-6).map(row=>[row.workingPage,row.modelLabel,row.findings]).sort((a,b)=>a[0]-b[0])),[[1,'本機比對（未使用 AI）',0],[2,'本機比對（未使用 AI）',2],[3,'本機比對（未使用 AI）',0],[4,'本機比對（未使用 AI）',0],[5,'本機比對（未使用 AI）',2],[6,'本機比對（未使用 AI）',0]]);
+    // 2026-11-23 「我在另一個電腦比對完成，為何換一個電腦看不到了」: a window opened afresh (another computer) lists what is stored
+    // without pressing anything, and compares nothing again.
+    const callsBefore=await qa(()=>window.__circuitAiQA.calls.length),savesBefore=await qa(()=>window.__circuitAiQA.saves);
+    await dialog.getByRole('button',{name:'關閉 AI 比對',exact:true}).click();await dialog.waitFor({state:'detached'});
+    await page.getByRole('button',{name:'開啟本頁 AI 初審',exact:true}).click();
+    await progress.getByRole('status').filter({hasText:/已儲存 6／6 頁 · 相同 4 頁 · 有差異 2 頁/}).waitFor();
+    assert.equal(await dialog.getByText('還沒有比對結果',{exact:true}).count(),0);
+    assert.equal(await qa(()=>window.__circuitAiQA.calls.length),callsBefore,'opening the window sends nothing to the AI');
+    assert.equal(await qa(()=>window.__circuitAiQA.saves),savesBefore,'and stores nothing');
     assert.ok(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth+1));
     assert.deepEqual(errors,[]);
     return {width,checks:['identical sheets settled without AI','no page compared or stored twice','renamed net is one located difference','zoom viewer follows a chosen difference','report holds summary, pages, differences and drawings','timeout and dropped connection recover by themselves','comparison without AI costs nothing']};

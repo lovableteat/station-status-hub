@@ -32,10 +32,17 @@ export async function circuitPdfPageSize(pdf: PDFDocumentProxy, pageNumber: numb
  * Draws one page at `scale` CSS pixels per point. The canvas is sharpened for the screen's pixel ratio, within a pixel budget
  * so a large sheet zoomed in cannot exceed what the browser can allocate. Rendering is cancelled when `signal` aborts.
  */
-export async function renderCircuitPdfPage(pdf: PDFDocumentProxy, pageNumber: number, canvas: HTMLCanvasElement, scale: number, signal?: AbortSignal) {
+/** Pixels one whole-page drawing may use; past it the page is drawn coarser and useSharpPdfRegion sharpens what is on screen. */
+export const CIRCUIT_PDF_RENDER_BUDGET = 24_000_000;
+/** Device pixels per CSS pixel a whole page of this size is drawn at. */
+export function circuitPdfRenderRatio(width: number, height: number, budget = CIRCUIT_PDF_RENDER_BUDGET) {
+  return Math.min(window.devicePixelRatio || 1, Math.sqrt(budget / Math.max(1, width * height)), 3);
+}
+
+export async function renderCircuitPdfPage(pdf: PDFDocumentProxy, pageNumber: number, canvas: HTMLCanvasElement, scale: number, signal?: AbortSignal, budget = CIRCUIT_PDF_RENDER_BUDGET) {
   const page = await pdf.getPage(pageNumber);
   const viewport = page.getViewport({ scale });
-  const budget = 24_000_000, ratio = Math.min(window.devicePixelRatio || 1, Math.sqrt(budget / Math.max(1, viewport.width * viewport.height)), 3);
+  const ratio = circuitPdfRenderRatio(viewport.width, viewport.height, budget);
   const width = Math.max(1, Math.floor(viewport.width * ratio)), height = Math.max(1, Math.floor(viewport.height * ratio));
   // Drawn off screen first, so the page on screen is replaced in one step instead of flashing white.
   const buffer = document.createElement("canvas");
@@ -50,6 +57,30 @@ export async function renderCircuitPdfPage(pdf: PDFDocumentProxy, pageNumber: nu
   canvas.style.width = `${viewport.width}px`; canvas.style.height = `${viewport.height}px`;
   canvas.getContext("2d")?.drawImage(buffer, 0, 0);
   return { width: viewport.width, height: viewport.height };
+}
+
+/**
+ * One part of a page at the given zoom, at the screen's full sharpness, into `canvas` placed over that part of the sheet
+ * (CSS pixels of the zoomed page). Returns false when cancelled.
+ */
+export async function renderCircuitPdfRegion(pdf: PDFDocumentProxy, pageNumber: number, canvas: HTMLCanvasElement, scale: number, region: { x: number; y: number; width: number; height: number }, signal?: AbortSignal) {
+  const page = await pdf.getPage(pageNumber);
+  const viewport = page.getViewport({ scale });
+  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  const width = Math.max(1, Math.ceil(region.width * ratio)), height = Math.max(1, Math.ceil(region.height * ratio));
+  const buffer = document.createElement("canvas");
+  buffer.width = width; buffer.height = height;
+  const task: RenderTask = page.render({ canvas: buffer, viewport, transform: [ratio, 0, 0, ratio, -region.x * ratio, -region.y * ratio] });
+  const cancel = () => task.cancel();
+  signal?.addEventListener("abort", cancel, { once: true });
+  try { await task.promise; }
+  catch (failure) { if (signal?.aborted) return false; throw failure; }
+  finally { signal?.removeEventListener("abort", cancel); }
+  if (signal?.aborted) return false;
+  canvas.width = width; canvas.height = height;
+  Object.assign(canvas.style, { left: `${region.x}px`, top: `${region.y}px`, width: `${region.width}px`, height: `${region.height}px` });
+  canvas.getContext("2d")?.drawImage(buffer, 0, 0);
+  return true;
 }
 
 /** Renders only the cropped area, from the PDF itself rather than the screen, so the picture stays sharp at any zoom. */

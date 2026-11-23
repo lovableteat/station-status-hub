@@ -80,6 +80,33 @@ export function buildCircuitPdfAiBatchPages(officialCount: number, workingCount:
   });
 }
 
+/**
+ * The page list as stored: every page of the pair, with the saved result of each one already in it. 2026-11-23 「我在另一個
+ * 電腦比對完成，為何換一個電腦看不到了」: the list started empty on every open, so results saved from another computer (or
+ * before this window opened) only showed after pressing 全部頁面比對 again. A page whose result was saved against another
+ * baseline page (a page match pinned on that computer, which keeps its pins locally) still shows that result, for that pair.
+ */
+export function restoreCircuitPdfAiBatchPages(
+  officialCount: number, workingCount: number, officialPageFor: (workingPage: number) => number,
+  reports: readonly CircuitPdfAiReviewReport[], key: (officialPage: number, workingPage: number) => string,
+): CircuitPdfAiBatchPage[] {
+  const latest = new Map<string, CircuitPdfAiReviewReport>(), byWorking = new Map<number, CircuitPdfAiReviewReport>();
+  for (const report of reports) {
+    const known = latest.get(report.key);
+    if (!known || report.createdAt > known.createdAt) latest.set(report.key, report);
+    const other = byWorking.get(report.workingPage);
+    if (!other || report.createdAt > other.createdAt) byWorking.set(report.workingPage, report);
+  }
+  return buildCircuitPdfAiBatchPages(officialCount, workingCount, officialPageFor).map(page => {
+    const exact = page.officialPage === null ? undefined : latest.get(key(page.officialPage, page.workingPage));
+    if (exact) return { ...page, status: "complete" as const, report: exact };
+    const elsewhere = byWorking.get(page.workingPage);
+    return elsewhere && elsewhere.officialPage >= 1 && elsewhere.officialPage <= officialCount
+      ? { ...page, officialPage: elsewhere.officialPage, status: "complete" as const, report: elsewhere }
+      : page;
+  });
+}
+
 function failureMessage(failure: unknown, fallback: string): string {
   return failure && typeof failure === "object" && "message" in failure && typeof failure.message === "string" && failure.message.trim()
     ? failure.message : fallback;

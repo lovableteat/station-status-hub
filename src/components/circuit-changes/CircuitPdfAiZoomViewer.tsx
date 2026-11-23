@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Maximize2, Minus, Plus, X } from "lucide-react";
+import { Eye, EyeOff, Maximize2, Minus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { CircuitCropRect } from "./circuitPdf";
 import type { CircuitPdfAiFinding, CircuitPdfAiReviewReport, CircuitPdfReviewPage } from "./circuitPdfAiReview";
-import { circuitPdfPageSize, renderCircuitPdfPage } from "./pdfRender";
+import { circuitPdfPageSize, CIRCUIT_PDF_RENDER_BUDGET, renderCircuitPdfPage } from "./pdfRender";
+import { useSharpPdfRegion } from "./useSharpPdfRegion";
 
 type Side = "official" | "working";
 type Mode = "both" | Side;
 const SIDE_LABEL: Record<Side, string> = { official: "基準版", working: "比對版" };
-const ZOOMS = [1, 1.5, 2, 3, 4, 6, 8];
+// Up to 16× (2026-11-23 「為何不能進一步放大」, it stopped at 8× and went soft there): past 4× the whole page is drawn coarser and
+// useSharpPdfRegion draws the part on screen again at full sharpness.
+const ZOOMS = [1, 1.5, 2, 3, 4, 6, 8, 12, 16];
+const DEEP_ZOOM_BUDGET = 8_000_000;
 const boxOf = (finding: CircuitPdfAiFinding, side: Side) => (side === "official" ? finding.officialBox : finding.workingBox) ?? null;
 
 /** One drawing at the chosen zoom, sharpened again from the PDF every time the zoom changes, with the differences boxed. */
@@ -21,7 +25,7 @@ function ZoomPane({ source, side, findings, zoom, selected, onSelect, centre, re
   register: (side: Side, node: HTMLDivElement | null) => void;
   onScrolled: (side: Side, middle: { x: number; y: number }) => void;
 }) {
-  const scroller = useRef<HTMLDivElement | null>(null), canvas = useRef<HTMLCanvasElement>(null);
+  const scroller = useRef<HTMLDivElement | null>(null), canvas = useRef<HTMLCanvasElement>(null), sheet = useRef<HTMLDivElement>(null);
   const [frame, setFrame] = useState({ width: 0, height: 0 });
   const [page, setPage] = useState<{ width: number; height: number } | null>(null);
   const [drawn, setDrawn] = useState<{ width: number; height: number } | null>(null);
@@ -52,6 +56,8 @@ function ZoomPane({ source, side, findings, zoom, selected, onSelect, centre, re
 
   const fit = page && frame.width > 40 && frame.height > 40 ? Math.min((frame.width - 16) / page.width, (frame.height - 16) / page.height) : 0;
   const scale = fit * zoom;
+  const budget = zoom > 4 ? DEEP_ZOOM_BUDGET : CIRCUIT_PDF_RENDER_BUDGET;
+  const sharp = useSharpPdfRegion({ pdf: source.pdf, page: source.page, scale, size: drawn, surface: sheet, clip: scroller, budget });
   useEffect(() => {
     const output = canvas.current, node = scroller.current;
     if (!output || !node || !scale) return;
@@ -59,14 +65,14 @@ function ZoomPane({ source, side, findings, zoom, selected, onSelect, centre, re
     settling.current = true;
     // A short wait so stepping through several zoom levels draws only the last one.
     const timer = window.setTimeout(() => {
-      void renderCircuitPdfPage(source.pdf, source.page, output, scale, controller.signal).then(size => {
+      void renderCircuitPdfPage(source.pdf, source.page, output, scale, controller.signal, budget).then(size => {
         if (!size || controller.signal.aborted) return;
         place.current = true;
         setDrawn({ ...size });
       }).catch(() => { if (!controller.signal.aborted) setFailed(true); });
     }, 90);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [source.pdf, source.page, scale, centre.token]);
+  }, [source.pdf, source.page, scale, centre.token, budget]);
   // The place is set once the sheet really has its new size on screen: set any earlier, the browser clamps it to the
   // old size (the pane was not scrollable yet) and the chosen difference ends up off to one side.
   useLayoutEffect(() => {
@@ -98,8 +104,9 @@ function ZoomPane({ source, side, findings, zoom, selected, onSelect, centre, re
       onPointerDown={event => { if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return; const node = scroller.current!; drag.current = { x: event.clientX, y: event.clientY, left: node.scrollLeft, top: node.scrollTop }; node.setPointerCapture(event.pointerId); }}
       onPointerMove={event => { const start = drag.current, node = scroller.current; if (!start || !node) return; node.scrollLeft = start.left - (event.clientX - start.x); node.scrollTop = start.top - (event.clientY - start.y); }}
       onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
-      <div className="circuit-pdf-ai-zoom-sheet" style={drawn ? { width: drawn.width, height: drawn.height } : undefined}>
+      <div ref={sheet} className="circuit-pdf-ai-zoom-sheet" style={drawn ? { width: drawn.width, height: drawn.height } : undefined}>
         <canvas ref={canvas} role="img" aria-label={`${label}第 ${source.page} 頁放大圖`} hidden={!drawn} />
+        <canvas ref={sharp.canvas} className="circuit-pdf-ai-zoom-detail-canvas" aria-hidden="true" hidden={!drawn || !sharp.shown} />
         {drawn && findings.map(finding => {
           const rect = boxOf(finding, side) as CircuitCropRect | null;
           if (!rect) return null;
@@ -131,6 +138,8 @@ export function CircuitPdfAiZoomViewer({ open, onOpenChange, report, official, w
   const [mode, setMode] = useState<Mode>(narrow ? "working" : "both");
   const [zoom, setZoom] = useState(1);
   const [selected, setSelected] = useState("");
+  // 隱藏標註: the bare drawing, to read what a box sits on (H).
+  const [marksHidden, setMarksHidden] = useState(false);
   const [centre, setCentre] = useState({ x: 0.5, y: 0.5, token: 0 });
   const panes = useRef<Partial<Record<Side, HTMLDivElement | null>>>({});
   const leading = useRef<Side | null>(null);
@@ -185,9 +194,10 @@ export function CircuitPdfAiZoomViewer({ open, onOpenChange, report, official, w
   const current = findings.find(item => item.id === selected);
   const sides: Side[] = mode === "both" ? ["official", "working"] : [mode];
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent hideCloseButton className="circuit-pdf-ai-zoom" data-testid="circuit-pdf-ai-zoom"
-    onKeyDown={event => { if ((event.target as HTMLElement).closest("input, textarea, select")) return; if (event.key === "+" || event.key === "=") { event.preventDefault(); step(1); } if (event.key === "-") { event.preventDefault(); step(-1); } if (event.key === "0") { event.preventDefault(); setZoom(1); } }}>
+    data-marks={marksHidden ? "hidden" : "shown"}
+    onKeyDown={event => { if ((event.target as HTMLElement).closest("input, textarea, select")) return; if (event.key === "h" || event.key === "H") { event.preventDefault(); setMarksHidden(value => !value); } if (event.key === "+" || event.key === "=") { event.preventDefault(); step(1); } if (event.key === "-") { event.preventDefault(); step(-1); } if (event.key === "0") { event.preventDefault(); setZoom(1); } }}>
     <header className="circuit-pdf-ai-zoom-bar">
-      <div><DialogTitle><Maximize2 aria-hidden="true" />放大檢視</DialogTitle><DialogDescription>兩版一起縮放與移動。拖曳圖面移動，按 Ctrl 加滾輪或右邊的按鈕縮放。</DialogDescription></div>
+      <div><DialogTitle><Maximize2 aria-hidden="true" />放大檢視</DialogTitle><DialogDescription>兩版一起縮放與移動，最大 1600%。拖曳圖面移動（框裡也可以拖），按 Ctrl 加滾輪或右邊的按鈕縮放，按 H 暫時隱藏標註。</DialogDescription></div>
       <div className="circuit-pdf-ai-zoom-modes" role="group" aria-label="顯示哪一版">
         {(["both", "official", "working"] as const).map(item => <button key={item} type="button" aria-pressed={mode === item} title={item === "both" ? "基準版與比對版並排，一起移動" : `只看${SIDE_LABEL[item]}；來回切換可以看出哪裡不一樣`} onClick={() => show(item)}>{item === "both" ? "兩版並排" : SIDE_LABEL[item]}</button>)}
       </div>
@@ -197,6 +207,7 @@ export function CircuitPdfAiZoomViewer({ open, onOpenChange, report, official, w
         <Button type="button" variant="outline" aria-label="放大" title="放大（鍵盤 +）" disabled={zoom >= ZOOMS[ZOOMS.length - 1]} onClick={() => step(1)}><Plus aria-hidden="true" /></Button>
         <Button type="button" variant="outline" title="縮回整頁（鍵盤 0）" disabled={zoom === 1} onClick={() => { setZoom(1); place.current = { x: 0.5, y: 0.5 }; setCentre(value => ({ x: 0.5, y: 0.5, token: value.token + 1 })); }}>整頁</Button>
       </div>
+      {findings.length > 0 && <Button type="button" variant="outline" className="circuit-pdf-ai-zoom-marks" aria-pressed={marksHidden} title={marksHidden ? "把 AI 找到的地方再框出來（鍵盤 H）" : "暫時拿掉框，看清楚框裡原本的線路（鍵盤 H）"} onClick={() => setMarksHidden(value => !value)}>{marksHidden ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}{marksHidden ? "顯示標註" : "隱藏標註"}</Button>}
       <Button type="button" variant="ghost" aria-label="關閉放大檢視" title="關閉放大檢視，回到比對結果" onClick={() => onOpenChange(false)}><X aria-hidden="true" /></Button>
     </header>
     {findings.length > 0 && <nav className="circuit-pdf-ai-zoom-findings" aria-label="跳到差異">

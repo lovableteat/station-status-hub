@@ -453,3 +453,24 @@ button.circuit-pdf-align > svg { width: 14px; height: 14px; }
   .circuit-pdf-pane-page input { width: 56px; height: 40px; font-size: 16px; }
   button.circuit-pdf-align { height: 44px; }
 }
+
+/* AI marks that leave the drawing readable (2026-11-23 「現有的標註方式我放大後會標註蓋掉導致看不到原本是甚麼」): no tint over
+   the area and no line on its edge. Four corner brackets sit just outside the area, the number tag sits outside above it,
+   and only the tag takes clicks, so the drawing can still be dragged and read right through a mark. 隱藏標註 (H) removes them. */
+.circuit-pdf-ai-mark { border: 0; background: transparent; pointer-events: none; --mark: #ff5a5f; }
+.circuit-pdf-ai-mark[data-certainty="unclear"] { border: 0; background: transparent; --mark: #f0a03c; }
+.circuit-pdf-ai-mark[data-decision="confirmed"] { border: 0; background: transparent; --mark: hsl(var(--primary)); }
+.circuit-pdf-ai-mark::before { content: ""; position: absolute; inset: -5px; pointer-events: none;
+  background:
+    linear-gradient(var(--mark), var(--mark)) top left / 12px 2px no-repeat, linear-gradient(var(--mark), var(--mark)) top left / 2px 12px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) top right / 12px 2px no-repeat, linear-gradient(var(--mark), var(--mark)) top right / 2px 12px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) bottom left / 12px 2px no-repeat, linear-gradient(var(--mark), var(--mark)) bottom left / 2px 12px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) bottom right / 12px 2px no-repeat, linear-gradient(var(--mark), var(--mark)) bottom right / 2px 12px no-repeat; }
+.circuit-pdf-ai-mark > span { bottom: calc(100% + 6px); left: -5px; padding: 0 5px; border-radius: 3px; background: var(--mark); box-shadow: 0 1px 3px #0006; pointer-events: auto; cursor: pointer; }
+.circuit-pdf-ai-mark[data-certainty="unclear"] > span { background: var(--mark); color: #1b1203; }
+.circuit-pdf-ai-mark:hover::before, .circuit-pdf-ai-mark:focus-visible::before { inset: -7px; }
+.circuit-pdf-ai-mark:hover, .circuit-pdf-ai-mark:focus-visible { outline: 1px dashed var(--mark); outline-offset: 5px; }
+.circuit-pdf-ai-marks-toggle[aria-pressed="true"] { border-color: hsl(var(--primary)); }
+.circuit-pdf-surface > canvas.circuit-pdf-sharp-region { position: absolute; display: block; pointer-events: none; }
+.circuit-pdf-surface > canvas.circuit-pdf-sharp-region[hidden], .circuit-pdf-ai-zoom-detail-canvas[hidden] { display: none; }
+.circuit-pdf-ai-mark[data-certainty="unclear"] { outline: 1px dashed var(--mark); outline-offset: 5px; }

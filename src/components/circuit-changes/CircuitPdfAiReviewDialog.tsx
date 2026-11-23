@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { loadSpecFillModels, type SpecFillModel } from "../material-requests/materialSpecFillService";
 import { buildCircuitLocalReport, CIRCUIT_AI_CATEGORY_LABELS, circuitPdfAiReviewKey, isCircuitReportIdentical, runCircuitPdfAiReview, type CircuitPdfAiFinding, type CircuitPdfAiReviewReport, type CircuitPdfReviewPage } from "./circuitPdfAiReview";
-import { buildCircuitPdfAiBatchPages, CIRCUIT_PDF_AI_BATCH_CONCURRENCY, CircuitPdfAiBatchStop, parseCircuitPdfAiPageSelection, runCircuitPdfAiBatchReview, type CircuitPdfAiBatchPage, type CircuitPdfAiBatchPolicy, type CircuitPdfAiBatchWait } from "./circuitPdfAiBatchReview";
+import { buildCircuitPdfAiBatchPages, CIRCUIT_PDF_AI_BATCH_CONCURRENCY, CircuitPdfAiBatchStop, parseCircuitPdfAiPageSelection, restoreCircuitPdfAiBatchPages, runCircuitPdfAiBatchReview, type CircuitPdfAiBatchPage, type CircuitPdfAiBatchPolicy, type CircuitPdfAiBatchWait } from "./circuitPdfAiBatchReview";
 import { findCircuitCommonChanges, summarizeCircuitLocalDiff, type CircuitCommonChanges, type CircuitLocalPageDiff } from "./circuitPdfLocalDiff";
 import { compareCircuitPdfPages } from "./circuitPdfLocalDiffReader";
 import { describeCircuitAiPage, type CircuitAiReportPage } from "./circuitPdfAiReport";
@@ -154,6 +154,28 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
     localRef.current = new Map(); commonRef.current = null; savedChecked.current = false;
     return () => { request.current?.abort(); exportRequest.current?.abort(); };
   }, [sourceKey, mappingKey, open]);
+
+  // What is already stored for this pair shows as soon as the window opens, on any computer (2026-11-23 「我在另一個電腦
+  // 比對完成，為何換一個電腦看不到了」: the list started empty until 全部頁面比對 was pressed again). The run itself still looks
+  // the results up again before comparing, so nothing is compared or paid for twice.
+  const [savedLoad, setSavedLoad] = useState<{ state: "idle" | "loading" | "failed"; attempt: number }>({ state: "idle", attempt: 0 });
+  useEffect(() => {
+    if (!open || !validSources || !allPages?.onLoadAll || batchRef.current.length || !sourceOfficial || !sourceWorking) return;
+    let present = true;
+    const officialId = sourceOfficial.id, workingId = sourceWorking.id;
+    setSavedLoad(value => ({ ...value, state: "loading" }));
+    allPages.onLoadAll().then(reports => {
+      if (!present) return;
+      setSavedLoad(value => ({ ...value, state: "idle" }));
+      if (batchRef.current.length) return;
+      const pages = restoreCircuitPdfAiBatchPages(officialCount, workingCount, officialPageFor, reports,
+        (officialPage, workingPage) => circuitPdfAiReviewKey({ officialVersionId: officialId, workingVersionId: workingId, officialPage, workingPage }));
+      if (pages.some(page => page.status === "complete")) { batchRef.current = pages; setBatch(pages); }
+    }).catch(() => { if (present) setSavedLoad(value => ({ ...value, state: "failed" })); });
+    return () => { present = false; };
+  // officialPageFor changes together with mappingKey.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, sourceKey, mappingKey, validSources, officialCount, workingCount, savedLoad.attempt]);
 
   useEffect(() => {
     request.current?.abort(); request.current = null; setAnalysing(false); setDirty(false); setError(""); setHistoryId("");
@@ -477,7 +499,11 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
       {error && error !== stop?.message && <p role="alert" className="circuit-pdf-ai-error">{error}</p>}
       {notice && <p role="status" className="circuit-pdf-ai-notice"><Check aria-hidden="true" />{notice}</p>}
       {analysing && <p role="status" className="circuit-pdf-ai-progress"><LoaderCircle aria-hidden="true" />正在比對這一頁：先在本機逐字、逐點比對，有差異才送 AI…</p>}
-      {!result && !batch.length && !analysing && !batchRunning && validPair && <div className="circuit-pdf-ai-empty"><Sparkles aria-hidden="true" /><h3>還沒有比對結果</h3><p>按「全部頁面比對」：相同的頁直接完成，有差異的頁才送 AI。每頁結果自動儲存，中斷後再按一次只會接著做還沒比對的頁；完成後按「下載報告」。</p></div>}
+      {!result && !batch.length && !analysing && !batchRunning && validPair && (savedLoad.state === "loading"
+        ? <div className="circuit-pdf-ai-empty" role="status"><LoaderCircle className="circuit-pdf-ai-spin" aria-hidden="true" /><h3>正在讀取已存的比對結果…</h3><p>在任何一台電腦比對過的頁都存在系統裡，讀完就會列出來。</p></div>
+        : savedLoad.state === "failed"
+          ? <div className="circuit-pdf-ai-empty" role="alert"><WifiOff aria-hidden="true" /><h3>已存的比對結果讀不到</h3><p>可能是網路中斷；結果都還在系統裡。<Button type="button" variant="outline" size="sm" title="重新讀取這兩個版本已存的比對結果" onClick={() => setSavedLoad(value => ({ state: "idle", attempt: value.attempt + 1 }))}><RotateCcw aria-hidden="true" />重新讀取</Button></p></div>
+          : <div className="circuit-pdf-ai-empty"><Sparkles aria-hidden="true" /><h3>還沒有比對結果</h3><p>這兩個版本還沒有人比對過（每台電腦比對的結果都會存在系統裡，這裡會直接列出）。按「全部頁面比對」：相同的頁直接完成，有差異的頁才送 AI。每頁結果自動儲存，中斷後再按一次只會接著做還沒比對的頁；完成後按「下載報告」。</p></div>)}
       {result && <section className="circuit-pdf-ai-results" aria-label="本頁 AI 初審結果"><header><h3>比對版第 {result.workingPage} 頁 · 基準版第 {result.officialPage} 頁初審摘要</h3><p>{result.summary}</p><small>{result.generatedBy} · {new Date(result.createdAt).toLocaleString("zh-TW")} · {result.modelLabel}{result.usage ? ` · ${(result.usage.input + result.usage.output).toLocaleString()} tokens` : ""}</small></header>
         <dl className="circuit-pdf-ai-checks">{result.checks.map(item => <div key={item.category} data-state={item.state}><dt>{CIRCUIT_AI_CATEGORY_LABELS[item.category]}<strong>{checkLabels[item.state]}</strong></dt><dd>{item.note}</dd></div>)}</dl>
         {result.key === key && official && working && <CircuitPdfAiAnnotations report={result} official={official} working={working} onFinding={id => { openFinding(id); }} />}

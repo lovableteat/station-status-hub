@@ -1,12 +1,13 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { ArrowLeftRight, Check, ChevronDown, ImagePlus, ChevronLeft, ChevronRight, Crop, Eraser, FileUp, Hand, Link2, Minus, Pencil, PenLine, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, Undo2, UnfoldHorizontal, Unlink, Upload, X } from "lucide-react";
+import { ArrowLeftRight, Check, ChevronDown, ImagePlus, ChevronLeft, ChevronRight, Crop, Eraser, Eye, EyeOff, FileUp, Hand, Link2, Minus, Pencil, PenLine, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, Undo2, UnfoldHorizontal, Unlink, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   circuitPdfCaption, circuitPdfImageName, circuitPdfPageState, circuitPdfProgress, circuitPdfVersionLabel, normalizeCropRect,
   type CircuitCropRect, type CircuitPdfDocument, type CircuitPdfPageState, type CircuitPdfRegistry,
 } from "./circuitPdf";
-import { circuitPdfPageSize, cropCircuitPdfPage, renderCircuitPdfPage } from "./pdfRender";
+import { circuitPdfPageSize, cropCircuitPdfPage, CIRCUIT_PDF_RENDER_BUDGET, renderCircuitPdfPage } from "./pdfRender";
+import { useSharpPdfRegion } from "./useSharpPdfRegion";
 import { CIRCUIT_IMAGE_SIDE_LABELS, type CircuitImageSide, type CircuitImageSource } from "./types";
 import type { CircuitPdfModel } from "./useCircuitPdfs";
 import type { CircuitPdfInkModel } from "./useCircuitPdfInk";
@@ -27,7 +28,11 @@ interface AiMark { id: string; title: string; rect: CircuitCropRect; certainty: 
 interface Selection { pane: Pane; rect: CircuitCropRect }
 const SHORT_SIDE: Record<CircuitImageSide, string> = { before: "前", after: "後", reference: "補" };
 const STATE_LABEL: Record<CircuitPdfPageState, string> = { here: "在這版看過", older: "在較早的版本看過", none: "還沒看" };
-const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 2.5, 3, 4];
+// Up to 800 % (2026-11-23 「為何不能進一步放大」): past 400 % the whole page is drawn coarser and useSharpPdfRegion draws the part on
+// screen again at full sharpness, so memory stays bounded.
+const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8];
+const DEEP_ZOOM_BUDGET = 12_000_000;
+const AI_MARKS_HIDDEN_KEY = "circuit-pdf-ai-marks-hidden:v1";
 const isPdf = (file: File) => /\.pdf$/i.test(file.name) || /pdf/i.test(file.type);
 const carriesFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
 const finePointer = () => window.matchMedia?.("(pointer: fine)").matches ?? true;
@@ -63,6 +68,9 @@ export function CircuitPdfPanel({ onUploaded, mode = "review", captureSide = "be
 }) {
   const { active, compare, official, documents, registry, page } = pdfs;
   const [zoom, setZoom] = useState<number | "fit">("fit");
+  // 隱藏標註 (2026-11-23 「標註蓋掉導致看不到原本是甚麼」): the drawing without any AI box, remembered on this computer.
+  const [aiMarksHidden, setAiMarksHidden] = useState(() => { try { return window.localStorage.getItem(AI_MARKS_HIDDEN_KEY) === "1"; } catch { return false; } });
+  const toggleAiMarks = useCallback(() => setAiMarksHidden(value => { try { window.localStorage.setItem(AI_MARKS_HIDDEN_KEY, value ? "0" : "1"); } catch { /* storage unavailable */ } return !value; }), []);
   const [fitScale, setFitScale] = useState(1);
   const [tool, setTool] = useState<CircuitPdfTool>(() => finePointer() ? "crop" : "pan");
   const [inkPane, setInkPane] = useState<Pane>("active");
@@ -142,6 +150,17 @@ export function CircuitPdfPanel({ onUploaded, mode = "review", captureSide = "be
   useEffect(() => { setPageInput(String(page)); setSelection(null); stage.current?.scrollTo({ top: 0 }); }, [page, active?.id]);
   useEffect(() => { setSelection(null); }, [compare?.id, pdfs.comparePage]);
   useEffect(() => { if (!captured) return; const timer = setTimeout(() => setCaptured(""), 4000); return () => clearTimeout(timer); }, [captured]);
+  // H shows or hides the AI boxes on both drawings (AI 比對 only; never while typing).
+  useEffect(() => {
+    if (mode !== "ai") return;
+    const key = (event: KeyboardEvent) => {
+      if ((event.key !== "h" && event.key !== "H") || event.ctrlKey || event.metaKey || event.altKey) return;
+      if ((event.target as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable='true'], .circuit-pdf-ai-dialog, .circuit-pdf-ai-zoom")) return;
+      event.preventDefault(); toggleAiMarks();
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [mode, toggleAiMarks]);
   // Escape drops the framed area or version menu; closing the workspace stays an explicit action.
   useEffect(() => {
     if (!selection && !versionsOpen && !deleting) return;
@@ -444,7 +463,7 @@ export function CircuitPdfPanel({ onUploaded, mode = "review", captureSide = "be
         </span>;
   // AI 比對: what AI found on the page on screen, and its marks on both drawings.
   const aiPage = mode === "ai" && compare ? aiResults?.pages.get(page) || null : null;
-  const aiMarks = (side: "officialBox" | "workingBox"): AiMark[] => (aiPage?.live || []).flatMap(item => {
+  const aiMarks = (side: "officialBox" | "workingBox"): AiMark[] => aiMarksHidden ? [] : (aiPage?.live || []).flatMap(item => {
     const rect = item[side];
     return rect ? [{ id: item.id, title: item.title, rect, certainty: item.certainty ?? "suspected", decision: item.decision }] : [];
   });
@@ -530,6 +549,7 @@ export function CircuitPdfPanel({ onUploaded, mode = "review", captureSide = "be
           {linkGroup}{zoomGroup}{inkStatus}
           {uploadButton && <div className="circuit-pdf-tool-group" data-group="files">{uploadButton}</div>}
           {aiStatus}
+          {aiPage && aiPage.live.length > 0 && <Button type="button" variant="outline" data-circuit-tone="view" className="circuit-pdf-ai-marks-toggle" aria-pressed={aiMarksHidden} title={aiMarksHidden ? "把 AI 找到的地方再框出來（鍵盤 H）" : "暫時拿掉圖上的 AI 框，看清楚原本的線路（鍵盤 H）"} onClick={toggleAiMarks}>{aiMarksHidden ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}<span className="circuit-pdf-tool-text">{aiMarksHidden ? "顯示標註" : "隱藏標註"}</span></Button>}
           {aiRun}
         </> : <>{zoomGroup}{linkGroup}{inkStatus}</>}
       </div>
@@ -690,6 +710,8 @@ function PdfPage({ pane, pdf, row, page, scale, heading, header, aiMarks = [], o
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [rendering, setRendering] = useState(true);
   const [error, setError] = useState("");
+  const budget = scale > 4 ? DEEP_ZOOM_BUDGET : CIRCUIT_PDF_RENDER_BUDGET;
+  const sharp = useSharpPdfRegion({ pdf, page, scale, size: rendering ? null : size, surface, clip: [viewportRef, stage], budget });
   const drag = useRef<{ start: { x: number; y: number }; pan?: { left: number; top: number; x: number; y: number } } | null>(null);
   const space = useRef(false);
   const resizeCallback = useRef(onResize);
@@ -706,12 +728,12 @@ function PdfPage({ pane, pdf, row, page, scale, heading, header, aiMarks = [], o
     if (!pdf || !canvas.current) return;
     const controller = new AbortController();
     setRendering(true); setError("");
-    renderCircuitPdfPage(pdf, page, canvas.current, scale, controller.signal)
+    renderCircuitPdfPage(pdf, page, canvas.current, scale, controller.signal, budget)
       .then(result => { if (result && !controller.signal.aborted) setSize(result); })
       .catch(failure => { if (!controller.signal.aborted && (failure as { name?: string })?.name !== "RenderingCancelledException") setError("這一頁無法顯示，請重試或換一個版本。"); })
       .finally(() => { if (!controller.signal.aborted) setRendering(false); });
     return () => controller.abort();
-  }, [pdf, page, scale]);
+  }, [pdf, page, scale, budget]);
   const point = (event: ReactPointerEvent) => {
     const box = surface.current!.getBoundingClientRect();
     return { x: (event.clientX - box.left) / box.width, y: (event.clientY - box.top) / box.height };
@@ -750,6 +772,7 @@ function PdfPage({ pane, pdf, row, page, scale, heading, header, aiMarks = [], o
       }}
       onPointerCancel={() => { drag.current = null; }} onLostPointerCapture={() => { drag.current = null; }}>
       <canvas ref={canvas} aria-label={`${row.name} 第 ${page} 頁`} role="img" />
+      <canvas ref={sharp.canvas} className="circuit-pdf-sharp-region" aria-hidden="true" hidden={!sharp.shown || rendering} />
       {size && !rendering && !error && <CircuitPdfInkLayer key={`${row.id}:${page}:${tool}`} strokes={strokes} width={size.width} height={size.height} tool={tool} space={space}
         label={`${row.name} 第 ${page} 頁`} onAdd={onAddInk} onRemove={onRemoveInk} onTarget={onInkTarget} />}
       {crops.map(crop => <span key={crop.id} className="circuit-pdf-crop" data-side={crop.side} style={box(crop.rect)}><span>{SHORT_SIDE[crop.side]}</span></span>)}
