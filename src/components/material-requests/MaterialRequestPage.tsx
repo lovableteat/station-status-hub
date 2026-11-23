@@ -152,14 +152,14 @@ import {
 import { applyBomNoteSnapshot, applyRealtimeBomRecords, mergeBomWorkspaceRecords } from "./materialBomNoteSync";
 import type { BomTableColorTheme, BomWorkspaceArchive, BomWorkspaceProject } from "./materialBomStorage";
 import { loadBomWorkspaceArchives, loadBomWorkspaceProjects, saveBomWorkspaceArchive, saveBomWorkspaceProject, saveBomWorkspaceTableColorTheme } from "./materialBomStorage";
-import { loadBomWorkspaceForWrite, loadBomWorkspaceRecords, loadBomWorkspaceVersions, saveBomWorkspaceVersion } from "./materialBomStorage";
+import { loadBomVersionRecords, loadBomWorkspaceForWrite, loadBomWorkspaceRecords, loadBomWorkspaceVersions, saveBomWorkspaceVersion } from "./materialBomStorage";
 import { BomVersionCenter, type BomDiffLocateTarget, type BomDiffRequest } from "./BomVersionCenter";
 import { buildNvBomTableIndex, matchNvBomTableChange, type NvBomTableCandidate } from "./nvBomTableMatch";
 import type { NvBomChange } from "./nvBomCompare";
 import { BomUploadDialog, NEW_BOM_SERIES_TARGET, type BomUploadMeta, type PendingBomUpload } from "./BomUploadDialog";
 import { checkBomUploadRows } from "./bomUploadChecks";
 import type { BomUploadReview } from "./BomUploadDialog";
-import { carryBomTracking, classifyRetainedApplications, describeBomLineHistories, diffBomRecords, fillForwardBomTracking, linkBomVersions, recarryBomTracking, type BomLineHistory } from "./bomDiff";
+import { carryBomTracking, classifyRetainedApplications, createBomVersionLinker, describeBomLineHistories, diffBomRecords, fillForwardBomTracking, recarryBomTracking, type BomLineHistory, type BomVersionLink } from "./bomDiff";
 import {
   BOM_SERIES_NAME_LIMIT, BOM_VERSION_LABEL_LIMIT, BOM_VERSION_NOTE_LIMIT, bomFileBaseName, buildBomSeriesList, createBomSeriesId,
   bomVersionComparePair, createBomVersionWorkspaceId, findBomSeriesByWorkspace, inferBomSeriesForFile, nextBomVersionNumber, readBomDiffLocation, readBomLocateLocation, writeBomLocateLocation,
@@ -2238,6 +2238,10 @@ export function PendingMaterialsDialog({
     </Dialog>
   );
 }
+
+const NO_VERSION_LINKS: BomVersionLink[] = [];
+/** One macrotask, so the browser can paint and handle input between two pieces of background work. */
+const yieldToBrowser = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 const MATERIAL_CE_EDITOR_FIELDS = [
   { key: "level", id: "material-level", width: 80 },
@@ -4396,31 +4400,67 @@ export function MaterialRequestPage() {
   const [otherVersionRecords, setOtherVersionRecords] = useState<{ forWorkspaceId: string; key: string; versions: Array<{ workspaceId: string; label: string; records: MaterialWorkbookRecord[]; newer: boolean }>; failed: string[] } | null>(null);
   useEffect(() => {
     if (otherVersions.length === 0) { setOtherVersionRecords(null); return; }
+    // The version on screen first (E1.s, 2026-11-23: 「BOM時間超長」): the board's 15 other versions (~6 MB) were read at the
+    // same time as the board itself and slowed it down. They start once this version is fully loaded, newest first, two at a
+    // time, from this browser's copy when a version has not changed (loadBomVersionRecords).
+    if (!isFullDatasetLoaded) return;
     let cancelled = false;
     const forWorkspaceId = activeWorkspace.id;
     const activeNumber = activeVersionInfo?.version.version.versionNumber ?? Number.POSITIVE_INFINITY;
-    // One version that cannot be read (deleted meanwhile, offline) does not hide the others; the dialog names it and offers 重試.
-    void Promise.allSettled(otherVersions.map(async (item) => {
-      const cached = otherRecordsCache.current.get(item.workspace.id);
-      const records = cached && cached.updatedAt === item.workspace.updatedAt ? cached.records : await loadBomWorkspaceRecords(item.workspace.id);
-      otherRecordsCache.current.set(item.workspace.id, { updatedAt: item.workspace.updatedAt, records });
-      return { workspaceId: item.workspace.id, label: item.displayNumber, records, newer: item.version.versionNumber > activeNumber };
-    })).then((results) => {
+    type Loaded = { workspaceId: string; label: string; records: MaterialWorkbookRecord[]; newer: boolean };
+    const results: Array<{ ok: true; value: Loaded } | { ok: false }> = [];
+    let nextPosition = 0;
+    const readNext = async () => {
+      while (!cancelled && nextPosition < otherVersions.length) {
+        const position = nextPosition++;
+        const item = otherVersions[position];
+        try {
+          const cached = otherRecordsCache.current.get(item.workspace.id);
+          const records = cached && cached.updatedAt === item.workspace.updatedAt
+            ? cached.records
+            : await loadBomVersionRecords(item.workspace.id, { updatedAt: item.workspace.updatedAt, recordCount: item.workspace.payload.recordCount });
+          otherRecordsCache.current.set(item.workspace.id, { updatedAt: item.workspace.updatedAt, records });
+          results[position] = { ok: true, value: { workspaceId: item.workspace.id, label: item.displayNumber, records, newer: item.version.versionNumber > activeNumber } };
+        } catch {
+          // One version that cannot be read (deleted meanwhile, offline) does not hide the others; the dialog names it and offers 重試.
+          results[position] = { ok: false };
+        }
+      }
+    };
+    void Promise.all([readNext(), readNext()]).then(() => {
       if (cancelled) return;
-      const versions = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
-      const failed = results.flatMap((result, position) => (result.status === "rejected" ? [otherVersions[position].displayNumber] : []));
+      const versions = results.flatMap((result) => (result?.ok ? [result.value] : []));
+      const failed = results.flatMap((result, position) => (result && !result.ok ? [otherVersions[position].displayNumber] : []));
       setOtherVersionRecords({ forWorkspaceId, key: otherVersionsKey, versions, failed });
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- otherVersionsKey stands for otherVersions
-  }, [activeWorkspace.id, otherVersionsKey, otherVersionsAttempt]);
+  }, [activeWorkspace.id, otherVersionsKey, otherVersionsAttempt, isFullDatasetLoaded]);
   const otherVersionsReady = Boolean(otherVersionRecords && otherVersionRecords.forWorkspaceId === activeWorkspace.id && otherVersionRecords.key === otherVersionsKey);
   // Pairing is the expensive part and depends only on the rows' identity; a status, owner or Note change reuses it.
   const currentRowShape = useMemo(() => basePayload.records.map((record) => [record.id, record.refDes, record.refGroup, record.manufacturer, record.manufacturerPartNumber, record.partNumber, record.virtualAlternative ?? "", record.name].join("\u0001")).join("\u0002"), [basePayload.records]);
-  const otherVersionLinks = useMemo(() => (
-    otherVersionsReady && isFullDatasetLoaded && otherVersionRecords ? linkBomVersions(basePayload.records, otherVersionRecords.versions) : []
+  // Linked one version at a time with a turn for the browser in between, so a board with many versions never holds the page
+  // (16 versions took a quarter of a second in one go). Until a new linking is done the previous one stays in use.
+  const [otherVersionLinkState, setOtherVersionLinkState] = useState<{ key: string; forWorkspaceId: string; links: BomVersionLink[] } | null>(null);
+  useEffect(() => {
+    if (!otherVersionsReady || !isFullDatasetLoaded || !otherVersionRecords) return;
+    let cancelled = false;
+    const { key, forWorkspaceId, versions } = otherVersionRecords;
+    const linker = createBomVersionLinker(basePayload.records, versions);
+    void (async () => {
+      const links: BomVersionLink[] = [];
+      for (let index = 0; index < versions.length; index += 1) {
+        await yieldToBrowser();
+        if (cancelled) return;
+        links.push(linker.link(index));
+      }
+      if (!cancelled) setOtherVersionLinkState({ key, forWorkspaceId, links });
+    })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- currentRowShape stands for the rows' identity
-  ), [otherVersionsReady, isFullDatasetLoaded, otherVersionRecords, currentRowShape]);
+  }, [otherVersionsReady, isFullDatasetLoaded, otherVersionRecords, currentRowShape]);
+  const otherVersionsLinked = Boolean(otherVersionsReady && otherVersionLinkState && otherVersionLinkState.key === otherVersionRecords?.key && otherVersionLinkState.forWorkspaceId === activeWorkspace.id);
+  const otherVersionLinks = otherVersionsLinked && otherVersionLinkState ? otherVersionLinkState.links : NO_VERSION_LINKS;
   const retained = useMemo(() => (
     otherVersionLinks.length > 0 ? classifyRetainedApplications(otherVersionLinks, new Map(basePayload.records.map((record) => [record.id, record] as const)), previousWorkspaceId) : { retained: [], recarry: 0 }
   ), [otherVersionLinks, basePayload.records, previousWorkspaceId]);
@@ -6191,7 +6231,7 @@ export function MaterialRequestPage() {
         retainedGroups={retainedPendingGroups}
         onOpenRetained={(record) => { setPendingDialogOpen(false); setReturnToPending(true); openRetainedRecord(record); }}
         otherVersions={otherVersions.length === 0 ? undefined : {
-          loading: !otherVersionsReady,
+          loading: !otherVersionsLinked,
           failed: otherVersionRecords?.failed ?? [],
           onRetry: () => setOtherVersionsAttempt((current) => current + 1),
           recarry: retained.recarryRows ?? retained.recarry,
@@ -6227,7 +6267,7 @@ export function MaterialRequestPage() {
         workspaceName={activeWorkspace.name}
         exportedBy={user?.displayName || user?.username || "未知使用者"}
         open={weeklyProgressOpen}
-        ready={isFullDatasetLoaded && !isWorkspaceLoading && (otherVersions.length === 0 || otherVersionsReady)}
+        ready={isFullDatasetLoaded && !isWorkspaceLoading && (otherVersions.length === 0 || otherVersionsLinked)}
         onOpenChange={open => { setWeeklyProgressOpen(open); if (!open) { setPendingRestoreView(true); setPendingDialogOpen(true); } }}
       />}
       {specFillContext && specFillContext.accountId === user?.userId && specFillContext.workspaceId === activeWorkspace.id && canViewModuleAccess && <Suspense fallback={specFillOpen ? <div role="status" className="fixed inset-0 z-50 grid place-items-center bg-background/90">正在開啟依照片填表…</div> : null}><MaterialSpecFillDialog

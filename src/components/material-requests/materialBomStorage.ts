@@ -1530,6 +1530,75 @@ export async function saveBomWorkspaceVersion(workspaceId: string, version: BomW
   void patchCachedWorkspaceFields(workspaceId, (workspace) => ({ ...workspace, version }), assertWrite);
 }
 
+// The board's other versions, kept in this browser by their last change (E1.s, 2026-11-23): 15 other versions of ~650 rows
+// were downloaded again (≈6 MB) every time the board was opened. A version whose updated_at is unchanged has the same rows.
+const VERSION_CACHE_DATABASE_NAME = "station-status-hub-material-bom-version-cache";
+const VERSION_CACHE_STORE_NAME = "versions";
+const VERSION_CACHE_LIMIT = 48;
+let versionCacheDatabasePromise: Promise<IDBDatabase | null> | null = null;
+interface BomVersionCacheEntry { id: string; updatedAt: string; savedAt: number; records: MaterialWorkbookRecord[] }
+
+function openVersionCacheDatabase() {
+  if (typeof window === "undefined" || !("indexedDB" in window)) return Promise.resolve<IDBDatabase | null>(null);
+  versionCacheDatabasePromise ??= new Promise<IDBDatabase | null>((resolve, reject) => {
+    const request = window.indexedDB.open(VERSION_CACHE_DATABASE_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(VERSION_CACHE_STORE_NAME)) request.result.createObjectStore(VERSION_CACHE_STORE_NAME, { keyPath: "id" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  }).catch(() => null);
+  return versionCacheDatabasePromise;
+}
+
+async function runVersionCacheRequest<T>(mode: IDBTransactionMode, action: (store: IDBObjectStore) => IDBRequest<T>) {
+  const database = await openVersionCacheDatabase();
+  if (!database) return null;
+  return new Promise<T | null>((resolve, reject) => {
+    const request = action(database.transaction(VERSION_CACHE_STORE_NAME, mode).objectStore(VERSION_CACHE_STORE_NAME));
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function readCachedVersionRecords(workspaceId: string, updatedAt: string) {
+  try {
+    const entry = await runVersionCacheRequest<BomVersionCacheEntry | undefined>("readonly", (store) => store.get(workspaceId));
+    return entry && entry.updatedAt === updatedAt && Array.isArray(entry.records) ? entry.records : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCachedVersionRecords(workspaceId: string, updatedAt: string, records: MaterialWorkbookRecord[]) {
+  try {
+    await runVersionCacheRequest("readwrite", (store) => store.put({ id: workspaceId, updatedAt, savedAt: Date.now(), records } satisfies BomVersionCacheEntry));
+    const keys = await runVersionCacheRequest<IDBValidKey[]>("readonly", (store) => store.getAllKeys());
+    if ((keys?.length ?? 0) <= VERSION_CACHE_LIMIT) return;
+    // Oldest saved first: a board not opened for a while gives way to the ones in use.
+    const entries = await runVersionCacheRequest<BomVersionCacheEntry[]>("readonly", (store) => store.getAll());
+    const stale = [...(entries ?? [])].sort((left, right) => left.savedAt - right.savedAt).slice(0, (entries?.length ?? 0) - VERSION_CACHE_LIMIT);
+    for (const entry of stale) await runVersionCacheRequest("readwrite", (store) => store.delete(entry.id));
+  } catch {
+    // A full or blocked browser store only means the version is downloaded again next time.
+  }
+}
+
+/**
+ * Another version of the board on screen, for 待處理料's other-version groups and line notes: from this browser when the
+ * version has not changed since (same updated_at), otherwise downloaded once and kept. `recordCount` from the workspace
+ * list saves the extra header request.
+ */
+export async function loadBomVersionRecords(workspaceId: string, { updatedAt, recordCount }: { updatedAt: string; recordCount?: number }): Promise<MaterialWorkbookRecord[]> {
+  const cached = updatedAt ? await readCachedVersionRecords(workspaceId, updatedAt) : null;
+  if (cached) return cached;
+  const records = recordCount && recordCount > 0
+    ? [...await loadRemoteRecordRowsForWorkspace(workspaceId, recordCount, { loadAllRecords: true })].sort((left, right) => left.order_index - right.order_index).map((row) => row.data)
+    : await loadBomWorkspaceRecords(workspaceId);
+  if (updatedAt) void writeCachedVersionRecords(workspaceId, updatedAt, records);
+  return records;
+}
+
 /**
  * Loads every row of one BOM (for example an older version to compare) without
  * touching the active workspace or the IndexedDB render cache.

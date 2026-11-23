@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   bomDiffEntryPreview, bomRecordHasTracking, bomRecordHasWebsiteData, bomRefTokens, buildBomDiffGroups, carryBomTracking, describeBomWebsiteData, diffBomRecords,
-  describeBomLineHistories, findRetainedApplications, linkBomVersions, matchBomVendorLines, mergeBomTrackingHistories, normalizeBomText, recarryBomTracking,
+  createBomVersionLinker, describeBomLineHistories, findRetainedApplications, linkBomVersions, matchBomVendorLines, mergeBomTrackingHistories, normalizeBomText, recarryBomTracking,
 } from "../src/components/material-requests/bomDiff.ts";
 
 let counter = 0;
@@ -784,4 +784,23 @@ test("待處理料 line history: added in this version, since which version with
   assert.equal(histories.get("r9")!.since, undefined);
   assert.equal(histories.get("j1")!.added, true);
   assert.equal(describeBomLineHistories([], v16).size, 0, "a board with no older version gets no note");
+});
+
+test("linking a board's versions one at a time gives the same links, and a row changed in place is keyed again", () => {
+  const v1 = [row({ id: "a1", refDes: "U1", manufacturerPartNumber: "TPS1" }), row({ id: "b1", refDes: "R1", manufacturerPartNumber: "RES-1" })];
+  const v2 = [row({ id: "a2", refDes: "U1", manufacturerPartNumber: "TPS1" }), row({ id: "b2", refDes: "R2", manufacturerPartNumber: "RES-1" })];
+  const v3 = [row({ id: "a3", refDes: "U1", manufacturerPartNumber: "TPS1" }), row({ id: "b3", refDes: "R2", manufacturerPartNumber: "RES-1" })];
+  const others = [{ workspaceId: "bom:v2", label: "V2", records: v2 }, { workspaceId: "bom:v1", label: "V1", records: v1 }];
+  const all = linkBomVersions(v3, others);
+  const linker = createBomVersionLinker(v3, others);
+  const oneByOne = others.map((_, index) => linker.link(index));
+  const shape = (links: typeof all) => links.map((link) => [link.label, [...link.toCurrent].map(([record, id]) => [record.id, id]), [...(link.toNewer ?? [])].map(([record, newer]) => [record.id, newer.id])]);
+  assert.deepEqual(shape(oneByOne), shape(all));
+  assert.deepEqual(shape(all)[0][1], [["a2", "a3"], ["b2", "b3"]]);
+  // Keys are kept per row; a row edited in place (not the page's way, but possible in tests or scripts) is keyed again.
+  const before = [row({ id: "x1", refDes: "C9", partNumber: "000-1", manufacturerPartNumber: "CAP-A" })];
+  const after = [row({ id: "x2", refDes: "C9", partNumber: "000-2", manufacturerPartNumber: "CAP-B" })];
+  assert.equal(matchBomVendorLines(before, after).filter((line) => line.before && line.after).length, 0);
+  (after[0] as { partNumber: string }).partNumber = "000-1";
+  assert.equal(matchBomVendorLines(before, after).filter((line) => line.before && line.after).length, 1);
 });

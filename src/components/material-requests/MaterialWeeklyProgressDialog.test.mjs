@@ -66,8 +66,9 @@ test("the page uses the shared pending selection and preserves the alternate-ven
   assert.match(page, /\[\.\.\.buildPendingApplications\(pendingMaterialGroups, \{ includeAlternates: weeklyIncludeAlternates \}\), \.\.\.buildPendingApplications\(retainedPendingGroups, \{ includeAlternates: true \}\)\]\.map\(application => application\.record\)/);
   assert.match(page, /groups=\{pendingMaterialGroups\}\s+retainedGroups=\{retainedPendingGroups\}/);
   assert.match(page, /onOpenWeeklyProgress=\{includeAlternates => \{ setWeeklyIncludeAlternates\(includeAlternates\); setPendingDialogOpen\(false\); setWeeklyProgressOpen\(true\); \}\}/);
-  // The report waits for the board's other versions too, so 舊版申請 is in it before anything is exported.
-  assert.match(page, /ready=\{isFullDatasetLoaded && !isWorkspaceLoading && \(otherVersions\.length === 0 \|\| otherVersionsReady\)\}/);
+  // The report waits for the board's other versions too, so 舊版申請 is in it before anything is exported. Since 2026-11-23
+  // they are read and linked in the background one version at a time, so it waits until the linking is done.
+  assert.match(page, /ready=\{isFullDatasetLoaded && !isWorkspaceLoading && \(otherVersions\.length === 0 \|\| otherVersionsLinked\)\}/);
 });
 
 test("ready materials are excluded while CIS, SYMBOL and the selected alternate-vendor scope flow into every report surface", async () => {

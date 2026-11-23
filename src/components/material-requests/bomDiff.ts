@@ -262,7 +262,18 @@ interface LineMatch {
   after?: MaterialWorkbookRecord;
 }
 
+// Rows are never changed in place (an edit makes a new object), so a row's keys can be kept: every pairing level asked
+// for them again, and linking a 16-version board pairs each row up to four times.
+type LineKeySource = Pick<MaterialWorkbookRecord, "partNumber" | "manufacturerPartNumber" | "manufacturer">;
+const lineKeyCache = new WeakMap<MaterialWorkbookRecord, { source: LineKeySource; keys: ReturnType<typeof computeLineKeys> }>();
 const lineKeys = (record: MaterialWorkbookRecord) => {
+  const cached = lineKeyCache.get(record);
+  if (cached && cached.source.partNumber === record.partNumber && cached.source.manufacturerPartNumber === record.manufacturerPartNumber && cached.source.manufacturer === record.manufacturer) return cached.keys;
+  const keys = computeLineKeys(record);
+  lineKeyCache.set(record, { source: { partNumber: record.partNumber, manufacturerPartNumber: record.manufacturerPartNumber, manufacturer: record.manufacturer }, keys });
+  return keys;
+};
+function computeLineKeys(record: MaterialWorkbookRecord) {
   const part = upper(record.partNumber);
   const mpn = upper(record.manufacturerPartNumber);
   // The same MPN typed with or without its dashes, slashes or spaces (RC0402FR-0710KL / RC0402FR0710KL).
@@ -276,7 +287,7 @@ const lineKeys = (record: MaterialWorkbookRecord) => {
     bareMpn: bare ? `bare:${bare}` : "",
     vendorBare: bare && maker ? `vendor-bare:${maker}|${bare}` : "",
   };
-};
+}
 
 const PLACEHOLDER_MPNS = new Set(["NA", "N/A", "TBD", "TBA", "NONE", "NULL", "無", "待確認", "待定"]);
 
@@ -878,12 +889,17 @@ export interface BomCarryResult {
  * website data that found no partner are looked up by vendor part anywhere in the new version.
  * Shared by the upload carry-over and 帶入舊版資料, and the same rule the comparison uses.
  */
-export function pairBomLines(previous: readonly MaterialWorkbookRecord[], next: readonly MaterialWorkbookRecord[]) {
+export function pairBomLines(
+  previous: readonly MaterialWorkbookRecord[],
+  next: readonly MaterialWorkbookRecord[],
+  /** Groups already built for these same arrays (linkBomVersions pairs the version on screen with every other one). */
+  groups: { previous?: BomDiffGroup[]; next?: BomDiffGroup[] } = {},
+) {
   const pairs: Array<{ before: MaterialWorkbookRecord; after: MaterialWorkbookRecord; moved: boolean }> = [];
   const usedPrevious = new Set<MaterialWorkbookRecord>();
   const usedNext = new Set<MaterialWorkbookRecord>();
-  const previousGroups = buildBomDiffGroups(previous);
-  const nextGroups = buildBomDiffGroups(next);
+  const previousGroups = groups.previous ?? buildBomDiffGroups(previous);
+  const nextGroups = groups.next ?? buildBomDiffGroups(next);
   for (const match of matchGroups(previousGroups, nextGroups)) {
     if (!match.before || !match.after) continue;
     for (const line of matchBomVendorLines(match.before.rows, match.after.rows)) {
@@ -1104,14 +1120,38 @@ export function linkBomVersions(
   current: readonly MaterialWorkbookRecord[],
   others: ReadonlyArray<{ workspaceId: string; label: string; records: readonly MaterialWorkbookRecord[]; newer?: boolean }>,
 ): BomVersionLink[] {
-  return others.map((version, index) => {
-    const toCurrent = new Map<MaterialWorkbookRecord, string>();
-    for (const pair of pairBomLines(version.records, current).pairs) toCurrent.set(pair.before, pair.after.id);
-    // The chain never crosses the version on screen: for the newest older version, the next newer one is the screen.
-    const next = index === 0 ? undefined : others[index - 1];
-    const toNewer = !next || Boolean(next.newer) !== Boolean(version.newer) ? undefined : new Map(pairBomLines(version.records, next.records).pairs.map((pair) => [pair.before, pair.after] as const));
-    return { workspaceId: version.workspaceId, label: version.label, records: version.records, toCurrent, ...(toNewer ? { toNewer } : {}), ...(version.newer ? { newer: true } : {}) };
-  });
+  const linker = createBomVersionLinker(current, others);
+  return others.map((_, index) => linker.link(index));
+}
+
+/**
+ * linkBomVersions one version at a time, so the page can give the browser a turn between versions: E1.s (2026-11-23)
+ * had 16 versions of ~650 rows and linking them in one go held the page for a quarter of a second on a fast PC.
+ * Each records array is grouped once, not once per pairing (the version on screen used to be grouped for every version).
+ */
+export function createBomVersionLinker(
+  current: readonly MaterialWorkbookRecord[],
+  others: ReadonlyArray<{ workspaceId: string; label: string; records: readonly MaterialWorkbookRecord[]; newer?: boolean }>,
+) {
+  const grouped = new Map<readonly MaterialWorkbookRecord[], BomDiffGroup[]>();
+  const groupsOf = (records: readonly MaterialWorkbookRecord[]) => {
+    let groups = grouped.get(records);
+    if (!groups) { groups = buildBomDiffGroups(records); grouped.set(records, groups); }
+    return groups;
+  };
+  return {
+    link(index: number): BomVersionLink {
+      const version = others[index];
+      const toCurrent = new Map<MaterialWorkbookRecord, string>();
+      for (const pair of pairBomLines(version.records, current, { previous: groupsOf(version.records), next: groupsOf(current) }).pairs) toCurrent.set(pair.before, pair.after.id);
+      // The chain never crosses the version on screen: for the newest older version, the next newer one is the screen.
+      const next = index === 0 ? undefined : others[index - 1];
+      const toNewer = !next || Boolean(next.newer) !== Boolean(version.newer)
+        ? undefined
+        : new Map(pairBomLines(version.records, next.records, { previous: groupsOf(version.records), next: groupsOf(next.records) }).pairs.map((pair) => [pair.before, pair.after] as const));
+      return { workspaceId: version.workspaceId, label: version.label, records: version.records, toCurrent, ...(toNewer ? { toNewer } : {}), ...(version.newer ? { newer: true } : {}) };
+    },
+  };
 }
 
 export interface BomRetainedResult {

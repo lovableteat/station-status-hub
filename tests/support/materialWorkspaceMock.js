@@ -226,6 +226,11 @@ export const loadBomWorkspaceRecords = async (workspaceId) => {
   if (!fullRecords.has(workspaceId)) throw new Error('QA：找不到這個版本');
   return structuredClone(fullRecords.get(workspaceId));
 };
+// The real one reads this browser's copy first; the QA store is in memory, so it simply reads the version.
+export const loadBomVersionRecords = async (workspaceId) => {
+  window.__qaVersionLoads = [...(window.__qaVersionLoads ?? []), workspaceId];
+  return loadBomWorkspaceRecords(workspaceId);
+};
 export const loadBomWorkspaceRecordChanges = async (current) => {
   const change = { workspaceIds: [current.id], records: [] };
   if (!liveRecords || !fullRecords.has(current.id)) return change;

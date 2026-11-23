@@ -178,3 +178,18 @@ test("2026-11-17 user pass: one place for each count, worded rare actions, phone
   assert.match(page, /已帶入舊版的追蹤、Note、負責人與 SPEC 附件/);
   assert.doesNotMatch(page, /新系列 \{newSeriesCount\} 個 · 新版本 \{newVersionCount\} 個/);
 });
+
+test("E1.s 16 versions (2026-11-23 「BOM時間超長」): other versions load after the board on screen, two at a time, from this browser's copy, and link without holding the page", () => {
+  const effect = page.slice(page.indexOf("if (otherVersions.length === 0) { setOtherVersionRecords(null); return; }"), page.indexOf("const otherVersionsReady"));
+  assert.match(effect, /if \(!isFullDatasetLoaded\) return;/, "nothing competes with the version the user is waiting for");
+  assert.match(effect, /loadBomVersionRecords\(item\.workspace\.id, \{ updatedAt: item\.workspace\.updatedAt, recordCount: item\.workspace\.payload\.recordCount \}\)/);
+  assert.match(effect, /Promise\.all\(\[readNext\(\), readNext\(\)\]\)/, "two versions at a time, newest first");
+  assert.match(effect, /\[activeWorkspace\.id, otherVersionsKey, otherVersionsAttempt, isFullDatasetLoaded\]/);
+  assert.match(page, /const linker = createBomVersionLinker\(basePayload\.records, versions\);[\s\S]*?await yieldToBrowser\(\);[\s\S]*?links\.push\(linker\.link\(index\)\);/, "one version per turn");
+  assert.match(page, /loading: !otherVersionsLinked,/);
+  assert.doesNotMatch(page, /linkBomVersions\(basePayload\.records/, "never all versions in one go on the page");
+  const cache = storage.slice(storage.indexOf("export async function loadBomVersionRecords("), storage.indexOf("export async function loadBomWorkspaceRecords("));
+  assert.match(cache, /readCachedVersionRecords\(workspaceId, updatedAt\)/, "a version whose updated_at is unchanged is read from this browser");
+  assert.match(storage, /entry\.updatedAt === updatedAt/);
+  assert.match(storage, /const VERSION_CACHE_LIMIT = 48;/);
+});
