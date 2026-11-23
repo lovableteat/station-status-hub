@@ -27,10 +27,9 @@ async function compareDrawings(page, dialog) {
     await panel.locator('input[aria-label="選擇原理圖 PDF"]').setInputFiles(file); await rendered();
     if (name.startsWith('Official')) {
       await dialog.getByRole('tab', { name: /^官方版本/ }).click();
-      await dialog.getByRole('button', { name: /^(設定|更換)官方版本$/ }).click();
       await dialog.getByRole('button', { name: `設為官方版本：${name}`, exact: true }).click();
       await dialog.getByRole('button', { name: '確定更換', exact: true }).click();
-      await dialog.locator('.circuit-official-timeline > li').first().waitFor();
+      await dialog.locator('[data-testid="circuit-official-group-official"] li[data-current="true"]').waitFor();
       await dialog.getByRole('tab', { name: /^線路 Review/ }).click();
     }
   }

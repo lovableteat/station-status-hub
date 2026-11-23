@@ -136,10 +136,9 @@ async function managerFits(page) {
       await rendered(p);
       if(!index){
         await dialog(p).getByRole('tab', { name: /^官方版本/ }).click();
-        await dialog(p).getByRole('button', { name: /^(設定|更換)官方版本$/ }).click();
         await dialog(p).getByRole('button', { name: `設為官方版本：Official_20261101.pdf`, exact: true }).click();
         await dialog(p).getByRole('button', { name: '確定更換', exact: true }).click();
-        await dialog(p).locator('.circuit-official-timeline > li').first().waitFor();
+        await dialog(p).locator('[data-testid="circuit-official-group-official"] li[data-current="true"]').waitFor();
         await dialog(p).getByRole('tab', { name: /^線路 Review/ }).click();
         await eventually(()=>fixture.state.pdfOfficials.size===1,'Official pointer saves');await rendered(p);}
     }

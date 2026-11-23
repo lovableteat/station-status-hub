@@ -102,3 +102,27 @@ test("names and captions say which dated PDF and page a crop came from", () => {
   assert.equal(pdf.circuitPdfCaption(row, 12), "2026-11-09 V2 版 PDF「Vera/SCH.pdf」第 12 頁");
   assert.equal(pdf.circuitPdfVersionLabel({ date: "2026-11-09", label: "" }), "11/09 版");
 });
+
+// 2026-11-23 官方版本: 「要能分成官方版本以及自己畫的版本，並能夠刪除我想刪除的檔案，我不喜歡這麼多」.
+test("a PDF keeps the group it was put in, and older PDFs fall in 官方版本 when they were ever the official version", () => {
+  const stored = pdf.normalizeCircuitPdfRegistry({ documents: [doc("d1", "2026-11-01", { kind: "official" }), doc("d2", "2026-11-02", { kind: "own" }), doc("d3", "2026-11-03", { kind: "draft" }), doc("d4", "2026-11-04")] });
+  same(stored.documents.map(row => row.kind ?? null), ["official", "own", null, null], "only the two known groups are kept; anything else is dropped");
+  // The group travels with the document through a merge (the newer copy wins whole).
+  const merged = pdf.mergeCircuitPdfRegistry(stored, { ...pdf.emptyCircuitPdfRegistry(), documents: [{ ...stored.documents[3], kind: "official", updatedAt: "2026-11-23T01:00:00.000Z" }] });
+  assert.equal(merged.documents.find(row => row.id === "d4").kind, "official");
+  const everOfficial = new Set(["d3", "d2"]);
+  const kind = (row, officialId) => pdf.circuitPdfKind(row, { officialId, everOfficial });
+  assert.equal(kind(stored.documents[1], "d2"), "official", "the current official version is always under 官方版本, whatever it was put in");
+  assert.equal(kind(stored.documents[1], "d1"), "own", "a chosen group wins over having been official once");
+  assert.equal(kind(stored.documents[2], ""), "official", "no group chosen: ever official → 官方版本");
+  assert.equal(kind(stored.documents[3], ""), "own", "no group chosen and never official → 自己畫的版本");
+});
+
+test("the 更換紀錄 leaves out deleted PDFs and merges the same PDF set again right after itself", () => {
+  const change = (documentId, revision) => ({ documentId, revision });
+  const history = [change("v16", 8), change("nv", 7), change("fio", 6), change("nv", 5), change("nv", 4), change("nv", 3), change("v13", 2), change("nv", 1)];
+  const { entries, hidden } = pdf.compactCircuitOfficialHistory(history, new Set(["fio"]));
+  same(entries.map(entry => [entry.documentId, entry.repeats]), [["v16", 1], ["nv", 4], ["v13", 1], ["nv", 1]], "fio is gone and nv 7 joins nv 5–3 once fio is out of the way");
+  assert.equal(hidden, 1);
+  same(pdf.compactCircuitOfficialHistory([], new Set()).entries, []);
+});

@@ -16,7 +16,13 @@ export interface CircuitPdfDocument {
   path: string; localOnly: boolean;
   size: number; pages: number; uploadedAt: string; uploadedBy: string; uploadedByName: string;
   updatedAt: string; removedAt?: string;
+  /**
+   * Which group of 官方版本 the PDF is listed in: a released drawing ("official") or one drawn here ("own"). Absent on
+   * PDFs uploaded before 2026-11-23: a PDF that was ever the official version counts as official, the others as own.
+   */
+  kind?: CircuitPdfKind;
 }
+export type CircuitPdfKind = "official" | "own";
 export interface CircuitPdfPageMark { checked: boolean; at: string; by: string; byName: string; documentId: string }
 export interface CircuitPdfPosition { documentId: string; page: number; at: string }
 export interface CircuitPdfRegistry {
@@ -44,8 +50,35 @@ function document(value: unknown): CircuitPdfDocument | null {
   const localOnly = row.localOnly === true, path = localOnly ? "" : text(row.path, 500);
   if (!localOnly && !path) return null;
   const uploadedAt = stamp(row.uploadedAt), updatedAt = stamp(row.updatedAt) || uploadedAt, removedAt = stamp(row.removedAt);
+  const kind = row.kind === "official" || row.kind === "own" ? row.kind : undefined;
   return { id, name, date, label: text(row.label, CIRCUIT_PDF_LABEL_LIMIT), path, localOnly, size, pages, uploadedAt,
-    uploadedBy: text(row.uploadedBy, 100), uploadedByName: text(row.uploadedByName, 200), updatedAt, ...(removedAt ? { removedAt } : {}) };
+    uploadedBy: text(row.uploadedBy, 100), uploadedByName: text(row.uploadedByName, 200), updatedAt, ...(removedAt ? { removedAt } : {}), ...(kind ? { kind } : {}) };
+}
+
+/**
+ * The group a PDF is listed in on the 官方版本 page (2026-11-23: 「要能分成官方版本以及自己畫的版本」): the current
+ * official version always under 官方版本, then the group chosen for it, then official when it was ever set official.
+ */
+export function circuitPdfKind(row: Pick<CircuitPdfDocument, "id" | "kind">, { officialId, everOfficial }: { officialId?: string; everOfficial: ReadonlySet<string> }): CircuitPdfKind {
+  if (officialId && row.id === officialId) return "official";
+  if (row.kind) return row.kind;
+  return everOfficial.has(row.id) ? "official" : "own";
+}
+
+/**
+ * The 更換紀錄 without the noise (「我不喜歡這麼多」): changes of PDFs that were deleted are left out, and the same PDF set
+ * again right after itself is one entry with a count. Newest first, as given.
+ */
+export function compactCircuitOfficialHistory<T extends { documentId: string }>(history: readonly T[], removedIds: ReadonlySet<string>) {
+  const entries: Array<T & { repeats: number }> = [];
+  let hidden = 0;
+  for (const change of history) {
+    if (removedIds.has(change.documentId)) { hidden++; continue; }
+    const last = entries[entries.length - 1];
+    if (last && last.documentId === change.documentId) { last.repeats++; continue; }
+    entries.push({ ...change, repeats: 1 });
+  }
+  return { entries, hidden };
 }
 
 /** Reads a stored document, dropping anything malformed instead of refusing the whole list. */

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import {
   CIRCUIT_PDF_LABEL_LIMIT, CIRCUIT_PDF_MAX_BYTES, CIRCUIT_PDF_MAX_PAGES, CIRCUIT_PDF_NAME_LIMIT, circuitPdfDateFromFile, circuitPdfResumePage,
-  emptyCircuitPdfRegistry, mergeCircuitPdfRegistry, visibleCircuitPdfDocuments, type CircuitPdfDocument, type CircuitPdfRegistry,
+  emptyCircuitPdfRegistry, mergeCircuitPdfRegistry, visibleCircuitPdfDocuments, type CircuitPdfDocument, type CircuitPdfKind, type CircuitPdfRegistry,
 } from "./circuitPdf";
 import { isPdfFile, openCircuitPdf } from "./pdfRender";
 import { downloadCircuitPdf, loadCircuitPdfRegistry, saveCircuitPdfRegistry, uploadCircuitPdf } from "./pdfStorage";
@@ -30,13 +30,14 @@ export interface CircuitPdfModel {
   setComparePage: (page: number) => void;
   /** Drops the user's pin deciding the page on screen, so the automatic match applies again. */
   clearComparePin: () => void;
-  upload: (file: File) => Promise<void>; openLocal: (file: File) => Promise<void>;
+  /** `kind` lists the PDF under 官方版本 or 自己畫的版本 on the 官方版本 page (uploads elsewhere leave it unset). */
+  upload: (file: File, options?: { kind?: CircuitPdfKind }) => Promise<void>; openLocal: (file: File) => Promise<void>;
   /** Opens a version at a page, e.g. the page a picture was framed on. Returns false when that version is no longer offered. */
   show: (documentId: string, page: number) => boolean;
   select: (id: string) => void; setCompare: (id: string) => void; setCompareOffset: (offset: number) => void; swapComparison: () => void;
   setOfficial: (id: string) => Promise<void>; compareOfficial: () => void;
   goTo: (page: number) => void; setChecked: (page: number, checked: boolean) => void;
-  updateDocument: (id: string, patch: { date?: string; label?: string }) => void;
+  updateDocument: (id: string, patch: { date?: string; label?: string; kind?: CircuitPdfKind }) => void;
   removeDocument: (id: string) => Promise<void>; restoreDocument: (id: string) => Promise<void>; reload: () => Promise<void>; clearError: () => void;
 }
 
@@ -344,7 +345,7 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
     return true;
   }, [documents, compareId]);
 
-  const register = useCallback(async (file: File) => {
+  const register = useCallback(async (file: File, kind?: CircuitPdfKind) => {
     if (!canEdit) throw new Error("目前為檢視權限，無法上傳 PDF。");
     if (!/\.pdf$/i.test(file.name) && !/pdf/i.test(file.type)) throw new Error(`${file.name} 不是 PDF。`);
     if (!(await isPdfFile(file))) throw new Error(`${file.name} 不是有效的 PDF。`);
@@ -357,18 +358,18 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
     if (localOnly) localFiles.set(id, file); else remember(path, await file.arrayBuffer());
     opened.current.set(id, Promise.resolve(pdf)); setPdfs(previous => ({ ...previous, [id]: pdf }));
     const row: CircuitPdfDocument = { id, name: file.name.slice(0, CIRCUIT_PDF_NAME_LIMIT) || "schematic.pdf", date: circuitPdfDateFromFile(file), label: "", path, localOnly,
-      size: file.size, pages, uploadedAt: at, uploadedBy: userId, uploadedByName: userName, updatedAt: at };
+      size: file.size, pages, uploadedAt: at, uploadedBy: userId, uploadedByName: userName, updatedAt: at, ...(kind ? { kind } : {}) };
     await queue({ documents: [row] }, true);
     return { row, localOnly };
   }, [canEdit, seriesId, userId, userName, queue]);
 
-  const upload = useCallback(async (file: File) => {
+  const upload = useCallback(async (file: File, options: { kind?: CircuitPdfKind } = {}) => {
     const captured = scopeRef.current;
     // The new day's PDF continues at the page being read now, or where this person last stopped when nothing is open.
     const reading = onScreen.current.documentId ? onScreen.current.page : latestPosition(registryRef.current, userId, seriesId)?.page || 1;
     setUploading(file.name); setError("");
     try {
-      const { row, localOnly } = await register(file);
+      const { row, localOnly } = await register(file, options.kind);
       if (scopeRef.current !== captured) return;
       placed.current = row.id; setActiveId(row.id); setOpenError(""); setLocalFileId("");
       const next = Math.min(row.pages, Math.max(1, reading));
@@ -404,13 +405,14 @@ export function useCircuitPdfs({ open, seriesId, canEdit, userId, userName, auto
     void queue({ pages: { [String(target)]: { checked, at: now(), by: userId, byName: userName, documentId: active.id } } }).catch(() => {});
   }, [active, canEdit, queue, userId, userName]);
 
-  const updateDocument = useCallback((id: string, patch: { date?: string; label?: string }) => {
+  const updateDocument = useCallback((id: string, patch: { date?: string; label?: string; kind?: CircuitPdfKind }) => {
     const row = registryRef.current.documents.find(item => item.id === id);
     if (!row || !canEdit) return;
     const date = patch.date !== undefined && DATE.test(patch.date) ? patch.date : row.date;
     const label = patch.label !== undefined ? patch.label.slice(0, CIRCUIT_PDF_LABEL_LIMIT) : row.label;
-    if (date === row.date && label === row.label) return;
-    void queue({ documents: [{ ...row, date, label, updatedAt: now() }] }).catch(() => {});
+    const kind = patch.kind === "official" || patch.kind === "own" ? patch.kind : row.kind;
+    if (date === row.date && label === row.label && kind === row.kind) return;
+    void queue({ documents: [{ ...row, date, label, ...(kind ? { kind } : {}), updatedAt: now() }] }).catch(() => {});
   }, [canEdit, queue]);
 
   const setOfficial = useCallback(async (id: string) => {

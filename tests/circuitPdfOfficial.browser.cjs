@@ -119,7 +119,7 @@ async function managerFits(page, label) {
     const baselineId = registry().documents[0].id;
     // The official version is set on its own page only; the version list just shows it.
     await dialog(page).getByRole('tab', { name: /^官方版本/ }).click();
-    await dialog(page).getByRole('button', { name: '設定官方版本', exact: true }).click();
+    // 2026-11-23: every PDF is a row of 官方版本／自己畫的版本 with its own 設為官方版本; no separate chooser.
     await dialog(page).getByRole('button', { name: '設為官方版本：Official_20261101.pdf', exact: true }).click();
     assert.ok(!fixture.state.pdfOfficials.get('series:qa'), 'The confirmation must show before changing the shared pointer');
     await dialog(page).getByRole('button', { name: '確定更換', exact: true }).click();
