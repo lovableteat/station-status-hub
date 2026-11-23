@@ -232,6 +232,24 @@ test("a returned change shows its reason first and cannot be sent until the requ
     assert.equal(calls.filter(call => call[0] === "review").length, 0, "an incomplete change never reaches the server");
   } finally { act(() => root.unmount()); }
 });
+test("a note typed while an action is on its way stays in the box; only the note that went out is cleared", async () => {
+  // 2026-11-23: the box was emptied whenever an action finished, also wiping a 退回 reason typed while 回報改善 was still saving.
+  let release; const gate = new Promise(resolve => { release = resolve; });
+  const reviews = [];
+  const { root, button } = mount({ review: async (...args) => { reviews.push(args); if (reviews.length === 1) await gate; } }, undefined, { task: "track" });
+  const note = () => root.root.findByProps({ "aria-label": "留言" });
+  try {
+    act(() => note().props.onChange({ target: { value: "看過了" } }));
+    await act(async () => { button("確認結案").props.onClick(); });
+    act(() => note().props.onChange({ target: { value: "請補上修改後的接線位置" } }));
+    await act(async () => { release(); await gate; await new Promise(resolve => setTimeout(resolve, 0)); });
+    assert.deepEqual(reviews[0], ["approve", "看過了"]);
+    assert.equal(note().props.value, "請補上修改後的接線位置");
+    await act(async () => { button("新增留言").props.onClick(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    assert.deepEqual(reviews[1], ["comment", "請補上修改後的接線位置"]);
+    assert.equal(note().props.value, "");
+  } finally { act(() => root.unmount()); }
+});
 test("a pasted screenshot goes to the marked pane, pasted cell text stays text, and a failed close keeps the draft", async () => {
   const { root, calls, pane, text, button } = mount({ dirty: true, saveDraft: async () => { throw new Error("儲存失敗，草稿保留"); } }, undefined, { task: "review" });
   try {

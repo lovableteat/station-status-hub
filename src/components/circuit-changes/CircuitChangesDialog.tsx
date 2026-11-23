@@ -450,7 +450,10 @@ export function CircuitChangesDialog({ open, onOpenChange, context, canEdit, mod
       if ((action === "request_changes" || action === "comment") && !reviewNote.trim()) setTimeout(() => detailPanel.current?.querySelector<HTMLTextAreaElement>(".circuit-note-box textarea")?.focus(), 0);
       if ((action === "request_changes" || action === "comment") && !reviewNote.trim()) throw new Error(action === "request_changes" ? "請先寫退回原因，畫線路的人才知道還要改哪裡。" : "請填寫留言內容。");
       if (action === "submit" && missing.length) throw new Error(`回報改善前還缺：${missing.join("、")}。`);
-      await model.review(action, reviewNote.trim()); setReviewNote("");
+      const sent = reviewNote;
+      await model.review(action, sent.trim());
+      // Only the words that went out are cleared: a note typed while the action was on its way stays in the box.
+      setReviewNote(current => current === sent ? "" : current);
       if (action === "submit") celebrate("已回報改善", "等主管確認");
       else if (action === "approve") celebrate("已結案");
       else if (action === "request_changes") celebrate("已退回重改", "畫線路的人會在最上方看到原因");
