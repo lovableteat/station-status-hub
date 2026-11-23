@@ -166,7 +166,8 @@ export function CircuitOfficialVersions({ seriesId, pdfs, canEdit, onOpen }: {
       {saved && <p className="circuit-official-note" role="status">{saved}</p>}
       {(failure || pdfs.error) && <p className="circuit-official-error" role="alert">{failure || pdfs.error}</p>}
       {pdfs.uploading && <p className="circuit-official-note" role="status"><span className="circuit-wait-line"><CircuitSpinner />正在上傳「{pdfs.uploading}」…</span><CircuitProgress /></p>}
-      {GROUPS.map(group => {
+      {/* Side by side on a wide window (2026-11-24: 「官方的和我個人的從上下變成左右放會比較清楚」), one above the other on a phone. */}
+      <div className="circuit-official-groups">{GROUPS.map(group => {
         const rows = groups[group.kind];
         return <section key={group.kind} className="circuit-official-group" data-kind={group.kind} aria-label={`${group.title} PDF`} data-testid={`circuit-official-group-${group.kind}`}>
           <header>
@@ -175,7 +176,7 @@ export function CircuitOfficialVersions({ seriesId, pdfs, canEdit, onOpen }: {
           </header>
           {rows.length ? <ul className="circuit-official-files">{rows.map(row => fileRow(row, group.kind))}</ul> : <p className="circuit-official-empty">{pdfs.loading ? "讀取中…" : group.empty}</p>}
         </section>;
-      })}
+      })}</div>
       {removed.length > 0 && <details className="circuit-official-fold" data-testid="circuit-official-removed">
         <summary title="刪除的 PDF 不會出現在線路 Review、AI 比對與上面的清單；需要時可以還原"><Trash2 aria-hidden="true" />已刪除的 PDF<span className="circuit-official-count">{removed.length} 份</span></summary>
         <ul className="circuit-official-files">{removed.map(row => <li key={row.id} data-testid="circuit-official-removed-file">

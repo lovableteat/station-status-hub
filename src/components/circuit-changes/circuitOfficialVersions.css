@@ -77,6 +77,14 @@
 .circuit-official-current-tag { flex: none; padding: 2px 7px; border-radius: 4px; background: hsl(var(--warning) / .14); color: hsl(var(--warning)); font-size: 12px; }
 .circuit-official-history-meta { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px; }
 /* 2026-11-23: the PDFs in two groups (官方版本 / 自己畫的版本), one row each, then two folded sections. */
+/* 2026-11-24: 官方版本 left, 自己畫的版本 right on a wide window; each card is as tall as the taller one. */
+.circuit-official-groups { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+@media (min-width: 1100px) {
+  .circuit-official-scroll { width: min(100%, 1760px); }
+  .circuit-official-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+  .circuit-official-group { align-content: start; }
+}
+.circuit-official-group { container-type: inline-size; }
 .circuit-official-group, .circuit-official-fold {
   display: grid;
   gap: 12px;
@@ -142,4 +150,11 @@
   .circuit-official-row-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
   .circuit-official-row-actions > .circuit-official-confirm { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .circuit-official-row-actions > .circuit-official-confirm > span:first-child { grid-column: 1 / -1; }
+}
+/* In a narrow column (two groups side by side at ~1440) a row puts its buttons under the file text instead of letting the
+   buttons cover it. Kept last: it must win over the one-line row above. */
+@container (max-width: 760px) {
+  .circuit-official-files > li { grid-template-columns: minmax(0, 1fr); }
+  .circuit-official-row-actions { justify-content: flex-start; }
+  .circuit-official-file-name strong { white-space: normal; overflow-wrap: anywhere; }
 }
