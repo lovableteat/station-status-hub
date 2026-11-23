@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/security/safe-asset-retention.md`；程式參考基準：`8c6f8107d6366631e8ba706545c2cf231076bd7c`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/security/safe-asset-retention.md`；程式參考基準：`5962b97162ff8cb95f4af2e2aab736a5a4ba8005`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # GitHub Pages 跨版本資產承接：隔離方案與啟用門檻
 
