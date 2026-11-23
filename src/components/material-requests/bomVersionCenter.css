@@ -248,3 +248,59 @@
   .bom-version-card-actions .bom-version-more { margin-inline-start: auto; }
   .bom-version-card > div:last-child:not(.bom-version-card-actions) { margin-top: 2px; }
 }
+
+/* 2026-11-23 「BOM管理的UIUX要改一下，目前的不好看也不好操作」. On a 1900px screen six bands sat above the list (title, path,
+   workspace project, level heading, 專案總料表, search) and the table stretched across the whole window: a wide empty name
+   column with the numbers crammed at the far right, and an empty bordered box under three rows.
+   Now: title, path and workspace project share one row; the level heading carries every action of that level (專案總料表
+   included) on its right; the search with the count sits right above the list; columns share the width by what they hold;
+   lists end with their last row. */
+@media (min-width: 1024px) {
+  .bom-version-center .bom-version-header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 16px; padding-bottom: 14px; }
+  .bom-version-header > h2 { white-space: nowrap; }
+  .bom-version-header .bom-crumbs:not([data-depth="1"]) { border-left: 1px solid hsl(var(--border)); padding-left: 12px; }
+  .bom-version-header .bom-crumbs ol { margin-left: 0; }
+  .bom-version-header .bom-version-overview { grid-column: 3; justify-self: end; }
+  .bom-version-workspace { display: inline-flex; align-items: center; height: 28px; border: 1px solid hsl(var(--border)); border-radius: 999px; padding: 0 10px; font-size: 12px; }
+
+  .bom-level { gap: 12px; }
+  .bom-level-head { align-items: center; padding-bottom: 2px; }
+  .bom-level-actions { gap: 8px; }
+  /* 專案總料表 joins the level's actions as one gold button that still says 打開 ›. */
+  .bom-level-actions .bom-project-parts-entry { width: auto; min-height: 40px; gap: 8px; margin: 0; border-radius: 8px; padding: 0 5px 0 8px; box-shadow: none; }
+  .bom-level-actions .bom-project-parts-icon { width: 26px; height: 26px; border-radius: 6px; }
+  .bom-level-actions .bom-project-parts-icon svg { width: 16px; height: 16px; }
+  .bom-level-actions .bom-project-parts-text { display: flex; align-items: baseline; gap: 8px; }
+  .bom-level-actions .bom-project-parts-text strong { font-size: 13px; line-height: 20px; }
+  .bom-level-actions .bom-project-parts-text small { font-size: 12px; }
+  .bom-level-actions .bom-project-parts-open { height: 28px; font-size: 12px; }
+
+  .bom-level-filter { flex-wrap: nowrap; }
+  .bom-level-count { margin-left: auto; flex: none; color: hsl(var(--muted-foreground)); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+  /* A list is as tall as its rows (scrolling inside once it reaches the window), not an empty box down to the bottom. */
+  .bom-level-table { flex: 0 1 auto; }
+  .bom-level-table[data-kind="projects"] { --bom-level-cols: minmax(16rem, 2.4fr) minmax(6rem, .8fr) minmax(7rem, .9fr) minmax(8rem, 1fr) 20px; }
+  .bom-level-table[data-kind="boards"] { --bom-level-cols: minmax(16rem, 2.2fr) minmax(12rem, 1.6fr) minmax(6rem, .7fr) minmax(6rem, .7fr) minmax(12rem, 1.4fr) 20px; }
+  .bom-level-table[data-kind="search"] { --bom-level-cols: minmax(14rem, 1.8fr) minmax(8rem, 1fr) minmax(11rem, 1.4fr) minmax(5.5rem, .6fr) minmax(5.5rem, .6fr) minmax(11rem, 1.2fr) 20px; }
+  .bom-level-table-head, .bom-level-row { gap: 16px; padding-inline: 16px; }
+  .bom-level-table-head { min-height: 36px; }
+  .bom-level-row { min-height: 54px; }
+  .bom-version-center .bom-version-table-scroll { flex: 0 1 auto; }
+}
+/* Board rows: the current version with its label and data left behind, and who uploaded last. */
+.bom-level-cell-current { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.bom-level-version-label { min-width: 0; overflow: hidden; color: hsl(var(--foreground) / .88); text-overflow: ellipsis; white-space: nowrap; }
+.bom-level-lost { flex: none; border: 1px solid hsl(var(--destructive) / .45); border-radius: 999px; padding: 0 7px; background: hsl(var(--destructive) / .12); color: hsl(var(--destructive)); font-size: 11px; font-weight: 600; line-height: 18px; }
+.bom-level-cell-time { display: flex; min-width: 0; align-items: baseline; gap: 8px; }
+.bom-level-uploader { min-width: 0; overflow: hidden; color: hsl(var(--muted-foreground) / .85); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+/* The board's project, inline with its other facts. */
+.bom-series-summary-meta .bom-series-project { display: inline-flex; align-items: center; gap: 8px; margin-left: 4px; border-left: 1px solid hsl(var(--border)); padding-left: 14px; }
+.bom-series-summary-meta .bom-series-project > label { font-size: 12px; white-space: nowrap; }
+@media (max-width: 1023px) {
+  .bom-level-cell-current { order: 2; }
+  .bom-level-uploader { display: none; }
+  .bom-level-count { display: none; }
+  .bom-series-summary-meta .bom-series-project { flex-basis: 100%; margin-left: 0; border-left: 0; padding-left: 0; }
+  .bom-series-summary-meta .bom-series-project-trigger { flex: 1; height: 40px; }
+}

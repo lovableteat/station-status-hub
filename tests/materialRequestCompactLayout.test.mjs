@@ -207,7 +207,9 @@ test("BOMs are grouped by project in BOM 管理 and in the header switcher", () 
   assert.match(versionCenter, /onClick=\{\(\) => goProject\(group\.key\)\}/);
   assert.match(versionCenter, /aria-label=\{`打開\$\{archive \? "" : "專案："\}\$\{group\.label\}/);
   assert.match(versionCenter, /\{ key: "projects", label: "全部專案"/);
-  assert.match(versionCenter, /\{renderPartsEntry\(openGroup\)\}/);
+  // 2026-11-23: 專案總料表 sits with the level's actions in the heading row instead of a band of its own.
+  assert.match(versionCenter, /renderPartsEntry\(openGroup\),\s*\)\}/);
+  assert.match(versionCenter, /<div className="bom-level-actions">\{extra\}\{nvCompareButton\}\{importButton\}<\/div>/);
   assert.match(versionCenter, /請有編輯權限的同事匯入 BOM 或指定專案/);
   assert.match(versionCenter, /group\.isActive && <span[^>]*>工作區專案<\/span>/);
   assert.doesNotMatch(versionCenter, /collapsedProjects|aria-expanded=\{expanded\}/, "levels replace the collapsible project groups");
