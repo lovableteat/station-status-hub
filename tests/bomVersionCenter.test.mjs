@@ -193,3 +193,23 @@ test("E1.s 16 versions (2026-11-23 「BOM時間超長」): other versions load a
   assert.match(storage, /entry\.updatedAt === updatedAt/);
   assert.match(storage, /const VERSION_CACHE_LIMIT = 48;/);
 });
+
+test("2026-11-23 「新版跟舊版切換時不同電腦之間常錯亂」: switches and uploads start from the stored versions, and a browser showing the current version follows a switch made elsewhere", () => {
+  const apply = page.slice(page.indexOf("const applyCurrentBomVersion = async () => {"), page.indexOf("const requestSetCurrentBomVersion"));
+  assert.match(apply.length ? apply : page.slice(page.indexOf("const applyCurrentBomVersion = async () => {")), /const storedVersions = await loadBomWorkspaceVersions\(\);[\s\S]*?const series = withStoredBomVersions\(target\.series, storedVersions\);[\s\S]*?const previous = series\.current;/);
+  assert.match(page, /const plan = planBomCurrentVersionWrites\(series\.versions\.map/);
+  assert.match(page, /for \(const write of plan\.writes\)/);
+  assert.doesNotMatch(page, /if \(!isTarget && item\.stored && !item\.version\.isCurrent\) continue;/, "never only the version this page believed current");
+  const upload = page.slice(page.indexOf("const confirmBomUploads = async"), page.indexOf("const requestSetCurrentBomVersion"));
+  assert.match(upload, /const storedVersions = await loadBomWorkspaceVersions\(\);/);
+  assert.match(upload, /nextBomCurrentStamp\(series\.versions\.map\(\(item\) => item\.version\)\)/);
+  assert.match(upload, /for \(const item of series\.versions\) \{\s*if \(!item\.version\.isCurrent\) continue;/);
+  // Following the current version.
+  assert.match(page, /const ACTIVE_BOM_FOLLOWS_CURRENT_KEY = "station-status-hub:active-material-bom-follows-current:v1";/);
+  assert.match(page, /followsCurrentRef\.current = options\.followsCurrent \?\? \(!picked \|\| picked\.version\.isCurrent\);/, "檢視 of an older version stops following");
+  assert.match(page, /switchActiveBom\(version\.workspace\.id, \{ followsCurrent: true \}\);/);
+  assert.match(page, /if \(!workspaceListSettled \|\| !activeVersionInfo \|\| !followsCurrentRef\.current\) return;[\s\S]*?switchActiveBomRef\.current\(target\.workspace\.id\);[\s\S]*?有人把目前版本從/);
+  // Coming back to the page and opening BOM 管理 read the stored versions again.
+  assert.match(page, /const onReturn = \(\) => \{ catchUp\(\); refreshPreferencesOnReturn\(\); \};/);
+  assert.match(page, /if \(!bomManagerOpen \|\| !canViewModuleAccess\) return;\s*void refreshBomPreferences\(\)/);
+});

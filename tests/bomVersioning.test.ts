@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   BOM_DIFF_QUERY_KEYS, bomSeriesStem, bomVersionComparePair, buildBomSeriesList, createBomVersionWorkspaceId, deriveLegacyBomVersion, findBomSeriesByWorkspace,
-  inferBomSeriesForFile, nextBomVersionNumber, normalizeBomVersion, readBomDiffLocation, readBomLocateLocation, resolveCurrentBomVersion, writeBomLocateLocation,
+  inferBomSeriesForFile, nextBomCurrentStamp, nextBomVersionNumber, normalizeBomVersion, planBomCurrentVersionWrites, readBomDiffLocation, readBomLocateLocation, resolveCurrentBomVersion, withStoredBomVersions, writeBomLocateLocation,
 } from "../src/components/material-requests/bomVersioning.ts";
 
 const workspace = (id: string, overrides: Record<string, unknown> = {}) => ({
@@ -136,4 +136,56 @@ test("a part located from a version comparison round-trips through the URL", () 
   assert.equal(readBomLocateLocation("?bomLocate=r1&bomLocateBom=w1"), null, "no comparison to go back to");
   assert.equal(readBomLocateLocation("?bomLocate=r1&bomLocateBom=w1&bomLocateBack=%5B%22s%22%2C%22a%22%2C%22a%22%5D"), null, "the same version on both sides");
   assert.equal(readBomLocateLocation("?bomLocate=r1&bomLocateBom=w1&bomLocateBack=not-json"), null);
+});
+
+// 2026-11-23 「現在新版跟舊版切換時不同電腦之間常錯亂」: a switch cleared only the version the page believed current and dated
+// itself with the computer's own clock, so a colleague's switch the page had not seen stayed flagged and could win.
+test("設為目前版本 clears every version flagged where it is stored and is dated after every stored switch", () => {
+  const series = { id: "series:s1", name: "E1.s" };
+  // Stored now: computer A (clock 10 minutes fast) made V15 current at 10:10 by its clock.
+  const stored = [
+    { workspaceId: "bom:v15", version: version({ versionNumber: 15, isCurrent: true, currentChangedAt: "2026-11-23T10:10:00.000Z" }), stored: true },
+    { workspaceId: "bom:v16", version: version({ versionNumber: 16, isCurrent: false, currentChangedAt: "2026-11-23T10:10:00.000Z", uploadedAt: "2026-11-23T09:00:00.000Z" }), stored: true },
+    { workspaceId: "bom:v14", version: version({ versionNumber: 14, isCurrent: false }), stored: true },
+  ];
+  // Computer B (right clock, 10:03) never saw A's switch: it still believes V16 is current and now switches to V14.
+  const staleView = stored.map((item) => item.workspaceId === "bom:v16" ? { ...item, version: { ...item.version, isCurrent: true } } : item.workspaceId === "bom:v15" ? { ...item, version: { ...item.version, isCurrent: false } } : item);
+  const oldLoop = staleView.filter((item) => item.workspaceId === "bom:v14" || item.version.isCurrent).map((item) => item.workspaceId);
+  assert.deepEqual(oldLoop.sort(), ["bom:v14", "bom:v16"], "the old rule never touched V15");
+  const afterOldRule = buildBomSeriesList([
+    workspace("bom:v15", { version: stored[0].version }),
+    workspace("bom:v16", { version: { ...stored[1].version, isCurrent: false, currentChangedAt: "2026-11-23T10:03:00.000Z" } }),
+    workspace("bom:v14", { version: { ...stored[2].version, isCurrent: true, currentChangedAt: "2026-11-23T10:03:00.000Z" } }),
+  ])[0];
+  assert.equal(afterOldRule.current.workspace.id, "bom:v15", "two flags, and A's fast clock made its older switch win: B's switch to V14 was lost");
+
+  // The new rule works from what is stored and dates the switch after it.
+  const plan = planBomCurrentVersionWrites(stored, "bom:v14", series, Date.parse("2026-11-23T10:03:00.000Z"));
+  assert.deepEqual(plan.writes.map((write) => [write.workspaceId, write.version.isCurrent]).sort(), [["bom:v14", true], ["bom:v15", false]]);
+  assert.ok(Date.parse(plan.stamp) > Date.parse("2026-11-23T10:10:00.000Z"), "later than every stored switch, whatever this computer's clock says");
+  const after = buildBomSeriesList(stored.map((item) => workspace(item.workspaceId, { version: plan.writes.find((write) => write.workspaceId === item.workspaceId)?.version ?? item.version })))[0];
+  assert.equal(after.current.workspace.id, "bom:v14");
+  assert.equal(after.versions.filter((item) => item.version.isCurrent).length, 1);
+  // A version never stored (a legacy BOM joining the series) is written too, as not current.
+  const legacy = planBomCurrentVersionWrites([...stored, { workspaceId: "bom:old", version: version({ versionNumber: 1 }), stored: false }], "bom:v14", series, 0);
+  assert.ok(legacy.writes.some((write) => write.workspaceId === "bom:old" && write.version.isCurrent === false));
+  // With a right clock the stamp is simply now.
+  assert.equal(nextBomCurrentStamp([version({ currentChangedAt: "2026-11-01T00:00:00.000Z" })], Date.parse("2026-11-23T00:00:00.000Z")), "2026-11-23T00:00:00.000Z");
+});
+
+test("the series is rebuilt from the version metadata as stored now before a switch or an upload", () => {
+  const list = buildBomSeriesList([
+    workspace("bom:v1", { version: version({ versionNumber: 1, isCurrent: false }) }),
+    workspace("bom:v2", { version: version({ versionNumber: 2, isCurrent: true, currentChangedAt: "2026-11-02T00:00:00.000Z" }) }),
+  ]);
+  assert.equal(list[0].current.workspace.id, "bom:v2");
+  // A colleague switched back to V1 since this page loaded.
+  const stored = new Map([
+    ["bom:v1", version({ versionNumber: 1, isCurrent: true, currentChangedAt: "2026-11-03T00:00:00.000Z" })],
+    ["bom:v2", version({ versionNumber: 2, isCurrent: false, currentChangedAt: "2026-11-03T00:00:00.000Z" })],
+  ]);
+  const fresh = withStoredBomVersions(list[0], stored);
+  assert.equal(fresh.current.workspace.id, "bom:v1");
+  assert.equal(fresh.id, list[0].id);
+  assert.equal(nextBomVersionNumber(fresh), 3);
 });

@@ -162,7 +162,7 @@ import type { BomUploadReview } from "./BomUploadDialog";
 import { carryBomTracking, classifyRetainedApplications, createBomVersionLinker, describeBomLineHistories, diffBomRecords, fillForwardBomTracking, recarryBomTracking, type BomLineHistory, type BomVersionLink } from "./bomDiff";
 import {
   BOM_SERIES_NAME_LIMIT, BOM_VERSION_LABEL_LIMIT, BOM_VERSION_NOTE_LIMIT, bomFileBaseName, buildBomSeriesList, createBomSeriesId,
-  bomVersionComparePair, createBomVersionWorkspaceId, findBomSeriesByWorkspace, inferBomSeriesForFile, nextBomVersionNumber, readBomDiffLocation, readBomLocateLocation, writeBomLocateLocation,
+  bomVersionComparePair, createBomVersionWorkspaceId, findBomSeriesByWorkspace, inferBomSeriesForFile, nextBomCurrentStamp, nextBomVersionNumber, planBomCurrentVersionWrites, readBomDiffLocation, readBomLocateLocation, withStoredBomVersions, writeBomLocateLocation,
   type BomSeries, type BomSeriesVersion, type BomWorkspaceVersion,
 } from "./bomVersioning";
 import { createBomSourceUrl, uploadBomSourceFile } from "./materialBomSources";
@@ -902,6 +902,18 @@ function getBestTrackingRecord(records: MaterialRecord[], fallback: MaterialReco
 function loadActiveBomId() {
   if (typeof window === "undefined") return DEFAULT_BOM_ID;
   return window.localStorage.getItem(ACTIVE_BOM_KEY) || DEFAULT_BOM_ID;
+}
+
+/**
+ * Whether the BOM this browser shows was its board's current version when it was picked (so it follows a change of
+ * current version made on another computer), or an older version opened on purpose with 檢視 (it stays). Absent: follows.
+ */
+const ACTIVE_BOM_FOLLOWS_CURRENT_KEY = "station-status-hub:active-material-bom-follows-current:v1";
+function loadActiveBomFollowsCurrent() {
+  try { return typeof window === "undefined" || window.localStorage.getItem(ACTIVE_BOM_FOLLOWS_CURRENT_KEY) !== "0"; } catch { return true; }
+}
+function saveActiveBomFollowsCurrent(follows: boolean) {
+  try { window.localStorage.setItem(ACTIVE_BOM_FOLLOWS_CURRENT_KEY, follows ? "1" : "0"); } catch { /* storage unavailable */ }
 }
 
 function loadHiddenColumns(): MaterialTableColumnKey[] {
@@ -3401,6 +3413,10 @@ export function MaterialRequestPage() {
   const [collaborationStatus, setCollaborationStatus] = useState<CollaborationStatus>("checking");
   // A link to a located part (bomLocate…) opens on the version that part belongs to.
   const [activeBomId, setActiveBomId] = useState(() => (typeof window !== "undefined" && readBomLocateLocation(window.location.search)?.workspaceId) || loadActiveBomId());
+  // See loadActiveBomFollowsCurrent. A link to one version (bomLocate) pins that version.
+  const followsCurrentRef = useRef(typeof window !== "undefined" && readBomLocateLocation(window.location.search) ? false : loadActiveBomFollowsCurrent());
+  // This page's own switch or upload changes the current version too; no "someone else switched" notice for those.
+  const ownVersionChangeUntilRef = useRef(0);
   const [showMarkedOnly, setShowMarkedOnly] = useState(false);
   const [query, setQuery] = useState("");
   const [searchDraft, setSearchDraft] = useState("");
@@ -3683,6 +3699,11 @@ export function MaterialRequestPage() {
       return sameProject && sameArchive && sameVersion && sameSettings ? workspace : { ...workspace, project, archive, version, pageTracker, tableColorTheme };
     }));
   }, []);
+  // BOM 管理 shows which version is current and offers 設為目前版本: read the stored answer every time it opens.
+  useEffect(() => {
+    if (!bomManagerOpen || !canViewModuleAccess) return;
+    void refreshBomPreferences().catch(() => undefined);
+  }, [bomManagerOpen, canViewModuleAccess, refreshBomPreferences]);
 
   const applyLoadedWorkspaces = useCallback((storedWorkspaces: BomWorkspace[], preferredBomId?: string) => {
     if (user?.userId !== bomAccountRef.current.accountId) return;
@@ -3935,16 +3956,25 @@ export function MaterialRequestPage() {
       }
     });
     const reconcileTimer = window.setInterval(catchUp, 3000);
-    window.addEventListener("online", catchUp);
-    window.addEventListener("focus", catchUp);
-    document.addEventListener("visibilitychange", catchUp);
+    // Which version is current lives in the BOM preferences. A missed realtime event (sleep, network drop) left this page
+    // on an old answer until a reload, so coming back to the page reads them again (2026-11-23: 不同電腦之間常錯亂).
+    let lastPreferenceRefresh = 0;
+    const refreshPreferencesOnReturn = () => {
+      if (!active || document.visibilityState === "hidden" || Date.now() - lastPreferenceRefresh < 5000) return;
+      lastPreferenceRefresh = Date.now();
+      void refreshBomPreferences().catch(queueWorkspaceRefresh);
+    };
+    const onReturn = () => { catchUp(); refreshPreferencesOnReturn(); };
+    window.addEventListener("online", onReturn);
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onReturn);
 
     return () => {
       active = false;
       window.clearInterval(reconcileTimer);
-      window.removeEventListener("online", catchUp);
-      window.removeEventListener("focus", catchUp);
-      document.removeEventListener("visibilitychange", catchUp);
+      window.removeEventListener("online", onReturn);
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onReturn);
       unsubscribe();
     };
   }, [applyLoadedWorkspaces, canViewModuleAccess, refreshBomPreferences, reloadBomWorkspaces]);
@@ -4169,6 +4199,24 @@ export function MaterialRequestPage() {
     const target = orderedBomWorkspaces.find((workspace) => !workspace.archive && workspace.project?.projectId === activeProjectId);
     if (target && target.id !== activeBomId) switchActiveBomRef.current(target.id);
   }, [activeBomId, activeProjectId, bomWorkspaces, orderedBomWorkspaces, workspaceListSettled]);
+
+  // 「設為目前版本」 promises 「切換後所有人打開這塊板看到的都是 V1」, but each browser reopened the version it last showed, so
+  // after a switch (or an upload) on another computer two computers showed two versions (2026-11-23: 不同電腦之間常錯亂).
+  // A browser that was showing the board's current version follows it to the new current one; an older version opened on
+  // purpose (檢視) or through a link stays where it is.
+  useEffect(() => {
+    if (!workspaceListSettled || !activeVersionInfo || !followsCurrentRef.current) return;
+    if (pendingBomLocationRef.current || bomTableLocationRef.current) return;
+    const { series, version } = activeVersionInfo;
+    if (version.isCurrent || series.current.workspace.id === version.workspace.id) return;
+    const target = series.current;
+    switchActiveBomRef.current(target.workspace.id);
+    if (Date.now() < ownVersionChangeUntilRef.current) return;
+    toast({
+      title: `「${series.name}」的目前版本已改為 ${target.displayNumber}`,
+      description: `有人把目前版本從 ${version.displayNumber} 換成 ${target.displayNumber}，畫面已跟著切換，所有人看到的是同一版。要看 ${version.displayNumber}，請到 BOM 管理按「檢視」。`,
+    });
+  }, [activeVersionInfo, workspaceListSettled, toast]);
 
   const searchTokens = useMemo(() => parseSearchTokens(deferredQuery), [deferredQuery]);
   const hasActiveColumnFilters = Object.values(columnFilters).some((values) => values != null);
@@ -4720,6 +4768,7 @@ export function MaterialRequestPage() {
   const confirmBomUploads = async (meta: BomUploadMeta) => {
     const uploads = pendingUploads;
     if (uploads.length === 0) return;
+    ownVersionChangeUntilRef.current = Date.now() + 120_000;
     let writeScope;
     try {writeScope = captureBomWrite();} catch {return;}
     if (!isCollaborativeReady) {
@@ -4747,6 +4796,14 @@ export function MaterialRequestPage() {
       // A new version starts from the board's page progress as stored now; the copies held on this page can lag behind a
       // colleague's save. If it cannot be read, the copies on this page are used.
       const storedPageTrackers = await loadPageTrackerMap().catch(() => null);
+      // Which version is current, and the next number, as stored now: a colleague may have switched or uploaded since this
+      // page loaded, and carrying from (or un-flagging) a stale "current" mixed versions up between computers (2026-11-23).
+      const storedVersions = await loadBomWorkspaceVersions();
+      assertBomWriteCurrent(writeScope);
+      workspaces = workspaces.map((workspace) => {
+        const version = storedVersions.get(workspace.id);
+        return version && JSON.stringify(version) !== JSON.stringify(workspace.version ?? null) ? { ...workspace, version } : workspace;
+      });
       for (const upload of uploads) {
         assertBomWriteCurrent(writeScope);
         const currentSeriesList = buildBomSeriesList(workspaces);
@@ -4777,7 +4834,8 @@ export function MaterialRequestPage() {
           trackedTotal += carried.tracked;
           comparison = diffBomRecords(previousRecords, records).summary;
         }
-        const stamp = new Date().toISOString();
+        // Dated after every switch and upload stored for the series, so this new version is current on every computer.
+        const stamp = series ? nextBomCurrentStamp(series.versions.map((item) => item.version)) : new Date().toISOString();
         const workspace: BomWorkspace = {
           id: workspaceId,
           name: seriesName,
@@ -4799,8 +4857,12 @@ export function MaterialRequestPage() {
           for (const item of series.versions) {
             await saveBomWorkspaceVersion(item.workspace.id, { ...item.version, seriesId, seriesName, isCurrent: false, currentChangedAt: stamp }, () => assertBomWriteCurrent(writeScope));
           }
-        } else if (previous) {
-          await saveBomWorkspaceVersion(previous.workspace.id, { ...previous.version, isCurrent: false, currentChangedAt: stamp }, () => assertBomWriteCurrent(writeScope));
+        } else if (series) {
+          // Every version still flagged current (normally just `previous`; two after a switch this page had not seen yet).
+          for (const item of series.versions) {
+            if (!item.version.isCurrent) continue;
+            await saveBomWorkspaceVersion(item.workspace.id, { ...item.version, isCurrent: false, currentChangedAt: stamp }, () => assertBomWriteCurrent(writeScope));
+          }
         }
         if (!isBomWriteCurrent(writeScope)) return;
         let version: BomWorkspaceVersion = {
@@ -4857,6 +4919,9 @@ export function MaterialRequestPage() {
       if (!isBomWriteCurrent(writeScope)) return;
       setUploadDialogOpen(false);
       setPendingUploads([]);
+      // The new version is the board's current one: this browser follows it from now on.
+      followsCurrentRef.current = true;
+      saveActiveBomFollowsCurrent(true);
       setActiveBomId(lastWorkspaceId);
       setExpandedKey(null);
       setPage(1);
@@ -4923,16 +4988,25 @@ export function MaterialRequestPage() {
     const target = pendingCurrent;
     setPendingCurrent(null);
     if (!target) return;
+    ownVersionChangeUntilRef.current = Date.now() + 60_000;
     let writeScope;
     try {writeScope = captureBomWrite();} catch {return;}
     if (!isCollaborativeReady) {
       showCollaborativeUnavailableToast();
       return;
     }
-    const { version, series } = target;
-    const previous = series.current;
-    const stamp = new Date().toISOString();
+    const { version } = target;
     try {
+      // Decide from the version metadata as stored now: a colleague may have switched or uploaded since this page loaded
+      // (2026-11-23: 「新版跟舊版切換時不同電腦之間常錯亂」). `previous` is the version that is current for everyone right now.
+      const storedVersions = await loadBomWorkspaceVersions();
+      assertBomWriteCurrent(writeScope);
+      const series = withStoredBomVersions(target.series, storedVersions);
+      const previous = series.current;
+      // Every version still flagged current where it is stored is cleared, and the switch is dated after every stored one,
+      // so the last switch wins on every computer whatever their clocks say.
+      const plan = planBomCurrentVersionWrites(series.versions.map((item) => ({ workspaceId: item.workspace.id, version: item.version, stored: item.stored })), version.workspace.id, series);
+      const stamp = plan.stamp;
       const carry = version.version.carry;
       let repairedRows = 0;
       let carriedRows = 0;
@@ -4963,10 +5037,9 @@ export function MaterialRequestPage() {
         await saveBomWorkspace({ ...version.workspace, pageTracker: undefined, payload: { ...version.workspace.payload, records: targetRecords, recordCount: targetRecords.length }, updatedAt: stamp }, () => assertBomWriteCurrent(writeScope));
       }
       if (!isBomWriteCurrent(writeScope)) return;
-      for (const item of series.versions) {
-        const isTarget = item.workspace.id === version.workspace.id;
-        if (!isTarget && item.stored && !item.version.isCurrent) continue;
-        await saveBomWorkspaceVersion(item.workspace.id, { ...item.version, seriesId: series.id, seriesName: series.name, isCurrent: isTarget, currentChangedAt: stamp, ...(isTarget ? { carry } : {}) }, () => assertBomWriteCurrent(writeScope));
+      for (const write of plan.writes) {
+        const isTarget = write.workspaceId === version.workspace.id;
+        await saveBomWorkspaceVersion(write.workspaceId, { ...write.version, ...(isTarget && carry ? { carry } : {}) }, () => assertBomWriteCurrent(writeScope));
       }
       if (!isBomWriteCurrent(writeScope)) return;
       void logMaterialWorkspaceAction({
@@ -4977,7 +5050,7 @@ export function MaterialRequestPage() {
       });
       await reloadBomWorkspaces(version.workspace.id);
       if (!isBomWriteCurrent(writeScope)) return;
-      switchActiveBom(version.workspace.id);
+      switchActiveBom(version.workspace.id, { followsCurrent: true });
       toast({
         title: `${series.name} 已切換到 ${version.displayNumber}`,
         description: `${repairedRows > 0 ? `已把填反的廠商與廠商料號兩欄換回來（${repairedRows.toLocaleString()} 列）。` : ""}${carrying
@@ -5642,7 +5715,11 @@ export function MaterialRequestPage() {
     }
   };
 
-  const switchActiveBom = (value: string) => {
+  const switchActiveBom = (value: string, options: { followsCurrent?: boolean } = {}) => {
+    // A board's current version follows a switch made elsewhere; an older version opened on purpose stays on screen.
+    const picked = findBomSeriesByWorkspace(seriesList, value);
+    followsCurrentRef.current = options.followsCurrent ?? (!picked || picked.version.isCurrent);
+    saveActiveBomFollowsCurrent(followsCurrentRef.current);
     setActiveBomId(value);
     setRemoteSyncFailed(false);
     setQuery("");

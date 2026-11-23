@@ -169,6 +169,47 @@ export function buildBomSeriesList(workspaces: readonly BomWorkspace[]): BomSeri
   return series.sort((left, right) => time(right.updatedAt) - time(left.updatedAt) || left.name.localeCompare(right.name));
 }
 
+/**
+ * The time a new 設為目前版本 or upload records: later than every switch and upload already stored for the series. The
+ * newest isCurrent flag wins (resolveCurrentBomVersion), and each computer writes its own clock; a computer whose clock is
+ * a few minutes behind another one's used to lose to an earlier switch made there (2026-11-23: 「新版跟舊版切換時不同電腦之間常錯亂」).
+ */
+export function nextBomCurrentStamp(versions: ReadonlyArray<Pick<BomWorkspaceVersion, "currentChangedAt" | "uploadedAt">>, now = Date.now()) {
+  const latest = versions.reduce((max, version) => Math.max(max, time(version.currentChangedAt), time(version.uploadedAt)), 0);
+  return new Date(Math.max(now, latest + 1)).toISOString();
+}
+
+/**
+ * What 設為目前版本 writes, decided from the version metadata as stored now, never from this page's copy alone: the target
+ * becomes current, and every other version that is still flagged current there (or was never stored) is cleared. Clearing only
+ * the version this page believed current left a colleague's newer switch flagged too, so two versions were "current" and each
+ * computer could end up on a different one.
+ */
+export function planBomCurrentVersionWrites(
+  versions: ReadonlyArray<{ workspaceId: string; version: BomWorkspaceVersion; stored: boolean }>,
+  targetId: string,
+  series: { id: string; name: string },
+  now = Date.now(),
+): { stamp: string; writes: Array<{ workspaceId: string; version: BomWorkspaceVersion }> } {
+  const stamp = nextBomCurrentStamp(versions.map((item) => item.version), now);
+  const writes = versions.flatMap((item) => {
+    const isTarget = item.workspaceId === targetId;
+    if (!isTarget && item.stored && !item.version.isCurrent) return [];
+    return [{ workspaceId: item.workspaceId, version: { ...item.version, seriesId: series.id, seriesName: series.name, isCurrent: isTarget, currentChangedAt: stamp } }];
+  });
+  return { stamp, writes };
+}
+
+/** The series' versions with the version metadata as stored now (a colleague may have switched or uploaded since this page loaded). */
+export function withStoredBomVersions(series: BomSeries, stored: ReadonlyMap<string, BomWorkspaceVersion>): BomSeries {
+  const versions = series.versions.map((item) => {
+    const version = stored.get(item.workspace.id);
+    return version ? { ...item, workspace: { ...item.workspace, version }, version, stored: true } : item;
+  });
+  const rebuilt = buildBomSeriesList(versions.map((item) => item.workspace)).find((candidate) => candidate.id === series.id);
+  return rebuilt ?? series;
+}
+
 export function findBomSeriesByWorkspace(seriesList: readonly BomSeries[], workspaceId: string) {
   for (const series of seriesList) {
     const version = series.versions.find((item) => item.workspace.id === workspaceId);

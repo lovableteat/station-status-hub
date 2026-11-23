@@ -31,6 +31,9 @@ function execute(name,h,overrides={}){
   seriesList:[],uploadTargetSeriesRef:{current:null},checkBomUploadRows:()=>[],inferBomSeriesForFile:()=>null,bomFileBaseName:n=>n,NEW_BOM_SERIES_TARGET:'__new-series__',
   pendingUploads:[upload('A-private.xlsx'),upload('second.xlsx')],buildBomSeriesList:()=>[],nextBomVersionNumber:()=>1,createBomSeriesId:()=>'series:new',createBomVersionWorkspaceId:(name,n)=>`bom:${name}:v${n}`,
   carryBomTracking:(_,next)=>({records:next,matched:0,orphaned:[],manual:0}),loadVersionRecords:async()=>[],
+  // 2026-11-23: switches and uploads read the stored version metadata first.
+  loadBomWorkspaceVersions:async()=>new Map(),withStoredBomVersions:series=>series,nextBomCurrentStamp:()=>'2026-11-23T00:00:00.000Z',
+  planBomCurrentVersionWrites:(versions,targetId)=>({stamp:'2026-11-23T00:00:00.000Z',writes:versions.filter(item=>item.workspaceId===targetId).map(item=>({workspaceId:item.workspaceId,version:{...item.version,isCurrent:true}}))}),
   BOM_SERIES_NAME_LIMIT:120,BOM_VERSION_LABEL_LIMIT:60,BOM_VERSION_NOTE_LIMIT:500,
   saveBomWorkspace:async w=>{writes.push(w);},saveBomWorkspaceRecord:async(w,r)=>{writes.push(w);return {updatedAt:'new'};},
   saveBomWorkspaceVersion:async()=>{writes.push('version');},uploadBomSourceFile:async()=>({name:'x.xlsx',path:'p',size:1,mimeType:'m'}),
