@@ -170,9 +170,10 @@ export function normalizeCircuitPdfAiReviewReport(value: unknown): CircuitPdfAiR
 export const isCircuitReportIdentical = (report: CircuitPdfAiReviewReport) => report.source === "local" && report.local?.identical === true;
 /**
  * Raise it when 本機比對 lists a page differently. 2: a moved or redrawn block of a sheet is one finding; 3: plain words and
- * the title block as one line that is not an error (both 2026-11-24).
+ * the title block as one line that is not an error (both 2026-11-24); 4: a redrawn sheet compares names written one way (U4401A is U4401,
+ * GND_1 is GND, ^OE3# is OE3#, pin names are never parts or nets) and ignores how often a name is drawn (2026-11-25).
  */
-export const CIRCUIT_LOCAL_METHOD = 3;
+export const CIRCUIT_LOCAL_METHOD = 4;
 /**
  * A page 本機比對 listed with an older method and nobody has judged yet: comparing it again costs nothing (no AI) and lists
  * it the current way, so a batch does it again instead of keeping it (2026-11-24: the old method put 40 marks on one

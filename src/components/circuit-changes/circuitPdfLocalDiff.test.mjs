@@ -326,3 +326,34 @@ test("a new company and author in the title block are one line that is not an er
     titleBlock: { base: k.findCircuitTitleBlock(zh("作者 王")), work: k.findCircuitTitleBlock(zh("作者 劉")) } });
   assert.deepEqual([only.findings.length, only.own, only.common], [1, 0, 1]);
 });
+
+// 2026-11-24, the real E1.S redraw (公版 V16 against 1121y26): the names were the same, written another way.
+test("pin names, buses and standards are never parts, however much they look like a Ref Des", () => {
+  const k = service();
+  assert.deepEqual(["GPIO0", "GPIO15", "PCIE5", "I2C", "ADC3"].map(k.circuitTokenType), ["other", "other", "other", "other", "other"]);
+  assert.deepEqual(["VDD1", "GND2", "VCC3"].map(k.circuitTokenType), ["net", "net", "net"]);
+  // Pin and part names a library writes like nets: two functions, a note, a pin number in front, no-connects, the pad, a body.
+  assert.deepEqual(["GND/PG", "OE3#/SMB_CLK", "VDDD(I2C-BUS)", "9_THM", "NC_1", "NC#35", "THERMAL_PAD", "WAFER_HD_2P"].map(k.circuitTokenType), ["other", "other", "other", "other", "other", "other", "other", "other"]);
+  assert.deepEqual(["P3V3_UART", "BF_POW_EXT_S", "N1_USB_2_DP", "3V3_STBY", "+12V"].map(k.circuitTokenType), ["net", "net", "net", "net", "net"]);
+  assert.deepEqual(["R4410", "U4401A", "Q4603B", "CN1401", "TP7", "LED1", "FB1"].map(k.circuitTokenType), ["refdes", "refdes", "refdes", "refdes", "refdes", "refdes", "refdes"]);
+  assert.deepEqual(plain(["U4401A", "^OE3#/SMB_CLK", "vZOUT_SEL", "^vCLKIN_SEL_tri/SMB_DATA", "VCC"].map(word => k.circuitNameKey(word).key)), ["U4401", "OE3#/SMB_CLK", "ZOUT_SEL", "CLKIN_SEL_TRI/SMB_DATA", "VCC"]);
+});
+
+test("a part drawn in sections, numbered repeated pins and pull marks are the same names; a renumbered part is still found", () => {
+  const k = service();
+  const before = [...grid(sheetNames), item("U4401", 0.3, 0.3), item("R4410", 0.32, 0.36), item("GND", 0.34, 0.4), item("GND", 0.5, 0.4), item("GND", 0.6, 0.4), item("VSS", 0.4, 0.45),
+    item("OE3#/SMB_CLK", 0.4, 0.5), item("ZOUT_SEL", 0.4, 0.55), ...Array.from({ length: 4 }, (_, index) => item(`GPIO${index}`, 0.7, 0.3 + index * 0.02))];
+  const after = [...grid(sheetNames, 0.02, 0.95), item("U4401A", 0.2, 0.3), item("U4401B", 0.6, 0.3), item("R5416", 0.22, 0.36), item("GND", 0.24, 0.4), item("GND_1", 0.25, 0.42), item("GND_2", 0.25, 0.44),
+    item("VSS_1", 0.3, 0.45), item("VSS_2", 0.3, 0.47), item("^OE3#/SMB_CLK", 0.3, 0.5), item("vZOUT_SEL", 0.3, 0.55)];
+  const { changes, contents } = k.diffCircuitPageContents(before, after);
+  const summary = k.summarizeCircuitLocalDiff({ textComparable: true, graphicsComparable: false, sizeChanged: false, textChanges: [], regions: [], redrawn: "layout", contentChanges: changes, pages: { base: 44, work: 44 }, contents });
+  const titles = plain(summary.findings.map(finding => finding.title));
+  assert.deepEqual(titles.filter(title => !/^(不算錯|參考)：/.test(title)), ["基準版有、比對版沒有的零件編號：R4410", "比對版多出來的零件編號：R5416"], "only the renumbered part is a difference");
+  const same = summary.findings.find(finding => finding.title.startsWith("不算錯：寫法不一樣"));
+  assert.ok(same, "the names written another way are listed once");
+  assert.ok(!titles.some(title => title.includes("OE3#")), "a pin with two functions, a pull mark in front, is the same pin");
+  for (const pair of ["U4401 ↔ U4401A、U4401B", "GND ↔ GND_1", "VSS ↔ VSS_1", "ZOUT_SEL ↔ VZOUT_SEL"]) assert.ok(same.suggestion.includes(pair), `${pair} in ${same.suggestion}`);
+  assert.equal(summary.own, 2);
+  assert.ok(!titles.some(title => title.includes("GPIO")), "pin names are other words, never missing parts");
+  assert.ok(!titles.some(title => /GND(?! ↔)/.test(title) && !title.startsWith("不算錯")), "a GND drawn three times against once is not a difference");
+});

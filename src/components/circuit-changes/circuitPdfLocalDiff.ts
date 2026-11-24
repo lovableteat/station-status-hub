@@ -49,6 +49,11 @@ export interface CircuitContentChange {
   side: "base" | "work"; token: string; type: CircuitContentType; count: number; item?: CircuitDiffText;
   /** Every occurrence the other side lacks is in the frame (title block, border): not part of the circuit. */
   frame?: boolean;
+  /**
+   * How the other side writes the same name (U4401 for U4401A, VSS for VSS_1, OE3# for ^OE3#): not a difference, listed
+   * once for reference. `token` is then how this side writes it.
+   */
+  alias?: string;
 }
 
 const SAME = 0.004;      // the same string within 0.4 % of the page is the same text
@@ -146,12 +151,36 @@ export function isCircuitLayoutRedrawn(result: { unchanged: number; totals: { be
 
 const REFDES = /^[A-Z]{1,4}\d{1,5}[A-Z]?$/;
 const NET = /_|^[+-]?\d+(?:\.\d+)?V\d*$|^P\d+V\d*|^V(?:CC|DD|SS|IN|OUT)|^GND|^\+/;
+/**
+ * Letters that look like a Ref Des with a number but are pin names, buses or standards (GPIO0–GPIO15 on an IC, VDD1,
+ * PCIE5, I2C). On the real E1.S redraw, GPIO0–GPIO15 were listed as 16 missing parts (2026-11-24).
+ */
+const NOT_REFDES = new Set(["GPIO", "GPI", "GPO", "ADC", "DAC", "AIN", "AOUT", "PWM", "PIO", "MIO", "IO", "PIN", "TXD", "RXD", "SDA", "SCL", "CLK", "DQ", "DQS", "VDD", "VCC", "VSS", "VIO", "AVDD", "DVDD", "GND", "NC", "LANE", "PORT", "GEN", "DDR", "USB", "PCIE", "SATA", "HDMI", "SPI", "SMB", "BANK", "EP", "LX", "I"]);
+/**
+ * Pin and part names that look like net names, as one library or another writes them (the real E1.S redraw, 2026-11-24):
+ * a pin with two functions (GND/PG, A0/NC, OE3#/SMB_CLK), a pin with a note (VDD(I2C-bus)), a pin number in front
+ * (9_THM), no-connect pins (NC#35, NC_1), the exposed pad (THERMAL_PAD) and a part body with its pin count (WAFER_HD_2P).
+ */
+const PIN_NAME = /[/()]|^\d+_|^NC([#_.]?\d+)?$|^(THERMAL|EXPOSED)_?PAD|_\d+P$/;
 /** What a word on a sheet is: a reference designator (location), a net name, or another word (value, pin name, note). */
 export function circuitTokenType(token: string): CircuitContentType | null {
   const word = token.trim().toUpperCase();
   if (word.length < 2 || !/[A-Z]/.test(word) || /^\d+(?:\.\d+)?$/.test(word)) return null;
-  if (REFDES.test(word)) return "refdes";
-  return NET.test(word) ? "net" : "other";
+  if (REFDES.test(word) && !NOT_REFDES.has(word.match(/^[A-Z]+/)![0])) return "refdes";
+  return NET.test(word) && !PIN_NAME.test(word) ? "net" : "other";
+}
+
+/**
+ * A word as a name to compare, written one way for both versions (2026-11-24, the real E1.S redraw): a part drawn in
+ * sections is one part (U4401A and U4401B are U4401), and the pull-up / pull-down marks some datasheets put before a pin
+ * name are left off (^OE3#/SMB_CLK is OE3#/SMB_CLK, vZOUT_SEL is ZOUT_SEL).
+ */
+export function circuitNameKey(word: string): { key: string; type: CircuitContentType } | null {
+  const bare = word.trim().replace(/^\^+/, "").replace(/^v(?=[A-Z^])/, "").replace(/^\^+/, "");
+  const type = circuitTokenType(bare);
+  if (!type) return null;
+  const key = bare.toUpperCase();
+  return { key: type === "refdes" ? key.replace(/^([A-Z]{1,4}\d{1,5})[A-Z]$/, "$1") : key, type };
 }
 
 /**
@@ -159,34 +188,52 @@ export function circuitTokenType(token: string): CircuitContentType | null {
  * drawn just inside the frame on one sheet and just outside it on the other is not a difference.
  */
 function pageTokens(items: readonly CircuitDiffText[]) {
-  const tokens: Array<{ token: string; type: CircuitContentType; item: CircuitDiffText; frame: boolean }> = [];
+  const tokens: Array<{ token: string; raw: string; type: CircuitContentType; item: CircuitDiffText; frame: boolean }> = [];
   for (const item of items) {
     const frame = inFrame(center(item));
     for (const word of collapse(item.str).split(" ")) {
-      const type = circuitTokenType(word);
-      if (type) tokens.push({ token: word.toUpperCase(), type, item, frame });
+      const name = circuitNameKey(word);
+      if (name) tokens.push({ token: name.key, raw: word.toUpperCase(), type: name.type, item, frame });
     }
   }
   return tokens;
 }
 
 /**
- * Compares two sheets by what is on them, not where: every Ref Des, net name and other word one side has more often than
- * the other. On a redrawn sheet this is what can be trusted: a missing part or a renamed net, wherever it was drawn.
+ * Compares two sheets by what is on them, not where: every Ref Des, net name and other word only one side has. How often
+ * a name is drawn does not count (a redraw puts a GND or a net label down as often as it likes). On a redrawn sheet this
+ * is what can be trusted: a missing part or a renamed net, wherever it was drawn.
  */
 export function diffCircuitPageContents(beforeItems: readonly CircuitDiffText[], afterItems: readonly CircuitDiffText[]) {
   const before = pageTokens(beforeItems), after = pageTokens(afterItems);
-  const tally = (tokens: typeof before) => { const map = new Map<string, typeof before>(); for (const entry of tokens) map.set(entry.token, [...(map.get(entry.token) ?? []), entry]); return map; };
-  const b = tally(before), a = tally(after);
+  type Token = (typeof before)[number];
+  const group = (tokens: readonly Token[]) => { const map = new Map<string, Token[]>(); for (const entry of tokens) map.set(entry.token, [...(map.get(entry.token) ?? []), entry]); return map; };
+  const b = group(before), a = group(after);
+  // A pin name written with a number on one side (GND_1, VSS_2: a symbol's repeated pins in one library) and bare on
+  // the other is the same name.
+  const numbered = new Map<string, string>();
+  for (const [own, other] of [[b, a], [a, b]] as const) for (const key of own.keys()) {
+    const bare = /^(.+)_\d+$/.exec(key)?.[1];
+    if (bare && !other.has(key) && other.has(bare)) numbered.set(key, bare);
+  }
+  // Where it is: one in the drawing if there is one, so a frame copy never hides a real one.
+  const where = (entries: readonly Token[]) => { const inDrawing = entries.find(entry => !entry.frame); return { item: (inDrawing ?? entries[0]).item, ...(inDrawing ? {} : { frame: true as const }) }; };
+  const spellings = (entries: readonly Token[]) => [...new Set(entries.map(entry => entry.raw))];
   const changes: CircuitContentChange[] = [];
   for (const token of new Set([...b.keys(), ...a.keys()])) {
-    const olds = b.get(token) ?? [], news = a.get(token) ?? [];
-    if (olds.length === news.length) continue;
-    const more = olds.length > news.length ? olds : news, fewer = olds.length > news.length ? news : olds;
-    // The occurrences the other side lacks: those in the drawing first, so a frame copy never hides a real one.
-    const extra = [...more].sort((left, right) => Number(left.frame) - Number(right.frame)).slice(0, more.length - fewer.length);
-    const inDrawing = extra.find(entry => !entry.frame);
-    changes.push({ side: olds.length > news.length ? "base" : "work", token, type: more[0].type, count: extra.length, item: (inDrawing ?? extra[0]).item, ...(inDrawing ? {} : { frame: true }) });
+    const olds = b.get(token), news = a.get(token);
+    if (olds && news) {
+      // Both have it, written differently (U4401 and U4401A, OE3# and ^OE3#): the same name, listed once for reference.
+      const left = spellings(olds), right = spellings(news);
+      if (olds[0].type !== "other" && news.some(entry => !entry.frame) && !left.some(word => right.includes(word))) changes.push({ side: "work", token: right.join("、"), type: news[0].type, count: 1, alias: left.join("、"), ...where(news) });
+      continue;
+    }
+    const entries = (olds ?? news)!, side = olds ? "base" as const : "work" as const, other = olds ? a : b;
+    const bare = numbered.get(token);
+    if (bare) { changes.push({ side, token, type: entries[0].type, count: 1, alias: bare, ...where(entries) }); continue; }
+    // The bare name whose numbered forms only the other side has (VSS here, VSS_1 and VSS_2 there): already listed above.
+    if ([...numbered].some(([variant, name]) => name === token && other.has(variant))) continue;
+    changes.push({ side, token, type: entries[0].type, count: 1, ...where(entries) });
   }
   const rank = { refdes: 0, net: 1, other: 2 };
   changes.sort((left, right) => rank[left.type] - rank[right.type] || left.token.localeCompare(right.token));
@@ -500,9 +547,10 @@ function onAnotherSheet(side: "base" | "work", token: string, pages: readonly nu
 function summarizeRedrawn(diff: CircuitLocalPageDiff, limit: number, cross?: CircuitContentIndex | null): CircuitLocalSummary {
   const counts = { changed: 0, removed: 0, added: 0, moved: 0, graphic: 0 };
   const findings: Array<CircuitLocalFinding & { rank: number; own: boolean }> = [];
-  const others: CircuitContentChange[] = [], frames: CircuitContentChange[] = [];
+  const others: CircuitContentChange[] = [], frames: CircuitContentChange[] = [], aliases: CircuitContentChange[] = [];
   for (const change of diff.contentChanges ?? []) {
     if (change.frame) { frames.push(change); continue; }
+    if (change.alias) { aliases.push(change); continue; }
     if (change.type === "other") { others.push(change); continue; }
     const otherPages = (change.side === "base" ? cross?.work : cross?.base)?.get(change.token)?.filter(page => page !== (change.side === "base" ? diff.pages?.work : diff.pages?.base)) ?? [];
     const box = textBox(change.item), place = change.item ? describeCircuitDiffPlace(change.item) : "這一頁";
@@ -523,11 +571,19 @@ function summarizeRedrawn(diff: CircuitLocalPageDiff, limit: number, cross?: Cir
       suggestion: words.suggestion, officialBox: change.side === "base" ? box : null, workingBox: change.side === "work" ? box : null });
   }
   if (others.length) {
-    const sample = others.slice(0, 8).map(change => `${change.token}（${change.side === "base" ? "基準版" : "比對版"}多 ${change.count}）`).join("、");
+    const sample = others.slice(0, 8).map(change => `${change.token}（只在${change.side === "base" ? "基準版" : "比對版"}）`).join("、");
     findings.push({ rank: 7, own: false, category: "label-name", priority: "low", certainty: "unclear", title: clip(`${CIRCUIT_FOR_REFERENCE}其他字不一樣 ${others.length} 個（數值、腳位名稱或備註）`, 280), location: "整頁",
       officialEvidence: clip(others.filter(change => change.side === "base").map(change => change.token).join("、") || "—", 1900),
       workingEvidence: clip(others.filter(change => change.side === "work").map(change => change.token).join("、") || "—", 1900),
       suggestion: `重畫的時候常會改寫數值、腳位名稱或備註，例如：${sample}。需要時再一個一個看。`, officialBox: null, workingBox: null });
+  }
+  if (aliases.length) {
+    // The same part or name written another way by the other drawing or its library: listed so it can be checked, never
+    // counted (2026-11-24: U4401 against U4401A / U4401B, GND against GND_1…GND_7, OE3# against ^OE3# on the real E1.S).
+    const pairs = aliases.map(change => change.side === "base" ? { base: change.token, work: change.alias! } : { base: change.alias!, work: change.token });
+    findings.push({ rank: 7, own: false, category: "label-name", priority: "low", certainty: "unclear", title: clip(`${CIRCUIT_NOT_AN_ERROR}寫法不一樣、其實是同一個的名字 ${aliases.length} 個（拆成幾部分畫的零件、腳位名稱的寫法）`, 280), location: "整頁",
+      officialEvidence: clip(pairs.map(pair => pair.base).join("；"), 1900), workingEvidence: clip(pairs.map(pair => pair.work).join("；"), 1900),
+      suggestion: `例如：${pairs.slice(0, 8).map(pair => `${pair.base} ↔ ${pair.work}`).join("、")}（左邊是基準版、右邊是比對版的寫法）。同一個零件拆成幾部分畫（A、B），或圖庫把重複的腳位加上 _1、_2、在腳位名稱前加 ^ 或 v，都是同一個東西，不算錯。`, officialBox: null, workingBox: null });
   }
   if (frames.length) {
     // The frame of a redrawn sheet (title block, company, drawer, date) differs by nature: one line, listed, never hidden.
@@ -554,9 +610,9 @@ function summarizeArea(area: CircuitChangeArea, diff: CircuitLocalPageDiff, cros
   const tally = (items: readonly CircuitDiffText[]) => {
     const map = new Map<string, Entry>();
     for (const item of items) for (const word of collapse(item.str).split(" ")) {
-      const type = circuitTokenType(word);
-      if (!type) continue;
-      const token = word.toUpperCase(), entry = map.get(token);
+      const name = circuitNameKey(word);
+      if (!name) continue;
+      const token = name.key, type = name.type, entry = map.get(token);
       if (entry) entry.count++; else map.set(token, { count: 1, item, type });
     }
     return map;
@@ -574,8 +630,8 @@ function summarizeArea(area: CircuitChangeArea, diff: CircuitLocalPageDiff, cros
   // A string rewritten in place whose only named difference is one name for another: one rename, not two lines.
   for (const change of area.changes) {
     if (change.kind !== "changed") continue;
-    const gone = collapse(change.before!.str).split(" ").map(word => word.toUpperCase()).filter(token => extra.get(token)?.side === "base");
-    const came = collapse(change.after!.str).split(" ").map(word => word.toUpperCase()).filter(token => extra.get(token)?.side === "work");
+    const gone = collapse(change.before!.str).split(" ").map(word => circuitNameKey(word)?.key ?? "").filter(token => extra.get(token)?.side === "base");
+    const came = collapse(change.after!.str).split(" ").map(word => circuitNameKey(word)?.key ?? "").filter(token => extra.get(token)?.side === "work");
     if (gone.length !== 1 || came.length !== 1 || extra.get(gone[0])!.count !== 1 || extra.get(came[0])!.count !== 1) continue;
     const category = classifyCircuitDiffText(change.after!.str);
     findings.push({ rank: 0, category, priority: "high", certainty: "suspected", title: clip(`字改了：${change.before!.str} → ${change.after!.str}`, 280), location: describeCircuitDiffPlace(change.after!),
