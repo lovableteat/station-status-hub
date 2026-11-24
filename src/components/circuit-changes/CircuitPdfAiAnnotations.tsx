@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { CIRCUIT_AI_CATEGORY_LABELS, type CircuitPdfAiReviewReport, type CircuitPdfReviewPage } from "./circuitPdfAiReview";
 import { CircuitPdfAiZoomViewer } from "./CircuitPdfAiZoomViewer";
 import { circuitPdfPageSize, renderCircuitPdfPage } from "./pdfRender";
-import { circuitMarkTagStyle, placeCircuitMarkTags } from "./circuitPdfMarkTags";
+import { circuitMarkKind, circuitMarkTagStyle, placeCircuitMarkTags } from "./circuitPdfMarkTags";
+import "./circuitPdfMarks.css";
 
 type AnnotationProps = {
   report: CircuitPdfAiReviewReport;
@@ -68,7 +69,7 @@ function AnnotatedPage({ source: { pdf, page }, side, report, onFinding, onZoom 
         const rect = item[boxKey];
         if (!rect) return null;
         return <button key={item.id} type="button" className="circuit-pdf-ai-annotation-box"
-          data-certainty={item.certainty ?? "suspected"} aria-label={`${label} ${item.id}：${item.title}`} title={item.title}
+          data-certainty={item.certainty ?? "suspected"} data-kind={circuitMarkKind(item)} aria-label={`${label} ${item.id}：${item.title}`} title={item.title}
           style={{ left: `${rect.x * 100}%`, top: `${rect.y * 100}%`, width: `${rect.width * 100}%`, height: `${rect.height * 100}%`, minHeight: 0, ...circuitMarkTagStyle(tagOffsets?.get(item.id)) }}
           onClick={() => onFinding(item.id)}><span aria-hidden="true">{item.id}</span></button>;
       })}
@@ -89,7 +90,7 @@ export function CircuitPdfAiAnnotations({ report, official, working, onFinding }
   </section>;
   return <section className="circuit-pdf-ai-annotations" aria-label="AI 圖面標註">
     <h3><ScanLine aria-hidden="true" />AI 圖面標註<Button type="button" variant="outline" title="把基準版和比對版放大並排查看，可以縮放、拖曳，點差異會自動放大到那個位置" onClick={() => setZoom(true)}><Maximize2 aria-hidden="true" />放大檢視兩版</Button></h3>
-    <p><span data-kind="suspected">實線：疑似問題</span><span data-kind="unclear">虛線：證據不足</span>點框查看兩版證據。</p>
+    <p className="circuit-pdf-ai-key"><span><i aria-hidden="true" data-kind="check" />桃紅實線：要你看一下</span><span><i aria-hidden="true" data-kind="unclear" />桃紅虛線：證據不夠</span><span><i aria-hidden="true" data-kind="confirmed" />綠色：已確認</span><span><i aria-hidden="true" data-kind="reference" />灰色虛線：不算錯（例如標題欄）</span>點框上的編號看兩版。</p>
     <div className="circuit-pdf-ai-annotation-pages">
       <AnnotatedPage key={`official:${official.id}:${official.page}`} source={official} side="official" report={report} onFinding={onFinding} onZoom={() => setZoom(true)} />
       <AnnotatedPage key={`working:${working.id}:${working.page}`} source={working} side="working" report={report} onFinding={onFinding} onZoom={() => setZoom(true)} />

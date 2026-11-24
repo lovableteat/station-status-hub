@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { circuitPdfAiReviewKey, type CircuitPdfAiFinding, type CircuitPdfAiReviewReport } from "./circuitPdfAiReview";
 import { loadCircuitPdfAiPairReviews } from "./pdfAiReviewStorage";
+import { isCircuitReferenceFinding } from "./circuitPdfLocalDiff";
 
 /** The saved AI review of one working page, as matched to its baseline page on the drawing. */
 export interface CircuitPdfAiPageResult {
   report: CircuitPdfAiReviewReport;
-  /** Findings still standing (not marked 不採用). */
+  /** Findings still standing (not marked 不採用) that are differences of the page. */
   live: CircuitPdfAiFinding[];
+  /** Findings listed that are not an error (title block, a change on every sheet, reference lines): marked in grey, not counted. */
+  reference: CircuitPdfAiFinding[];
   pending: number; confirmed: number;
 }
 export interface CircuitPdfAiResults {
@@ -51,9 +54,12 @@ export function useCircuitPdfAiResults({ open, seriesId, baselineId, workingId, 
       if (!report) continue;
       // A redrawn sheet's reference lines (a part drawn on another sheet, other words, the title block) stay listed in the
       // review but are not the page's differences: the overview would turn every redrawn sheet red (2026-11-24).
-      const counted = report.source === "local" && report.local?.redrawn ? report.findings.filter(item => item.priority !== "low") : report.findings;
-      const live = counted.filter(item => item.decision !== "dismissed");
-      result.set(page, { report, live, pending: live.filter(item => item.decision === "pending").length, confirmed: live.filter(item => item.decision === "confirmed").length });
+      // The title block and changes on every sheet are not an error either (2026-11-24 「右下角的我要換成我們公司跟我這個作者，
+      // 但他也報錯?」): still marked on the drawing, in grey, but never counted.
+      const aside = (item: CircuitPdfAiFinding) => isCircuitReferenceFinding(item) || (report.source === "local" && Boolean(report.local?.redrawn) && item.priority === "low");
+      const shown = report.findings.filter(item => item.decision !== "dismissed");
+      const live = shown.filter(item => !aside(item)), reference = shown.filter(aside);
+      result.set(page, { report, live, reference, pending: live.filter(item => item.decision === "pending").length, confirmed: live.filter(item => item.decision === "confirmed").length });
     }
     return result;
   // comparePageFor changes together with alignmentKey.

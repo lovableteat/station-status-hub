@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {chromium}=createRequire(path.resolve(process.env.AUDIT_QA_DIR||'../qa-tools','package.json'))('playwright');
 const evidence=path.resolve(process.env.CIRCUIT_AI_EVIDENCE_DIR||'../circuit-pdf-ai-review-evidence');
 const findingTitle='CON2A A1 差分 P/N 名稱不同';
-// 本機比對 lists the renamed net first (F1: 文字改了：PCIE_RX_P → PCIE_RX_N); the model's own findings follow as F2…F4.
+// 本機比對 lists the renamed net first (F1: 字改了：PCIE_RX_P → PCIE_RX_N); the model's own findings follow as F2…F4.
 const findingMarker=(region, side)=>region.getByRole('button',{name:`${side} F2：${findingTitle}`,exact:true});
 
 async function verifyAnnotations(dialog,page,width) {
@@ -27,10 +27,13 @@ async function verifyAnnotations(dialog,page,width) {
     assert.ok(placement.error<=1.1,`annotation coordinate error ${placement.error}px at viewport ${width}px`);
     assert.equal(placement.labelOverlaps,false);
   }
-  // 2026-11-23 (「標註蓋掉導致看不到原本是甚麼」): marks no longer draw on the area; 證據不足 keeps a dashed line just outside it.
-  assert.deepEqual(await unclear.evaluate(node=>{const style=getComputedStyle(node);return {outline:style.outlineStyle,offset:parseFloat(style.outlineOffset)>0,border:style.borderTopStyle,fill:style.backgroundColor};}),{outline:'dashed',offset:true,border:'none',fill:'rgba(0, 0, 0, 0)'});
+  // 2026-11-24 (「標註的方式、範圍、顏色不夠清楚」): the whole area is outlined just outside its edge in magenta, a colour
+  // schematics do not use; 證據不足 is the same outline dashed and untinted, so what is under it stays readable.
+  const outline=node=>{const mark=getComputedStyle(node,'::before'),box=node.getBoundingClientRect(),around=parseFloat(mark.width);return {style:mark.borderTopStyle,colour:mark.borderTopColor,tinted:mark.backgroundColor!=='rgba(0, 0, 0, 0)',outside:around>box.width};};
+  assert.deepEqual(await unclear.evaluate(outline),{style:'dashed',colour:'rgb(232, 23, 138)',tinted:false,outside:true});
+  assert.deepEqual(await baseline.evaluate(outline),{style:'solid',colour:'rgb(232, 23, 138)',tinted:true,outside:true});
   assert.equal(await region.getByRole('button',{name:/^(基準版|比對版) F3：/}).count(),0);
-  assert.equal(await region.getByRole('button',{name:/^(基準版|比對版) F1：文字改了：PCIE_RX_P → PCIE_RX_N$/}).count(),2,'the difference found without AI is boxed on both drawings');
+  assert.equal(await region.getByRole('button',{name:/^(基準版|比對版) F1：字改了：PCIE_RX_P → PCIE_RX_N$/}).count(),2,'the difference found without AI is boxed on both drawings');
   assert.equal(await region.getByText('位置未能確認',{exact:true}).count(),2);
   assert.ok((await region.innerText()).includes('元件／接腳名稱'));
   const first=dialog.locator('.circuit-pdf-ai-finding').nth(1);
@@ -195,8 +198,8 @@ async function runLocalFirst(browser,origin,width) {
     // The renamed net is one difference with its place, in front of what the model added.
     if(phone)await chip(2).tap();else await chip(2).click();
     await dialog.getByRole('heading',{name:'比對版第 2 頁 · 基準版第 2 頁初審摘要',exact:true}).waitFor();
-    assert.match(await dialog.locator('.circuit-pdf-ai-results > header p').innerText(),/^本機比對：這一頁有 2 處不同（文字改 1 處、圖形 1 處）。.*AI 說明：/s);
-    assert.match(await dialog.locator('.circuit-pdf-ai-finding summary').first().innerText(),/F1 · 文字改了：NET_2 → NET_2_NEW/);
+    assert.match(await dialog.locator('.circuit-pdf-ai-results > header p').innerText(),/^電腦比對（沒用 AI）：這一頁有 2 個地方不一樣（字改了 1 個、線不一樣 1 處）。.*AI 說明：/s);
+    assert.match(await dialog.locator('.circuit-pdf-ai-finding summary').first().innerText(),/F1 · 字改了：NET_2 → NET_2_NEW/);
 
     // 放大檢視: both versions large; choosing a difference zooms to it.
     await dialog.getByRole('button',{name:'放大檢視兩版',exact:true}).click();
@@ -238,7 +241,7 @@ async function runLocalFirst(browser,origin,width) {
     assert.equal(summary['相同'],'4 頁');assert.equal(summary['有差異'],'2 頁');assert.equal(summary['比對失敗'],'0 頁');assert.match(summary['AI token 用量'],/輸入 8,400、輸出 760/);
     assert.equal(book.getWorksheet('各頁結果').rowCount,7);
     assert.deepEqual(cells('各頁結果',2).slice(0,4),['1','1','相同','本機比對']);
-    assert.deepEqual(cells('差異清單',2).slice(0,4).concat(cells('差異清單',2)[6]),['2','2','F1','Net 名稱','文字改了：NET_2 → NET_2_NEW']);
+    assert.deepEqual(cells('差異清單',2).slice(0,4).concat(cells('差異清單',2)[6]),['2','2','F1','Net 名稱','字改了：NET_2 → NET_2_NEW']);
     assert.equal(book.getWorksheet('圖面標註').getImages().length,4,'both versions of the two sheets that differ');
 
     // A timeout and a dropped connection need no manual retry, and no page is marked failed on the way.
@@ -311,14 +314,16 @@ async function runMovedBlock(browser,origin,width) {
     await progress.getByText('全部頁面比對已結束',{exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>window.__circuitAiQA.calls.length),0);
     assert.deepEqual(await page.evaluate(()=>window.__circuitAiQA.saveRecords.map(row=>[row.workingPage,row.source]).sort()),[[1,'local'],[2,'local'],[3,'local']]);
-    assert.deepEqual([await chip(1).getAttribute('data-outcome'),await chip(2).getAttribute('data-outcome'),await chip(3).getAttribute('data-outcome')],['identical','different','identical']);
+    assert.deepEqual([await chip(1).getAttribute('data-outcome'),await chip(2).getAttribute('data-outcome'),await chip(3).getAttribute('data-outcome')],['common','different','common'],'a new company in the title block is not a difference');
+    assert.equal((await chip(1).locator('strong').innerText()).trim(),'只有不算錯的地方（標題欄等 1 項）');
     await press(chip(2));
     await dialog.getByRole('heading',{name:'比對版第 2 頁 · 基準版第 2 頁初審摘要',exact:true}).waitFor();
     const titles=(await dialog.locator('.circuit-pdf-ai-finding summary').allInnerTexts()).map(text=>text.trim());
-    assert.equal(titles.length,2,titles.join(' | '));
-    assert.ok(titles.some(title=>/文字改了：R910 → R920/.test(title)),titles.join(' | '));
-    assert.ok(titles.some(title=>/這一區整塊搬移或重畫：32 段文字位置不同，位號與網路名稱一致/.test(title)),titles.join(' | '));
-    assert.match(await dialog.locator('.circuit-pdf-ai-results > header p').innerText(),/1 個整塊搬移或重畫的區塊，每個區塊列成一項/);
+    assert.equal(titles.length,3,titles.join(' | '));
+    assert.ok(titles.some(title=>/不算錯：標題欄不一樣（公司、作者、日期等 1 處）/.test(title)),titles.join(' | '));
+    assert.ok(titles.some(title=>/字改了：R910 → R920/.test(title)),titles.join(' | '));
+    assert.ok(titles.some(title=>/這一塊整個搬走或重畫了：32 段字的位置不一樣，零件和線路名稱都一樣/.test(title)),titles.join(' | '));
+    assert.match(await dialog.locator('.circuit-pdf-ai-results > header p').innerText(),/1 塊整個搬走或重畫的地方，每一塊只列一項/);
     await dialog.locator('.circuit-pdf-ai-annotation-box').first().waitFor();
     assert.deepEqual(await tagsApart(dialog),[]);
     await page.screenshot({path:path.join(evidence,`moved-block-${width}.png`)});
@@ -356,20 +361,20 @@ async function runRedrawn(browser,origin,width) {
     assert.deepEqual(await page.evaluate(()=>window.__circuitAiQA.saveRecords.map(row=>[row.workingPage,row.source]).sort()),[[1,'local'],[2,'local'],[3,'local'],[4,'local']]);
     const labels=[];
     for(const number of [1,2,3,4]) labels.push([await chip(number).getAttribute('data-outcome'),(await chip(number).locator('strong').innerText()).trim()]);
-    assert.deepEqual(labels,[['clean','重畫的圖：位號與網路一致'],['different','重畫的圖：1 個位號／網路不同'],['clean','重畫的圖：位號與網路一致'],['clean','重畫的圖：位號與網路一致']]);
+    assert.deepEqual(labels,[['clean','重畫的圖：零件和線路名稱都一樣'],['different','重畫的圖：1 個零件或線路名稱不一樣'],['clean','重畫的圖：零件和線路名稱都一樣'],['clean','重畫的圖：零件和線路名稱都一樣']]);
     assert.match(await progress.getByRole('status').innerText(),/有差異 1 頁/);
     await page.screenshot({path:path.join(evidence,`redrawn-${width}.png`)});
 
     await press(chip(2));
     await dialog.getByRole('heading',{name:'比對版第 2 頁 · 基準版第 2 頁初審摘要',exact:true}).waitFor();
     const summary=await dialog.locator('.circuit-pdf-ai-results > header p').innerText();
-    assert.match(summary,/^本機比對：兩版這一頁的畫法與版面不同（重畫的圖）/);assert.match(summary,/不是電氣驗證/);
-    assert.match(await dialog.locator('.circuit-pdf-ai-finding summary').first().innerText(),/F1 · 零件位號只在基準版：R204/);
+    assert.match(summary,/^電腦比對（沒用 AI）：這一頁兩版是重新畫過的（重畫的圖）/);assert.match(summary,/電腦只比名字/);
+    assert.match(await dialog.locator('.circuit-pdf-ai-finding summary').first().innerText(),/F1 · 基準版有、比對版沒有的零件編號：R204/);
     assert.equal(await dialog.locator('.circuit-pdf-ai-finding').count(),1,'one part left out is one item, not a list of every moved word and line');
     await page.screenshot({path:path.join(evidence,`redrawn-page2-${width}.png`)});
     await press(chip(3));
     await dialog.getByRole('heading',{name:'比對版第 3 頁 · 基準版第 3 頁初審摘要',exact:true}).waitFor();
-    assert.match(await dialog.locator('.circuit-pdf-ai-finding summary').first().innerText(),/零件位號換頁：U30 在比對版第 4 頁/);
+    assert.match(await dialog.locator('.circuit-pdf-ai-finding summary').first().innerText(),/參考：U30 畫到比對版第 4 頁了/);
     assert.ok(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth+1));
     assert.deepEqual(errors,[]);
     return {width,checks:['redrawn sheets settled by parts and nets without AI','a part left out is one located item','a part drawn on another sheet is not missing']};
@@ -409,7 +414,7 @@ async function runStopLoss(browser,origin) {
 try{await server.listen();const origin='http://127.0.0.1:'+server.httpServer.address().port;browser=await chromium.launch({channel:'chrome'});
 for(const width of[1440,1173,390]){const context=await browser.newContext({viewport:{width,height:884},hasTouch:true,isMobile:width<768,reducedMotion:'reduce'});await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());const page=await context.newPage(),errors=[];page.on('pageerror',error=>{errors.push(error.message);console.error('Browser error:',error.message)});page.setDefaultTimeout(20000);await page.goto(origin);const open=page.getByRole('button',{name:'開啟本頁 AI 初審',exact:true});await open.click();const dialog=page.getByTestId('circuit-pdf-ai-review');await dialog.waitFor();await dialog.getByRole('combobox',{name:'AI 初審服務',exact:true}).selectOption('qa-vision');
 await dialog.getByRole('button',{name:'只比對這一頁',exact:true}).click();await page.waitForFunction(()=>window.__circuitAiQA.rows.length===1);assert.equal((await page.evaluate(()=>window.__circuitAiQA.calls))[0].images,4,'both whole pages and the changed area of both versions');assert.deepEqual((await page.evaluate(()=>window.__circuitAiQA.calls))[0].detail,['high','high','high','high']);assert.match((await page.evaluate(()=>window.__circuitAiQA.calls))[0].text,/已經確定的差異/);assert.match((await page.evaluate(()=>window.__circuitAiQA.calls))[0].text,/PCIE_RX_P/);assert.match(await dialog.innerText(),/有疑點或證據不足就標註/);const first=await page.evaluate(()=>window.__circuitAiQA.rows[0].id);
-await verifyAnnotations(dialog,page,width);const confirmed=dialog.getByRole('group',{name:'F2 人工判讀',exact:true}).getByRole('button',{name:'已確認',exact:true});await confirmed.click();await dialog.getByRole('textbox',{name:'F2 人工核對備註',exact:true}).fill('QA 已核對原生 netlist，應更正 P/N。');await dialog.getByRole('button',{name:'返回圖面',exact:true}).click();assert.ok(await dialog.isVisible());assert.match(await dialog.getByRole('alert').innerText(),/尚未儲存/);await dialog.getByRole('button',{name:'儲存人工判讀',exact:true}).click();await page.waitForFunction(()=>window.__circuitAiQA.saves===2);assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows[0].id),first);assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows[0].findings[1].decision),'confirmed');assert.deepEqual(await page.evaluate(()=>window.__circuitAiQA.rows[0].findings[1].workingBox),{x:.125,y:.283,width:.15,height:.058});assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows[0].findings[0].title),'文字改了：PCIE_RX_P → PCIE_RX_N');await dialog.getByRole('button',{name:'返回圖面',exact:true}).click();await dialog.waitFor({state:'hidden'});await open.click();assert.match(await dialog.innerText(),/已確認/);await findingMarker(dialog.getByRole('region',{name:'AI 圖面標註',exact:true}),'基準版').waitFor();
+await verifyAnnotations(dialog,page,width);const confirmed=dialog.getByRole('group',{name:'F2 人工判讀',exact:true}).getByRole('button',{name:'已確認',exact:true});await confirmed.click();await dialog.getByRole('textbox',{name:'F2 人工核對備註',exact:true}).fill('QA 已核對原生 netlist，應更正 P/N。');await dialog.getByRole('button',{name:'返回圖面',exact:true}).click();assert.ok(await dialog.isVisible());assert.match(await dialog.getByRole('alert').innerText(),/尚未儲存/);await dialog.getByRole('button',{name:'儲存人工判讀',exact:true}).click();await page.waitForFunction(()=>window.__circuitAiQA.saves===2);assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows[0].id),first);assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows[0].findings[1].decision),'confirmed');assert.deepEqual(await page.evaluate(()=>window.__circuitAiQA.rows[0].findings[1].workingBox),{x:.125,y:.283,width:.15,height:.058});assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows[0].findings[0].title),'字改了：PCIE_RX_P → PCIE_RX_N');await dialog.getByRole('button',{name:'返回圖面',exact:true}).click();await dialog.waitFor({state:'hidden'});await open.click();assert.match(await dialog.innerText(),/已確認/);await findingMarker(dialog.getByRole('region',{name:'AI 圖面標註',exact:true}),'基準版').waitFor();
 await dialog.getByRole('button',{name:'重新比對這一頁',exact:true}).click();await page.waitForFunction(()=>window.__circuitAiQA.rows.length===2);assert.notEqual(await page.evaluate(()=>window.__circuitAiQA.rows.at(-1).id),first);await dialog.getByRole('combobox',{name:'歷次 AI 初審',exact:true}).selectOption(first);assert.match(await dialog.innerText(),/正在查看歷史初審/);if(!await confirmed.isVisible())await dialog.locator('.circuit-pdf-ai-finding summary').nth(1).click();assert.equal(await confirmed.isEnabled(),false);await dialog.getByRole('combobox',{name:'歷次 AI 初審',exact:true}).selectOption('');
 if(width===1440){const saved=await page.evaluate(()=>window.__circuitAiQA.rows.at(-1).id);await page.evaluate(()=>window.__circuitAiQA.mode='invalid');await dialog.getByRole('button',{name:'重新比對這一頁',exact:true}).click();await dialog.getByRole('alert').waitFor();assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows.at(-1).id),saved);await page.evaluate(()=>{window.__circuitAiQA.mode='normal';window.__circuitAiQA.saveFail=true});await dialog.getByRole('button',{name:'重新比對這一頁',exact:true}).click();await dialog.getByRole('alert').filter({hasText:'QA 模擬儲存失敗'}).waitFor();assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows.length),2);await page.evaluate(()=>window.__circuitAiQA.saveFail=false);await dialog.getByRole('button',{name:'儲存人工判讀',exact:true}).click();await page.waitForFunction(()=>window.__circuitAiQA.rows.length===3);const count=await page.evaluate(()=>window.__circuitAiQA.calls.length);await page.evaluate(()=>window.__circuitAiQA.mode='slow');await dialog.getByRole('button',{name:'重新比對這一頁',exact:true}).click();await page.waitForFunction(count=>window.__circuitAiQA.calls.length>count,count);await dialog.getByRole('button',{name:'取消初審',exact:true}).click();await dialog.getByRole('button',{name:'重新比對這一頁',exact:true}).waitFor({state:'visible'});assert.equal(await page.evaluate(()=>window.__circuitAiQA.rows.length),3);}
 await page.setViewportSize({width,height:500});

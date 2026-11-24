@@ -6,7 +6,8 @@ import type { CircuitCropRect } from "./circuitPdf";
 import type { CircuitPdfAiFinding, CircuitPdfAiReviewReport, CircuitPdfReviewPage } from "./circuitPdfAiReview";
 import { circuitPdfPageSize, CIRCUIT_PDF_RENDER_BUDGET, renderCircuitPdfPage } from "./pdfRender";
 import { useSharpPdfRegion } from "./useSharpPdfRegion";
-import { circuitMarkTagStyle, placeCircuitMarkTags } from "./circuitPdfMarkTags";
+import { circuitMarkKind, circuitMarkTagStyle, placeCircuitMarkTags } from "./circuitPdfMarkTags";
+import "./circuitPdfMarks.css";
 
 type Side = "official" | "working";
 type Mode = "both" | Side;
@@ -113,7 +114,7 @@ function ZoomPane({ source, side, findings, zoom, selected, onSelect, centre, re
         {drawn && findings.map(finding => {
           const rect = boxOf(finding, side) as CircuitCropRect | null;
           if (!rect) return null;
-          return <button key={finding.id} type="button" className="circuit-pdf-ai-annotation-box" data-certainty={finding.certainty ?? "suspected"} data-selected={selected === finding.id}
+          return <button key={finding.id} type="button" className="circuit-pdf-ai-annotation-box" data-certainty={finding.certainty ?? "suspected"} data-kind={circuitMarkKind(finding)} data-selected={selected === finding.id}
             aria-label={`放大圖 ${label} ${finding.id}：${finding.title}`} aria-pressed={selected === finding.id} title={`${finding.id} · ${finding.title}`}
             style={{ left: `${rect.x * 100}%`, top: `${rect.y * 100}%`, width: `${rect.width * 100}%`, height: `${rect.height * 100}%`, minHeight: 0, ...circuitMarkTagStyle(tagOffsets?.get(finding.id)) }}
             onClick={() => onSelect(finding.id)}><span aria-hidden="true">{finding.id}</span></button>;

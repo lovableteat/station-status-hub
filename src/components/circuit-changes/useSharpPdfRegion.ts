@@ -33,7 +33,8 @@ export function useSharpPdfRegion({ pdf, page, scale, size, surface, clip, budge
       const view = windows.map(item => item.getBoundingClientRect()).reduce((acc, rect) => ({ left: Math.max(acc.left, rect.left), top: Math.max(acc.top, rect.top), right: Math.min(acc.right, rect.right), bottom: Math.min(acc.bottom, rect.bottom) }), { left: -Infinity, top: -Infinity, right: Infinity, bottom: Infinity });
       if (!box.width || !box.height) return;
       const toPage = size.width / box.width;
-      const margin = 160;
+      // A wide margin keeps a short drag sharp before the next redraw (2026-11-24, 1200 %).
+      const margin = 320;
       const left = Math.max(0, (Math.max(view.left, box.left) - box.left) * toPage - margin);
       const top = Math.max(0, (Math.max(view.top, box.top) - box.top) * toPage - margin);
       const right = Math.min(size.width, (Math.min(view.right, box.right) - box.left) * toPage + margin);
@@ -45,7 +46,7 @@ export function useSharpPdfRegion({ pdf, page, scale, size, surface, clip, budge
         .then(done => { if (done && !signal.aborted) setShown(true); })
         .catch(() => { /* the coarser whole page stays on screen */ });
     };
-    const schedule = () => { window.clearTimeout(timer); timer = window.setTimeout(draw, 140); };
+    const schedule = () => { window.clearTimeout(timer); timer = window.setTimeout(draw, 90); };
     schedule();
     // Any scrolling ancestor moves the page under the window, so listen in the capture phase.
     document.addEventListener("scroll", schedule, true);

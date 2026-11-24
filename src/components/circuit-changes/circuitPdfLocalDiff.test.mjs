@@ -97,7 +97,7 @@ test("the findings of a page say what changed and where, most telling first, wit
       { kind: "removed", before: item("TP7", 0.7, 0.7) }, { kind: "added", after: item("R99", 0.8, 0.1) }],
     regions: [{ box: { x: 0.6, y: 0.6, width: 0.1, height: 0.02 }, base: false, work: true }] };
   const summary = k.summarizeCircuitLocalDiff(diff);
-  assert.deepEqual(plain(summary.findings.map(finding => finding.title)), ["文字改了：USB_DP → USB_D_P", "文字移除：TP7", "文字新增：R99", "圖形改了（線條、接點或符號）", "文字移位：C5"]);
+  assert.deepEqual(plain(summary.findings.map(finding => finding.title)), ["字改了：USB_DP → USB_D_P", "比對版少了：TP7", "比對版多了：R99", "這裡的線或符號不一樣", "換了位置：C5"]);
   assert.deepEqual(plain(summary.findings.map(finding => finding.category)), ["net-name", "label-name", "label-name", "connectivity", "label-name"]);
   assert.deepEqual(plain(summary.counts), { changed: 1, removed: 1, added: 1, moved: 1, graphic: 1 });
   assert.equal(summary.findings[0].location, "左上（橫 33%、直 21%）");
@@ -127,11 +127,11 @@ test("the same frame spot changing on most sheets is the title block: listed las
   assert.ok(common.examples[0].includes("SHEET 0 OF 20"));
   const diff = changes => ({ textComparable: true, graphicsComparable: true, sizeChanged: false, textChanges: changes, regions: [] });
   const shared = k.summarizeCircuitLocalDiff(diff(pages[0]), common);
-  assert.deepEqual(plain(shared.findings.map(finding => [finding.title, finding.priority])), [["多頁共通：文字改了：SHEET 0 OF 20 → SHEET 1 OF 21", "low"]]);
+  assert.deepEqual(plain(shared.findings.map(finding => [finding.title, finding.priority])), [["不算錯：標題欄不一樣（公司、作者、日期等 1 處）", "low"]]);
   assert.deepEqual([shared.common, shared.own], [1, 0], "nothing of this page's own, so no AI is needed");
   assert.equal(k.isCircuitPageIdentical(diff(pages[0])), false, "a page with a change is never called the same");
   const mixed = k.summarizeCircuitLocalDiff(diff(pages[4]), common);
-  assert.deepEqual(plain(mixed.findings.map(finding => finding.title)), ["文字改了：USB_DP → USB_D_P", "多頁共通：文字改了：SHEET 4 OF 20 → SHEET 5 OF 21"]);
+  assert.deepEqual(plain(mixed.findings.map(finding => finding.title)), ["字改了：USB_DP → USB_D_P", "不算錯：標題欄不一樣（公司、作者、日期等 1 處）"]);
   assert.deepEqual([mixed.common, mixed.own], [1, 1]);
   // A few sheets changing the same spot is not "every sheet": four of eight is a real change on each of them.
   assert.equal(k.findCircuitCommonChanges(pages.slice(0, 3)).spots.size, 0);
@@ -220,8 +220,8 @@ test("a redrawn sheet is compared by what is on it: a missing part and a new net
   const diff = { textComparable: true, graphicsComparable: false, sizeChanged: false, textChanges: [], regions: [], redrawn: "layout", contentChanges: changes, pages: { base: 4, work: 4 }, contents };
   const summary = k.summarizeCircuitLocalDiff(diff);
   assert.deepEqual(plain(summary.findings.map(finding => [finding.priority, finding.title])), [
-    ["high", "零件位號只在基準版：R99"], ["medium", "網路名稱只在比對版：NEW_NET"],
-    ["low", "其他文字不同 2 個（數值、接腳名稱或註解）"], ["low", "圖框／標題欄文字不同 1 個"]]);
+    ["high", "基準版有、比對版沒有的零件編號：R99"], ["medium", "比對版多出來的線路名稱：NEW_NET"],
+    ["low", "參考：其他字不一樣 2 個（數值、腳位名稱或備註）"], ["low", "不算錯：標題欄或圖框的字不一樣 1 個（公司、作者、日期等）"]]);
   assert.equal(summary.own, 2, "values and the title block are listed but are not this sheet's own differences");
   assert.deepEqual(plain(summary.counts), { changed: 0, removed: 1, added: 1, moved: 0, graphic: 0 });
   assert.ok(summary.findings[0].officialBox && !summary.findings[0].workingBox, "the part is boxed where it is, on the side that has it");
@@ -234,7 +234,7 @@ test("a part the redraw put on another sheet is listed as drawn there, not as mi
   assert.deepEqual(plain(cross.work.get("R99")), [6]);
   const { changes, contents } = k.diffCircuitPageContents([...grid(sheetNames), item("R99", 0.5, 0.5)], grid(sheetNames, 0.02, 0.95));
   const summary = k.summarizeCircuitLocalDiff({ ...page(4, 4, contents.base, contents.work), contentChanges: changes }, null, 40, cross);
-  assert.deepEqual(plain(summary.findings.map(finding => [finding.priority, finding.title])), [["low", "零件位號換頁：R99 在比對版第 6 頁"]]);
+  assert.deepEqual(plain(summary.findings.map(finding => [finding.priority, finding.title])), [["low", "參考：R99 畫到比對版第 6 頁了"]]);
   assert.equal(summary.own, 0); assert.equal(summary.counts.removed, 0);
 });
 
@@ -272,19 +272,19 @@ test("a block moved or redrawn as a whole is one finding; a part it lost and a r
   const titles = summary.findings.map(finding => finding.title);
   assert.equal(summary.areas, 1);
   assert.equal(summary.findings.length, 3, titles.join(" | "));
-  assert.ok(titles.includes("文字改了：C1306 → C1316"), titles.join(" | "));
-  assert.ok(titles.includes("零件位號只在基準版：U7"), titles.join(" | "));
-  const block = summary.findings.find(finding => finding.title.startsWith("這一區整塊搬移或重畫"));
-  assert.match(block.title, /29 段文字位置不同，1 個位號／網路只在一邊（另列）/);
+  assert.ok(titles.includes("字改了：C1306 → C1316"), titles.join(" | "));
+  assert.ok(titles.includes("基準版有、比對版沒有的零件編號：U7"), titles.join(" | "));
+  const block = summary.findings.find(finding => finding.title.startsWith("這一塊整個搬走或重畫了"));
+  assert.match(block.title, /29 段字的位置不一樣，有 1 個零件或線路名稱只在一邊（另外列出）/);
   assert.equal(block.certainty, "unclear");
   // Each side is boxed where the block is drawn on that side, the changed lines of the redraw included.
   assert.ok(block.officialBox.y < 0.06 && block.officialBox.y + block.officialBox.height > 0.36, JSON.stringify(block.officialBox));
   assert.ok(block.workingBox.y < 0.06 && block.workingBox.x < 0.7, JSON.stringify(block.workingBox));
-  assert.equal(titles.some(title => title.startsWith("圖形改了")), false, "the redraw's lines are the block's, not a finding of their own");
+  assert.equal(titles.some(title => title.startsWith("這裡的線")), false, "the redraw's lines are the block's, not a finding of their own");
   // Nothing missing: the block alone, saying its parts and nets match.
   const same = movedBlockPage({ dropPart: false });
   const clean = k.summarizeCircuitLocalDiff(pageDiff(k, same.before, same.after));
-  assert.deepEqual(plain(clean.findings.map(finding => finding.title)), ["文字改了：C1306 → C1316", "這一區整塊搬移或重畫：28 段文字位置不同，位號與網路名稱一致"]);
+  assert.deepEqual(plain(clean.findings.map(finding => finding.title)), ["字改了：C1306 → C1316", "這一塊整個搬走或重畫了：28 段字的位置不一樣，零件和線路名稱都一樣"]);
 });
 
 test("edits spread over the sheet, or only a few close together, stay one finding each", () => {
@@ -298,4 +298,31 @@ test("edits spread over the sheet, or only a few close together, stay one findin
   const close = Array.from({ length: 7 }, (_, index) => index);
   const few = k.summarizeCircuitLocalDiff(pageDiff(k, [...fixed, ...close.map(index => item(`OLD_${index}`, 0.5, 0.5 + index * 0.012))], [...fixed, ...close.map(index => item(`NEW_${index}`, 0.5, 0.5 + index * 0.012))]));
   assert.equal(few.areas, undefined); assert.equal(few.findings.length, 7);
+});
+
+// 2026-11-24 「右下角的我要換成我們公司跟我這個作者，但他也報錯?」: positions taken from the real E1.S MCU1 sheet.
+test("a new company and author in the title block are one line that is not an error; the circuit beside it still counts", () => {
+  const k = service();
+  const block = company => [item("Title", 0.85, 0.955), item("Size", 0.85, 0.972), item("Document Number", 0.86, 0.972), item("Rev", 0.985, 0.972), item("Date:", 0.85, 0.99), item("Sheet", 0.93, 0.99), item(company, 0.93, 0.935)];
+  const circuit = [item("R1312", 0.75, 0.925, 0.03), item("U1301", 0.55, 0.86, 0.03)];
+  const zone = k.findCircuitTitleBlock(block("NVIDIA Corporation"));
+  assert.ok(zone && zone.x > 0.8 && zone.x < 0.85 && zone.y > 0.88 && zone.y < 0.92, JSON.stringify(zone));
+  assert.equal(k.findCircuitTitleBlock(circuit), null, "parts and nets are never taken for a title block");
+  const before = [...block("NVIDIA Corporation"), item("Author: Jensen", 0.93, 0.955), ...circuit];
+  const after = [...block("PEGATRON Corp."), item("Author: 劉", 0.93, 0.955), item("R1313", 0.75, 0.925, 0.03), circuit[1]];
+  const diff = { textComparable: true, graphicsComparable: true, sizeChanged: false, textChanges: k.diffCircuitPageTexts(before, after).changes,
+    regions: [{ box: { x: 0.86, y: 0.93, width: 0.05, height: 0.03 }, base: true, work: true }], titleBlock: { base: k.findCircuitTitleBlock(before), work: k.findCircuitTitleBlock(after) } };
+  const summary = k.summarizeCircuitLocalDiff(diff);
+  const titles = summary.findings.map(finding => finding.title);
+  assert.deepEqual(plain(titles), ["字改了：R1312 → R1313", "不算錯：標題欄不一樣（公司、作者、日期等 3 處）"]);
+  const title = summary.findings[1];
+  assert.equal(k.isCircuitReferenceFinding(title), true);
+  assert.match(title.officialEvidence, /NVIDIA Corporation/); assert.match(title.workingEvidence, /PEGATRON Corp\./); assert.match(title.workingEvidence, /標誌或線也不一樣/);
+  assert.match(title.suggestion, /不是線路/);
+  assert.deepEqual([summary.common, summary.own], [1, 1], "the title block is not a difference of the page; the renamed resistor is");
+  // Chinese field names count too, and with nothing else changed nothing is sent to the AI.
+  const zh = text => [item("標題", 0.8, 0.95), item("圖號", 0.8, 0.97), item("日期", 0.9, 0.97), item(text, 0.9, 0.95)];
+  const only = k.summarizeCircuitLocalDiff({ textComparable: true, graphicsComparable: true, sizeChanged: false, textChanges: k.diffCircuitPageTexts(zh("作者 王"), zh("作者 劉")).changes, regions: [],
+    titleBlock: { base: k.findCircuitTitleBlock(zh("作者 王")), work: k.findCircuitTitleBlock(zh("作者 劉")) } });
+  assert.deepEqual([only.findings.length, only.own, only.common], [1, 0, 1]);
 });

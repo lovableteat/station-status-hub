@@ -1,7 +1,7 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { SpecFillModel } from "../material-requests/materialSpecFillService";
 import { CIRCUIT_PDF_MAX_PAGES, type CircuitCropRect } from "./circuitPdf";
-import { circuitDiffWindows, describeCircuitDiffPlace, isCircuitPageIdentical, summarizeCircuitLocalDiff, type CircuitCommonChanges, type CircuitContentIndex, type CircuitLocalPageDiff, type CircuitLocalSummary } from "./circuitPdfLocalDiff";
+import { circuitDiffWindows, describeCircuitDiffPlace, isCircuitPageIdentical, isCircuitReferenceFinding, summarizeCircuitLocalDiff, type CircuitCommonChanges, type CircuitContentIndex, type CircuitLocalPageDiff, type CircuitLocalSummary } from "./circuitPdfLocalDiff";
 
 export interface CircuitPdfReviewPage { id: string; name: string; page: number; pdf: PDFDocumentProxy }
 export interface CircuitPdfAiReviewTarget { officialVersionId: string; workingVersionId: string; officialPage: number; workingPage: number }
@@ -168,14 +168,17 @@ export function normalizeCircuitPdfAiReviewReport(value: unknown): CircuitPdfAiR
 
 /** True for a page 本機比對 found the same in both versions. */
 export const isCircuitReportIdentical = (report: CircuitPdfAiReviewReport) => report.source === "local" && report.local?.identical === true;
-/** 2: a moved or redrawn block of a sheet is one finding (2026-11-24). Raise it when 本機比對 lists a page differently. */
-export const CIRCUIT_LOCAL_METHOD = 2;
+/**
+ * Raise it when 本機比對 lists a page differently. 2: a moved or redrawn block of a sheet is one finding; 3: plain words and
+ * the title block as one line that is not an error (both 2026-11-24).
+ */
+export const CIRCUIT_LOCAL_METHOD = 3;
 /**
  * A page 本機比對 listed with an older method and nobody has judged yet: comparing it again costs nothing (no AI) and lists
  * it the current way, so a batch does it again instead of keeping it (2026-11-24: the old method put 40 marks on one
- * moved block). Pages found identical or redrawn come out the same and are kept, as is anything someone judged.
+ * moved block). Pages found identical come out the same and are kept, as is anything someone judged.
  */
-export const isCircuitLocalReportOutdated = (report: CircuitPdfAiReviewReport) => report.source === "local" && !report.local?.identical && !report.local?.redrawn
+export const isCircuitLocalReportOutdated = (report: CircuitPdfAiReviewReport) => report.source === "local" && !report.local?.identical
   && (report.local?.method ?? 1) < CIRCUIT_LOCAL_METHOD && report.findings.every(finding => finding.decision === "pending" && !finding.reviewNote);
 
 const localInfo = (diff: CircuitLocalPageDiff, summary: CircuitLocalSummary): CircuitPdfLocalInfo => ({ identical: isCircuitPageIdentical(diff),
@@ -186,25 +189,25 @@ function describeLocal(diff: CircuitLocalPageDiff, summary: CircuitLocalSummary,
   const { counts } = summary, total = counts.changed + counts.removed + counts.added + counts.moved + counts.graphic;
   if (diff.redrawn && diff.contentChanges) {
     // A redrawn sheet (公版 vs one's own drawing, or another line style): no lines or places compared, only what is on it.
-    const moved = summary.findings.filter(finding => finding.title.includes("換頁：")).length;
+    const moved = summary.findings.filter(finding => /換頁：| 畫到(基準|比對)版第 /.test(finding.title)).length;
     const head = diff.redrawn === "layout"
-      ? "本機比對：兩版這一頁的畫法與版面不同（重畫的圖），所以不比圖形與文字位置，只比零件位號與網路名稱。"
-      : "本機比對：兩版線條的畫法不同（線寬、顏色或輸出 PDF 的方式），整頁線條都會不一樣，所以不逐點比對圖形，只比零件位號與網路名稱。";
+      ? "電腦比對（沒用 AI）：這一頁兩版是重新畫過的（重畫的圖），位置都不一樣，所以只比零件編號和線路名稱，不比位置和線。"
+      : "電腦比對（沒用 AI）：兩版的線畫法不一樣（粗細、顏色或存成 PDF 的方式），整頁的線都會不同，所以只比零件編號和線路名稱。";
     const body = summary.own
-      ? `只出現在一邊的有 ${summary.own} 個（基準版多 ${counts.removed}、比對版多 ${counts.added}）。`
-      : "兩版的零件位號與網路名稱都一致。";
-    return `${head}${body}${moved ? `另有 ${moved} 個畫在另一頁，不算少。` : ""}這種頁面不送 AI（AI 看圖判斷接線不可靠）。這不是電氣驗證：同名網路是否接到同一個腳位，請放大核對。`.slice(0, 3900);
+      ? `有 ${summary.own} 個只在一邊（基準版多 ${counts.removed} 個、比對版多 ${counts.added} 個）。`
+      : "兩版的零件編號和線路名稱都一樣。";
+    return `${head}${body}${moved ? `另外有 ${moved} 個畫到別頁，不算少。` : ""}這種頁不送 AI（AI 看圖判斷接線不準）。電腦只比名字：名字一樣的線有沒有接到同一個腳位，還是要放大看。`.slice(0, 3900);
   }
   const example = common?.examples[0] ? `，例如${common.examples[0].slice(0, 80)}` : "";
-  const shared = summary.common ? `另有 ${summary.common} 處是很多頁同一個圖框位置都有的變更（通常是標題欄的日期、版次或頁數${example}），列在清單最後。` : "";
-  const unlaid = diff.graphicsComparable ? "" : "兩版頁面大小不同，沒有做圖形疊合比對，接線請人工核對。";
+  const shared = summary.common ? `另外 ${summary.common} 項是標題欄或很多頁都一樣的改變（公司、作者、日期、版次${example}），不算錯，放在清單最後。` : "";
+  const unlaid = diff.graphicsComparable ? "" : "兩版的紙張大小不一樣，沒辦法把線疊在一起比，線請自己看。";
   let words: string;
-  if (!diff.textComparable && !diff.graphicsComparable) words = "本機比對：這一頁沒有可選取的文字，兩版頁面大小也不同，無法自動比對，請人工核對或改用 AI。";
-  else if (!total) words = `本機比對：兩版這一頁的${[diff.textComparable && "文字逐一比對", diff.graphicsComparable && "圖形疊合比對"].filter(Boolean).join("、")}${summary.common ? "沒有這一頁自己的差異" : "都相同"}，沒有送 AI。${shared}${unlaid}`;
+  if (!diff.textComparable && !diff.graphicsComparable) words = "電腦比對（沒用 AI）：這一頁的字選不起來（可能是圖片），兩版紙張大小也不一樣，電腦沒辦法比，請自己看或改用 AI。";
+  else if (!total) words = `電腦比對（沒用 AI）：這一頁${[diff.textComparable && "字一個一個比", diff.graphicsComparable && "線疊在一起比"].filter(Boolean).join("、")}，${summary.common ? "除了不算錯的地方，" : ""}兩版都一樣，沒有送 AI。${shared}${unlaid}`;
   else {
-    const parts = [counts.changed && `文字改 ${counts.changed} 處`, counts.removed && `移除 ${counts.removed} 處`, counts.added && `新增 ${counts.added} 處`, counts.moved && `移位 ${counts.moved} 處`, counts.graphic && `圖形 ${counts.graphic} 處`].filter(Boolean).join("、");
-    const blocks = summary.areas ? `其中大部分集中在 ${summary.areas} 個整塊搬移或重畫的區塊，每個區塊列成一項（區塊裡只在一邊的位號與網路另列）。` : "";
-    words = `本機比對：這一頁有 ${total} 處不同（${parts}）。${blocks}${summary.omitted ? `其中 ${summary.omitted} 處超過清單上限沒有逐一列出，請放大兩版核對整頁。` : ""}${shared}${unlaid}`;
+    const parts = [counts.changed && `字改了 ${counts.changed} 個`, counts.removed && `少了 ${counts.removed} 個`, counts.added && `多了 ${counts.added} 個`, counts.moved && `換位置 ${counts.moved} 個`, counts.graphic && `線不一樣 ${counts.graphic} 處`].filter(Boolean).join("、");
+    const blocks = summary.areas ? `其中大部分在 ${summary.areas} 塊整個搬走或重畫的地方，每一塊只列一項（裡面只在一邊的零件和線路名稱另外列出）。` : "";
+    words = `電腦比對（沒用 AI）：這一頁有 ${total} 個地方不一樣（${parts}）。${blocks}${summary.omitted ? `還有 ${summary.omitted} 個太多了沒有一個一個列出，請把兩版放大看整頁。` : ""}${shared}${unlaid}`;
   }
   return words.slice(0, 3900).trim();
 }
@@ -212,28 +215,32 @@ function describeLocal(diff: CircuitLocalPageDiff, summary: CircuitLocalSummary,
 function localChecks(diff: CircuitLocalPageDiff, summary: CircuitLocalSummary): CircuitPdfAiCheck[] {
   if (diff.redrawn && diff.contentChanges) {
     return CIRCUIT_AI_CATEGORIES.map(category => {
-      if (category === "connectivity") return { category, state: "unverifiable" as const, note: diff.redrawn === "layout" ? "重畫的圖不做圖形比對；請以零件位號與網路名稱是否一致為準，接到哪個腳位請放大核對。" : "兩版線條畫法不同，沒有逐點比對圖形；請以零件位號與網路名稱是否一致為準，接線請放大核對。" };
+      if (category === "connectivity") return { category, state: "unverifiable" as const, note: diff.redrawn === "layout" ? "重畫的圖不比線，只比名字；線接到哪個腳位，請放大看。" : "兩版的線畫法不一樣，不一點一點比線，只比名字；線接到哪個腳位，請放大看。" };
       const label = CIRCUIT_AI_CATEGORY_LABELS[category];
       // Only differences this sheet really has count (a part drawn on another sheet, other words are listed but low).
       const listed = summary.findings.filter(item => item.category === category), found = listed.filter(item => item.priority !== "low").length;
-      if (found) return { category, state: "possible-issue" as const, note: `${label}有 ${found} 個只出現在一邊，請核對。` };
+      if (found) return { category, state: "possible-issue" as const, note: `${label}有 ${found} 個只在一邊，請看一下。` };
       // Listed for reference only (drawn on another sheet, other words, the title block): never "no visible issue" while
       // something is listed under it, which a stored report may not say.
-      if (listed.length) return { category, state: "unverifiable" as const, note: `兩版的${label}沒有只出現在一邊的；另列 ${listed.length} 項僅供參考（換頁、其他文字或圖框），需要時再核對。` };
-      return { category, state: "no-visible-issue" as const, note: `兩版的${label}一致（只比名稱，不比位置與畫法）。` };
+      if (listed.length) return { category, state: "unverifiable" as const, note: `兩版的${label}沒有只在一邊的；另外 ${listed.length} 項只是參考（畫到別頁、其他字或標題欄），需要時再看。` };
+      return { category, state: "no-visible-issue" as const, note: `兩版的${label}都一樣（只比名字，不比位置和畫法）。` };
     });
   }
   return CIRCUIT_AI_CATEGORIES.map(category => {
-    const found = summary.findings.filter(item => item.category === category).length;
+    const listed = summary.findings.filter(item => item.category === category), found = listed.filter(item => !isCircuitReferenceFinding(item)).length;
+    // Only the title block or a change on every sheet: listed, not an error, so the check says that instead of "possible issue".
+    const aside = listed.length - found;
     if (category === "connectivity") {
-      if (found) return { category, state: "possible-issue", note: `圖形疊合比對有 ${found} 處不同，可能是接線、接點或符號變更，請人工核對。` };
-      if (!diff.graphicsComparable) return { category, state: "unverifiable", note: "兩版頁面大小不同，沒有做圖形疊合比對，請人工核對接線。" };
-      return { category, state: summary.omitted ? "unverifiable" : "no-visible-issue", note: summary.omitted ? "差異太多沒有逐一列出，請放大兩版核對接線。" : "兩版圖形疊合比對沒有不同。這只代表畫面相同，不是電氣驗證。" };
+      if (found) return { category, state: "possible-issue", note: `線疊在一起比，有 ${found} 個地方不一樣，可能是線、接點或符號改了，請看一下。` };
+      if (!diff.graphicsComparable) return { category, state: "unverifiable", note: "兩版紙張大小不一樣，沒辦法把線疊在一起比，請自己看線。" };
+      if (aside) return { category, state: "unverifiable", note: `線疊在一起比，除了 ${aside} 項不算錯的（標題欄等），都一樣。` };
+      return { category, state: summary.omitted ? "unverifiable" : "no-visible-issue", note: summary.omitted ? "不一樣的地方太多，沒有一個一個列出，請放大兩版看線。" : "兩版的線疊在一起比，都一樣。這只代表畫出來一樣，不代表電路一定對。" };
     }
     const label = CIRCUIT_AI_CATEGORY_LABELS[category];
-    if (found) return { category, state: "possible-issue", note: `文字逐一比對有 ${found} 處${label}不同。` };
-    if (!diff.textComparable) return { category, state: "unverifiable", note: "這一頁沒有可選取的文字，無法逐字比對，請看圖形比對結果或人工核對。" };
-    return { category, state: summary.omitted ? "unverifiable" : "no-visible-issue", note: summary.omitted ? "差異太多沒有逐一列出，請人工核對。" : `兩版文字逐一比對，${label}沒有不同。` };
+    if (found) return { category, state: "possible-issue", note: `字一個一個比，有 ${found} 個${label}不一樣。` };
+    if (!diff.textComparable) return { category, state: "unverifiable", note: "這一頁的字選不起來（可能是圖片），沒辦法一個字一個字比，請看線的比對結果或自己看。" };
+    if (aside) return { category, state: "unverifiable", note: `字一個一個比，除了 ${aside} 項不算錯的（標題欄等），兩版的${label}都一樣。` };
+    return { category, state: summary.omitted ? "unverifiable" : "no-visible-issue", note: summary.omitted ? "不一樣的地方太多，沒有一個一個列出，請自己看。" : `字一個一個比，兩版的${label}都一樣。` };
   });
 }
 

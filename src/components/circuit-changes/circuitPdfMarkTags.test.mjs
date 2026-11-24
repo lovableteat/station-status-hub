@@ -8,7 +8,7 @@ const service = () => loader()("src/components/circuit-changes/circuitPdfMarkTag
 // The tag box as the CSS draws it, moved by the offset.
 function tagBox(k, mark, offsets, width, height) {
   const offset = offsets.get(mark.id) ?? { dx: 0, dy: 0 };
-  return { x: mark.rect.x * width - 5 + offset.dx, y: mark.rect.y * height - 22 + offset.dy, width: k.circuitMarkTagWidth(mark.id), height: 16 };
+  return { x: mark.rect.x * width - 5 + offset.dx, y: mark.rect.y * height - 24 + offset.dy, width: k.circuitMarkTagWidth(mark.id), height: 18 };
 }
 const clash = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
@@ -31,7 +31,7 @@ test("tags of marks drawn on top of each other step aside instead of piling up (
 test("a mark at the top edge puts its tag beside the box; a lone mark keeps the usual place", () => {
   const k = service();
   const top = k.placeCircuitMarkTags([{ id: "F1", rect: { x: 0.4, y: 0.005, width: 0.1, height: 0.05 } }], 800, 600);
-  assert.deepEqual({ ...top.get("F1") }, { dx: 0.1 * 800 + 17, dy: 22 }, "level with the top of the box, just right of it");
+  assert.deepEqual({ ...top.get("F1") }, { dx: 0.1 * 800 + 17, dy: 24 }, "level with the top of the box, just right of it");
   assert.equal(k.placeCircuitMarkTags([{ id: "F2", rect: { x: 0.4, y: 0.4, width: 0.1, height: 0.05 } }], 800, 600).size, 0);
   assert.deepEqual({ ...k.circuitMarkTagStyle({ dx: 33, dy: -18 }) }, { "--tag-dx": "33px", "--tag-dy": "-18px" });
 });

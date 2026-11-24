@@ -40,6 +40,8 @@ export interface CircuitLocalPageDiff {
   pages?: { base: number; work: number };
   /** The Ref Des and net names of each side, for the same look-up across sheets. */
   contents?: { base: string[]; work: string[] };
+  /** Where each side's title block is (findCircuitTitleBlock); absent: only the far corner counts. */
+  titleBlock?: { base: CircuitCropRect | null; work: CircuitCropRect | null };
 }
 export type CircuitContentType = "refdes" | "net" | "other";
 /** One word one side has more often than the other; `item` is where it is on the side that has it. */
@@ -346,9 +348,9 @@ export const isCircuitCommonChange = (change: CircuitTextChange, common: Circuit
 
 export function describeCircuitTextChange(change: CircuitTextChange) {
   if (change.kind === "changed") return `「${change.before!.str}」改成「${change.after!.str}」`;
-  if (change.kind === "removed") return `「${change.before!.str}」移除`;
-  if (change.kind === "added") return `新增「${change.after!.str}」`;
-  return `「${change.after!.str}」移位`;
+  if (change.kind === "removed") return `少了「${change.before!.str}」`;
+  if (change.kind === "added") return `多了「${change.after!.str}」`;
+  return `「${change.after!.str}」換了位置`;
 }
 
 export interface CircuitLocalFinding {
@@ -443,9 +445,53 @@ export function findCircuitChangeAreas(changes: readonly CircuitTextChange[], re
 
 const clip = (value: string, max = 180) => value.length > max ? `${value.slice(0, max - 1)}…` : value;
 const textBox = (item: CircuitDiffText | undefined) => item ? pad({ x: item.x, y: item.y, width: Math.max(item.width, 0.006), height: Math.max(item.height, 0.006) }, 0.004) : null;
-const COMMON_NOTE = "很多頁同一個圖框位置都有這個變更（通常是標題欄的日期、版次或頁數），確認一次即可。";
+const COMMON_NOTE = "很多頁的同一個地方都這樣改（通常是標題欄的日期、版次或頁數），不是線路，看一次就好。";
 
-const TYPE_WORDS: Record<CircuitContentType, string> = { refdes: "零件位號", net: "網路名稱", other: "其他文字" };
+/**
+ * Plain words (2026-11-24 「報錯的說明不夠人性化，要國小生都看得懂才對」): every finding says what is different and what to do
+ * in everyday words. Findings that are not an error (the title block, a change on every sheet) start with 不算錯：, those
+ * only worth a look start with 參考：; neither counts as a difference of the page (isCircuitReferenceFinding).
+ */
+export const CIRCUIT_NOT_AN_ERROR = "不算錯：";
+export const CIRCUIT_FOR_REFERENCE = "參考：";
+// How reports made before 2026-11-24 started the same kinds of finding.
+const OLD_REFERENCE = /^(多頁共通：|圖框／標題欄文字不同|其他文字不同|零件位號換頁：|網路名稱換頁：)/;
+export const isCircuitReferenceFinding = (finding: { title: string }) => finding.title.startsWith(CIRCUIT_NOT_AN_ERROR) || finding.title.startsWith(CIRCUIT_FOR_REFERENCE) || OLD_REFERENCE.test(finding.title);
+const TITLE_BLOCK_NOTE = "這些字在右下角的標題欄或圖框（公司、作者、日期、版次），不是線路。換成你們公司或你的名字是正常的，不用改。";
+/**
+ * The title block (company, author, date, revision): changing it to one's own company and name is expected (2026-11-24
+ * 「右下角的我要換成我們公司跟我這個作者，但他也報錯?」). It is found by its field names in the lower right (Title, Size,
+ * Document Number, Rev, Date, Sheet … or 標題、圖號、版本、日期、作者 …): the box from the leftmost and highest of them to the
+ * page corner, with room above for the company lines. Only that box: on a real sheet the circuit runs right up to it (the
+ * E1.S MCU1 sheet has parts at 75 % across and 93 % down; its title block starts at 85 % / 94 %). Without field names, only
+ * the far corner counts.
+ */
+const TITLE_FIELD = /^(?:(?:title|size|document(?: number| no\.?)?|doc\.? ?no\.?|rev(?:ision)?|date:?|sheet|drawn(?: by)?|designed(?: by)?|designer|engineer|checked(?: by)?|approved(?: by)?|author|company|project|page)\b|標題|圖名|圖號|品名|名稱|版本|版次|日期|頁次|設計|繪圖|製圖|審核|核准|作者|公司)/i;
+export function findCircuitTitleBlock(items: readonly CircuitDiffText[]): CircuitCropRect | null {
+  const fields = items.filter(item => { const point = center(item); return point.x > 0.55 && point.y > 0.75 && TITLE_FIELD.test(collapse(item.str)); });
+  if (fields.length < 2) return null;
+  const x = Math.max(0, Math.min(...fields.map(item => item.x)) - 0.02), y = Math.max(0, Math.min(...fields.map(item => item.y)) - 0.04);
+  return { x, y, width: 1 - x, height: 1 - y };
+}
+const FALLBACK_TITLE_BLOCK: CircuitCropRect = { x: 0.8, y: 0.9, width: 0.2, height: 0.1 };
+const inside = (box: CircuitCropRect, point: { x: number; y: number }) => point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height;
+
+const TYPE_WORDS: Record<CircuitContentType, string> = { refdes: "零件編號", net: "線路名稱", other: "其他字" };
+/** A part or net name only one side has: what to call it and what to check, for the side that has it. */
+function onlyOnOneSide(side: "base" | "work", type: CircuitContentType, token: string, count: number) {
+  const words = TYPE_WORDS[type], times = count > 1 ? `（多 ${count} 個）` : "";
+  return {
+    title: side === "base" ? `基準版有、比對版沒有的${words}：${token}${times}` : `比對版多出來的${words}：${token}${times}`,
+    suggestion: side === "base"
+      ? (type === "refdes" ? `基準版有 ${token} 這個零件，比對版找不到。是故意拿掉的嗎？不是的話，可能是漏畫，或是編號寫錯。` : `基準版有 ${token} 這條線路名稱，比對版沒有。是改了名字，還是漏接了？`)
+      : (type === "refdes" ? `比對版多了 ${token} 這個零件。確認是新加的，不是編號寫錯。` : `比對版多了 ${token} 這條線路名稱。確認是新加的或改了名字，而且接到對的腳位。`),
+  };
+}
+/** A name the other PDF draws on another sheet: not missing. */
+function onAnotherSheet(side: "base" | "work", token: string, pages: readonly number[]) {
+  const there = side === "base" ? "比對版" : "基準版", list = pages.slice(0, 3).join("、");
+  return { title: `${CIRCUIT_FOR_REFERENCE}${token} 畫到${there}第 ${list} 頁了`, suggestion: `不是少了，只是${there}把 ${token} 畫在第 ${list} 頁。有空去那一頁看看接法一樣就好。` };
+}
 /**
  * A redrawn sheet as findings: the Ref Des and net names only one side has, each named, with where it is on that side.
  * One the other PDF has on another sheet moved sheet (listed, not this sheet's difference). Other words (values, pin
@@ -458,40 +504,37 @@ function summarizeRedrawn(diff: CircuitLocalPageDiff, limit: number, cross?: Cir
   for (const change of diff.contentChanges ?? []) {
     if (change.frame) { frames.push(change); continue; }
     if (change.type === "other") { others.push(change); continue; }
-    const words = TYPE_WORDS[change.type], here = change.side === "base" ? "基準版" : "比對版", there = change.side === "base" ? "比對版" : "基準版";
     const otherPages = (change.side === "base" ? cross?.work : cross?.base)?.get(change.token)?.filter(page => page !== (change.side === "base" ? diff.pages?.work : diff.pages?.base)) ?? [];
-    const times = change.count > 1 ? `（多 ${change.count} 個）` : "";
     const box = textBox(change.item), place = change.item ? describeCircuitDiffPlace(change.item) : "這一頁";
     const category: CircuitDiffCategory = change.type === "refdes" ? "label-name" : "net-name";
     if (otherPages.length) {
-      findings.push({ rank: 6, own: false, category, priority: "low", certainty: "suspected", title: clip(`${words}換頁：${change.token} 在${there}第 ${otherPages.slice(0, 3).join("、")} 頁`, 280), location: place,
+      const moved = onAnotherSheet(change.side, change.token, otherPages);
+      findings.push({ rank: 6, own: false, category, priority: "low", certainty: "unclear", title: clip(moved.title, 280), location: place,
         officialEvidence: change.side === "base" ? `${change.token}（${place}）` : `基準版在第 ${otherPages.slice(0, 3).join("、")} 頁`, workingEvidence: change.side === "work" ? `${change.token}（${place}）` : `比對版在第 ${otherPages.slice(0, 3).join("、")} 頁`,
-        suggestion: `${there}把 ${change.token} 畫在另一頁，不算少了；確認那一頁的接法相同即可。`, officialBox: change.side === "base" ? box : null, workingBox: change.side === "work" ? box : null });
+        suggestion: moved.suggestion, officialBox: change.side === "base" ? box : null, workingBox: change.side === "work" ? box : null });
       continue;
     }
     if (change.side === "base") counts.removed += change.count; else counts.added += change.count;
+    const words = onlyOnOneSide(change.side, change.type, change.token, change.count);
     findings.push({ rank: change.type === "refdes" ? 0 : 1, own: true, category, priority: change.type === "refdes" ? "high" : "medium", certainty: "suspected",
-      title: clip(`${words}只在${here}：${change.token}${times}`, 280), location: place,
+      title: clip(words.title, 280), location: place,
       officialEvidence: change.side === "base" ? `${change.token}（${place}）` : `基準版${cross ? "整份" : "這一頁"}沒有 ${change.token}`,
       workingEvidence: change.side === "work" ? `${change.token}（${place}）` : `比對版${cross ? "整份" : "這一頁"}沒有 ${change.token}`,
-      suggestion: change.side === "base"
-        ? (change.type === "refdes" ? `基準版有 ${change.token}，比對版沒有：確認是刻意拿掉，還是漏畫或位號寫錯。` : `基準版有網路 ${change.token}，比對版沒有：確認是改名、合併，還是漏接。`)
-        : (change.type === "refdes" ? `比對版多了 ${change.token}：確認是新增的零件，還是位號寫錯。` : `比對版多了網路 ${change.token}：確認是新增或改名，接到的腳位正確。`),
-      officialBox: change.side === "base" ? box : null, workingBox: change.side === "work" ? box : null });
+      suggestion: words.suggestion, officialBox: change.side === "base" ? box : null, workingBox: change.side === "work" ? box : null });
   }
   if (others.length) {
     const sample = others.slice(0, 8).map(change => `${change.token}（${change.side === "base" ? "基準版" : "比對版"}多 ${change.count}）`).join("、");
-    findings.push({ rank: 7, own: false, category: "label-name", priority: "low", certainty: "unclear", title: clip(`其他文字不同 ${others.length} 個（數值、接腳名稱或註解）`, 280), location: "整頁",
+    findings.push({ rank: 7, own: false, category: "label-name", priority: "low", certainty: "unclear", title: clip(`${CIRCUIT_FOR_REFERENCE}其他字不一樣 ${others.length} 個（數值、腳位名稱或備註）`, 280), location: "整頁",
       officialEvidence: clip(others.filter(change => change.side === "base").map(change => change.token).join("、") || "—", 1900),
       workingEvidence: clip(others.filter(change => change.side === "work").map(change => change.token).join("、") || "—", 1900),
-      suggestion: `重畫的圖常改寫數值、接腳名稱或註解，例如：${sample}。需要時再逐一核對。`, officialBox: null, workingBox: null });
+      suggestion: `重畫的時候常會改寫數值、腳位名稱或備註，例如：${sample}。需要時再一個一個看。`, officialBox: null, workingBox: null });
   }
   if (frames.length) {
     // The frame of a redrawn sheet (title block, company, drawer, date) differs by nature: one line, listed, never hidden.
-    findings.push({ rank: 8, own: false, category: "label-name", priority: "low", certainty: "unclear", title: clip(`圖框／標題欄文字不同 ${frames.length} 個`, 280), location: "圖框與標題欄",
+    findings.push({ rank: 8, own: false, category: "label-name", priority: "low", certainty: "unclear", title: clip(`${CIRCUIT_NOT_AN_ERROR}標題欄或圖框的字不一樣 ${frames.length} 個（公司、作者、日期等）`, 280), location: "圖框與標題欄",
       officialEvidence: clip(frames.filter(change => change.side === "base").map(change => change.token).join("、") || "—", 1900),
       workingEvidence: clip(frames.filter(change => change.side === "work").map(change => change.token).join("、") || "—", 1900),
-      suggestion: "只出現在圖框或標題欄（日期、版次、繪圖者、公司名稱等），不是電路內容。", officialBox: null, workingBox: null });
+      suggestion: TITLE_BLOCK_NOTE, officialBox: null, workingBox: null });
   }
   findings.sort((left, right) => left.rank - right.rank);
   const kept = findings.slice(0, limit);
@@ -535,31 +578,30 @@ function summarizeArea(area: CircuitChangeArea, diff: CircuitLocalPageDiff, cros
     const came = collapse(change.after!.str).split(" ").map(word => word.toUpperCase()).filter(token => extra.get(token)?.side === "work");
     if (gone.length !== 1 || came.length !== 1 || extra.get(gone[0])!.count !== 1 || extra.get(came[0])!.count !== 1) continue;
     const category = classifyCircuitDiffText(change.after!.str);
-    findings.push({ rank: 0, category, priority: "high", certainty: "suspected", title: clip(`文字改了：${change.before!.str} → ${change.after!.str}`, 280), location: describeCircuitDiffPlace(change.after!),
-      officialEvidence: clip(change.before!.str, 1900), workingEvidence: clip(change.after!.str, 1900), suggestion: "這一區整塊搬移或重畫，這個名稱也換了：請確認這是預期的修改。", officialBox: textBox(change.before), workingBox: textBox(change.after) });
+    findings.push({ rank: 0, category, priority: "high", certainty: "suspected", title: clip(`字改了：${change.before!.str} → ${change.after!.str}`, 280), location: describeCircuitDiffPlace(change.after!),
+      officialEvidence: clip(change.before!.str, 1900), workingEvidence: clip(change.after!.str, 1900), suggestion: "這一塊被搬走或重畫，這個名字也換了。是你要改的嗎？不是的話，就是改錯了。", officialBox: textBox(change.before), workingBox: textBox(change.after) });
     extra.delete(gone[0]); extra.delete(came[0]);
   }
   for (const [token, { side, count, entry }] of extra) {
-    const words = TYPE_WORDS[entry.type], here = side === "base" ? "基準版" : "比對版", there = side === "base" ? "比對版" : "基準版";
     const place = describeCircuitDiffPlace(entry.item), box = textBox(entry.item), category: CircuitDiffCategory = entry.type === "refdes" ? "label-name" : "net-name";
     const onPage = (side === "base" ? diff.contents?.work : diff.contents?.base)?.includes(token) ?? false;
     const otherPages = onPage ? [] : (side === "base" ? cross?.work : cross?.base)?.get(token)?.filter(page => page !== (side === "base" ? diff.pages?.work : diff.pages?.base)) ?? [];
     const boxes = { officialBox: side === "base" ? box : null, workingBox: side === "work" ? box : null };
     if (onPage || otherPages.length) {
+      const moved = onAnotherSheet(side, token, otherPages);
       findings.push({ rank: 6, category, priority: "low", certainty: "unclear", location: place, ...boxes,
-        title: clip(onPage ? `${words}${here}這一區多 ${count} 個：${token}（${there}這一頁仍有）` : `${words}換頁：${token} 在${there}第 ${otherPages.slice(0, 3).join("、")} 頁`, 280),
+        title: clip(onPage ? `${CIRCUIT_FOR_REFERENCE}${token} 在這一塊畫的次數不一樣（兩版這一頁都有）` : moved.title, 280),
         officialEvidence: side === "base" ? `${token}（${place}）` : onPage ? `基準版這一頁其他地方有 ${token}` : `基準版在第 ${otherPages.slice(0, 3).join("、")} 頁`,
         workingEvidence: side === "work" ? `${token}（${place}）` : onPage ? `比對版這一頁其他地方有 ${token}` : `比對版在第 ${otherPages.slice(0, 3).join("、")} 頁`,
-        suggestion: onPage ? `兩版都有 ${token}，只是這一區畫的次數不同（重畫時常增減網路標籤）；確認它接到的腳位相同即可。` : `${there}把 ${token} 畫在另一頁，不算少了；確認那一頁的接法相同即可。` });
+        suggestion: onPage ? `兩版都有 ${token}，只是這一塊畫的次數不一樣（重畫時常常會這樣）。確認它接到一樣的腳位就好。` : moved.suggestion });
       continue;
     }
+    const words = onlyOnOneSide(side, entry.type, token, count);
     findings.push({ rank: entry.type === "refdes" ? 0 : 1, category, priority: entry.type === "refdes" ? "high" : "medium", certainty: "suspected", location: place, ...boxes,
-      title: clip(`${words}只在${here}：${token}${count > 1 ? `（多 ${count} 個）` : ""}`, 280),
+      title: clip(words.title, 280),
       officialEvidence: side === "base" ? `${token}（${place}）` : `基準版${cross ? "整份" : "這一頁"}沒有 ${token}`,
       workingEvidence: side === "work" ? `${token}（${place}）` : `比對版${cross ? "整份" : "這一頁"}沒有 ${token}`,
-      suggestion: side === "base"
-        ? (entry.type === "refdes" ? `基準版有 ${token}，比對版沒有：確認是刻意拿掉，還是漏畫或位號寫錯。` : `基準版有網路 ${token}，比對版沒有：確認是改名、合併，還是漏接。`)
-        : (entry.type === "refdes" ? `比對版多了 ${token}：確認是新增的零件，還是位號寫錯。` : `比對版多了網路 ${token}：確認是新增或改名，接到的腳位正確。`) });
+      suggestion: words.suggestion });
   }
   const rewrites = area.changes.filter(change => change.kind === "changed").map(change => `${change.before!.str} → ${change.after!.str}`);
   const sideBox = (items: readonly CircuitDiffText[], ink: "base" | "work") => {
@@ -570,14 +612,14 @@ function summarizeArea(area: CircuitChangeArea, diff: CircuitLocalPageDiff, cros
   const named = findings.filter(item => item.rank < 6).length;
   const evidence = (items: readonly CircuitDiffText[], label: string, side: "base" | "work") => {
     const extraOthers = others.filter(word => word.includes(side === "base" ? "基準版多" : "比對版多"));
-    return clip([`${label} ${items.length} 段文字不在原位${area.regions.some(region => region[side]) ? "，線條也不同" : ""}`,
-      extraOthers.length ? `只在這一邊的其他文字：${extraOthers.slice(0, 12).join("、")}` : "",
-      side === "work" && rewrites.length ? `同一位置改寫：${rewrites.slice(0, 8).join("、")}` : ""].filter(Boolean).join("；"), 1900);
+    return clip([`${label}有 ${items.length} 段字換了位置${area.regions.some(region => region[side]) ? "，線也畫得不一樣" : ""}`,
+      extraOthers.length ? `只在這一邊的其他字：${extraOthers.slice(0, 12).join("、")}` : "",
+      side === "work" && rewrites.length ? `同一個位置改寫的字：${rewrites.slice(0, 8).join("、")}` : ""].filter(Boolean).join("；"), 1900);
   };
   findings.push({ rank: 3, category: "connectivity", priority: "medium", certainty: "unclear", location: officialBox ?? workingBox ? describeCircuitDiffPlace((officialBox ?? workingBox)!) : "這一頁",
-    title: clip(`這一區整塊搬移或重畫：${area.changes.length} 段文字位置不同，${named ? `${named} 個位號／網路只在一邊（另列）` : "位號與網路名稱一致"}`, 280),
-    officialEvidence: evidence(befores, "基準版這一區", "base"), workingEvidence: evidence(afters, "比對版這一區", "work"),
-    suggestion: "這一區的文字大量換了位置，通常是整塊搬移或重畫。零件位號與網路名稱已在這一區逐一比對（只在一邊的另列）；數值、接腳名稱見證據，接線請放大兩版核對。",
+    title: clip(`這一塊整個搬走或重畫了：${area.changes.length} 段字的位置不一樣，${named ? `有 ${named} 個零件或線路名稱只在一邊（另外列出）` : "零件和線路名稱都一樣"}`, 280),
+    officialEvidence: evidence(befores, "基準版這一塊", "base"), workingEvidence: evidence(afters, "比對版這一塊", "work"),
+    suggestion: "這一塊被搬走或重畫，所以很多字的位置都變了。零件編號和線路名稱都已經一個一個比過（只在一邊的另外列出）。請把兩版放大，看線有沒有接到一樣的地方。",
     officialBox, workingBox });
   return findings;
 }
@@ -590,9 +632,15 @@ function summarizeArea(area: CircuitChangeArea, diff: CircuitLocalPageDiff, cros
 export function summarizeCircuitLocalDiff(diff: CircuitLocalPageDiff, common?: CircuitCommonChanges | null, limit = 40, cross?: CircuitContentIndex | null): CircuitLocalSummary {
   // Both kinds of redraw: places and lines say nothing about the circuit there, names do.
   if (diff.redrawn && diff.contentChanges) return summarizeRedrawn(diff, limit, cross);
-  const counts = { changed: 0, removed: 0, added: 0, moved: 0, graphic: diff.regions.length };
+  // The title block first: one line that is not an error, whatever changed there (company, author, date, logo).
+  const zones = { base: diff.titleBlock?.base ?? diff.titleBlock?.work ?? FALLBACK_TITLE_BLOCK, work: diff.titleBlock?.work ?? diff.titleBlock?.base ?? FALLBACK_TITLE_BLOCK };
+  const titled = (change: CircuitTextChange) => (!change.before || inside(zones.base, center(change.before))) && (!change.after || inside(zones.work, center(change.after)));
+  const titleChanges = diff.textChanges.filter(titled);
+  const titleRegions = diff.regions.filter(region => { const middle = { x: region.box.x + region.box.width / 2, y: region.box.y + region.box.height / 2 }; return (region.base && inside(zones.base, middle)) || (region.work && inside(zones.work, middle)); });
+  const textChanges = diff.textChanges.filter(change => !titleChanges.includes(change)), regions = diff.regions.filter(region => !titleRegions.includes(region));
+  const counts = { changed: 0, removed: 0, added: 0, moved: 0, graphic: regions.length };
   // Blocks moved or redrawn as a whole: one finding each, compared by name (summarizeArea), counted like any text change.
-  const grouping = findCircuitChangeAreas(diff.textChanges, diff.regions, change => isCircuitCommonChange(change, common));
+  const grouping = findCircuitChangeAreas(textChanges, regions, change => isCircuitCommonChange(change, common));
   for (const change of grouping.areas.flatMap(area => area.changes)) counts[change.kind]++;
   const order: Record<CircuitTextChangeKind, number> = { changed: 0, removed: 1, added: 2, moved: 4 };
   const findings: Array<CircuitLocalFinding & { rank: number; shared: boolean }> = grouping.rest.map(change => {
@@ -601,23 +649,35 @@ export function summarizeCircuitLocalDiff(diff: CircuitLocalPageDiff, common?: C
     const text = (change.after ?? change.before)!.str, category = classifyCircuitDiffText(text);
     const place = describeCircuitDiffPlace((change.after ?? change.before)!);
     // A change shared by many sheets is listed last and marked, never left out.
-    const rank = shared ? 5 : order[change.kind], mark = shared ? "多頁共通：" : "";
-    if (change.kind === "changed") return { rank, shared, category, priority: shared ? "low" as const : "high" as const, certainty: "suspected" as const, title: clip(`${mark}文字改了：${change.before!.str} → ${change.after!.str}`, 280), location: place,
-      officialEvidence: clip(change.before!.str, 1900), workingEvidence: clip(change.after!.str, 1900), suggestion: shared ? COMMON_NOTE : "兩版同一個位置的文字不同，請確認這是預期的修改。", officialBox: textBox(change.before), workingBox: textBox(change.after) };
-    if (change.kind === "removed") return { rank, shared, category, priority: shared ? "low" as const : "medium" as const, certainty: "suspected" as const, title: clip(`${mark}文字移除：${change.before!.str}`, 280), location: place,
-      officialEvidence: clip(change.before!.str, 1900), workingEvidence: "比對版這個位置沒有這段文字", suggestion: shared ? COMMON_NOTE : "基準版有、比對版沒有，請確認是刻意刪除還是漏畫。", officialBox: textBox(change.before), workingBox: null };
-    if (change.kind === "added") return { rank, shared, category, priority: shared ? "low" as const : "medium" as const, certainty: "suspected" as const, title: clip(`${mark}文字新增：${change.after!.str}`, 280), location: place,
-      officialEvidence: "基準版這個位置沒有這段文字", workingEvidence: clip(change.after!.str, 1900), suggestion: shared ? COMMON_NOTE : "比對版新增的文字，請確認內容與位置正確。", officialBox: null, workingBox: textBox(change.after) };
-    return { rank, shared, category, priority: "low" as const, certainty: "suspected" as const, title: clip(`${mark}文字移位：${change.after!.str}`, 280), location: place,
-      officialEvidence: `${clip(change.before!.str, 1800)}（${describeCircuitDiffPlace(change.before!)}）`, workingEvidence: `${clip(change.after!.str, 1800)}（${place}）`, suggestion: shared ? COMMON_NOTE : "文字相同但位置不同，通常是圖面重排；請確認旁邊的接線沒有跟著改錯。", officialBox: textBox(change.before), workingBox: textBox(change.after) };
+    const rank = shared ? 5 : order[change.kind];
+    // The same frame spot changing on many sheets: not an error, said once per change in plain words.
+    const title = (words: string) => clip(shared ? `${CIRCUIT_NOT_AN_ERROR}很多頁的同一個地方都改了（${describeCircuitTextChange(change)}）` : words, 280);
+    if (change.kind === "changed") return { rank, shared, category, priority: shared ? "low" as const : "high" as const, certainty: shared ? "unclear" as const : "suspected" as const, title: title(`字改了：${change.before!.str} → ${change.after!.str}`), location: place,
+      officialEvidence: clip(change.before!.str, 1900), workingEvidence: clip(change.after!.str, 1900), suggestion: shared ? COMMON_NOTE : "同一個位置的字改了。是你要改的嗎？不是的話，就是改錯了。", officialBox: textBox(change.before), workingBox: textBox(change.after) };
+    if (change.kind === "removed") return { rank, shared, category, priority: shared ? "low" as const : "medium" as const, certainty: shared ? "unclear" as const : "suspected" as const, title: title(`比對版少了：${change.before!.str}`), location: place,
+      officialEvidence: clip(change.before!.str, 1900), workingEvidence: "比對版這裡沒有這段字", suggestion: shared ? COMMON_NOTE : "基準版這裡有這段字，比對版拿掉了。是故意拿掉的嗎？不是的話，就是漏畫了。", officialBox: textBox(change.before), workingBox: null };
+    if (change.kind === "added") return { rank, shared, category, priority: shared ? "low" as const : "medium" as const, certainty: shared ? "unclear" as const : "suspected" as const, title: title(`比對版多了：${change.after!.str}`), location: place,
+      officialEvidence: "基準版這裡沒有這段字", workingEvidence: clip(change.after!.str, 1900), suggestion: shared ? COMMON_NOTE : "比對版多了這段字。確認字寫對、位置放對。", officialBox: null, workingBox: textBox(change.after) };
+    return { rank, shared, category, priority: "low" as const, certainty: shared ? "unclear" as const : "suspected" as const, title: title(`換了位置：${change.after!.str}`), location: place,
+      officialEvidence: `${clip(change.before!.str, 1800)}（${describeCircuitDiffPlace(change.before!)}）`, workingEvidence: `${clip(change.after!.str, 1800)}（${place}）`, suggestion: shared ? COMMON_NOTE : "字一樣，只是換了位置（通常是圖重新排過）。看看旁邊的線有沒有一起接好。", officialBox: textBox(change.before), workingBox: textBox(change.after) };
   });
   for (const area of grouping.areas) findings.push(...summarizeArea(area, diff, cross).map(finding => ({ ...finding, shared: false })));
   for (const region of grouping.regions) {
     const box = pad(region.box, 0.004);
-    findings.push({ rank: 3, shared: false, category: "connectivity", priority: "medium", certainty: "unclear", title: region.faint ? "圖形有細微不同（接點或線段長短）" : "圖形改了（線條、接點或符號）", location: describeCircuitDiffPlace(region.box),
-      officialEvidence: region.base ? "基準版這裡有比對版沒有的線條或圖形（見圖面標註）" : "基準版這裡沒有對應的線條",
-      workingEvidence: region.work ? "比對版這裡有基準版沒有的線條或圖形（見圖面標註）" : "比對版這裡沒有對應的線條",
-      suggestion: region.faint ? "兩版在這裡只差幾個像素，可能是多或少一個接點、線段長了或短了一點；請放大兩版核對接線。" : "文字沒有改，但圖形不同，可能是接線、接點或符號變更；請放大兩版核對。", officialBox: box, workingBox: box });
+    findings.push({ rank: 3, shared: false, category: "connectivity", priority: "medium", certainty: "unclear", title: region.faint ? "這裡的線有一點點不一樣（接點或線的長短）" : "這裡的線或符號不一樣", location: describeCircuitDiffPlace(region.box),
+      officialEvidence: region.base ? "基準版這裡多了一些線或圖形（看框起來的地方）" : "基準版這裡沒有這些線",
+      workingEvidence: region.work ? "比對版這裡多了一些線或圖形（看框起來的地方）" : "比對版這裡沒有這些線",
+      suggestion: region.faint ? "兩版這裡只差一點點，可能是多了或少了一個接點，或線長了、短了一點。請放大兩版看清楚。" : "字沒變，但線、接點或符號畫得不一樣。請把兩版放大，看線是不是接到一樣的地方。", officialBox: box, workingBox: box });
+  }
+  if (titleChanges.length || titleRegions.length) {
+    const words = (side: "before" | "after") => [...new Set(titleChanges.flatMap(change => change[side] ? [change[side]!.str] : []))];
+    const box = (side: "before" | "after", ink: "base" | "work") => { const bounds = boundsOf([...titleChanges.flatMap(change => change[side] ? [itemBox(change[side]!)] : []), ...titleRegions.filter(region => region[ink]).map(region => region.box)]); return bounds && pad(bounds, 0.004); };
+    const before = words("before"), after = words("after"), logo = titleRegions.length ? "（標誌或線也不一樣）" : "";
+    findings.push({ rank: 5, shared: true, category: "label-name", priority: "low", certainty: "unclear", location: "右下角標題欄",
+      title: clip(`${CIRCUIT_NOT_AN_ERROR}標題欄不一樣（公司、作者、日期等 ${titleChanges.length + titleRegions.length} 處）`, 280),
+      officialEvidence: clip(`${before.length ? `基準版寫：${before.slice(0, 20).join("、")}` : "基準版這裡沒有不同的字"}${logo}`, 1900),
+      workingEvidence: clip(`${after.length ? `比對版寫：${after.slice(0, 20).join("、")}` : "比對版這裡沒有不同的字"}${logo}`, 1900),
+      suggestion: TITLE_BLOCK_NOTE, officialBox: box("before", "base"), workingBox: box("after", "work") });
   }
   findings.sort((left, right) => left.rank - right.rank);
   const kept = findings.slice(0, limit);

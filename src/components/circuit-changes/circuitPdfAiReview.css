@@ -101,11 +101,6 @@
 .circuit-pdf-ai-annotation-surface { position: relative; margin-inline: 4px; }
 .circuit-pdf-ai-annotation-surface > canvas:not([hidden]) { display: block; width: 100% !important; height: auto !important; }
 .circuit-pdf-ai-annotation-surface > p { min-height: 90px; padding: 14px; }
-.circuit-pdf-ai-annotation-box { position: absolute; padding: 0; border: 2px solid #bc202a; background: #ff46571a; color: white; cursor: pointer; }
-.circuit-pdf-ai-annotation-box[data-certainty="unclear"] { border-color: #925200; border-style: dashed; background: #ffb42724; }
-.circuit-pdf-ai-annotation-box:hover, .circuit-pdf-ai-annotation-box:focus-visible { z-index: 1; outline: 2px solid #121826; outline-offset: 2px; }
-.circuit-pdf-ai-annotation-box > span { position: absolute; bottom: 100%; left: -2px; min-width: 24px; padding-inline: 4px; border-radius: 4px 4px 0 0; background: #a31b26; text-align: center; font: 700 11px/16px system-ui, sans-serif; }
-.circuit-pdf-ai-annotation-box[data-certainty="unclear"] > span { background: #7e4800; }
 .circuit-pdf-ai-unlocated { display: flex; flex-wrap: wrap; gap: 3px 8px; padding: 7px 10px; color: hsl(var(--warning)); font-size: 12px; }
 .circuit-pdf-ai-finding { border-bottom: 1px solid hsl(var(--border)); }
 .circuit-pdf-ai-finding summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-block: 14px; cursor: pointer; }
@@ -229,7 +224,6 @@
 .circuit-pdf-ai-zoom-scroll > p { padding: 24px; color: hsl(var(--muted-foreground)); font-size: 13px; }
 .circuit-pdf-ai-zoom-sheet { position: relative; margin: 8px auto; background: white; }
 .circuit-pdf-ai-zoom-sheet canvas:not([hidden]) { display: block; max-width: none; }
-.circuit-pdf-ai-zoom-sheet .circuit-pdf-ai-annotation-box[data-selected="true"] { z-index: 1; outline: 3px solid #121826; outline-offset: 2px; box-shadow: 0 0 0 6px #ffe1664d; }
 @media (prefers-reduced-motion: reduce) { .circuit-pdf-ai-spin { animation: none; } }
 @media (max-width: 899px) {
   .workspace-dialog-surface.circuit-pdf-ai-zoom[data-ui="dialog"] { width: 100vw; height: 100dvh; border-radius: 0; }
@@ -257,28 +251,9 @@
   .circuit-pdf-ai-toolbar label { flex: 0 0 170px; min-width: 170px; }
 }
 
-/* The same readable marks in the review and in 放大檢視: corners outside the area, the tag outside above it, no tint, clicks only
-   on the tag (2026-11-23 「放大後會標註蓋掉導致看不到原本是甚麼」). */
-.circuit-pdf-ai-annotation-box { border: 0; background: transparent; pointer-events: none; --mark: #ff5a5f; }
-.circuit-pdf-ai-annotation-box[data-certainty="unclear"] { border: 0; background: transparent; --mark: #f0a03c; }
-.circuit-pdf-ai-annotation-box::before { content: ""; position: absolute; inset: -5px; pointer-events: none;
-  background:
-    linear-gradient(var(--mark), var(--mark)) top left / 12px 2px no-repeat, linear-gradient(var(--mark), var(--mark)) top left / 2px 12px no-repeat,
-    linear-gradient(var(--mark), var(--mark)) top right / 12px 2px no-repeat, linear-gradient(var(--mark), var(--mark)) top right / 2px 12px no-repeat,
-    linear-gradient(var(--mark), var(--mark)) bottom left / 12px 2px no-repeat, linear-gradient(var(--mark), var(--mark)) bottom left / 2px 12px no-repeat,
-    linear-gradient(var(--mark), var(--mark)) bottom right / 12px 2px no-repeat, linear-gradient(var(--mark), var(--mark)) bottom right / 2px 12px no-repeat; }
-.circuit-pdf-ai-annotation-box > span { bottom: calc(100% + 6px); left: -5px; padding-inline: 5px; border-radius: 3px; background: var(--mark); box-shadow: 0 1px 3px #0006; pointer-events: auto; cursor: pointer; }
-/* A tag whose usual place is taken steps aside (circuitPdfMarkTags.ts sets the offset); it keeps its mark's colour. */
-.circuit-pdf-ai-annotation-box > span { white-space: nowrap; transform: translate(var(--tag-dx, 0px), var(--tag-dy, 0px)); }
-.circuit-pdf-ai-annotation-box[data-certainty="unclear"] > span { background: var(--mark); color: #1b1203; }
-.circuit-pdf-ai-annotation-box:hover, .circuit-pdf-ai-annotation-box:focus-visible { outline: 1px dashed var(--mark); outline-offset: 5px; }
-.circuit-pdf-ai-zoom-sheet .circuit-pdf-ai-annotation-box[data-selected="true"] { outline: 2px dashed var(--mark); outline-offset: 7px; box-shadow: none; }
-.circuit-pdf-ai-zoom-sheet .circuit-pdf-ai-annotation-box[data-selected="true"]::before { inset: -7px; }
 .circuit-pdf-ai-zoom[data-marks="hidden"] .circuit-pdf-ai-annotation-box { display: none; }
 .circuit-pdf-ai-zoom-detail-canvas { position: absolute; z-index: 0; pointer-events: none; }
 .circuit-pdf-ai-zoom-sheet > canvas:first-child { position: absolute; inset: 0; }
-/* 證據不足 keeps a cue besides its colour: a dashed line just outside the area (never on it). */
-.circuit-pdf-ai-annotation-box[data-certainty="unclear"] { outline: 1px dashed var(--mark); outline-offset: 5px; }
 .circuit-pdf-ai-zoom-bar > .circuit-pdf-ai-zoom-marks { width: auto; min-height: 40px; height: 40px; gap: 6px; padding-inline: 12px; font-size: 13px; }
 .circuit-pdf-ai-zoom-bar > .circuit-pdf-ai-zoom-marks svg { width: 16px; height: 16px; }
 .circuit-pdf-ai-zoom-bar > .circuit-pdf-ai-zoom-marks[aria-pressed="true"] { border-color: hsl(var(--primary)); color: hsl(var(--primary)); }

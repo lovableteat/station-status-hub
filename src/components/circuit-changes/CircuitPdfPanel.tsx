@@ -18,6 +18,7 @@ import { CircuitBusyIcon, CircuitProgress, CircuitSpinner } from "./CircuitFeedb
 import type { CircuitPdfAiResults } from "./useCircuitPdfAiResults";
 import { circuitMarkTagStyle, placeCircuitMarkTags, type CircuitMarkTagOffset } from "./circuitPdfMarkTags";
 import "./circuitPdf.css";
+import "./circuitPdfMarks.css";
 
 export interface CircuitPdfCapture { side: CircuitImageSide; file: File; source: CircuitImageSource; caption: string; page: number }
 export interface CircuitPdfCrop { id: string; side: CircuitImageSide; documentId: string; page: number; rect: CircuitCropRect }
@@ -25,13 +26,17 @@ type Pane = "active" | "compare";
 /** What AI 比對 knows about a page: AI found differences still to judge, all judged with some confirmed, nothing found, not compared yet, no baseline page. */
 type AiPageState = "diff" | "confirmed" | "clear" | "none" | "new";
 interface AiStrip { cells: Array<{ state: AiPageState; words: string }>; title: string }
-interface AiMark { id: string; title: string; rect: CircuitCropRect; certainty: "suspected" | "unclear"; decision: string }
+/** check: to be judged; unclear: not enough evidence; confirmed: judged a real difference; reference: not an error (title block). */
+type AiMarkKind = "check" | "unclear" | "confirmed" | "reference";
+interface AiMark { id: string; title: string; rect: CircuitCropRect; certainty: "suspected" | "unclear"; decision: string; kind: AiMarkKind }
+const AI_MARK_WORDS: Record<AiMarkKind, string> = { check: "要你看一下", unclear: "證據不夠，要你看一下", confirmed: "已確認是差異", reference: "不算錯，只是讓你知道" };
 interface Selection { pane: Pane; rect: CircuitCropRect }
 const SHORT_SIDE: Record<CircuitImageSide, string> = { before: "前", after: "後", reference: "補" };
 const STATE_LABEL: Record<CircuitPdfPageState, string> = { here: "在這版看過", older: "在較早的版本看過", none: "還沒看" };
 // Up to 800 % (2026-11-23 「為何不能進一步放大」): past 400 % the whole page is drawn coarser and useSharpPdfRegion draws the part on
 // screen again at full sharpness, so memory stays bounded.
-const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8];
+// Up to 1200 % (2026-11-24 「800%不夠，要1200%」): the smallest schematic text (about 3 pt) is then about 40 px high.
+const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12];
 const DEEP_ZOOM_BUDGET = 12_000_000;
 const AI_MARKS_HIDDEN_KEY = "circuit-pdf-ai-marks-hidden:v1";
 const isPdf = (file: File) => /\.pdf$/i.test(file.name) || /pdf/i.test(file.type);
@@ -123,7 +128,7 @@ export function CircuitPdfPanel({ onUploaded, mode = "review", captureSide = "be
         : state === "diff" ? `基準版第 ${basePage} 頁 · 找到 ${result!.live.length} 處不同，${result!.pending} 處待判讀`
         : state === "confirmed" ? `基準版第 ${basePage} 頁 · ${result!.confirmed} 處差異已確認`
           // A page settled by 本機比對 was never read by an AI; it says so.
-          : `基準版第 ${basePage} 頁 · ${result!.report.source !== "local" ? "AI 未見差異" : result!.report.local?.redrawn ? "重畫的圖：位號與網路一致（本機比對）" : "兩版相同（本機比對）"}`;
+          : `基準版第 ${basePage} 頁 · ${result!.reference.length ? "只有不算錯的地方（標題欄等）" : result!.report.source !== "local" ? "AI 未見差異" : result!.report.local?.redrawn ? "重畫的圖：零件和線路名稱都一樣（電腦比對）" : "兩版相同（電腦比對）"}`;
       return { state, words };
     });
     return { cells, title: `已比對 ${compared} / ${active.pages} 頁，${differing} 頁有差異（紅：待判讀，青：已確認，空心：未見差異，橘框：基準版沒有這頁）。拖曳白色標記換頁；點一格直接跳頁，也可以按方向鍵換頁` };
@@ -464,9 +469,10 @@ export function CircuitPdfPanel({ onUploaded, mode = "review", captureSide = "be
         </span>;
   // AI 比對: what AI found on the page on screen, and its marks on both drawings.
   const aiPage = mode === "ai" && compare ? aiResults?.pages.get(page) || null : null;
-  const aiMarks = (side: "officialBox" | "workingBox"): AiMark[] => aiMarksHidden ? [] : (aiPage?.live || []).flatMap(item => {
+  const aiMarks = (side: "officialBox" | "workingBox"): AiMark[] => aiMarksHidden ? [] : [...(aiPage?.live || []).map(item => ({ item, reference: false })), ...(aiPage?.reference || []).map(item => ({ item, reference: true }))].flatMap(({ item, reference }) => {
     const rect = item[side];
-    return rect ? [{ id: item.id, title: item.title, rect, certainty: item.certainty ?? "suspected", decision: item.decision }] : [];
+    const kind: AiMarkKind = reference ? "reference" : item.decision === "confirmed" ? "confirmed" : item.certainty === "unclear" ? "unclear" : "check";
+    return rect ? [{ id: item.id, title: item.title, rect, certainty: item.certainty ?? "suspected", decision: item.decision, kind }] : [];
   });
   const aiStatus = mode !== "ai" || !compare ? null
     : aiResults?.error ? <span className="circuit-pdf-ai-status" data-kind="error" role="status" title={aiResults.error}>AI 結果讀不到<Button type="button" variant="ghost" title="重新讀取這兩個版本的 AI 比對結果" onClick={aiResults.retry}>重試</Button></span>
@@ -474,7 +480,7 @@ export function CircuitPdfPanel({ onUploaded, mode = "review", captureSide = "be
     : !pdfs.comparePage ? null
     : <span className="circuit-pdf-ai-status" role="status" data-kind={aiPage ? aiPage.pending ? "diff" : aiPage.confirmed ? "confirmed" : "clear" : "none"}
       title={aiPage ? "這一頁比對的結果；點圖上的框可直接看那一項的兩版證據並判讀" : "這一頁還沒比對；按「AI 比對新舊版」開始"}>
-      {aiPage ? aiPage.pending ? `本頁 ${aiPage.pending} 處待判讀` : aiPage.confirmed ? `本頁 ${aiPage.confirmed} 處差異已確認` : aiPage.report.source === "local" ? "本頁兩版相同" : "本頁 AI 未見差異" : "本頁還沒比對"}
+      {aiPage ? aiPage.pending ? `本頁 ${aiPage.pending} 處待判讀` : aiPage.confirmed ? `本頁 ${aiPage.confirmed} 處差異已確認` : aiPage.reference.length ? "本頁只有不算錯的地方（標題欄等）" : aiPage.report.source === "local" ? "本頁兩版相同" : "本頁 AI 未見差異" : "本頁還沒比對"}
     </span>;
   // The baseline page, typed where it is shown; how it was found.
   const basePageField = mode === "ai" && compare ? <BasePageField value={pdfs.comparePage} pages={compare.pages} working={page} onCommit={target => { setFailure(""); (pdfs.setComparePage ?? ((value: number) => pdfs.setCompareOffset(value - page)))(target); }} /> : null;
@@ -550,7 +556,9 @@ export function CircuitPdfPanel({ onUploaded, mode = "review", captureSide = "be
           {linkGroup}{zoomGroup}{inkStatus}
           {uploadButton && <div className="circuit-pdf-tool-group" data-group="files">{uploadButton}</div>}
           {aiStatus}
-          {aiPage && aiPage.live.length > 0 && <Button type="button" variant="outline" data-circuit-tone="view" className="circuit-pdf-ai-marks-toggle" aria-pressed={aiMarksHidden} title={aiMarksHidden ? "把 AI 找到的地方再框出來（鍵盤 H）" : "暫時拿掉圖上的 AI 框，看清楚原本的線路（鍵盤 H）"} onClick={toggleAiMarks}>{aiMarksHidden ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}<span className="circuit-pdf-tool-text">{aiMarksHidden ? "顯示標註" : "隱藏標註"}</span></Button>}
+          {aiPage && !aiMarksHidden && aiPage.live.length + aiPage.reference.length > 0 && <span className="circuit-pdf-ai-legend" role="note" aria-label="標註的意思" title="桃紅實線：要你看一下；桃紅虛線：證據不夠；綠色：已確認是差異；灰色虛線：不算錯（例如右下角標題欄的公司、作者）">
+            <i aria-hidden="true" data-kind="check" />要判讀<i aria-hidden="true" data-kind="unclear" />證據不夠<i aria-hidden="true" data-kind="confirmed" />已確認<i aria-hidden="true" data-kind="reference" />不算錯</span>}
+          {aiPage && aiPage.live.length + aiPage.reference.length > 0 && <Button type="button" variant="outline" data-circuit-tone="view" className="circuit-pdf-ai-marks-toggle" aria-pressed={aiMarksHidden} title={aiMarksHidden ? "把 AI 找到的地方再框出來（鍵盤 H）" : "暫時拿掉圖上的 AI 框，看清楚原本的線路（鍵盤 H）"} onClick={toggleAiMarks}>{aiMarksHidden ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}<span className="circuit-pdf-tool-text">{aiMarksHidden ? "顯示標註" : "隱藏標註"}</span></Button>}
           {aiRun}
         </> : <>{zoomGroup}{linkGroup}{inkStatus}</>}
       </div>
@@ -782,8 +790,8 @@ function PdfPage({ pane, pdf, row, page, scale, heading, header, aiMarks = [], o
       {size && !rendering && !error && <CircuitPdfInkLayer key={`${row.id}:${page}:${tool}`} strokes={strokes} width={size.width} height={size.height} tool={tool} space={space}
         label={`${row.name} 第 ${page} 頁`} onAdd={onAddInk} onRemove={onRemoveInk} onTarget={onInkTarget} />}
       {crops.map(crop => <span key={crop.id} className="circuit-pdf-crop" data-side={crop.side} style={box(crop.rect)}><span>{SHORT_SIDE[crop.side]}</span></span>)}
-      {size && !rendering && !error && aiMarks.map(mark => <button key={mark.id} type="button" className="circuit-pdf-ai-mark" data-certainty={mark.certainty} data-decision={mark.decision} style={{ ...box(mark.rect), ...circuitMarkTagStyle(tagOffsets.get(mark.id)) }}
-        title={`AI ${mark.id}：${mark.title}（${mark.certainty === "unclear" ? "證據不足" : "疑似差異"}${mark.decision === "confirmed" ? "，已確認" : ""}）；點一下看兩版證據並判讀`} aria-label={`AI 標記 ${mark.id}：${mark.title}`}
+      {size && !rendering && !error && aiMarks.map(mark => <button key={mark.id} type="button" className="circuit-pdf-ai-mark" data-kind={mark.kind} data-certainty={mark.certainty} data-decision={mark.decision} style={{ ...box(mark.rect), ...circuitMarkTagStyle(tagOffsets.get(mark.id)) }}
+        title={`${mark.id}：${mark.title}（${AI_MARK_WORDS[mark.kind]}）。點編號看兩版並判讀`} aria-label={`AI 標記 ${mark.id}：${mark.title}`}
         onClick={() => onAiMark?.(mark.id)}><span aria-hidden="true">{mark.id}</span></button>)}
       {shown && <span className="circuit-pdf-selection" data-mirror={shown.pane !== pane} style={box(shown.rect)} />}
       {flash && <span key={flash.id} className="circuit-pdf-flash" style={box(flash.rect)} aria-hidden="true" />}

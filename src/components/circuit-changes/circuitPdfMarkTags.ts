@@ -1,4 +1,14 @@
 import type { CircuitCropRect } from "./circuitPdf";
+import { isCircuitReferenceFinding } from "./circuitPdfLocalDiff";
+
+/**
+ * How a finding is drawn (2026-11-24 「標註的方式、範圍、顏色不夠清楚」): check = to be judged (magenta), unclear = not enough
+ * evidence (magenta dashed), confirmed = judged a real difference (green), reference = not an error, such as the title block
+ * (grey dashed). The CSS reads it as data-kind.
+ */
+export type CircuitMarkKind = "check" | "unclear" | "confirmed" | "reference";
+export const circuitMarkKind = (finding: { title: string; decision?: string; certainty?: string }): CircuitMarkKind =>
+  isCircuitReferenceFinding(finding) ? "reference" : finding.decision === "confirmed" ? "confirmed" : finding.certainty === "unclear" ? "unclear" : "check";
 
 /**
  * Where the number tag of each AI mark goes (2026-11-24, the user's MCU1 sheet: tags of neighbouring marks lay on top of
@@ -8,9 +18,9 @@ import type { CircuitCropRect } from "./circuitPdf";
  */
 export interface CircuitMarkTagOffset { dx: number; dy: number }
 
-/** The tag as circuitPdf.css draws it: 16px high, 5px padding, bold 11px digits, at least 22px wide. */
-const TAG_HEIGHT = 16, TAG_GAP = 6, TAG_INSET = 5, SPACE = 2;
-export const circuitMarkTagWidth = (id: string) => Math.max(22, 10 + 7 * id.length);
+/** The tag as the CSS draws it: 18px high, 5px padding, bold 12px digits, at least 22px wide. */
+const TAG_HEIGHT = 18, TAG_GAP = 6, TAG_INSET = 5, SPACE = 2;
+export const circuitMarkTagWidth = (id: string) => Math.max(22, Math.ceil(10 + 7.5 * id.length));
 
 type Box = { x: number; y: number; width: number; height: number };
 const clash = (a: Box, b: Box) => a.x < b.x + b.width + SPACE && b.x < a.x + a.width + SPACE && a.y < b.y + b.height + SPACE && b.y < a.y + a.height + SPACE;

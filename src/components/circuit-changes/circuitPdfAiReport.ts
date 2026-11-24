@@ -4,6 +4,7 @@
  * Pure rows here; circuitPdfAiReportExport.ts turns them into the Excel file with the marked drawings.
  */
 import { CIRCUIT_AI_CATEGORY_LABELS, isCircuitReportIdentical, type CircuitPdfAiReviewReport } from "./circuitPdfAiReview";
+import { isCircuitReferenceFinding } from "./circuitPdfLocalDiff";
 
 export interface CircuitAiReportPage {
   workingPage: number;
@@ -33,12 +34,13 @@ export function describeCircuitAiPage(page: CircuitAiReportPage): { outcome: Cir
     const own = report.findings.filter(finding => finding.priority !== "low").length;
     const count = own + (own === report.findings.length ? report.local.omitted : 0);
     return count
-      ? { outcome: "different", label: `重畫的圖：${count} 個位號／網路不同`, method }
-      : { outcome: "clean", label: "重畫的圖：位號與網路一致", method };
+      ? { outcome: "different", label: `重畫的圖：${count} 個零件或線路名稱不一樣`, method }
+      : { outcome: "clean", label: "重畫的圖：零件和線路名稱都一樣", method };
   }
-  const count = report.findings.length + (report.local?.omitted ?? 0);
-  // Only changes that many sheets share at the same frame spot (the title block): listed, but not this page's own change.
-  if (report.source === "local" && report.local && report.local.common > 0 && report.local.common === count) return { outcome: "common", label: `只有多頁共通的變更（${count} 處）`, method };
+  // The title block (company, author, date) and a change on every sheet are listed but are not an error (2026-11-24).
+  const aside = report.findings.filter(isCircuitReferenceFinding).length;
+  const count = report.findings.length - aside + (report.local?.omitted ?? 0);
+  if (!count && aside) return { outcome: "common", label: `只有不算錯的地方（標題欄等 ${aside} 項）`, method };
   if (!count) return { outcome: "clean", label: report.checks.some(check => check.state === "unverifiable") ? "未列出差異（有項目證據不足）" : "未見差異", method };
   return { outcome: "different", label: `${count} 處不同`, method };
 }
@@ -84,7 +86,7 @@ export function buildCircuitAiReportData({ officialName, workingName, pages, gen
   const summary: CircuitAiReportData["summary"] = [
     ["基準版", officialName], ["比對版", workingName], ["報告產生時間（台北）", taipei(generatedAt)], ["產生者", generatedBy],
     ["比對範圍", `比對版 ${pages.length} 頁`], ["已比對", `${compared} 頁`],
-    ["相同", `${totals.identical} 頁`], ["只有多頁共通的變更（標題欄等）", `${totals.common} 頁`], ["有差異", `${totals.different} 頁`], ["未見差異（AI 判讀，或重畫的圖位號與網路一致）", `${totals.clean} 頁`],
+    ["相同", `${totals.identical} 頁`], ["只有不算錯的地方不一樣（標題欄等）", `${totals.common} 頁`], ["有差異", `${totals.different} 頁`], ["未見差異（AI 判讀，或重畫的圖位號與網路一致）", `${totals.clean} 頁`],
     ["比對失敗", `${totals.failed} 頁`], ["尚未比對", `${totals.pending} 頁`], ["無對應頁（沒有比對）", `${totals.unmatched} 頁`],
     ["差異總數", `${totals.findings} 處（連接性 ${categories.connectivity}、Net 名稱 ${categories["net-name"]}、元件／接腳名稱 ${categories["label-name"]}）`],
     ["人工判讀", `未判讀 ${decisions.pending}、已確認 ${decisions.confirmed}、不採用 ${decisions.dismissed}`],

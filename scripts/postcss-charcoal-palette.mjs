@@ -186,8 +186,9 @@ export default function charcoalPalette() {
     Declaration(declaration) {
       if (visited.has(declaration)) return;
       visited.add(declaration);
-      // These workspaces define their own surface and accent colors.
-      if (/(?:^|[\\/])(?:diagramEditor|maintenanceFaultLayout|maintenancePalette)\.css$/.test(declaration.source?.input.file ?? "")) return;
+      // These workspaces define their own surface and accent colors; circuitPdfMarks.css draws AI marks on the white
+      // schematic, where they must stand apart from the drawing's own red, blue and green (2026-11-24).
+      if (/(?:^|[\\/])(?:diagramEditor|maintenanceFaultLayout|maintenancePalette|circuitPdfMarks)\.css$/.test(declaration.source?.input.file ?? "")) return;
       if (declaration.parent?.selector?.includes(".pcb-canvas .pcb-component-object")) return;
       for (let parent = declaration.parent; parent; parent = parent.parent) {
         if (parent.type === "atrule" && /^(?:media|page)$/i.test(parent.name) && /print/i.test(parent.params)) return;

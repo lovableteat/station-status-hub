@@ -26,8 +26,13 @@ test("every page is described by what it turned out to be", () => {
   const diffs = Array.from({ length: 12 }, (_, index) => ({ ...same, textChanges: [title(index)] }));
   const common = load("src/components/circuit-changes/circuitPdfLocalDiff.ts").findCircuitCommonChanges(diffs.map(diff => diff.textChanges));
   const shared = k.buildCircuitLocalReport({ official: side("official", 7), working: side("working", 7), userName: "RD", diff: diffs[0], common });
-  assert.deepEqual(describe({ workingPage: 7, officialPage: 7, report: shared }), { outcome: "common", label: "只有多頁共通的變更（1 處）", method: "本機比對" });
+  assert.deepEqual(describe({ workingPage: 7, officialPage: 7, report: shared }), { outcome: "common", label: "只有不算錯的地方（標題欄等 1 項）", method: "本機比對" });
   assert.equal(k.isCircuitReportIdentical(shared), false);
+  // 2026-11-24 「右下角的我要換成我們公司跟我這個作者，但他也報錯?」: one page compared on its own (no other sheets to learn
+  // the title block from) with a new company is not "different" either, and neither is it after an AI read it.
+  const alone = k.buildCircuitLocalReport({ official: side("official", 8), working: side("working", 8), userName: "RD", diff: { ...same, textChanges: [{ kind: "changed", before: item("NVIDIA Corporation", 0.93, 0.935), after: item("PEGATRON Corp.", 0.93, 0.935) }] } });
+  assert.equal(describe({ workingPage: 8, officialPage: 8, report: alone }).outcome, "common");
+  assert.equal(describe({ workingPage: 8, officialPage: 8, report: { ...alone, source: "ai" } }).outcome, "common");
 });
 
 test("the report counts the pages, lists every difference with its judgement and names what was not compared", () => {
@@ -46,7 +51,7 @@ test("the report counts the pages, lists every difference with its judgement and
   assert.equal(summary["本次比對提早停止"], "連續 3 頁比對失敗，已自動停止");
   assert.deepEqual(plain(data.pageRows.map(row => [row[0], row[2]])), [[1, "相同"], [2, "2 處不同"], [3, "比對失敗"], [4, "尚未比對"], [5, "無對應頁，沒有比對"], [6, "2 處不同"]]);
   assert.equal(data.pageRows[2][12], "AI 回應逾時");
-  assert.deepEqual(plain(data.findingRows[0].slice(0, 7)), [2, 2, "F1", "Net 名稱", "優先核對", "疑似問題", "文字改了：USB_DP → USB_D_P"]);
+  assert.deepEqual(plain(data.findingRows[0].slice(0, 7)), [2, 2, "F1", "Net 名稱", "優先核對", "疑似問題", "字改了：USB_DP → USB_D_P"]);
   assert.deepEqual(plain(data.findingRows[0].slice(12, 15)), ["已確認", "已核對", "主管"]);
   assert.deepEqual(plain(data.markedPages), [2, 6]);
   assert.equal(data.findingHeader.length, data.findingRows[0].length);
@@ -59,7 +64,7 @@ test("a redrawn sheet is labelled by its parts and nets, not by every word that 
   const value = { side: "work", token: "4.7K", type: "other", count: 1, item: item("4.7K", 0.4, 0.4) };
   const frame = { side: "work", token: "REV", type: "other", count: 1, item: item("REV", 0.9, 0.95), frame: true };
   const clean = local(7, redrawn([value, frame]));
-  assert.deepEqual(plain(k.describeCircuitAiPage({ workingPage: 7, officialPage: 7, report: clean })), { outcome: "clean", label: "重畫的圖：位號與網路一致", method: "本機比對" });
+  assert.deepEqual(plain(k.describeCircuitAiPage({ workingPage: 7, officialPage: 7, report: clean })), { outcome: "clean", label: "重畫的圖：零件和線路名稱都一樣", method: "本機比對" });
   const missing = local(7, redrawn([{ side: "base", token: "R99", type: "refdes", count: 1, item: item("R99", 0.5, 0.5) }, value, frame]));
-  assert.deepEqual(plain(k.describeCircuitAiPage({ workingPage: 7, officialPage: 7, report: missing })), { outcome: "different", label: "重畫的圖：1 個位號／網路不同", method: "本機比對" });
+  assert.deepEqual(plain(k.describeCircuitAiPage({ workingPage: 7, officialPage: 7, report: missing })), { outcome: "different", label: "重畫的圖：1 個零件或線路名稱不一樣", method: "本機比對" });
 });

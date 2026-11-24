@@ -56,6 +56,20 @@ test("warning and error retain distinct semantic colors", () => {
   assert.equal(recolorCssValue("#f78ea0", "color"), "#e9aab0");
 });
 
+test("AI marks on the schematic keep their exact colours; the rest of 線路修改 still takes the palette (2026-11-24)", async () => {
+  const marks = await readFile(new URL("../../src/components/circuit-changes/circuitPdfMarks.css", import.meta.url), "utf8");
+  const kept = await postcss([charcoalPalette()]).process(marks, { from: "src/components/circuit-changes/circuitPdfMarks.css" });
+  assert.equal(kept.css, marks);
+  assert.match(marks, /\.circuit-pdf-ai-mark \{ --mark: #e8178a;/);
+  // Recoloured, the magenta became the site's jade, the colour of the window's own buttons.
+  const recoloured = await postcss([charcoalPalette()]).process(marks, { from: "src/components/circuit-changes/circuitPdf.css" });
+  assert.doesNotMatch(recoloured.css, /--mark: #e8178a;/);
+  for (const name of ["circuitPdf.css", "circuitPdfAiReview.css"]) {
+    const css = await readFile(new URL(`../../src/components/circuit-changes/${name}`, import.meta.url), "utf8");
+    assert.doesNotMatch(css, /--mark:/, `${name}: mark colours live in circuitPdfMarks.css only`);
+  }
+});
+
 test("diagram editor preserves its requested Apple palette without changing the surrounding site", async () => {
   const css = `.comparison-diagram-editor { background: #f5f5f7; color: #1d1d1f; --diagram-accent: #0071e3; }`;
   const editor = await postcss([charcoalPalette()]).process(css, { from: "src/components/comparison/diagramEditor.css" });

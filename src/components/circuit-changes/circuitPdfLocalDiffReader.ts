@@ -5,7 +5,7 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { CircuitCropRect } from "./circuitPdf";
 import {
-  circuitInkDifferenceShare, circuitTextChangeBoxes, diffCircuitInkMasks, diffCircuitPageContents, diffCircuitPageTexts, isCircuitLayoutRedrawn, REDRAW_STYLE_SHARE,
+  circuitInkDifferenceShare, circuitTextChangeBoxes, diffCircuitInkMasks, diffCircuitPageContents, diffCircuitPageTexts, findCircuitTitleBlock, isCircuitLayoutRedrawn, REDRAW_STYLE_SHARE,
   type CircuitDiffText, type CircuitLocalPageDiff,
 } from "./circuitPdfLocalDiff";
 
@@ -74,14 +74,16 @@ export async function compareCircuitPdfPages(base: CircuitDiffPageSource, work: 
     const matched = textComparable ? diffCircuitPageTexts(baseTexts, workTexts) : { changes: [], shift: { dx: 0, dy: 0 }, unchanged: 0, totals: { before: 0, after: 0 } };
     const { changes, shift } = matched;
     const pages = { base: base.page, work: work.page };
+    // Where each title block is, so a changed company or author there is listed as not an error (2026-11-24).
+    const titleBlock = { base: findCircuitTitleBlock(baseTexts), work: findCircuitTitleBlock(workTexts) };
     const content = textComparable ? diffCircuitPageContents(baseTexts, workTexts) : null;
     const sameShape = Math.abs(baseSize.width / baseSize.height - workSize.width / workSize.height) <= 0.015;
     // The same circuit drawn again (公版 vs one's own drawing, another layout): placing strings and lines over each other
     // marks the whole sheet. Compare what is on it instead, and do not spend time drawing it (2026-11-24).
     if (content && isCircuitLayoutRedrawn(matched)) {
-      return { textComparable, graphicsComparable: false, textChanges: [], regions: [], sizeChanged: !sameShape, redrawn: "layout", contentChanges: content.changes, pages, contents: content.contents };
+      return { textComparable, graphicsComparable: false, textChanges: [], regions: [], sizeChanged: !sameShape, redrawn: "layout", contentChanges: content.changes, pages, contents: content.contents, titleBlock };
     }
-    if (!sameShape) return { textComparable, graphicsComparable: false, textChanges: changes, regions: [], sizeChanged: true, pages, ...(content ? { contents: content.contents } : {}) };
+    if (!sameShape) return { textComparable, graphicsComparable: false, textChanges: changes, regions: [], sizeChanged: true, pages, titleBlock, ...(content ? { contents: content.contents } : {}) };
     const longEdge = Math.min(LONG_EDGE_MAX, Math.max(baseSize.width, baseSize.height) * DENSITY), scale = longEdge / Math.max(baseSize.width, baseSize.height);
     const width = Math.max(1, Math.round(baseSize.width * scale)), height = Math.max(1, Math.round(baseSize.height * scale));
     const offset = { dx: Math.round(shift.dx * width), dy: Math.round(shift.dy * height) }, ignore = circuitTextChangeBoxes(changes);
@@ -98,7 +100,7 @@ export async function compareCircuitPdfPages(base: CircuitDiffPageSource, work: 
     // box would be the whole sheet; the parts and nets are what can be compared (2026-11-24). A sheet without text (a scan)
     // has nothing else to compare, so it keeps its drawing differences.
     if (content && share > REDRAW_STYLE_SHARE) {
-      return { textComparable, graphicsComparable: false, textChanges: changes, regions: [], sizeChanged: false, redrawn: "style", contentChanges: content.changes, pages, contents: content.contents };
+      return { textComparable, graphicsComparable: false, textChanges: changes, regions: [], sizeChanged: false, redrawn: "style", contentChanges: content.changes, pages, contents: content.contents, titleBlock };
     }
     if (regions.length) {
       // A difference is only reported when a second drawing of both pages shows it again in the same place: a real
@@ -108,7 +110,7 @@ export async function compareCircuitPdfPages(base: CircuitDiffPageSource, work: 
       const near = (a: CircuitCropRect, b: CircuitCropRect) => a.x <= b.x + b.width + 0.01 && b.x <= a.x + a.width + 0.01 && a.y <= b.y + b.height + 0.01 && b.y <= a.y + a.height + 0.01;
       regions = again.filter(region => regions.some(first => near(region.box, first.box)));
     }
-    return { textComparable, graphicsComparable: true, textChanges: changes, regions, sizeChanged: false, pages, ...(content ? { contents: content.contents } : {}) };
+    return { textComparable, graphicsComparable: true, textChanges: changes, regions, sizeChanged: false, pages, titleBlock, ...(content ? { contents: content.contents } : {}) };
   } finally {
     // Release what the pages keep after drawing, or a few hundred sheets stay in memory.
     basePage.cleanup(); workPage.cleanup();

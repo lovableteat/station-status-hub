@@ -163,9 +163,9 @@ test('a page the local comparison finds the same is a complete report without an
 test('a page that differs lists every difference with its place, and each check says what was compared',()=>{
   const k=service(), result=k.buildCircuitLocalReport({official:side('official',2),working:side('working',3),userName:'RD',diff:changedDiff});
   assert.equal(result.local.identical,false);assert.equal(k.isCircuitReportIdentical(result),false);
-  assert.deepEqual(JSON.parse(JSON.stringify(result.findings.map(finding=>[finding.id,finding.category,finding.title]))),[['F1','net-name','文字改了：PCIE_RX_P → PCIE_RX_N'],['F2','connectivity','圖形改了（線條、接點或符號）']]);
+  assert.deepEqual(JSON.parse(JSON.stringify(result.findings.map(finding=>[finding.id,finding.category,finding.title]))),[['F1','net-name','字改了：PCIE_RX_P → PCIE_RX_N'],['F2','connectivity','這裡的線或符號不一樣']]);
   assert.deepEqual(Object.fromEntries(result.checks.map(check=>[check.category,check.state])),{connectivity:'possible-issue','net-name':'possible-issue','label-name':'no-visible-issue'});
-  assert.match(result.summary,/有 2 處不同（文字改 1 處、圖形 1 處）/);
+  assert.match(result.summary,/有 2 個地方不一樣（字改了 1 個、線不一樣 1 處）/);
   assert.ok(k.normalizeCircuitPdfAiReviewReport(JSON.parse(JSON.stringify(result))));
   const unreadable=k.buildCircuitLocalReport({official:side('official',2),working:side('working',3),userName:'RD',diff:{...sameDiff,textComparable:false}});
   assert.deepEqual(Object.fromEntries(unreadable.checks.map(check=>[check.category,check.state])),{connectivity:'no-visible-issue','net-name':'unverifiable','label-name':'unverifiable'});
@@ -177,12 +177,12 @@ test('with the differences already known the model is shown them enlarged, and t
   const result=await k.runCircuitPdfAiReview({...input,local:{diff:changedDiff}});
   const body=JSON.parse(sent[0].init.body), images=body.messages.flatMap(message=>message.content).filter(part=>part.type==='image_url');
   assert.equal(images.length,6,'two whole pages and two changed areas from both versions');
-  assert.match(JSON.stringify(body),/已經確定的差異/);assert.match(JSON.stringify(body),/1\. 文字改了：PCIE_RX_P → PCIE_RX_N/);assert.match(JSON.stringify(body),/不要重複列出/);
+  assert.match(JSON.stringify(body),/已經確定的差異/);assert.match(JSON.stringify(body),/1\. 字改了：PCIE_RX_P → PCIE_RX_N/);assert.match(JSON.stringify(body),/不要重複列出/);
   assert.equal(renders.filter(item=>item.width===2048).length,2);
-  assert.deepEqual([...result.findings.map(finding=>finding.title)],['文字改了：PCIE_RX_P → PCIE_RX_N','圖形改了（線條、接點或符號）','A1 改接到 B1']);
+  assert.deepEqual([...result.findings.map(finding=>finding.title)],['字改了：PCIE_RX_P → PCIE_RX_N','這裡的線或符號不一樣','A1 改接到 B1']);
   assert.deepEqual([...result.findings.map(finding=>finding.id)],['F1','F2','F3']);
   assert.equal(result.checks.find(check=>check.category==='net-name').state,'possible-issue','the more careful of the two answers');
-  assert.match(result.summary,/^本機比對：這一頁有 2 處不同/);assert.match(result.summary,/AI 說明：/);
+  assert.match(result.summary,/^電腦比對（沒用 AI）：這一頁有 2 個地方不一樣/);assert.match(result.summary,/AI 說明：/);
   assert.equal(result.modelLabel,'QA GPT＋本機比對');assert.equal(result.source,'ai');assert.equal(result.local.changed,1);
   assert.ok(k.normalizeCircuitPdfAiReviewReport(JSON.parse(JSON.stringify(result))));
 });
@@ -227,14 +227,14 @@ test('a redrawn sheet is reported by its parts and nets, never claims the wiring
     contentChanges:[{side:'base',token:'R99',type:'refdes',count:1,item:item('R99',.5,.5)},{side:'work',token:'NEW_NET',type:'net',count:1,item:item('NEW_NET',.3,.7)},{side:'work',token:'4.7K',type:'other',count:1,item:item('4.7K',.4,.4)}]};
   const result=k.buildCircuitLocalReport({official:side('official',2),working:side('working',3),userName:'RD',diff});
   assert.equal(result.source,'local');assert.equal(result.local.redrawn,'layout');assert.equal(result.local.identical,false);
-  assert.match(result.summary,/重畫的圖/);assert.match(result.summary,/不比圖形與文字位置/);assert.match(result.summary,/不是電氣驗證/);
+  assert.match(result.summary,/重畫的圖/);assert.match(result.summary,/不比位置和線/);assert.match(result.summary,/電腦只比名字/);
   assert.deepEqual(Object.fromEntries(result.checks.map(check=>[check.category,check.state])),{connectivity:'unverifiable','net-name':'possible-issue','label-name':'possible-issue'});
-  assert.deepEqual([...result.findings.map(finding=>finding.title)],['零件位號只在基準版：R99','網路名稱只在比對版：NEW_NET','其他文字不同 1 個（數值、接腳名稱或註解）']);
+  assert.deepEqual([...result.findings.map(finding=>finding.title)],['基準版有、比對版沒有的零件編號：R99','比對版多出來的線路名稱：NEW_NET','參考：其他字不一樣 1 個（數值、腳位名稱或備註）']);
   const reopened=k.normalizeCircuitPdfAiReviewReport(JSON.parse(JSON.stringify(result)));
   assert.deepEqual(JSON.parse(JSON.stringify(reopened)),JSON.parse(JSON.stringify(result)),'the redraw mark survives a save and reopen');
   assert.equal(k.normalizeCircuitPdfAiReviewReport({...JSON.parse(JSON.stringify(result)),local:{...result.local,redrawn:'guess'}}),null);
   const style=k.buildCircuitLocalReport({official:side('official',2),working:side('working',3),userName:'RD',diff:{...diff,redrawn:'style',contentChanges:[]}});
-  assert.match(style.summary,/線條的畫法不同/);
+  assert.match(style.summary,/兩版的線畫法不一樣/);
   assert.deepEqual(Object.fromEntries(style.checks.map(check=>[check.category,check.state])),{connectivity:'unverifiable','net-name':'no-visible-issue','label-name':'no-visible-issue'});
 });
 
@@ -246,7 +246,7 @@ test('a local report made before blocks were grouped is compared again in the ne
   assert.equal(k.isCircuitLocalReportOutdated(old),true);
   assert.equal(k.isCircuitLocalReportOutdated({...old,findings:old.findings.map((finding,index)=>index?finding:{...finding,decision:'confirmed'})}),false,'a judged page is kept');
   assert.equal(k.isCircuitLocalReportOutdated({...old,local:{...older,identical:true}}),false,'an identical page stays identical');
-  assert.equal(k.isCircuitLocalReportOutdated({...old,local:{...older,redrawn:'layout'}}),false,'a redrawn sheet is listed the same way');
+  assert.equal(k.isCircuitLocalReportOutdated({...old,local:{...older,redrawn:'layout'}}),true,'a redrawn sheet is listed in plain words now too');
   assert.equal(k.isCircuitLocalReportOutdated({...old,source:'ai'}),false,'an AI reading is never redone for free');
   assert.equal(k.normalizeCircuitPdfAiReviewReport({...JSON.parse(JSON.stringify(fresh)),local:{...fresh.local,method:1.5}}),null);
 });
