@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`tests/fixtures/applied-anonymous-tables/README.md`；程式參考基準：`5962b97162ff8cb95f4af2e2aab736a5a4ba8005`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`tests/fixtures/applied-anonymous-tables/README.md`；程式參考基準：`18cab2554d9d7d6968a642ea53ce08f1222ebb69`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Applied anonymous-table ACL synthetic fixtures
 
