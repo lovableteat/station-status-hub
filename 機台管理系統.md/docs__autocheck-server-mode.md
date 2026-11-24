@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/autocheck-server-mode.md`；程式參考基準：`9ffa494320fed1de28334485685f1b90c42d5997`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/autocheck-server-mode.md`；程式參考基準：`522bb85adf9300e13626cc6e404ac0b90647ee16`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # AutoCheck server mode
 
