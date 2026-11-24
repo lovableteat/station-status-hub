@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-08-30-pcb-context-menu.md`；程式參考基準：`522bb85adf9300e13626cc6e404ac0b90647ee16`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-08-30-pcb-context-menu.md`；程式參考基準：`377b0cb36d78586f829cfb92bf4afa1c7ce6eca1`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # PCB Context Menu Implementation Plan
 
