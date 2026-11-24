@@ -90,3 +90,9 @@ AUDIT_QA_DIR=../qa-tools node scripts/perf/measure.cjs current office
 - 量的是程式載入與請求排隊的固定成本。假資料很小，所以真實資料的下載與查詢時間不在裡面；正式站需要登入，沒有辦法從外面量。
 - 量測時不要同時跑建置或測試，CPU 被佔用會讓數字失真。每個頁面的 cold／warm 取 3 次的中位數（`PERF_RUNS`）。
 - 本機的 `node_modules` 若比 `package-lock.json` 舊（2026-11-21 時 Vite 6.4.3 對 6.4.6、React Router 6.27 對 7.18.5），量出來的不是正式站會用的程式。當時是另開一個乾淨的 worktree 執行 `npm ci --legacy-peer-deps` 來建置與量測。
+
+## 部署後不用刷新（2026-11-25）
+
+使用者：「為什麼一天到晚要我刷新…一旦開了就不准關，沒有必要就不准一直刷新」。原因：GitHub Pages 每次部署都整個換掉網站，Vite 的檔名跟著內容變；部署前打開的頁面，之後第一次打開某個工作區或彈出視窗時，會去抓自己那個版本的檔案，但那些檔案已經被刪掉，於是出現「這個功能暫時無法載入」，只能刷新（網站本身沒有自動重新整理，`requestApplicationUpdate` 一定要使用者按確認；`index.html` 的自動重試只在網頁還沒載入完成前作用）。
+
+做法：部署流程在 `npm run build` 之後、上傳之前執行 `scripts/keepPreviousAssets.mjs`，把最近 7 天網站用過、新版本沒有的檔案一起放進 `dist/assets`（最多 300 MB，先留最近的），並發布 `assets-history.json` 記錄每個檔案最後一次出現在哪次建置。第一次執行還沒有這份紀錄時，從線上的 `index.html` 一路讀出目前所有檔案。開著的頁面因此一直用自己的版本運作，只有重新打開網頁才會拿到新版。讀不到線上網站時只會少保留舊檔，不會讓部署失敗。測試：`tests/keepPreviousAssets.test.mjs`。

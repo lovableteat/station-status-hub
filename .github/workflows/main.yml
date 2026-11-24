@@ -45,6 +45,11 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_SUPABASE_SCHEMA: ${{ vars.VITE_SUPABASE_SCHEMA || 'workspace' }}
           VITE_REALTIME_COLLABORATION_V2: ${{ vars.VITE_REALTIME_COLLABORATION_V2 || 'true' }}
+      # A page opened before this deploy still loads the files of its own version when it opens a workspace or a
+      # dialog for the first time: the files the site served in the last 14 days stay beside the new ones, so nobody is
+      # asked to reload because of a deploy (2026-11-25: 「一旦開了就不准關，沒有必要就不准一直刷新」).
+      - name: Keep the files of recent deployments
+        run: node scripts/keepPreviousAssets.mjs dist https://lovableteat.github.io/station-status-hub/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
