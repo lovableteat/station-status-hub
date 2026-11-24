@@ -237,3 +237,16 @@ test('a redrawn sheet is reported by its parts and nets, never claims the wiring
   assert.match(style.summary,/線條的畫法不同/);
   assert.deepEqual(Object.fromEntries(style.checks.map(check=>[check.category,check.state])),{connectivity:'unverifiable','net-name':'no-visible-issue','label-name':'no-visible-issue'});
 });
+
+test('a local report made before blocks were grouped is compared again in the next batch, unless someone judged it (2026-11-24)',()=>{
+  const k=service(), fresh=k.buildCircuitLocalReport({official:side('official',2),working:side('working',3),userName:'RD',diff:changedDiff});
+  assert.equal(fresh.local.method,k.CIRCUIT_LOCAL_METHOD);assert.equal(k.isCircuitLocalReportOutdated(fresh),false);
+  assert.deepEqual(JSON.parse(JSON.stringify(k.normalizeCircuitPdfAiReviewReport(JSON.parse(JSON.stringify(fresh))))),JSON.parse(JSON.stringify(fresh)),'the method comes back unchanged');
+  const {method:_method,...older}=fresh.local, old={...fresh,local:older};
+  assert.equal(k.isCircuitLocalReportOutdated(old),true);
+  assert.equal(k.isCircuitLocalReportOutdated({...old,findings:old.findings.map((finding,index)=>index?finding:{...finding,decision:'confirmed'})}),false,'a judged page is kept');
+  assert.equal(k.isCircuitLocalReportOutdated({...old,local:{...older,identical:true}}),false,'an identical page stays identical');
+  assert.equal(k.isCircuitLocalReportOutdated({...old,local:{...older,redrawn:'layout'}}),false,'a redrawn sheet is listed the same way');
+  assert.equal(k.isCircuitLocalReportOutdated({...old,source:'ai'}),false,'an AI reading is never redone for free');
+  assert.equal(k.normalizeCircuitPdfAiReviewReport({...JSON.parse(JSON.stringify(fresh)),local:{...fresh.local,method:1.5}}),null);
+});

@@ -248,3 +248,54 @@ test("lines drawn another way all over the sheet are measured as such; a single 
   const oneWire = draw([...lines, [100, 5, 101, 95]]);
   assert.ok(k.circuitInkDifferenceShare(base, oneWire, width, height) < k.REDRAW_STYLE_SHARE, "one wire added is a real, small difference");
 });
+
+// 2026-11-24, the user's MCU1 sheet: one MCU1G block redrawn higher up put 40 marks on top of each other.
+function movedBlockPage({ dropPart = true } = {}) {
+  const fixed = Array.from({ length: 60 }, (_, index) => item(`C${1100 + index}`, 0.06 + (index % 10) * 0.04, 0.2 + Math.floor(index / 10) * 0.1, 0.03));
+  const pins = Array.from({ length: 14 }, (_, index) => `PIO1_${index}`);
+  const before = [...fixed, item("C1306", 0.2, 0.86, 0.03), ...pins.map((pin, index) => item(pin, 0.78, 0.2 + index * 0.012)), ...(dropPart ? [item("U7", 0.8, 0.19, 0.02)] : [])];
+  const after = [...fixed, item("C1316", 0.2, 0.86, 0.03), ...pins.map((pin, index) => item(pin, 0.71, 0.06 + index * 0.012))];
+  return { before, after };
+}
+function pageDiff(k, before, after, regions = []) {
+  return { textComparable: true, graphicsComparable: true, sizeChanged: false, textChanges: k.diffCircuitPageTexts(before, after).changes, regions,
+    contents: k.diffCircuitPageContents(before, after).contents, pages: { base: 13, work: 13 } };
+}
+
+test("a block moved or redrawn as a whole is one finding; a part it lost and a rename elsewhere stay findings of their own", () => {
+  const k = service();
+  const { before, after } = movedBlockPage();
+  const diff = pageDiff(k, before, after, [{ box: { x: 0.68, y: 0.05, width: 0.16, height: 0.4 }, base: true, work: true }]);
+  assert.equal(k.isCircuitLayoutRedrawn(k.diffCircuitPageTexts(before, after)), false, "most of the sheet stayed in place");
+  assert.ok(diff.textChanges.length >= 28, "every pin of the block counts as a change");
+  const summary = k.summarizeCircuitLocalDiff(diff);
+  const titles = summary.findings.map(finding => finding.title);
+  assert.equal(summary.areas, 1);
+  assert.equal(summary.findings.length, 3, titles.join(" | "));
+  assert.ok(titles.includes("文字改了：C1306 → C1316"), titles.join(" | "));
+  assert.ok(titles.includes("零件位號只在基準版：U7"), titles.join(" | "));
+  const block = summary.findings.find(finding => finding.title.startsWith("這一區整塊搬移或重畫"));
+  assert.match(block.title, /29 段文字位置不同，1 個位號／網路只在一邊（另列）/);
+  assert.equal(block.certainty, "unclear");
+  // Each side is boxed where the block is drawn on that side, the changed lines of the redraw included.
+  assert.ok(block.officialBox.y < 0.06 && block.officialBox.y + block.officialBox.height > 0.36, JSON.stringify(block.officialBox));
+  assert.ok(block.workingBox.y < 0.06 && block.workingBox.x < 0.7, JSON.stringify(block.workingBox));
+  assert.equal(titles.some(title => title.startsWith("圖形改了")), false, "the redraw's lines are the block's, not a finding of their own");
+  // Nothing missing: the block alone, saying its parts and nets match.
+  const same = movedBlockPage({ dropPart: false });
+  const clean = k.summarizeCircuitLocalDiff(pageDiff(k, same.before, same.after));
+  assert.deepEqual(plain(clean.findings.map(finding => finding.title)), ["文字改了：C1306 → C1316", "這一區整塊搬移或重畫：28 段文字位置不同，位號與網路名稱一致"]);
+});
+
+test("edits spread over the sheet, or only a few close together, stay one finding each", () => {
+  const k = service();
+  const fixed = Array.from({ length: 40 }, (_, index) => item(`R${200 + index}`, 0.06 + (index % 8) * 0.1, 0.15 + Math.floor(index / 8) * 0.15, 0.03));
+  const spread = [[0.1, 0.12], [0.5, 0.12], [0.85, 0.5], [0.3, 0.8], [0.7, 0.85]];
+  const before = [...fixed, ...spread.map(([x, y], index) => item(`NET_A${index}`, x, y))];
+  const after = [...fixed, ...spread.map(([x, y], index) => item(`NET_B${index}`, x, y))];
+  const apart = k.summarizeCircuitLocalDiff(pageDiff(k, before, after));
+  assert.equal(apart.areas, undefined); assert.equal(apart.findings.length, 5);
+  const close = Array.from({ length: 7 }, (_, index) => index);
+  const few = k.summarizeCircuitLocalDiff(pageDiff(k, [...fixed, ...close.map(index => item(`OLD_${index}`, 0.5, 0.5 + index * 0.012))], [...fixed, ...close.map(index => item(`NEW_${index}`, 0.5, 0.5 + index * 0.012))]));
+  assert.equal(few.areas, undefined); assert.equal(few.findings.length, 7);
+});

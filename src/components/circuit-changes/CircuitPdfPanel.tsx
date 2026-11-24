@@ -16,6 +16,7 @@ import { CircuitPdfInkLayer, type CircuitPdfTool } from "./CircuitPdfInkLayer";
 import { useLinkedPdfViews } from "./useLinkedPdfViews";
 import { CircuitBusyIcon, CircuitProgress, CircuitSpinner } from "./CircuitFeedback";
 import type { CircuitPdfAiResults } from "./useCircuitPdfAiResults";
+import { circuitMarkTagStyle, placeCircuitMarkTags, type CircuitMarkTagOffset } from "./circuitPdfMarkTags";
 import "./circuitPdf.css";
 
 export interface CircuitPdfCapture { side: CircuitImageSide; file: File; source: CircuitImageSource; caption: string; page: number }
@@ -709,6 +710,11 @@ function PdfPage({ pane, pdf, row, page, scale, heading, header, aiMarks = [], o
   const surface = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [rendering, setRendering] = useState(true);
+  // Tags of neighbouring marks step aside instead of piling up (2026-11-24).
+  const tagOffsets = useMemo(() => size ? placeCircuitMarkTags(aiMarks, size.width, size.height) : new Map<string, CircuitMarkTagOffset>(),
+    // aiMarks is rebuilt on every render of the panel; what matters is which marks and where.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [size?.width, size?.height, aiMarks.map(mark => `${mark.id}:${mark.rect.x}:${mark.rect.y}:${mark.rect.width}:${mark.rect.height}`).join("|")]);
   const [error, setError] = useState("");
   const budget = scale > 4 ? DEEP_ZOOM_BUDGET : CIRCUIT_PDF_RENDER_BUDGET;
   const sharp = useSharpPdfRegion({ pdf, page, scale, size: rendering ? null : size, surface, clip: [viewportRef, stage], budget });
@@ -776,7 +782,7 @@ function PdfPage({ pane, pdf, row, page, scale, heading, header, aiMarks = [], o
       {size && !rendering && !error && <CircuitPdfInkLayer key={`${row.id}:${page}:${tool}`} strokes={strokes} width={size.width} height={size.height} tool={tool} space={space}
         label={`${row.name} 第 ${page} 頁`} onAdd={onAddInk} onRemove={onRemoveInk} onTarget={onInkTarget} />}
       {crops.map(crop => <span key={crop.id} className="circuit-pdf-crop" data-side={crop.side} style={box(crop.rect)}><span>{SHORT_SIDE[crop.side]}</span></span>)}
-      {size && !rendering && !error && aiMarks.map(mark => <button key={mark.id} type="button" className="circuit-pdf-ai-mark" data-certainty={mark.certainty} data-decision={mark.decision} style={box(mark.rect)}
+      {size && !rendering && !error && aiMarks.map(mark => <button key={mark.id} type="button" className="circuit-pdf-ai-mark" data-certainty={mark.certainty} data-decision={mark.decision} style={{ ...box(mark.rect), ...circuitMarkTagStyle(tagOffsets.get(mark.id)) }}
         title={`AI ${mark.id}：${mark.title}（${mark.certainty === "unclear" ? "證據不足" : "疑似差異"}${mark.decision === "confirmed" ? "，已確認" : ""}）；點一下看兩版證據並判讀`} aria-label={`AI 標記 ${mark.id}：${mark.title}`}
         onClick={() => onAiMark?.(mark.id)}><span aria-hidden="true">{mark.id}</span></button>)}
       {shown && <span className="circuit-pdf-selection" data-mirror={shown.pane !== pane} style={box(shown.rect)} />}

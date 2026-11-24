@@ -21,6 +21,8 @@ export interface CircuitPdfLocalInfo {
   identical: boolean; changed: number; removed: number; added: number; moved: number; graphic: number; omitted: number; common: number;
   /** The page was the same circuit drawn differently and was compared by content (2026-11-24); absent on older reports. */
   redrawn?: "layout" | "style";
+  /** Which 本機比對 made the report (CIRCUIT_LOCAL_METHOD); absent on reports made before blocks were grouped (2026-11-24). */
+  method?: number;
 }
 /** Tokens the provider billed for this page, when it reports them. */
 export interface CircuitPdfAiUsage { input: number; output: number }
@@ -132,7 +134,9 @@ function parseLocalInfo(value: unknown): CircuitPdfLocalInfo | null {
   if (typeof data.identical !== "boolean" || numbers.some(item => item === null)) return null;
   const [changed, removed, added, moved, graphic, omitted, common] = numbers as number[];
   if ("redrawn" in data && data.redrawn !== "layout" && data.redrawn !== "style") return null;
-  return { identical: data.identical, changed, removed, added, moved, graphic, omitted, common, ...(data.redrawn === "layout" || data.redrawn === "style" ? { redrawn: data.redrawn } : {}) };
+  if ("method" in data && (typeof data.method !== "number" || !Number.isInteger(data.method) || data.method < 1 || data.method > 99)) return null;
+  return { identical: data.identical, changed, removed, added, moved, graphic, omitted, common, ...(data.redrawn === "layout" || data.redrawn === "style" ? { redrawn: data.redrawn } : {}),
+    ...(typeof data.method === "number" ? { method: data.method } : {}) };
 }
 function parseUsage(value: unknown): CircuitPdfAiUsage | null {
   const data = object(value), input = count(data.input), output = count(data.output);
@@ -164,10 +168,19 @@ export function normalizeCircuitPdfAiReviewReport(value: unknown): CircuitPdfAiR
 
 /** True for a page 本機比對 found the same in both versions. */
 export const isCircuitReportIdentical = (report: CircuitPdfAiReviewReport) => report.source === "local" && report.local?.identical === true;
+/** 2: a moved or redrawn block of a sheet is one finding (2026-11-24). Raise it when 本機比對 lists a page differently. */
+export const CIRCUIT_LOCAL_METHOD = 2;
+/**
+ * A page 本機比對 listed with an older method and nobody has judged yet: comparing it again costs nothing (no AI) and lists
+ * it the current way, so a batch does it again instead of keeping it (2026-11-24: the old method put 40 marks on one
+ * moved block). Pages found identical or redrawn come out the same and are kept, as is anything someone judged.
+ */
+export const isCircuitLocalReportOutdated = (report: CircuitPdfAiReviewReport) => report.source === "local" && !report.local?.identical && !report.local?.redrawn
+  && (report.local?.method ?? 1) < CIRCUIT_LOCAL_METHOD && report.findings.every(finding => finding.decision === "pending" && !finding.reviewNote);
 
 const localInfo = (diff: CircuitLocalPageDiff, summary: CircuitLocalSummary): CircuitPdfLocalInfo => ({ identical: isCircuitPageIdentical(diff),
   changed: summary.counts.changed, removed: summary.counts.removed, added: summary.counts.added, moved: summary.counts.moved, graphic: summary.counts.graphic, omitted: summary.omitted, common: summary.common,
-  ...(diff.redrawn ? { redrawn: diff.redrawn } : {}) });
+  ...(diff.redrawn ? { redrawn: diff.redrawn } : {}), method: CIRCUIT_LOCAL_METHOD });
 
 function describeLocal(diff: CircuitLocalPageDiff, summary: CircuitLocalSummary, common?: CircuitCommonChanges | null) {
   const { counts } = summary, total = counts.changed + counts.removed + counts.added + counts.moved + counts.graphic;
@@ -190,7 +203,8 @@ function describeLocal(diff: CircuitLocalPageDiff, summary: CircuitLocalSummary,
   else if (!total) words = `本機比對：兩版這一頁的${[diff.textComparable && "文字逐一比對", diff.graphicsComparable && "圖形疊合比對"].filter(Boolean).join("、")}${summary.common ? "沒有這一頁自己的差異" : "都相同"}，沒有送 AI。${shared}${unlaid}`;
   else {
     const parts = [counts.changed && `文字改 ${counts.changed} 處`, counts.removed && `移除 ${counts.removed} 處`, counts.added && `新增 ${counts.added} 處`, counts.moved && `移位 ${counts.moved} 處`, counts.graphic && `圖形 ${counts.graphic} 處`].filter(Boolean).join("、");
-    words = `本機比對：這一頁有 ${total} 處不同（${parts}）。${summary.omitted ? `其中 ${summary.omitted} 處超過清單上限沒有逐一列出，請放大兩版核對整頁。` : ""}${shared}${unlaid}`;
+    const blocks = summary.areas ? `其中大部分集中在 ${summary.areas} 個整塊搬移或重畫的區塊，每個區塊列成一項（區塊裡只在一邊的位號與網路另列）。` : "";
+    words = `本機比對：這一頁有 ${total} 處不同（${parts}）。${blocks}${summary.omitted ? `其中 ${summary.omitted} 處超過清單上限沒有逐一列出，請放大兩版核對整頁。` : ""}${shared}${unlaid}`;
   }
   return words.slice(0, 3900).trim();
 }

@@ -365,6 +365,80 @@ export interface CircuitLocalSummary {
   /** Findings that are this page's own differences: only these are worth an AI explanation. */
   own: number;
   counts: { changed: number; removed: number; added: number; moved: number; graphic: number };
+  /** Blocks of the sheet that were moved or redrawn, each listed as one finding (findCircuitChangeAreas). */
+  areas?: number;
+}
+
+/** Strings of one block lie this close (fraction of the page): a moved or redrawn block chains through its own strings. */
+const AREA_LINK = 0.04;
+/**
+ * At least this many changed strings close together: a block of the sheet was moved or redrawn (2026-11-24, the user's
+ * MCU1 sheet: one redrawn MCU1G block put 40 marks on top of each other, 「你自己看，幫我解決」). Such an area is compared
+ * by content, like a redrawn sheet, and listed as one finding; the Ref Des and net names one side lacks there stay findings
+ * of their own, so a missing part is never folded away.
+ */
+const AREA_MIN = 8;
+export interface CircuitChangeArea { changes: CircuitTextChange[]; regions: CircuitGraphicRegion[] }
+const boundsOf = (boxes: readonly CircuitCropRect[]): CircuitCropRect | null => {
+  if (!boxes.length) return null;
+  const left = Math.min(...boxes.map(box => box.x)), top = Math.min(...boxes.map(box => box.y));
+  return { x: left, y: top, width: Math.max(...boxes.map(box => box.x + box.width)) - left, height: Math.max(...boxes.map(box => box.y + box.height)) - top };
+};
+const overlapOf = (a: CircuitCropRect, b: CircuitCropRect) => Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+const itemBox = (item: CircuitDiffText): CircuitCropRect => ({ x: item.x, y: item.y, width: item.width, height: item.height });
+
+/**
+ * Groups the text changes of a page into the blocks that were moved or redrawn: changes whose strings (on either side)
+ * lie within AREA_LINK of each other chain into one group, and a group of AREA_MIN or more is an area. A changed drawing
+ * that lies mostly in the areas belongs to them (the redraw itself). `skip` keeps changes out (frame changes shared by
+ * many sheets). `rest` / `regions` are what stays a difference of its own.
+ */
+export function findCircuitChangeAreas(changes: readonly CircuitTextChange[], regions: readonly CircuitGraphicRegion[], skip: (change: CircuitTextChange) => boolean = () => false) {
+  const candidates = changes.filter(change => !skip(change));
+  const points = candidates.map(change => [change.before, change.after].filter((item): item is CircuitDiffText => Boolean(item)).map(center));
+  const parent = candidates.map((_, index) => index);
+  const root = (index: number) => { while (parent[index] !== index) { parent[index] = parent[parent[index]]; index = parent[index]; } return index; };
+  for (let i = 0; i < candidates.length; i++) for (let j = i + 1; j < candidates.length; j++) {
+    if (root(i) === root(j)) continue;
+    if (points[i].some(p => points[j].some(q => Math.abs(p.x - q.x) <= AREA_LINK && Math.abs(p.y - q.y) <= AREA_LINK && Math.hypot(p.x - q.x, p.y - q.y) <= AREA_LINK))) parent[root(i)] = root(j);
+  }
+  // A block moved farther than a string's own reach leaves its old place (strings only the baseline has there) and its
+  // new place (strings only the new version has) as two groups. They hold the same strings, so they are one block.
+  const members = new Map<number, number[]>();
+  candidates.forEach((_, index) => { const key = root(index); members.set(key, [...(members.get(key) ?? []), index]); });
+  const sizable = [...members.values()].filter(group => group.length >= 3);
+  const words = (group: number[], side: "before" | "after") => {
+    const map = new Map<string, number>();
+    for (const index of group) { const str = candidates[index][side]?.str; if (str) map.set(str, (map.get(str) ?? 0) + 1); }
+    return map;
+  };
+  const sides = sizable.map(group => ({ before: words(group, "before"), after: words(group, "after") }));
+  const shared = (from: Map<string, number>, to: Map<string, number>) => { let count = 0; for (const [str, times] of from) count += Math.min(times, to.get(str) ?? 0); return count; };
+  const total = (map: Map<string, number>) => [...map.values()].reduce((sum, times) => sum + times, 0);
+  for (let i = 0; i < sizable.length; i++) for (let j = i + 1; j < sizable.length; j++) {
+    for (const [from, to] of [[sides[i].before, sides[j].after], [sides[j].before, sides[i].after]] as const) {
+      const common = shared(from, to), fewer = Math.min(total(from), total(to));
+      if (common >= 3 && common >= fewer * 0.3) { parent[root(sizable[i][0])] = root(sizable[j][0]); break; }
+    }
+  }
+  const groups = new Map<number, CircuitTextChange[]>();
+  candidates.forEach((change, index) => { const key = root(index); groups.set(key, [...(groups.get(key) ?? []), change]); });
+  const areas: CircuitChangeArea[] = [...groups.values()].filter(group => group.length >= AREA_MIN).map(group => ({ changes: group, regions: [] }));
+  const grouped = new Set(areas.flatMap(area => area.changes));
+  const boxes = areas.map(area => boundsOf(area.changes.flatMap(change => [change.before, change.after]).filter((item): item is CircuitDiffText => Boolean(item)).map(itemBox)))
+    .map(box => box && pad(box, 0.01));
+  const loose: CircuitGraphicRegion[] = [];
+  for (const region of regions) {
+    const size = region.box.width * region.box.height, middle = { x: region.box.x + region.box.width / 2, y: region.box.y + region.box.height / 2 };
+    const shares = boxes.map(box => box ? overlapOf(box, region.box) : 0);
+    const inside = boxes.findIndex(box => box && middle.x >= box.x && middle.x <= box.x + box.width && middle.y >= box.y && middle.y <= box.y + box.height);
+    const best = shares.indexOf(Math.max(0, ...shares));
+    // Mostly inside the moved blocks (all of them together), or centred in one: the lines of that redraw.
+    if (inside >= 0) areas[inside].regions.push(region);
+    else if (best >= 0 && shares[best] > 0 && shares.reduce((sum, share) => sum + share, 0) >= size * 0.25) areas[best].regions.push(region);
+    else loose.push(region);
+  }
+  return { areas, rest: changes.filter(change => !grouped.has(change)), regions: loose };
 }
 
 const clip = (value: string, max = 180) => value.length > max ? `${value.slice(0, max - 1)}…` : value;
@@ -426,15 +500,102 @@ function summarizeRedrawn(diff: CircuitLocalPageDiff, limit: number, cross?: Cir
 }
 
 /**
+ * One moved or redrawn block as findings: the block itself (one finding, both sides boxed), and every Ref Des and net
+ * name it has more of on one side, compared by name inside the block. Strings that only moved cancel out; a name one side
+ * lacks keeps a finding of its own (renamed when one string was rewritten in place), one the other side still has on the
+ * page or on another sheet is listed low. Values, pin names and notes are named in the block's evidence.
+ */
+function summarizeArea(area: CircuitChangeArea, diff: CircuitLocalPageDiff, cross?: CircuitContentIndex | null): Array<CircuitLocalFinding & { rank: number }> {
+  type Entry = { count: number; item: CircuitDiffText; type: CircuitContentType };
+  const befores = area.changes.flatMap(change => change.before ? [change.before] : []), afters = area.changes.flatMap(change => change.after ? [change.after] : []);
+  const tally = (items: readonly CircuitDiffText[]) => {
+    const map = new Map<string, Entry>();
+    for (const item of items) for (const word of collapse(item.str).split(" ")) {
+      const type = circuitTokenType(word);
+      if (!type) continue;
+      const token = word.toUpperCase(), entry = map.get(token);
+      if (entry) entry.count++; else map.set(token, { count: 1, item, type });
+    }
+    return map;
+  };
+  const base = tally(befores), work = tally(afters);
+  const extra = new Map<string, { side: "base" | "work"; count: number; entry: Entry }>(), others: string[] = [];
+  for (const token of new Set([...base.keys(), ...work.keys()])) {
+    const difference = (base.get(token)?.count ?? 0) - (work.get(token)?.count ?? 0);
+    if (!difference) continue;
+    const side = difference > 0 ? "base" : "work", entry = (side === "base" ? base : work).get(token)!;
+    if (entry.type === "other") others.push(`${token}（${side === "base" ? "基準版" : "比對版"}多 ${Math.abs(difference)}）`);
+    else extra.set(token, { side, count: Math.abs(difference), entry });
+  }
+  const findings: Array<CircuitLocalFinding & { rank: number }> = [];
+  // A string rewritten in place whose only named difference is one name for another: one rename, not two lines.
+  for (const change of area.changes) {
+    if (change.kind !== "changed") continue;
+    const gone = collapse(change.before!.str).split(" ").map(word => word.toUpperCase()).filter(token => extra.get(token)?.side === "base");
+    const came = collapse(change.after!.str).split(" ").map(word => word.toUpperCase()).filter(token => extra.get(token)?.side === "work");
+    if (gone.length !== 1 || came.length !== 1 || extra.get(gone[0])!.count !== 1 || extra.get(came[0])!.count !== 1) continue;
+    const category = classifyCircuitDiffText(change.after!.str);
+    findings.push({ rank: 0, category, priority: "high", certainty: "suspected", title: clip(`文字改了：${change.before!.str} → ${change.after!.str}`, 280), location: describeCircuitDiffPlace(change.after!),
+      officialEvidence: clip(change.before!.str, 1900), workingEvidence: clip(change.after!.str, 1900), suggestion: "這一區整塊搬移或重畫，這個名稱也換了：請確認這是預期的修改。", officialBox: textBox(change.before), workingBox: textBox(change.after) });
+    extra.delete(gone[0]); extra.delete(came[0]);
+  }
+  for (const [token, { side, count, entry }] of extra) {
+    const words = TYPE_WORDS[entry.type], here = side === "base" ? "基準版" : "比對版", there = side === "base" ? "比對版" : "基準版";
+    const place = describeCircuitDiffPlace(entry.item), box = textBox(entry.item), category: CircuitDiffCategory = entry.type === "refdes" ? "label-name" : "net-name";
+    const onPage = (side === "base" ? diff.contents?.work : diff.contents?.base)?.includes(token) ?? false;
+    const otherPages = onPage ? [] : (side === "base" ? cross?.work : cross?.base)?.get(token)?.filter(page => page !== (side === "base" ? diff.pages?.work : diff.pages?.base)) ?? [];
+    const boxes = { officialBox: side === "base" ? box : null, workingBox: side === "work" ? box : null };
+    if (onPage || otherPages.length) {
+      findings.push({ rank: 6, category, priority: "low", certainty: "unclear", location: place, ...boxes,
+        title: clip(onPage ? `${words}${here}這一區多 ${count} 個：${token}（${there}這一頁仍有）` : `${words}換頁：${token} 在${there}第 ${otherPages.slice(0, 3).join("、")} 頁`, 280),
+        officialEvidence: side === "base" ? `${token}（${place}）` : onPage ? `基準版這一頁其他地方有 ${token}` : `基準版在第 ${otherPages.slice(0, 3).join("、")} 頁`,
+        workingEvidence: side === "work" ? `${token}（${place}）` : onPage ? `比對版這一頁其他地方有 ${token}` : `比對版在第 ${otherPages.slice(0, 3).join("、")} 頁`,
+        suggestion: onPage ? `兩版都有 ${token}，只是這一區畫的次數不同（重畫時常增減網路標籤）；確認它接到的腳位相同即可。` : `${there}把 ${token} 畫在另一頁，不算少了；確認那一頁的接法相同即可。` });
+      continue;
+    }
+    findings.push({ rank: entry.type === "refdes" ? 0 : 1, category, priority: entry.type === "refdes" ? "high" : "medium", certainty: "suspected", location: place, ...boxes,
+      title: clip(`${words}只在${here}：${token}${count > 1 ? `（多 ${count} 個）` : ""}`, 280),
+      officialEvidence: side === "base" ? `${token}（${place}）` : `基準版${cross ? "整份" : "這一頁"}沒有 ${token}`,
+      workingEvidence: side === "work" ? `${token}（${place}）` : `比對版${cross ? "整份" : "這一頁"}沒有 ${token}`,
+      suggestion: side === "base"
+        ? (entry.type === "refdes" ? `基準版有 ${token}，比對版沒有：確認是刻意拿掉，還是漏畫或位號寫錯。` : `基準版有網路 ${token}，比對版沒有：確認是改名、合併，還是漏接。`)
+        : (entry.type === "refdes" ? `比對版多了 ${token}：確認是新增的零件，還是位號寫錯。` : `比對版多了網路 ${token}：確認是新增或改名，接到的腳位正確。`) });
+  }
+  const rewrites = area.changes.filter(change => change.kind === "changed").map(change => `${change.before!.str} → ${change.after!.str}`);
+  const sideBox = (items: readonly CircuitDiffText[], ink: "base" | "work") => {
+    const bounds = boundsOf([...items.map(itemBox), ...area.regions.filter(region => region[ink]).map(region => region.box)]);
+    return bounds && pad(bounds, 0.004);
+  };
+  const officialBox = sideBox(befores, "base"), workingBox = sideBox(afters, "work");
+  const named = findings.filter(item => item.rank < 6).length;
+  const evidence = (items: readonly CircuitDiffText[], label: string, side: "base" | "work") => {
+    const extraOthers = others.filter(word => word.includes(side === "base" ? "基準版多" : "比對版多"));
+    return clip([`${label} ${items.length} 段文字不在原位${area.regions.some(region => region[side]) ? "，線條也不同" : ""}`,
+      extraOthers.length ? `只在這一邊的其他文字：${extraOthers.slice(0, 12).join("、")}` : "",
+      side === "work" && rewrites.length ? `同一位置改寫：${rewrites.slice(0, 8).join("、")}` : ""].filter(Boolean).join("；"), 1900);
+  };
+  findings.push({ rank: 3, category: "connectivity", priority: "medium", certainty: "unclear", location: officialBox ?? workingBox ? describeCircuitDiffPlace((officialBox ?? workingBox)!) : "這一頁",
+    title: clip(`這一區整塊搬移或重畫：${area.changes.length} 段文字位置不同，${named ? `${named} 個位號／網路只在一邊（另列）` : "位號與網路名稱一致"}`, 280),
+    officialEvidence: evidence(befores, "基準版這一區", "base"), workingEvidence: evidence(afters, "比對版這一區", "work"),
+    suggestion: "這一區的文字大量換了位置，通常是整塊搬移或重畫。零件位號與網路名稱已在這一區逐一比對（只在一邊的另列）；數值、接腳名稱見證據，接線請放大兩版核對。",
+    officialBox, workingBox });
+  return findings;
+}
+
+/**
  * The differences of one page as findings a person can check, most telling first; at most `limit`. A redrawn page is
  * summarised by content (summarizeRedrawn); `cross` tells which sheets of each PDF hold every Ref Des and net name.
+ * A moved or redrawn block of an otherwise unchanged page is one finding plus its named differences (summarizeArea).
  */
 export function summarizeCircuitLocalDiff(diff: CircuitLocalPageDiff, common?: CircuitCommonChanges | null, limit = 40, cross?: CircuitContentIndex | null): CircuitLocalSummary {
   // Both kinds of redraw: places and lines say nothing about the circuit there, names do.
   if (diff.redrawn && diff.contentChanges) return summarizeRedrawn(diff, limit, cross);
   const counts = { changed: 0, removed: 0, added: 0, moved: 0, graphic: diff.regions.length };
+  // Blocks moved or redrawn as a whole: one finding each, compared by name (summarizeArea), counted like any text change.
+  const grouping = findCircuitChangeAreas(diff.textChanges, diff.regions, change => isCircuitCommonChange(change, common));
+  for (const change of grouping.areas.flatMap(area => area.changes)) counts[change.kind]++;
   const order: Record<CircuitTextChangeKind, number> = { changed: 0, removed: 1, added: 2, moved: 4 };
-  const findings: Array<CircuitLocalFinding & { rank: number; shared: boolean }> = diff.textChanges.map(change => {
+  const findings: Array<CircuitLocalFinding & { rank: number; shared: boolean }> = grouping.rest.map(change => {
     const shared = isCircuitCommonChange(change, common);
     if (!shared) counts[change.kind]++;
     const text = (change.after ?? change.before)!.str, category = classifyCircuitDiffText(text);
@@ -450,7 +611,8 @@ export function summarizeCircuitLocalDiff(diff: CircuitLocalPageDiff, common?: C
     return { rank, shared, category, priority: "low" as const, certainty: "suspected" as const, title: clip(`${mark}文字移位：${change.after!.str}`, 280), location: place,
       officialEvidence: `${clip(change.before!.str, 1800)}（${describeCircuitDiffPlace(change.before!)}）`, workingEvidence: `${clip(change.after!.str, 1800)}（${place}）`, suggestion: shared ? COMMON_NOTE : "文字相同但位置不同，通常是圖面重排；請確認旁邊的接線沒有跟著改錯。", officialBox: textBox(change.before), workingBox: textBox(change.after) };
   });
-  for (const region of diff.regions) {
+  for (const area of grouping.areas) findings.push(...summarizeArea(area, diff, cross).map(finding => ({ ...finding, shared: false })));
+  for (const region of grouping.regions) {
     const box = pad(region.box, 0.004);
     findings.push({ rank: 3, shared: false, category: "connectivity", priority: "medium", certainty: "unclear", title: region.faint ? "圖形有細微不同（接點或線段長短）" : "圖形改了（線條、接點或符號）", location: describeCircuitDiffPlace(region.box),
       officialEvidence: region.base ? "基準版這裡有比對版沒有的線條或圖形（見圖面標註）" : "基準版這裡沒有對應的線條",
@@ -470,7 +632,7 @@ export function summarizeCircuitLocalDiff(diff: CircuitLocalPageDiff, common?: C
     }
   }
   return { findings: kept.map(({ rank: _rank, shared: _shared, ...finding }) => finding), omitted: findings.length - kept.length,
-    common: findings.filter(item => item.shared).length, own: findings.filter(item => !item.shared).length, counts };
+    common: findings.filter(item => item.shared).length, own: findings.filter(item => !item.shared).length, counts, ...(grouping.areas.length ? { areas: grouping.areas.length } : {}) };
 }
 
 /**

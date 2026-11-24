@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { loadSpecFillModels, type SpecFillModel } from "../material-requests/materialSpecFillService";
-import { buildCircuitLocalReport, CIRCUIT_AI_CATEGORY_LABELS, circuitPdfAiReviewKey, isCircuitReportIdentical, runCircuitPdfAiReview, type CircuitPdfAiFinding, type CircuitPdfAiReviewReport, type CircuitPdfReviewPage } from "./circuitPdfAiReview";
+import { buildCircuitLocalReport, CIRCUIT_AI_CATEGORY_LABELS, circuitPdfAiReviewKey, isCircuitLocalReportOutdated, isCircuitReportIdentical, runCircuitPdfAiReview, type CircuitPdfAiFinding, type CircuitPdfAiReviewReport, type CircuitPdfReviewPage } from "./circuitPdfAiReview";
 import { buildCircuitPdfAiBatchPages, CIRCUIT_PDF_AI_BATCH_CONCURRENCY, CircuitPdfAiBatchStop, parseCircuitPdfAiPageSelection, restoreCircuitPdfAiBatchPages, runCircuitPdfAiBatchReview, type CircuitPdfAiBatchPage, type CircuitPdfAiBatchPolicy, type CircuitPdfAiBatchWait } from "./circuitPdfAiBatchReview";
 import { findCircuitCommonChanges, indexCircuitPageContents, summarizeCircuitLocalDiff, type CircuitCommonChanges, type CircuitContentIndex, type CircuitLocalPageDiff } from "./circuitPdfLocalDiff";
 import { compareCircuitPdfPages } from "./circuitPdfLocalDiffReader";
@@ -173,6 +173,8 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
       const pages = restoreCircuitPdfAiBatchPages(officialCount, workingCount, officialPageFor, reports,
         (officialPage, workingPage) => circuitPdfAiReviewKey({ officialVersionId: officialId, workingVersionId: workingId, officialPage, workingPage }));
       if (pages.some(page => page.status === "complete")) { batchRef.current = pages; setBatch(pages); }
+      const outdated = pages.filter(page => page.status === "complete" && page.report && isCircuitLocalReportOutdated(page.report)).length;
+      if (outdated) setNotice(`有 ${outdated} 頁是舊的比對方式列的（整塊搬移的區塊會拆成很多項），按「全部頁面比對」會重新比對這些頁，免費、不用 AI。`);
     }).catch(() => { if (present) setSavedLoad(value => ({ ...value, state: "failed" })); });
     return () => { present = false; };
   // officialPageFor changes together with mappingKey.
@@ -248,6 +250,7 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
     batchRef.current = pages; setBatch(pages);
     if (!resume) savedChecked.current = false;
     const aiModel = useAi ? model : undefined;
+    const relisted = new Set<number>();
     try {
       // Pages compared before keep their result: an interrupted run only does what is left, and nothing is paid for twice.
       // A run resumed after this look-up failed or was stopped does it now.
@@ -257,7 +260,12 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
         for (const report of await allPages.onLoadAll()) { const known = latest.get(report.key); if (!known || report.createdAt > known.createdAt) latest.set(report.key, report); }
         if (!live() || signal.aborted) return;
         // A page with an answer in hand (stored or waiting to be stored) keeps it.
-        pages = pages.map(page => { const report = page.officialPage === null || page.report ? undefined : latest.get(targetKey(page)); return report ? { ...page, status: "complete" as const, report, error: undefined } : page; });
+        // A page listed by an older 本機比對 that nobody judged is compared again (free, no AI), so it is listed the current way.
+        pages = pages.map(page => {
+          const report = page.officialPage === null || page.report ? undefined : latest.get(targetKey(page));
+          if (report && isCircuitLocalReportOutdated(report)) relisted.add(page.workingPage);
+          return report && !isCircuitLocalReportOutdated(report) ? { ...page, status: "complete" as const, report, error: undefined } : page;
+        });
         batchRef.current = pages; setBatch(pages);
         savedChecked.current = true;
       }
@@ -296,7 +304,8 @@ export function CircuitPdfAiReview({ open, onOpenChange, official: sourceOfficia
         // only add the drawing-style differences back (2026-11-24: 「600多項不同每頁都這樣子」).
         const settled = Boolean(diff.redrawn && diff.contentChanges) || (summary.own === 0 && summary.omitted === 0 && diff.graphicsComparable);
         // Only pages that really differ are worth an AI explanation; the rest are finished here.
-        if (aiModel && !settled) return { ...page, status: "pending" as const, error: undefined };
+        // A page only listed again (see isCircuitLocalReportOutdated) was settled without AI before and stays free.
+        if (aiModel && !settled && !relisted.has(page.workingPage)) return { ...page, status: "pending" as const, error: undefined };
         return { ...page, status: "unsaved" as const, error: undefined, report: buildCircuitLocalReport({ ...pageSource(page.workingPage, page.officialPage!), userName, diff, common, cross }) };
       });
       batchRef.current = pages; setBatch(pages);

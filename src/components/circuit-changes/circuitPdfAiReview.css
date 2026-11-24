@@ -268,6 +268,8 @@
     linear-gradient(var(--mark), var(--mark)) bottom left / 12px 2px no-repeat, linear-gradient(var(--mark), var(--mark)) bottom left / 2px 12px no-repeat,
     linear-gradient(var(--mark), var(--mark)) bottom right / 12px 2px no-repeat, linear-gradient(var(--mark), var(--mark)) bottom right / 2px 12px no-repeat; }
 .circuit-pdf-ai-annotation-box > span { bottom: calc(100% + 6px); left: -5px; padding-inline: 5px; border-radius: 3px; background: var(--mark); box-shadow: 0 1px 3px #0006; pointer-events: auto; cursor: pointer; }
+/* A tag whose usual place is taken steps aside (circuitPdfMarkTags.ts sets the offset); it keeps its mark's colour. */
+.circuit-pdf-ai-annotation-box > span { white-space: nowrap; transform: translate(var(--tag-dx, 0px), var(--tag-dy, 0px)); }
 .circuit-pdf-ai-annotation-box[data-certainty="unclear"] > span { background: var(--mark); color: #1b1203; }
 .circuit-pdf-ai-annotation-box:hover, .circuit-pdf-ai-annotation-box:focus-visible { outline: 1px dashed var(--mark); outline-offset: 5px; }
 .circuit-pdf-ai-zoom-sheet .circuit-pdf-ai-annotation-box[data-selected="true"] { outline: 2px dashed var(--mark); outline-offset: 7px; box-shadow: none; }

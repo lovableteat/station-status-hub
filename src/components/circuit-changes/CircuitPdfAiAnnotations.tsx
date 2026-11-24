@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Maximize2, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CIRCUIT_AI_CATEGORY_LABELS, type CircuitPdfAiReviewReport, type CircuitPdfReviewPage } from "./circuitPdfAiReview";
 import { CircuitPdfAiZoomViewer } from "./CircuitPdfAiZoomViewer";
 import { circuitPdfPageSize, renderCircuitPdfPage } from "./pdfRender";
+import { circuitMarkTagStyle, placeCircuitMarkTags } from "./circuitPdfMarkTags";
 
 type AnnotationProps = {
   report: CircuitPdfAiReviewReport;
@@ -25,6 +26,22 @@ function AnnotatedPage({ source: { pdf, page }, side, report, onFinding, onZoom 
   const unresolvedChecks = report.checks
     .filter(check => check.state === "unverifiable" && !report.findings.some(item => item.category === check.category))
     .map(check => CIRCUIT_AI_CATEGORY_LABELS[check.category]);
+  // The drawing's size on screen, so tags of neighbouring marks can step aside instead of piling up (2026-11-24).
+  const surface = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    const node = surface.current;
+    if (!node || status !== "ready" || typeof ResizeObserver === "undefined") return;
+    const measure = () => { const width = node.clientWidth, height = node.clientHeight; setShown(value => value && value.width === width && value.height === height ? value : width && height ? { width, height } : null); };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [status]);
+  const tagOffsets = useMemo(() => shown ? placeCircuitMarkTags(pending.flatMap(item => { const rect = item[boxKey]; return rect ? [{ id: item.id, rect }] : []; }), shown.width, shown.height) : null,
+    // pending is rebuilt from report on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shown, report, boxKey]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -44,7 +61,7 @@ function AnnotatedPage({ source: { pdf, page }, side, report, onFinding, onZoom 
   return <figure className="circuit-pdf-ai-annotated-page" data-unlocated={pageFlags.length > 0}>
     <figcaption><strong>{label}</strong><span>第 {page} 頁</span>
       <button type="button" className="circuit-pdf-ai-zoom-open" title={`把${label}和另一版放大並排查看，可以縮放、拖曳`} aria-label={`放大檢視${label}第 ${page} 頁`} onClick={onZoom}><Maximize2 aria-hidden="true" />放大</button></figcaption>
-    <div className="circuit-pdf-ai-annotation-surface">
+    <div ref={surface} className="circuit-pdf-ai-annotation-surface">
       <canvas ref={canvas} role="img" aria-label={`${label}第 ${page} 頁圖面`} hidden={status !== "ready"} />
       {status !== "ready" && <p role="status">{status === "failed" ? "圖面預覽無法顯示，請查看下方待核對項目。" : "正在載入圖面…"}</p>}
       {status === "ready" && pending.map(item => {
@@ -52,7 +69,7 @@ function AnnotatedPage({ source: { pdf, page }, side, report, onFinding, onZoom 
         if (!rect) return null;
         return <button key={item.id} type="button" className="circuit-pdf-ai-annotation-box"
           data-certainty={item.certainty ?? "suspected"} aria-label={`${label} ${item.id}：${item.title}`} title={item.title}
-          style={{ left: `${rect.x * 100}%`, top: `${rect.y * 100}%`, width: `${rect.width * 100}%`, height: `${rect.height * 100}%`, minHeight: 0 }}
+          style={{ left: `${rect.x * 100}%`, top: `${rect.y * 100}%`, width: `${rect.width * 100}%`, height: `${rect.height * 100}%`, minHeight: 0, ...circuitMarkTagStyle(tagOffsets?.get(item.id)) }}
           onClick={() => onFinding(item.id)}><span aria-hidden="true">{item.id}</span></button>;
       })}
     </div>

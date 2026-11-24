@@ -35,6 +35,7 @@ async function verifyAnnotations(dialog,page,width) {
   assert.ok((await region.innerText()).includes('元件／接腳名稱'));
   const first=dialog.locator('.circuit-pdf-ai-finding').nth(1);
   await baseline.scrollIntoViewIfNeeded();
+  assert.deepEqual(await tagsApart(dialog),[]);
   await page.screenshot({path:path.join(evidence,`annotations-${width}.png`)});
   if(width<768) {
     await working.scrollIntoViewIfNeeded();
@@ -214,6 +215,7 @@ async function runLocalFirst(browser,origin,width) {
     await page.waitForFunction(()=>{const sheet=document.querySelector('[data-testid="circuit-pdf-ai-zoom"] .circuit-pdf-ai-zoom-pane[data-side="working"] .circuit-pdf-ai-zoom-sheet'),view=sheet?.parentElement;return Boolean(sheet&&view&&sheet.getBoundingClientRect().width>view.clientWidth*1.8);},null,{timeout:10000});
     assert.match(await zoom.locator('.circuit-pdf-ai-zoom-detail').innerText(),/NET_2_NEW/);
     assert.ok(await zoom.evaluate(node=>node.scrollWidth<=node.clientWidth+1));
+    assert.deepEqual(await tagsApart(zoom),[],'the tags of the renamed net and the changed wire around it do not cover each other');
     await page.screenshot({path:path.join(evidence,`zoom-${width}.png`)});
     await zoom.getByRole('button',{name:'縮小',exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('[data-testid="circuit-pdf-ai-zoom"] output').textContent==='200%');
@@ -270,6 +272,64 @@ async function runLocalFirst(browser,origin,width) {
     assert.ok(await dialog.evaluate(node=>node.scrollWidth<=node.clientWidth+1));
     assert.deepEqual(errors,[]);
     return {width,checks:['identical sheets settled without AI','no page compared or stored twice','renamed net is one located difference','zoom viewer follows a chosen difference','report holds summary, pages, differences and drawings','timeout and dropped connection recover by themselves','comparison without AI costs nothing']};
+  } finally { await context.close(); }
+}
+
+// 2026-11-24 (the user's MCU1 sheet, 「你自己看，幫我解決」): one block of an otherwise unchanged sheet drawn again elsewhere
+// put 40 marks on top of each other. It is one finding now, its parts and nets compared by name, and no two number tags
+// on a drawing cover each other.
+async function tagsApart(scope) {
+  return scope.evaluate(root => {
+    const clashes = [];
+    for (const surface of root.querySelectorAll('.circuit-pdf-ai-annotation-surface, .circuit-pdf-ai-zoom-sheet')) {
+      const tags = [...surface.querySelectorAll('.circuit-pdf-ai-annotation-box > span')].map(node => ({ id: node.textContent, box: node.getBoundingClientRect() })).filter(tag => tag.box.width);
+      for (let i = 0; i < tags.length; i++) for (let j = i + 1; j < tags.length; j++) {
+        const a = tags[i].box, b = tags[j].box;
+        if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) clashes.push(`${tags[i].id}/${tags[j].id}`);
+      }
+    }
+    return clashes;
+  });
+}
+async function runMovedBlock(browser,origin,width) {
+  const phone=width<768;
+  const context=await browser.newContext({viewport:{width,height:884},isMobile:phone,hasTouch:phone,reducedMotion:'reduce'});
+  await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+  try {
+    const page=await context.newPage(),errors=[];
+    page.on('pageerror',error=>errors.push(error.message));
+    page.setDefaultTimeout(30000);
+    await page.goto(origin+'/?movedBlock');
+    await page.getByRole('button',{name:'開啟本頁 AI 初審',exact:true}).click();
+    const dialog=page.getByTestId('circuit-pdf-ai-review');
+    await dialog.getByRole('combobox',{name:'AI 初審服務',exact:true}).selectOption('qa-vision');
+    await dialog.getByLabel('有差異的頁再用 AI 說明').uncheck();
+    const progress=dialog.getByRole('region',{name:'全部頁面比對進度'});
+    const chip=number=>progress.getByRole('button',{name:`查看比對版第 ${number} 頁初審`,exact:true});
+    const press=async locator=>{if(phone)await locator.tap();else await locator.click();};
+    await dialog.getByRole('button',{name:'全部頁面比對',exact:true}).click();
+    await progress.getByText('全部頁面比對已結束',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>window.__circuitAiQA.calls.length),0);
+    assert.deepEqual(await page.evaluate(()=>window.__circuitAiQA.saveRecords.map(row=>[row.workingPage,row.source]).sort()),[[1,'local'],[2,'local'],[3,'local']]);
+    assert.deepEqual([await chip(1).getAttribute('data-outcome'),await chip(2).getAttribute('data-outcome'),await chip(3).getAttribute('data-outcome')],['identical','different','identical']);
+    await press(chip(2));
+    await dialog.getByRole('heading',{name:'比對版第 2 頁 · 基準版第 2 頁初審摘要',exact:true}).waitFor();
+    const titles=(await dialog.locator('.circuit-pdf-ai-finding summary').allInnerTexts()).map(text=>text.trim());
+    assert.equal(titles.length,2,titles.join(' | '));
+    assert.ok(titles.some(title=>/文字改了：R910 → R920/.test(title)),titles.join(' | '));
+    assert.ok(titles.some(title=>/這一區整塊搬移或重畫：32 段文字位置不同，位號與網路名稱一致/.test(title)),titles.join(' | '));
+    assert.match(await dialog.locator('.circuit-pdf-ai-results > header p').innerText(),/1 個整塊搬移或重畫的區塊，每個區塊列成一項/);
+    await dialog.locator('.circuit-pdf-ai-annotation-box').first().waitFor();
+    assert.deepEqual(await tagsApart(dialog),[]);
+    await page.screenshot({path:path.join(evidence,`moved-block-${width}.png`)});
+    await press(dialog.getByRole('button',{name:'放大檢視兩版',exact:true}));
+    const zoom=page.locator('.circuit-pdf-ai-zoom');
+    await zoom.locator('.circuit-pdf-ai-annotation-box').first().waitFor();
+    assert.deepEqual(await tagsApart(zoom),[]);
+    await page.screenshot({path:path.join(evidence,`moved-block-zoom-${width}.png`)});
+    await page.keyboard.press('Escape');
+    assert.deepEqual(errors,[]);
+    return {width,checks:['a moved block is one finding compared by name','a rename beside it stays its own finding','no two tags cover each other']};
   } finally { await context.close(); }
 }
 
@@ -364,8 +424,10 @@ const localFirst=[];
 for(const width of [1440,390])localFirst.push(await runLocalFirst(browser,origin,width));
 const redrawn=[];
 for(const width of [1440,390])redrawn.push(await runRedrawn(browser,origin,width));
+const movedBlock=[];
+for(const width of [1440,390])movedBlock.push(await runMovedBlock(browser,origin,width));
 const stopLoss=await runStopLoss(browser,origin);
-fs.writeFileSync(path.join(evidence,'browser-report.json'),JSON.stringify({result:'passed',checks:results,parallelBatch,selectedBatch,localFirst,redrawn,stopLoss},null,2));console.log(JSON.stringify({checks:results,parallelBatch,selectedBatch,localFirst,redrawn,stopLoss}));
+fs.writeFileSync(path.join(evidence,'browser-report.json'),JSON.stringify({result:'passed',checks:results,parallelBatch,selectedBatch,localFirst,redrawn,movedBlock,stopLoss},null,2));console.log(JSON.stringify({checks:results,parallelBatch,selectedBatch,localFirst,redrawn,movedBlock,stopLoss}));
 }finally{if(browser)await browser.close();await server.close()}})().catch(error=>{console.error(error);process.exitCode=1});
 
 
