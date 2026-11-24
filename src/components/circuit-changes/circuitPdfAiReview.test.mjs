@@ -179,7 +179,9 @@ test('with the differences already known the model is shown them enlarged, and t
   assert.equal(images.length,6,'two whole pages and two changed areas from both versions');
   assert.match(JSON.stringify(body),/已經確定的差異/);assert.match(JSON.stringify(body),/1\. 字改了：PCIE_RX_P → PCIE_RX_N/);assert.match(JSON.stringify(body),/不要重複列出/);
   assert.equal(renders.filter(item=>item.width===2048).length,2);
-  assert.deepEqual([...result.findings.map(finding=>finding.title)],['字改了：PCIE_RX_P → PCIE_RX_N','這裡的線或符號不一樣','A1 改接到 B1']);
+  assert.deepEqual([...result.findings.map(finding=>finding.title)],['字改了：PCIE_RX_P → PCIE_RX_N','這裡的線或符號不一樣','參考：AI 補充：A1 改接到 B1']);
+  // 2026-11-25: what the model adds is its reading of the picture: listed for reference, never counted.
+  assert.equal(result.findings[2].priority,'low');
   assert.deepEqual([...result.findings.map(finding=>finding.id)],['F1','F2','F3']);
   assert.equal(result.checks.find(check=>check.category==='net-name').state,'possible-issue','the more careful of the two answers');
   assert.match(result.summary,/^電腦比對（沒用 AI）：這一頁有 2 個地方不一樣/);assert.match(result.summary,/AI 說明：/);

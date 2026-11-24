@@ -97,7 +97,10 @@ test("the findings of a page say what changed and where, most telling first, wit
       { kind: "removed", before: item("TP7", 0.7, 0.7) }, { kind: "added", after: item("R99", 0.8, 0.1) }],
     regions: [{ box: { x: 0.6, y: 0.6, width: 0.1, height: 0.02 }, base: false, work: true }] };
   const summary = k.summarizeCircuitLocalDiff(diff);
-  assert.deepEqual(plain(summary.findings.map(finding => finding.title)), ["字改了：USB_DP → USB_D_P", "比對版少了：TP7", "比對版多了：R99", "這裡的線或符號不一樣", "換了位置：C5"]);
+  assert.deepEqual(plain(summary.findings.map(finding => finding.title)), ["字改了：USB_DP → USB_D_P", "比對版少了：TP7", "比對版多了：R99", "這裡的線或符號不一樣", "參考：1 段字一樣，只是換了位置或是符號上的腳位名稱（C5）"]);
+  // 2026-11-25: a string that only moved is the same text elsewhere, one reference line that is never counted.
+  assert.equal(summary.own, 4);
+  assert.equal(k.isCircuitReferenceFinding(summary.findings[4]), true);
   assert.deepEqual(plain(summary.findings.map(finding => finding.category)), ["net-name", "label-name", "label-name", "connectivity", "label-name"]);
   assert.deepEqual(plain(summary.counts), { changed: 1, removed: 1, added: 1, moved: 1, graphic: 1 });
   assert.equal(summary.findings[0].location, "左上（橫 33%、直 21%）");
@@ -274,7 +277,9 @@ test("a block moved or redrawn as a whole is one finding; a part it lost and a r
   assert.equal(summary.findings.length, 3, titles.join(" | "));
   assert.ok(titles.includes("字改了：C1306 → C1316"), titles.join(" | "));
   assert.ok(titles.includes("基準版有、比對版沒有的零件編號：U7"), titles.join(" | "));
-  const block = summary.findings.find(finding => finding.title.startsWith("這一塊整個搬走或重畫了"));
+  // 2026-11-25: the block itself is said for reference (a layout change, like a redrawn sheet); what it lost is counted.
+  const block = summary.findings.find(finding => finding.title.startsWith("參考：這一塊整個搬走或重畫了"));
+  assert.equal(summary.own, 2, titles.join(" | "));
   assert.match(block.title, /29 段字的位置不一樣，有 1 個零件或線路名稱只在一邊（另外列出）/);
   assert.equal(block.certainty, "unclear");
   // Each side is boxed where the block is drawn on that side, the changed lines of the redraw included.
@@ -284,7 +289,8 @@ test("a block moved or redrawn as a whole is one finding; a part it lost and a r
   // Nothing missing: the block alone, saying its parts and nets match.
   const same = movedBlockPage({ dropPart: false });
   const clean = k.summarizeCircuitLocalDiff(pageDiff(k, same.before, same.after));
-  assert.deepEqual(plain(clean.findings.map(finding => finding.title)), ["字改了：C1306 → C1316", "這一塊整個搬走或重畫了：28 段字的位置不一樣，零件和線路名稱都一樣"]);
+  assert.deepEqual(plain(clean.findings.map(finding => finding.title)), ["字改了：C1306 → C1316", "參考：這一塊整個搬走或重畫了：28 段字的位置不一樣，零件和線路名稱都一樣"]);
+  assert.equal(clean.own, 1, "only the rename counts");
 });
 
 test("edits spread over the sheet, or only a few close together, stay one finding each", () => {

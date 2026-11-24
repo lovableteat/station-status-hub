@@ -18,7 +18,12 @@ export interface CircuitTextChange { kind: CircuitTextChangeKind; before?: Circu
  * `faint`: the difference is within one pixel of existing lines (a junction dot on a crossing, a line a little longer);
  * it is still a difference and is always reported.
  */
-export interface CircuitGraphicRegion { box: CircuitCropRect; base: boolean; work: boolean; faint?: boolean }
+/**
+ * `kind` (2026-11-25, the real E1.S pair): "annotation" when what differs is coloured ink on an otherwise grey sheet (a
+ * dashed box or note someone drew), "frame" when it is something that did not move while the rest of the sheet did (the
+ * border and title block of a sheet whose content was shifted). Neither is a change of the circuit.
+ */
+export interface CircuitGraphicRegion { box: CircuitCropRect; base: boolean; work: boolean; faint?: boolean; kind?: "annotation" | "frame" | "nudged" }
 export interface CircuitLocalPageDiff {
   /** Both pages have selectable text, so the strings were matched one by one. */
   textComparable: boolean;
@@ -36,6 +41,10 @@ export interface CircuitLocalPageDiff {
   redrawn?: "layout" | "style";
   /** Ref Des, net names and other words one side has more often than the other (filled for redrawn pages). */
   contentChanges?: CircuitContentChange[];
+  /** Parts on both sides whose value label differs (R3410: 2.21KΩ → 100KΩ), whichever way the page was compared. */
+  valueChanges?: CircuitValueChange[];
+  /** Values printed more often on one side (how many parts carry each), whichever way the page was compared. */
+  valueCounts?: CircuitContentChange[];
   /** Page numbers compared, for looking up a Ref Des or net that moved to another sheet. */
   pages?: { base: number; work: number };
   /** The Ref Des and net names of each side, for the same look-up across sheets. */
@@ -54,6 +63,8 @@ export interface CircuitContentChange {
    * once for reference. `token` is then how this side writes it.
    */
   alias?: string;
+  /** A value (resistance, capacitance, not fitted) drawn more often on this side: `count` more parts carry it. */
+  value?: boolean;
 }
 
 const SAME = 0.004;      // the same string within 0.4 % of the page is the same text
@@ -91,10 +102,14 @@ function commonShift(before: readonly CircuitDiffText[], after: readonly Circuit
  */
 export function diffCircuitPageTexts(beforeItems: readonly CircuitDiffText[], afterItems: readonly CircuitDiffText[]): { changes: CircuitTextChange[]; shift: { dx: number; dy: number }; unchanged: number; totals: { before: number; after: number } } {
   const clean = (items: readonly CircuitDiffText[]) => items.map(item => ({ ...item, str: collapse(item.str) })).filter(item => item.str);
-  const before = clean(beforeItems), after = clean(afterItems);
+  let before = clean(beforeItems), after = clean(afterItems);
+  // A drawing that prints no part-number lines (a redraw that shows values) is not missing the other side's.
+  const numbered = (items: readonly CircuitDiffText[]) => items.some(item => CIRCUIT_PART_NUMBER_LINE.test(item.str));
+  if (numbered(before) !== numbered(after)) { before = before.filter(item => !CIRCUIT_PART_NUMBER_LINE.test(item.str)); after = after.filter(item => !CIRCUIT_PART_NUMBER_LINE.test(item.str)); }
   const shift = commonShift(before, after);
   const position = (item: CircuitDiffText, shifted: boolean) => { const point = center(item); return shifted ? { x: point.x + shift.dx, y: point.y + shift.dy } : point; };
-  const group = (items: CircuitDiffText[]) => { const map = new Map<string, CircuitDiffText[]>(); for (const item of items) { const list = map.get(item.str); if (list) list.push(item); else map.set(item.str, [item]); } return map; };
+  // The same value or part written another way (10KR2F-2-GP and 10KOhm) is the same text (circuitLabelKey).
+  const group = (items: CircuitDiffText[]) => { const map = new Map<string, CircuitDiffText[]>(); for (const item of items) { const key = textKey(item.str), list = map.get(key); if (list) list.push(item); else map.set(key, [item]); } return map; };
   const b = group(before), a = group(after);
   const changes: CircuitTextChange[] = [];
   const removed: CircuitDiffText[] = [], added: CircuitDiffText[] = [];
@@ -124,7 +139,8 @@ export function diffCircuitPageTexts(beforeItems: readonly CircuitDiffText[], af
   for (const pair of pairs) {
     if (usedRemoved.has(pair.r) || usedAdded.has(pair.a)) continue;
     usedRemoved.add(pair.r); usedAdded.add(pair.a);
-    changes.push({ kind: "changed", before: removed[pair.r], after: added[pair.a] });
+    // The same part with an ordering suffix on one side is the same text.
+    if (!samePart(removed[pair.r].str, added[pair.a].str)) changes.push({ kind: "changed", before: removed[pair.r], after: added[pair.a] });
   }
   removed.forEach((item, index) => { if (!usedRemoved.has(index)) changes.push({ kind: "removed", before: item }); });
   added.forEach((item, index) => { if (!usedAdded.has(index)) changes.push({ kind: "added", after: item }); });
@@ -179,8 +195,243 @@ export function circuitNameKey(word: string): { key: string; type: CircuitConten
   const bare = word.trim().replace(/^\^+/, "").replace(/^v(?=[A-Z^])/, "").replace(/^\^+/, "");
   const type = circuitTokenType(bare);
   if (!type) return null;
+  if (type === "other") return { key: circuitLabelKey(bare).toUpperCase(), type };
   const key = bare.toUpperCase();
   return { key: type === "refdes" ? key.replace(/^([A-Z]{1,4}\d{1,5})[A-Z]$/, "$1") : key, type };
+}
+
+/** An internal part-number line printed under a part (032-0793-000, 078.10622.M039): compared only when both drawings print them. */
+export const CIRCUIT_PART_NUMBER_LINE = /^\d{3}-\d{4}-\d{3}$|^\d{2,3}\.[0-9A-Z]{4,5}\.[0-9A-Z]{2,4}$/;
+const FARAD: Record<string, number> = { P: 1, N: 1e3, U: 1e6, "µ": 1e6 };
+const decimal = (text: string) => Number(text.replace(/^D/, "0.").replace(/D/, "."));
+const precise = (value: number) => Number(value.toPrecision(6));
+const ohms = (text: string) => {
+  if (text.startsWith("D")) return decimal(text);
+  const unit = /[KM]/.exec(text)?.[0];
+  if (!unit) return Number(text);
+  const [whole, fraction] = text.split(unit);
+  return Number(`${whole}.${fraction || 0}`) * (unit === "K" ? 1e3 : 1e6);
+};
+/**
+ * A value or part label written one way (2026-11-25, the real E1.S redraw): the reference prints part codes, a redraw
+ * often prints the value. 10KR2F-2-GP and 10KOhm are both a 10 kΩ resistor, SCD1U16V2KX-1 and 0.1uF/16V a 0.1 µF / 16 V
+ * capacitor, NOPOP and NI a part not fitted, XTAL-24MHZ-289-GP and 24MHZ a 24 MHz crystal, TS3USB221RSER-GP-U1 and
+ * TS3USB221RSER the same part. Anything else comes back as written.
+ */
+export function circuitLabelKey(word: string): string {
+  const text = word.trim();
+  let match = /^(D\d+|\d+[KM]\d*|\d+)R\d[A-Z](?:-|$)/.exec(text);
+  if (match) return `R:${precise(ohms(match[1]))}`;
+  match = /^(\d+(?:\.\d+)?)([kKmM]?)(?:ohm|OHM|Ohm|Ω)$/.exec(text);
+  if (match) return `R:${precise(Number(match[1]) * ({ k: 1e3, K: 1e3, M: 1e6, m: 1e-3 }[match[2]] ?? 1))}`;
+  match = /^SC(D?\d+(?:D\d+)?)([UPN])(\d+(?:D\d+)?)V\d[A-Z]{1,2}(?:-|$)/.exec(text);
+  if (match) return `C:${precise(decimal(match[1]) * FARAD[match[2]])}/${decimal(match[3])}V`;
+  match = /^(\d+(?:\.\d+)?)([uUpPnNµ])F\/(\d+(?:\.\d+)?)V$/.exec(text);
+  if (match) return `C:${precise(Number(match[1]) * FARAD[match[2] === "µ" ? "µ" : match[2].toUpperCase()])}/${Number(match[3])}V`;
+  if (/^(NOPOP|NI|DNP|DNI)$/i.test(text)) return "DNP";
+  match = /(?:^|-)(\d+(?:\.\d+)?)MHZ(?:-|$)/i.exec(text);
+  if (match) return `F:${Number(match[1])}MHZ`;
+  if (/-GP(?:-U\d*)?$|-HF$/.test(text)) return text.toUpperCase().replace(/(?:-\d+)?-GP(?:-U\d*)?$|-HF$/, "");
+  return text;
+}
+/** A string with every value or part label written one way (see circuitLabelKey); names keep their case. */
+const textKey = (text: string) => text.split(" ").map(circuitLabelKey).join(" ");
+/** The same part number with an ordering suffix on one side (PCA6408AHKX and PCA6408AHK, 74LVC1G07GW-125 and 74LVC1G07GW). */
+const samePart = (left: string, right: string) => {
+  const a = textKey(left).toUpperCase(), b = textKey(right).toUpperCase(), [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  return /^[A-Z0-9][A-Z0-9-]{5,}$/.test(short) && /\d/.test(short) && long.startsWith(short) && long.length - short.length <= 4;
+};
+/** How a value key reads: R:4700 is 4.7KΩ, C:100000/16V is 0.1µF/16V. */
+export function describeCircuitValue(key: string): string {
+  const number = (value: number) => String(precise(value));
+  if (key === "DNP") return "不上件（NOPOP／NI）";
+  let match = /^R:(.+)$/.exec(key);
+  if (match) { const value = Number(match[1]); return value >= 1e6 ? `${number(value / 1e6)}MΩ` : value >= 1e3 ? `${number(value / 1e3)}KΩ` : value < 1 && value > 0 ? `${number(value * 1e3)}mΩ` : `${number(value)}Ω`; }
+  match = /^C:([^/]+)\/(.+)$/.exec(key);
+  if (match) { const value = Number(match[1]); return `${value >= 1e5 ? `${number(value / 1e6)}µF` : value >= 1e3 ? `${number(value / 1e3)}nF` : `${number(value)}pF`}/${match[2]}`; }
+  match = /^F:(.+)$/.exec(key);
+  return match ? match[1] : key;
+}
+const isValueKey = (key: string) => /^(R:|C:|F:)|^DNP$/.test(key);
+
+/** A part whose value label differs between the two drawings: what each side prints next to the same Ref Des. */
+export interface CircuitValueChange {
+  refdes: string; before: string[]; after: string[]; baseItem?: CircuitDiffText; workItem?: CircuitDiffText;
+  /** Fitted or not changed: the side that marks the part(s) not fitted (`refdes` may name two parts a mark lies between). */
+  fitted?: "base" | "work";
+  /**
+   * The parts are a best guess (a mark far from its part, or the other drawing places its marks so loosely that "no mark
+   * beside it" cannot be sure): named as "maybe" in the count of not-fitted marks, never a finding of its own.
+   */
+  unsure?: boolean;
+}
+/** Which Ref Des a value can belong to: a resistance to a resistor, a capacitance to a capacitor, a frequency to a crystal. */
+const VALUE_PART: Record<string, RegExp> = { R: /^(P?R|RN|RA|RP|RT|PR)\d/, C: /^(P?C|EC|CE|PC)\d/, F: /^(X|Y|OSC)\d/, D: /^[A-Z]{1,4}\d/ };
+/** How near (page fractions, box to box) a value label must be to the Ref Des it belongs to: labels sit right beside their part. */
+const VALUE_REACH = 0.015;
+/**
+ * The values of the parts on two sheets, part by part (2026-11-25, the real E1.S pair: four resistors 2.21KΩ → 100KΩ,
+ * two capacitors 25 V → 16 V, four pull-ups 9.1K → 4.7K, whatever the sheet or block was redrawn). Each value label
+ * (written one way, see circuitLabelKey) belongs to the nearest Ref Des of a matching kind on the same sheet; a part that
+ * has values on both sides and different ones is a change. A part with no value found on one side is left out: a label
+ * placed far away is not proof that the value is missing.
+ */
+export function diffCircuitPartValues(beforeItems: readonly CircuitDiffText[], afterItems: readonly CircuitDiffText[]): CircuitValueChange[] {
+  const read = (items: readonly CircuitDiffText[]) => {
+    const parts: Array<{ refdes: string; item: CircuitDiffText; at: { x: number; y: number } }> = [], values: Array<{ key: string; item: CircuitDiffText; at: { x: number; y: number } }> = [];
+    for (const item of items) {
+      const at = center(item);
+      for (const word of collapse(item.str).split(" ")) {
+        const name = circuitNameKey(word);
+        if (!name) continue;
+        if (name.type === "refdes") parts.push({ refdes: name.key, item, at });
+        else if (isValueKey(name.key)) values.push({ key: name.key, item, at });
+      }
+    }
+    // A label and a part belong together only when each is the other's nearest of its kind (a value and a not-fitted mark
+    // are separate kinds): a label between two parts is left out rather than given to the wrong one (2026-11-25: C4602 got
+    // its neighbour's 100nF on the real E1.S pair).
+    const slot = (key: string) => key === "DNP" ? "DNP" : "value";
+    // Box to box: a value printed as a long vertical string under its part is near it at one end, not at its middle.
+    const gap = (a: CircuitDiffText, b: CircuitDiffText) => Math.hypot(Math.max(0, b.x - (a.x + a.width), a.x - (b.x + b.width)), Math.max(0, b.y - (a.y + a.height), a.y - (b.y + b.height)));
+    // How far this drawing prints labels from their parts, measured on the sheet (2026-11-25: the reference prints them
+    // 0.8 % away, the redraw 3–5 % away on some sheets): twice and a half the usual gap, within 1.5–6 % of the page.
+    const usual = values.map(value => { const fits = VALUE_PART[value.key[0]] ?? VALUE_PART.D; return Math.min(...parts.filter(part => fits.test(part.refdes)).map(part => gap(part.item, value.item))); }).filter(distance => distance < 0.08).sort((left, right) => left - right);
+    const reach = Math.min(0.06, Math.max(VALUE_REACH, (usual[Math.floor(usual.length / 2)] ?? 0.006) * 2.5));
+    // Not-fitted marks have their own place (the redraw prints NI under the value, 4–5 % from the part): measured apart.
+    const markGaps = values.filter(value => value.key === "DNP").map(value => Math.min(...parts.map(part => gap(part.item, value.item)))).filter(distance => distance < 0.08).sort((left, right) => left - right);
+    const markReach = Math.min(0.07, Math.max(VALUE_REACH, (markGaps[Math.floor(markGaps.length / 2)] ?? 0.006) * 1.6));
+    // Clearly nearest: a label about as near to a second part (two resistors stacked, one NOPOP between them) is left out.
+    const nearestPart = values.map(value => {
+      const fits = VALUE_PART[value.key[0]] ?? VALUE_PART.D;
+      let best = -1, distance = Infinity, second = Infinity;
+      parts.forEach((part, index) => { if (!fits.test(part.refdes)) return; const d = gap(part.item, value.item); if (d < distance) { second = distance; distance = d; best = index; } else if (d < second) second = d; });
+      return distance < reach && second >= Math.max(distance * 1.5, distance + 0.003) ? best : -1;
+    });
+    const map = new Map<string, { values: Map<string, string>; item: CircuitDiffText; part: CircuitDiffText; markNear: boolean }>();
+    parts.forEach((part, p) => {
+      for (const kind of ["value", "DNP"]) {
+        let best = -1, distance = Infinity;
+        values.forEach((value, v) => { if (slot(value.key) !== kind || nearestPart[v] !== p) return; const d = gap(part.item, value.item); if (d < distance) { distance = d; best = v; } });
+        if (best < 0) continue;
+        // Mutual: no other label of this kind is nearer to the part (one that chose another part included).
+        const closer = values.some((value, v) => v !== best && slot(value.key) === kind && (VALUE_PART[value.key[0]] ?? VALUE_PART.D).test(part.refdes) && gap(part.item, value.item) < distance);
+        if (closer) continue;
+        const entry = map.get(part.refdes) ?? { values: new Map<string, string>(), item: values[best].item, part: part.item, markNear: false };
+        entry.values.set(kind, values[best].key); map.set(part.refdes, entry);
+      }
+      // Any not-fitted mark beside the part, whoever it was given to: without one, the part is certainly fitted on this side.
+      const entry = map.get(part.refdes);
+      if (entry) entry.markNear = values.some(value => value.key === "DNP" && gap(part.item, value.item) < markReach);
+    });
+    // Every not-fitted mark with the parts it lies beside: the nearest, and any about as near (two resistors stacked).
+    const marks = values.map((mark, index) => ({ mark, index })).filter(({ mark }) => mark.key === "DNP").map(({ mark }) => {
+      // A mark printed right under a value belongs to that value's part (the redraw prints NI below the value).
+      let owner = -1, closest = 0.012;
+      values.forEach((value, v) => { if (value.key === "DNP" || nearestPart[v] < 0) return; const d = gap(value.item, mark.item); if (d < closest) { closest = d; owner = nearestPart[v]; } });
+      if (owner >= 0) return { item: mark.item, candidates: [parts[owner].refdes], sure: true };
+      const near = parts.map(part => ({ refdes: part.refdes, d: gap(part.item, mark.item) })).filter(entry => entry.d < markReach).sort((left, right) => left.d - right.d);
+      const nearest = near[0]?.d ?? Infinity;
+      return { item: mark.item, candidates: [...new Set(near.filter(entry => entry.d < Math.max(nearest * 1.5, nearest + 0.003)).map(entry => entry.refdes))].slice(0, 3), sure: nearest <= VALUE_REACH };
+    }).filter(mark => mark.candidates.length);
+    const named = new Map(parts.map(part => [part.refdes, part.item]));
+    // Marked: a mark that may belong to the part (an unclear one counts for each part it lies between), or one right beside it.
+    const markedNear = (refdes: string) => { const item = named.get(refdes); return Boolean(item) && (marks.some(mark => mark.candidates.includes(refdes)) || values.some(value => value.key === "DNP" && gap(item!, value.item) < VALUE_REACH)); };
+    // Every mark on this side surely belongs to its part(s): only then is "no mark beside that part" sure here.
+    return { map, marks, named, markedNear, marking: values.some(value => value.key === "DNP"), certain: marks.every(mark => mark.sure), markCount: values.filter(value => value.key === "DNP").length };
+  };
+  const before = read(beforeItems), after = read(afterItems), changes: CircuitValueChange[] = [];
+  // Values where both sides print one for the same part.
+  for (const [refdes, old] of before.map) {
+    const now = after.map.get(refdes);
+    const oldValue = old.values.get("value"), newValue = now?.values.get("value");
+    if (now && oldValue && newValue && oldValue !== newValue) changes.push({ refdes, before: [oldValue], after: [newValue], baseItem: old.item, workItem: now.item });
+  }
+  // Fitted or not: a mark beside a part (or between two) on one side, and none beside the same parts on the other, which
+  // does mark parts not fitted elsewhere on the sheet (2026-11-25, the real E1.S pair: beads and a choke NOPOP in the
+  // reference, printed 120Ω / 90Ω with no NI in the redraw; a NOPOP between two stacked resistors). An NI about as near to
+  // the transistor next door is still a mark beside the part, so that part did not change.
+  for (const [side, own, other] of [["base", before, after], ["work", after, before]] as const) {
+    if (!other.marking) continue;
+    const groups = new Map<string, { parts: string[]; marks: number; item: CircuitDiffText; sure: boolean }>();
+    for (const mark of own.marks) {
+      if (!mark.candidates.every(refdes => other.named.has(refdes)) || mark.candidates.some(refdes => other.markedNear(refdes))) continue;
+      const parts = [...mark.candidates].sort((left, right) => left.localeCompare(right, undefined, { numeric: true })), key = parts.join("|");
+      const group = groups.get(key) ?? { parts, marks: 0, item: mark.item, sure: true };
+      group.marks++; group.sure &&= mark.sure; groups.set(key, group);
+    }
+    for (const group of groups.values()) {
+      // As many marks as parts between them: every one of them is marked (R1418 and R1419, each with its NOPOP).
+      const refdes = group.marks >= group.parts.length ? group.parts.join("、") : group.parts.join(" 或 ");
+      const count = Math.min(group.marks, group.parts.length);
+      const unsure = !group.sure || !other.certain;
+      changes.push({ refdes, before: side === "base" ? Array(count).fill("DNP") : [], after: side === "work" ? Array(count).fill("DNP") : [], fitted: side, ...(unsure ? { unsure: true } : {}),
+        ...(side === "base" ? { baseItem: group.item, workItem: other.named.get(group.parts[0]) } : { workItem: group.item, baseItem: other.named.get(group.parts[0]) }) });
+    }
+  }
+  // The parts named for sure must add up to how many more marks one side prints; otherwise a mark was given to the wrong
+  // part (the redraw's NI for R3001 was nearer a neighbour), and every fitted change is only a guess.
+  const named = (side: "base" | "work") => changes.filter(change => change.fitted === side && !change.unsure).reduce((sum, change) => sum + (side === "base" ? change.before.length : change.after.length), 0);
+  if (named("base") - named("work") !== before.markCount - after.markCount) for (const change of changes) if (change.fitted) change.unsure = true;
+  return changes.sort((left, right) => left.refdes.localeCompare(right.refdes, undefined, { numeric: true }));
+}
+/**
+ * The values no part-by-part change explains (see diffCircuitPartValues): a clean swap of one value for another, as many
+ * parts each way (four 9.1K for four 4.7K, one of them too far from its Ref Des to pair), is a change of those parts and
+ * counted; anything else (a part code not read as a value, labels missing on one side) is listed for reference.
+ */
+function valueCountFindings(diff: CircuitLocalPageDiff): Array<CircuitLocalFinding & { rank: number; own: boolean }> {
+  const left = new Map<string, number>();
+  const add = (key: string, by: number) => left.set(key, (left.get(key) ?? 0) + by);
+  for (const change of diff.valueCounts ?? []) add(change.token, change.side === "base" ? change.count : -change.count);
+  // Each part-by-part change already says one part each way (a guess does not: it only names parts below).
+  for (const change of diff.valueChanges ?? []) { if (change.unsure) continue; for (const key of change.before) add(key, -1); for (const key of change.after) add(key, 1); }
+  const guesses = (side: "base" | "work") => [...new Set((diff.valueChanges ?? []).filter(change => change.unsure && change.fitted === side).map(change => change.refdes))];
+  const kinds: Record<string, string> = { R: "電阻", C: "電容", F: "晶振", D: "不上件標示" };
+  const findings: Array<CircuitLocalFinding & { rank: number; own: boolean }> = [];
+  for (const [kind, words] of Object.entries(kinds)) {
+    const entries = [...left].filter(([key, count]) => key[0] === kind && count !== 0);
+    if (!entries.length) continue;
+    const base = entries.filter(([, count]) => count > 0), work = entries.filter(([, count]) => count < 0);
+    const item = (key: string, side: "base" | "work") => (diff.valueCounts ?? []).find(change => change.token === key && change.side === side)?.item;
+    if (kind === "D") {
+      // Not-fitted marks: one per part, so how many more one side prints is how many parts differ, sure even when which
+      // ones is not (2026-11-25, the real E1.S pair: every page where the counts differed had that many parts changed).
+      const total = entries.reduce((sum, [, count]) => sum + count, 0);
+      if (!total) continue;
+      const side = total > 0 ? "base" : "work", count = Math.abs(total), maybe = guesses(side);
+      findings.push({ rank: 0, own: true, category: "label-name", priority: "high", certainty: "unclear",
+        title: clip(`${count} 顆零件的上件狀態不一樣：${side === "base" ? "基準版" : "比對版"}多 ${count} 個不上件標示（NOPOP／NI）${maybe.length ? `，可能是 ${maybe.slice(0, 6).join("、")}` : ""}`, 280), location: "這一頁的零件標示",
+        officialEvidence: side === "base" ? `基準版這一頁多 ${count} 個不上件標示` : "基準版這一頁的不上件標示比較少", workingEvidence: side === "work" ? `比對版這一頁多 ${count} 個不上件標示` : "比對版這一頁的不上件標示比較少",
+        suggestion: `${side === "base" ? "基準版" : "比對版"}這一頁多標了 ${count} 個不上件（NOPOP／NI），另一版對應的零件沒有標，裝不裝會不一樣。${maybe.length ? `最可能是 ${maybe.slice(0, 6).join("、")}，` : ""}請在圖上核對。`, officialBox: null, workingBox: null });
+      continue;
+    }
+    if (base.length === 1 && work.length === 1 && base[0][1] === -work[0][1]) {
+      const count = base[0][1], from = describeCircuitValue(base[0][0]), to = describeCircuitValue(work[0][0]);
+      findings.push({ rank: 0, own: true, category: "label-name", priority: "high", certainty: "suspected",
+        title: clip(`${count} 顆${words}的數值不一樣：${from} → ${to}（標示離零件編號太遠，沒有逐顆對到）`, 280), location: "這一頁的零件標示",
+        officialEvidence: `基準版這一頁多 ${count} 個 ${from}`, workingEvidence: `比對版這一頁多 ${count} 個 ${to}`,
+        suggestion: `兩版這一頁剛好有 ${count} 個 ${from} 換成 ${to}，但標示離零件編號太遠，沒辦法確定是哪幾顆。請在圖上找 ${to} 的零件核對。`, officialBox: textBox(item(base[0][0], "base")), workingBox: textBox(item(work[0][0], "work")) });
+      continue;
+    }
+    const side = (list: typeof entries) => list.map(([key, count]) => `${describeCircuitValue(key)} 多 ${Math.abs(count)} 個`).join("、");
+    findings.push({ rank: 7, own: false, category: "label-name", priority: "low", certainty: "unclear",
+      title: clip(`${CIRCUIT_FOR_REFERENCE}${words}的標示數量不一樣（沒有對到同一個零件編號）：${base.length ? `基準版 ${side(base)}` : "基準版沒有多的"}；${work.length ? `比對版 ${side(work)}` : "比對版沒有多的"}`, 280), location: "這一頁的零件標示",
+      officialEvidence: base.length ? `基準版這一頁 ${side(base)}` : "基準版沒有多出來的數值", workingEvidence: work.length ? `比對版這一頁 ${side(work)}` : "比對版沒有多出來的數值",
+      suggestion: "這些數值在兩版的數量不一樣，但沒有對到同一個零件編號（可能是料號寫法沒換算成數值，例如磁珠、共模電感，或標示離零件太遠）。逐顆比對得到的差異已經另外列出。", officialBox: null, workingBox: null });
+  }
+  return findings;
+}
+/** The findings of value changes: one per part, most telling (a value, not only fitted or not) first. */
+function valueFindings(changes: readonly CircuitValueChange[]): Array<CircuitLocalFinding & { rank: number }> {
+  const words = (keys: readonly string[]) => keys.map(describeCircuitValue).join("、");
+  return changes.filter(change => !change.unsure).map(change => ({ rank: 0, category: "label-name" as const, priority: "high" as const, certainty: "suspected" as const,
+    title: clip(change.fitted ? `${change.refdes} 的上件狀態不一樣：${change.fitted === "base" ? "基準版標不上件（NOPOP／NI），比對版旁邊沒有標" : "比對版標不上件（NOPOP／NI），基準版旁邊沒有標"}` : `${change.refdes} 的數值不一樣：${words(change.before)} → ${words(change.after)}`, 280),
+    location: change.workItem ? describeCircuitDiffPlace(change.workItem) : change.baseItem ? describeCircuitDiffPlace(change.baseItem) : "這一頁",
+    officialEvidence: change.fitted ? (change.fitted === "base" ? `${change.refdes} 旁邊標了不上件` : `${change.refdes} 旁邊沒有不上件的標示`) : `${change.refdes}：${words(change.before)}（${change.baseItem?.str ?? ""}）`,
+    workingEvidence: change.fitted ? (change.fitted === "work" ? `${change.refdes} 旁邊標了不上件` : `${change.refdes} 旁邊沒有不上件的標示`) : `${change.refdes}：${words(change.after)}（${change.workItem?.str ?? ""}）`,
+    suggestion: change.fitted ? "一邊標了這顆零件不上件，另一邊同樣的零件旁邊沒有標，裝不裝會不一樣。請確認哪一版才對。" : "同一顆零件兩版標的數值不一樣（料號和數值兩種寫法已經換算成同一種再比）。請確認是故意改的值，還是標錯了。",
+    officialBox: textBox(change.baseItem), workingBox: textBox(change.workItem) }));
 }
 
 /**
@@ -222,6 +473,12 @@ export function diffCircuitPageContents(beforeItems: readonly CircuitDiffText[],
   const changes: CircuitContentChange[] = [];
   for (const token of new Set([...b.keys(), ...a.keys()])) {
     const olds = b.get(token), news = a.get(token);
+    if (isValueKey(token)) {
+      // A value is on one label per part: how many parts carry it is what counts (four 9.1K resistors that became 4.7K).
+      const difference = (olds?.length ?? 0) - (news?.length ?? 0);
+      if (difference) changes.push({ side: difference > 0 ? "base" : "work", token, type: "other", count: Math.abs(difference), value: true, ...where((difference > 0 ? olds : news)!) });
+      continue;
+    }
     if (olds && news) {
       // Both have it, written differently (U4401 and U4401A, OE3# and ^OE3#): the same name, listed once for reference.
       const left = spellings(olds), right = spellings(news);
@@ -547,8 +804,9 @@ function onAnotherSheet(side: "base" | "work", token: string, pages: readonly nu
 function summarizeRedrawn(diff: CircuitLocalPageDiff, limit: number, cross?: CircuitContentIndex | null): CircuitLocalSummary {
   const counts = { changed: 0, removed: 0, added: 0, moved: 0, graphic: 0 };
   const findings: Array<CircuitLocalFinding & { rank: number; own: boolean }> = [];
-  const others: CircuitContentChange[] = [], frames: CircuitContentChange[] = [], aliases: CircuitContentChange[] = [];
+  const others: CircuitContentChange[] = [], frames: CircuitContentChange[] = [], aliases: CircuitContentChange[] = [], values: CircuitContentChange[] = [];
   for (const change of diff.contentChanges ?? []) {
+    if (change.value) continue;
     if (change.frame) { frames.push(change); continue; }
     if (change.alias) { aliases.push(change); continue; }
     if (change.type === "other") { others.push(change); continue; }
@@ -577,6 +835,9 @@ function summarizeRedrawn(diff: CircuitLocalPageDiff, limit: number, cross?: Cir
       workingEvidence: clip(others.filter(change => change.side === "work").map(change => change.token).join("、") || "—", 1900),
       suggestion: `重畫的時候常會改寫數值、腳位名稱或備註，例如：${sample}。需要時再一個一個看。`, officialBox: null, workingBox: null });
   }
+  // Values part by part first (R3410: 2.21KΩ → 100KΩ); what no part explains stays as a count per kind of value.
+  for (const finding of valueFindings(diff.valueChanges ?? [])) { counts.changed++; findings.push({ ...finding, own: true }); }
+  for (const finding of valueCountFindings(diff)) { if (finding.own) counts.changed++; findings.push(finding); }
   if (aliases.length) {
     // The same part or name written another way by the other drawing or its library: listed so it can be checked, never
     // counted (2026-11-24: U4401 against U4401A / U4401B, GND against GND_1…GND_7, OE3# against ^OE3# on the real E1.S).
@@ -693,13 +954,30 @@ export function summarizeCircuitLocalDiff(diff: CircuitLocalPageDiff, common?: C
   const titled = (change: CircuitTextChange) => (!change.before || inside(zones.base, center(change.before))) && (!change.after || inside(zones.work, center(change.after)));
   const titleChanges = diff.textChanges.filter(titled);
   const titleRegions = diff.regions.filter(region => { const middle = { x: region.box.x + region.box.width / 2, y: region.box.y + region.box.height / 2 }; return (region.base && inside(zones.base, middle)) || (region.work && inside(zones.work, middle)); });
-  const textChanges = diff.textChanges.filter(change => !titleChanges.includes(change)), regions = diff.regions.filter(region => !titleRegions.includes(region));
+  // Coloured marks someone drew and a frame the content moved against are not the circuit (2026-11-25, the real E1.S pair).
+  const marks = diff.regions.filter(region => !titleRegions.includes(region) && region.kind === "annotation");
+  const frameRegions = diff.regions.filter(region => !titleRegions.includes(region) && region.kind === "frame");
+  const nudged = diff.regions.filter(region => !titleRegions.includes(region) && region.kind === "nudged");
+  const textChanges = diff.textChanges.filter(change => !titleChanges.includes(change)), regions = diff.regions.filter(region => !titleRegions.includes(region) && !region.kind);
   const counts = { changed: 0, removed: 0, added: 0, moved: 0, graphic: regions.length };
+  // A value label rewritten, removed or added where a part's value is compared part by part is said once, by that part.
+  const valueText = (item?: CircuitDiffText) => Boolean(item) && collapse(item!.str).split(" ").every(word => isValueKey(circuitLabelKey(word).toUpperCase()) || CIRCUIT_PART_NUMBER_LINE.test(word));
+  const valueKeys = (item?: CircuitDiffText) => item ? collapse(item.str).split(" ").map(word => circuitLabelKey(word).toUpperCase()).filter(isValueKey) : [];
+  const explainedText = (change: CircuitTextChange) => (valueText(change.before) || valueText(change.after)) && (diff.valueChanges ?? []).some(value => valueKeys(change.before).some(key => value.before.includes(key)) || valueKeys(change.after).some(key => value.after.includes(key)));
   // Blocks moved or redrawn as a whole: one finding each, compared by name (summarizeArea), counted like any text change.
-  const grouping = findCircuitChangeAreas(textChanges, regions, change => isCircuitCommonChange(change, common));
+  const grouping = findCircuitChangeAreas(textChanges.filter(change => change.kind === "moved" || !explainedText(change)), regions, change => isCircuitCommonChange(change, common));
   for (const change of grouping.areas.flatMap(area => area.changes)) counts[change.kind]++;
   const order: Record<CircuitTextChangeKind, number> = { changed: 0, removed: 1, added: 2, moved: 4 };
-  const findings: Array<CircuitLocalFinding & { rank: number; shared: boolean }> = grouping.rest.map(change => {
+  // A string that only moved is the same text in another place: not a change of the circuit by itself (a wire that moved
+  // with it is a drawing difference of its own). One reference line, never counted (2026-11-25: grid letters, pin numbers
+  // and a cover title listed one by one on the real E1.S pair).
+  const movedOnly = grouping.rest.filter(change => change.kind === "moved" && !isCircuitCommonChange(change, common));
+  // A pin name shown on one side only (IO, GND, K, A on a diode another library draws with its pin names): part of a symbol
+  // drawn another way, whose lines are listed as a drawing difference; never a difference of its own (2026-11-25).
+  const PIN_WORD = /^(IO\d*|GND|NC|VCC|VDD|VSS|K|A|G|S|D|B|C|E|IN|OUT|EN|PG|FB|SW|LX|BST|VIN|VOUT|[1-9]\d?)$/;
+  const pinNames = grouping.rest.filter(change => (change.kind === "added" || change.kind === "removed") && !isCircuitCommonChange(change, common) && PIN_WORD.test(collapse((change.after ?? change.before)!.str)));
+  movedOnly.push(...pinNames);
+  const findings: Array<CircuitLocalFinding & { rank: number; shared: boolean }> = grouping.rest.filter(change => !movedOnly.includes(change)).map(change => {
     const shared = isCircuitCommonChange(change, common);
     if (!shared) counts[change.kind]++;
     const text = (change.after ?? change.before)!.str, category = classifyCircuitDiffText(text);
@@ -717,10 +995,54 @@ export function summarizeCircuitLocalDiff(diff: CircuitLocalPageDiff, common?: C
     return { rank, shared, category, priority: "low" as const, certainty: shared ? "unclear" as const : "suspected" as const, title: title(`換了位置：${change.after!.str}`), location: place,
       officialEvidence: `${clip(change.before!.str, 1800)}（${describeCircuitDiffPlace(change.before!)}）`, workingEvidence: `${clip(change.after!.str, 1800)}（${place}）`, suggestion: shared ? COMMON_NOTE : "字一樣，只是換了位置（通常是圖重新排過）。看看旁邊的線有沒有一起接好。", officialBox: textBox(change.before), workingBox: textBox(change.after) };
   });
-  for (const area of grouping.areas) findings.push(...summarizeArea(area, diff, cross).map(finding => ({ ...finding, shared: false })));
+  for (const finding of valueFindings(diff.valueChanges ?? [])) { counts.changed++; findings.push({ ...finding, shared: false }); }
+  for (const { own, ...finding } of valueCountFindings(diff)) { if (own) counts.changed++; findings.push({ ...finding, shared: !own }); }
+  if (movedOnly.length) {
+    counts.moved += movedOnly.length;
+    const sample = movedOnly.slice(0, 12).map(change => (change.after ?? change.before)!.str);
+    findings.push({ rank: 6, shared: true, category: "label-name", priority: "low", certainty: "unclear", location: "整頁",
+      title: clip(`${CIRCUIT_FOR_REFERENCE}${movedOnly.length} 段字一樣，只是換了位置或是符號上的腳位名稱（${sample.slice(0, 6).join("、")}${movedOnly.length > 6 ? "…" : ""}）`, 280),
+      officialEvidence: clip(movedOnly.filter(change => change.before).map(change => `${change.before!.str}（${describeCircuitDiffPlace(change.before!)}）`).join("、") || "—", 1900),
+      workingEvidence: clip(movedOnly.filter(change => change.after).map(change => `${change.after!.str}（${describeCircuitDiffPlace(change.after!)}）`).join("、") || "—", 1900),
+      suggestion: "字的內容一樣，只是放的位置不同（圖重新排過、圖框位置不同）。這不是線路改了；線如果也畫得不一樣，會另外列出。", officialBox: null, workingBox: null });
+  }
+  // A block moved or redrawn as a whole is said once for reference; what it changed (a name only on one side) is counted on
+  // its own line (2026-11-25: consistent with redrawn sheets, where layout is never a difference by itself).
+  for (const area of grouping.areas) findings.push(...summarizeArea(area, diff, cross).map(finding => finding.rank === 3 ? { ...finding, title: clip(`${CIRCUIT_FOR_REFERENCE}${finding.title}`, 280), priority: "low" as const, shared: true } : { ...finding, shared: finding.rank >= 6 }));
+  if (marks.length) {
+    const box = boundsOf(marks.map(region => region.box));
+    findings.push({ rank: 6, shared: true, category: "connectivity", priority: "low", certainty: "unclear", location: box ? describeCircuitDiffPlace(box) : "這一頁",
+      title: clip(`${CIRCUIT_NOT_AN_ERROR}${marks.some(region => region.work) ? "比對版" : "基準版"}多了彩色的框線或註記 ${marks.length} 處（不是線路）`, 280),
+      officialEvidence: marks.some(region => region.base) ? "基準版這裡有彩色的框線或註記" : "基準版這裡沒有", workingEvidence: marks.some(region => region.work) ? "比對版這裡有彩色的框線或註記（例如虛線框）" : "比對版這裡沒有",
+      suggestion: "不一樣的只有彩色的線（通常是有人畫上去的虛線框或標記），電路本身的線都一樣。", officialBox: box && pad(box, 0.004), workingBox: box && pad(box, 0.004) });
+  }
+  if (nudged.length) {
+    const box = boundsOf(nudged.map(region => region.box));
+    findings.push({ rank: 6, shared: true, category: "connectivity", priority: "low", certainty: "unclear", location: box ? describeCircuitDiffPlace(box) : "這一頁",
+      title: clip(`${CIRCUIT_FOR_REFERENCE}${nudged.length} 處符號或線只差一點點位置，形狀一樣（不到一支腳的距離）`, 280),
+      officialEvidence: "基準版的位置", workingEvidence: "比對版同樣的符號或線，往旁邊偏了一點點",
+      suggestion: "同樣的符號或線只偏了不到 1.5 點（一支腳的距離是 7.2 點），接不到別的腳，通常是圖庫符號的位置不同。需要時放大看一眼。", officialBox: box && pad(box, 0.004), workingBox: box && pad(box, 0.004) });
+  }
+  if (frameRegions.length) {
+    findings.push({ rank: 6, shared: true, category: "connectivity", priority: "low", certainty: "unclear", location: "圖框",
+      title: clip(`${CIRCUIT_NOT_AN_ERROR}整頁內容和圖框的相對位置不一樣（圖框沒動、內容整片平移，${frameRegions.length} 處框線）`, 280),
+      officialEvidence: "基準版的圖框位置", workingEvidence: "比對版的內容整片移了一點，圖框沒有跟著移",
+      suggestion: "整頁的線路一起平移了一點，只有圖框（外框、格線字）留在原地，所以框線看起來不一樣。電路內容已經對齊比過。", officialBox: null, workingBox: null });
+  }
+  // Drawing differences side by side are one place to look at, said once with how many spots it has.
+  const clusters: Array<{ box: CircuitCropRect; regions: CircuitGraphicRegion[] }> = [];
   for (const region of grouping.regions) {
+    const grown = { x: region.box.x - 0.03, y: region.box.y - 0.03, width: region.box.width + 0.06, height: region.box.height + 0.06 };
+    const touching = clusters.filter(cluster => cluster.box.x <= grown.x + grown.width && grown.x <= cluster.box.x + cluster.box.width && cluster.box.y <= grown.y + grown.height && grown.y <= cluster.box.y + cluster.box.height);
+    const merged = { box: boundsOf([region.box, ...touching.map(cluster => cluster.box)])!, regions: [region, ...touching.flatMap(cluster => cluster.regions)] };
+    for (const cluster of touching) clusters.splice(clusters.indexOf(cluster), 1);
+    clusters.push(merged);
+  }
+  counts.graphic = clusters.length;
+  for (const { box: bounds, regions: members } of clusters) {
+    const region = { box: bounds, base: members.some(member => member.base), work: members.some(member => member.work), faint: members.every(member => member.faint) };
     const box = pad(region.box, 0.004);
-    findings.push({ rank: 3, shared: false, category: "connectivity", priority: "medium", certainty: "unclear", title: region.faint ? "這裡的線有一點點不一樣（接點或線的長短）" : "這裡的線或符號不一樣", location: describeCircuitDiffPlace(region.box),
+    findings.push({ rank: 3, shared: false, category: "connectivity", priority: "medium", certainty: "unclear", title: region.faint ? "這裡的線有一點點不一樣（接點或線的長短）" : members.length > 1 ? `這一塊的線或符號不一樣（${members.length} 處）` : "這裡的線或符號不一樣", location: describeCircuitDiffPlace(region.box),
       officialEvidence: region.base ? "基準版這裡多了一些線或圖形（看框起來的地方）" : "基準版這裡沒有這些線",
       workingEvidence: region.work ? "比對版這裡多了一些線或圖形（看框起來的地方）" : "比對版這裡沒有這些線",
       suggestion: region.faint ? "兩版這裡只差一點點，可能是多了或少了一個接點，或線長了、短了一點。請放大兩版看清楚。" : "字沒變，但線、接點或符號畫得不一樣。請把兩版放大，看線是不是接到一樣的地方。", officialBox: box, workingBox: box });

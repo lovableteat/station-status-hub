@@ -1,7 +1,8 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{createRequire}=require('node:module');
 const {chromium}=createRequire(path.resolve(process.env.AUDIT_QA_DIR||'../qa-tools','package.json'))('playwright');
 const evidence=path.resolve(process.env.CIRCUIT_AI_EVIDENCE_DIR||'../circuit-pdf-ai-review-evidence');
-const findingTitle='CON2A A1 差分 P/N 名稱不同';
+// 2026-11-25: what the model adds is its reading of the picture, listed for reference with this prefix and never counted.
+const findingTitle='參考：AI 補充：CON2A A1 差分 P/N 名稱不同';
 // 本機比對 lists the renamed net first (F1: 字改了：PCIE_RX_P → PCIE_RX_N); the model's own findings follow as F2…F4.
 const findingMarker=(region, side)=>region.getByRole('button',{name:`${side} F2：${findingTitle}`,exact:true});
 
@@ -11,7 +12,7 @@ async function verifyAnnotations(dialog,page,width) {
   const working=findingMarker(region,'比對版');
   await baseline.waitFor();
   await working.waitFor();
-  const unclear=region.getByRole('button',{name:'比對版 F4：A1 接點需確認',exact:true});
+  const unclear=region.getByRole('button',{name:'比對版 F4：參考：AI 補充：A1 接點需確認',exact:true});
   await unclear.waitFor();
   assert.equal(await baseline.getAttribute('data-certainty'),'suspected');
   assert.equal(await unclear.getAttribute('data-certainty'),'unclear');
@@ -30,8 +31,9 @@ async function verifyAnnotations(dialog,page,width) {
   // 2026-11-24 (「標註的方式、範圍、顏色不夠清楚」): the whole area is outlined just outside its edge in magenta, a colour
   // schematics do not use; 證據不足 is the same outline dashed and untinted, so what is under it stays readable.
   const outline=node=>{const mark=getComputedStyle(node,'::before'),box=node.getBoundingClientRect(),around=parseFloat(mark.width);return {style:mark.borderTopStyle,colour:mark.borderTopColor,tinted:mark.backgroundColor!=='rgba(0, 0, 0, 0)',outside:around>box.width};};
-  assert.deepEqual(await unclear.evaluate(outline),{style:'dashed',colour:'rgb(232, 23, 138)',tinted:false,outside:true});
-  assert.deepEqual(await baseline.evaluate(outline),{style:'solid',colour:'rgb(232, 23, 138)',tinted:true,outside:true});
+  // 2026-11-25: what the model adds is for reference (never counted), so it is outlined in the grey of reference marks.
+  assert.deepEqual(await unclear.evaluate(outline),{style:'dashed',colour:'rgb(100, 116, 139)',tinted:false,outside:true});
+  assert.deepEqual(await baseline.evaluate(outline),{style:'dashed',colour:'rgb(100, 116, 139)',tinted:false,outside:true});
   assert.equal(await region.getByRole('button',{name:/^(基準版|比對版) F3：/}).count(),0);
   assert.equal(await region.getByRole('button',{name:/^(基準版|比對版) F1：字改了：PCIE_RX_P → PCIE_RX_N$/}).count(),2,'the difference found without AI is boxed on both drawings');
   assert.equal(await region.getByText('位置未能確認',{exact:true}).count(),2);

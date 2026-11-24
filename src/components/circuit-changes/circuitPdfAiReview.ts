@@ -1,7 +1,7 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { SpecFillModel } from "../material-requests/materialSpecFillService";
 import { CIRCUIT_PDF_MAX_PAGES, type CircuitCropRect } from "./circuitPdf";
-import { circuitDiffWindows, describeCircuitDiffPlace, isCircuitPageIdentical, isCircuitReferenceFinding, summarizeCircuitLocalDiff, type CircuitCommonChanges, type CircuitContentIndex, type CircuitLocalPageDiff, type CircuitLocalSummary } from "./circuitPdfLocalDiff";
+import { CIRCUIT_FOR_REFERENCE, circuitDiffWindows, describeCircuitDiffPlace, isCircuitPageIdentical, isCircuitReferenceFinding, summarizeCircuitLocalDiff, type CircuitCommonChanges, type CircuitContentIndex, type CircuitLocalPageDiff, type CircuitLocalSummary } from "./circuitPdfLocalDiff";
 
 export interface CircuitPdfReviewPage { id: string; name: string; page: number; pdf: PDFDocumentProxy }
 export interface CircuitPdfAiReviewTarget { officialVersionId: string; workingVersionId: string; officialPage: number; workingPage: number }
@@ -172,8 +172,11 @@ export const isCircuitReportIdentical = (report: CircuitPdfAiReviewReport) => re
  * Raise it when 本機比對 lists a page differently. 2: a moved or redrawn block of a sheet is one finding; 3: plain words and
  * the title block as one line that is not an error (both 2026-11-24); 4: a redrawn sheet compares names written one way (U4401A is U4401,
  * GND_1 is GND, ^OE3# is OE3#, pin names are never parts or nets) and ignores how often a name is drawn (2026-11-25).
+ * 5: values part by part (R3410: 2.21KΩ → 100KΩ) and not-fitted marks by count, every drawing difference drawn again sharp
+ * (specks gone, boxes someone drew and a frame the content moved against not counted, a symbol 1–2 px off for reference),
+ * text that only moved and AI additions for reference (2026-11-25, checked against the real E1.S pair page by page).
  */
-export const CIRCUIT_LOCAL_METHOD = 4;
+export const CIRCUIT_LOCAL_METHOD = 5;
 /**
  * A page 本機比對 listed with an older method and nobody has judged yet: comparing it again costs nothing (no AI) and lists
  * it the current way, so a batch does it again instead of keeping it (2026-11-24: the old method put 40 marks on one
@@ -360,7 +363,7 @@ export async function runCircuitPdfAiReview({ official, working, model, userName
     { role: "user", text: `基準版：${official.name}，PDF第${official.page}頁。下列文字位置以圖面左上角為原點，比例 0 至 1，代表文字基線起點${areas.windows.length ? "；只列出有差異區域附近的文字" : ""}。\n${before.texts || "沒有可選取文字，請清楚標示影像判讀限制。"}`, images: [before.image] },
     { role: "user", text: `比對版：${working.name}，PDF第${working.page}頁。\n${after.texts || "沒有可選取文字，請清楚標示影像判讀限制。"}`, images: [after.image] }];
   if (known?.findings.length) {
-    messages.push({ role: "user", text: `程式已把兩版這一頁的文字逐一比對、圖形疊合比對，下面是已經確定的差異。這些會原樣列入報告，不要重複列出，也不要改寫它們。你的工作是：一、在 summary 用白話說明這些差異對電路可能的意義；二、只補充程式沒有列到、但在圖上看得到的差異或疑點（例如線接到另一支腳、接點消失）；三、三個 checks 照樣回覆。\n${known.findings.map((finding, index) => `${index + 1}. ${finding.title}｜${finding.location}`).join("\n")}${known.omitted ? `\n另有 ${known.omitted} 處差異沒有列在這裡。` : ""}${areas.dropped ? `\n放大圖只包含差異最集中的 ${areas.windows.length} 個區域。` : ""}` });
+    messages.push({ role: "user", text: `程式已把兩版這一頁的文字逐一比對、圖形疊合比對，下面是已經確定的差異。這些會原樣列入報告，不要重複列出，也不要改寫它們。你的工作是：一、在 summary 用白話說明這些差異對電路可能的意義；二、只補充程式沒有列到、但兩版之間在圖上看得到的不同（例如線接到另一支腳、接點消失、數值不一樣）；兩版都一樣的地方（跨頁端點沒畫出、字靠太近、料號看不清楚）不是兩版的差異，不要列；三、三個 checks 照樣回覆。\n${known.findings.map((finding, index) => `${index + 1}. ${finding.title}｜${finding.location}`).join("\n")}${known.omitted ? `\n另有 ${known.omitted} 處差異沒有列在這裡。` : ""}${areas.dropped ? `\n放大圖只包含差異最集中的 ${areas.windows.length} 個區域。` : ""}` });
     areas.windows.forEach((area, index) => messages.push({ role: "user", text: `差異區域 ${index + 1}（${describeCircuitDiffPlace(area)}，x=${area.x.toFixed(3)}, y=${area.y.toFixed(3)}, width=${area.width.toFixed(3)}, height=${area.height.toFixed(3)}）的放大圖：第一張基準版，第二張比對版。回覆的 box 仍以整張頁面為準。`, images: [before.crops[index], after.crops[index]] }));
   }
   signal.throwIfAborted();
@@ -418,15 +421,18 @@ const WORST = { "possible-issue": 2, unverifiable: 1, "no-visible-issue": 0 } as
 /** The confirmed differences come first, then what the model added; each check takes the more careful of the two answers. */
 function mergeLocalIntoReport(report: CircuitPdfAiReviewReport, diff: CircuitLocalPageDiff, known: CircuitLocalSummary, common?: CircuitCommonChanges | null): CircuitPdfAiReviewReport {
   const own = known.findings.map(finding => ({ ...finding, decision: "pending" as const, reviewNote: "", reviewedBy: "", reviewedAt: "" }));
-  const room = Math.max(0, 40 - own.length), extra = report.findings.slice(0, room), cut = report.findings.length - extra.length;
+  // What the model adds is its reading of the picture, not a difference the comparison found: listed for reference, never
+  // counted (2026-11-25, the real E1.S pair: 「跨頁端點未提供」「型號字串與旁註過近」 turned identical sheets into 11 differences).
+  const room = Math.max(0, 40 - own.length), cut = Math.max(0, report.findings.length - room);
+  const extra = report.findings.slice(0, room).map(finding => isCircuitReferenceFinding(finding) ? finding : { ...finding, priority: "low" as const, title: `${CIRCUIT_FOR_REFERENCE}AI 補充：${finding.title}`.slice(0, 300) });
   const findings = [...own, ...extra].map((finding, index) => ({ ...finding, id: `F${index + 1}` })) as CircuitPdfAiFinding[];
   const mine = localChecks(diff, known);
   const checks = report.checks.map(check => {
     const other = mine.find(item => item.category === check.category)!;
     let state = WORST[other.state] >= WORST[check.state] ? other.state : check.state;
-    const located = findings.some(item => item.category === check.category);
-    if (state === "possible-issue" && !located) state = "unverifiable";
-    if (state === "no-visible-issue" && located) state = "possible-issue";
+    const located = findings.some(item => item.category === check.category), counted = findings.some(item => item.category === check.category && !isCircuitReferenceFinding(item));
+    if (state === "possible-issue" && !counted) state = "unverifiable";
+    if (state === "no-visible-issue" && located) state = counted ? "possible-issue" : "unverifiable";
     return { category: check.category, state, note: `${other.note} AI：${check.note}`.slice(0, 2000) };
   });
   const summary = `${describeLocal(diff, known, common)} AI 說明：${report.summary}${cut ? `（AI 另外列的 ${cut} 筆超過清單上限，沒有列入）` : ""}`.slice(0, 4000).trim();
