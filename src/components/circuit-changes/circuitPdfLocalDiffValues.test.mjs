@@ -113,3 +113,76 @@ test("drawn again sharp: a speck is gone, a junction dot stays, a box or a dashe
   assert.deepEqual(plain(r.bestAlignment(lBase, baseWidth, margin, lWork, width, height, 4, left)), { dx: 2, dy: 2 });
   assert.equal(r.cropDifference(lBase, baseWidth, margin, lWork, width, height, 0, [{ dx: 0, dy: 0 }, { dx: 2, dy: 2 }]).count, 0);
 });
+
+// 2026-11-25: 「明明上一頁同一的地方有標但下一頁卻沒掃出來」 — sheet 21 marked its four 9.1K → 4.7K pull-ups, sheet 22 (the same
+// circuit) marked one and only counted the other three. Every case below is the geometry of the real E1.S pair.
+test("a stack of parts with each value in its own row pairs up row by row, however near the next row is (sheets 21 and 22)", () => {
+  const k = diffs();
+  const part = (name, x, y) => item(name, x, y, 0.0114, 0.0054);
+  // The reference: Ref Des above, value right under it.
+  const pulls = [["R2201", 0.6563, 0.0179, "4K7R2F-GP"], ["R2202", 0.6777, 0.03, "4K7R2F-GP"], ["R2203", 0.6991, 0.0421, "9K1R2F-1-GP"], ["R2204", 0.7248, 0.0542, "4K7R2F-GP"]]
+    .flatMap(([name, x, y, value]) => [part(name, x, y), item(value, x - 0.0086, y + 0.0061, 0.0245, 0.0054)]);
+  const caps = (value, down, width) => Array.from({ length: 9 }, (_, index) => [part(`C22${10 + index}`, 0.1 + index * 0.05, 0.5), item(value, 0.1 + index * 0.05, 0.5 + down, width, 0.0054)]).flat();
+  // The redraw: four pull-ups stacked 0.65 % apart, each value 2.85 % to the right in its own row, farther than two and a
+  // half times the usual gap of the sheet (the capacitors print theirs 1.1 % under the Ref Des).
+  const redraw = [0.0288, 0.0355, 0.0421, 0.0482].flatMap((y, index) => [part(`R220${index + 1}`, 0.6717, y), item("4.7Kohm", 0.7116, y, 0.0155, 0.0054)]);
+  const result = k.matchCircuitPartValues([...pulls, ...caps("SCD1U16V2KX-1", 0.0061, 0.03)], [...redraw, ...caps("0.1uF/16V", 0.0166, 0.0197)]);
+  assert.deepEqual(plain(result.changes.map(change => [change.refdes, change.before, change.after, change.baseItem.str, change.workItem.y])), [["R2203", ["R:9100"], ["R:4700"], "9K1R2F-1-GP", 0.0421]]);
+  assert.deepEqual(plain(result.leftovers), { base: [], work: [] }, "every label has its part");
+});
+
+test("a not-fitted mark under a tall symbol, in line with its Ref Des, is that part's and not the resistor's below it (sheets 35, 36 and 45)", () => {
+  const k = diffs();
+  const part = (name, x, y) => item(name, x, y, 0.0114, 0.0054), mark = (x, y) => item("NOPOP", x, y, 0.0137, 0.0054), ni = (x, y) => item("NI", x, y, 0.0038, 0.0054);
+  // The reference prints NOPOP under the choke symbol, 5.5 % below its Ref Des; the resistor under it is 1.4 % away.
+  const chokes = [part("L3609", 0.3977, 0.0361), mark(0.3977, 0.0966), part("R3634", 0.3805, 0.1147), item("0R2F-1-GP", 0.4169, 0.1147, 0.0198, 0.0054),
+    part("L3611", 0.3977, 0.154), mark(0.3977, 0.2145), part("R3632", 0.3784, 0.2326), item("0R2F-1-GP", 0.4148, 0.2326, 0.0198, 0.0054)];
+  const pulls = [0.4231, 0.4866, 0.5531].flatMap((y, index) => [part(`R36${18 + index * 2}`, 0.7183, y), mark(0.7333, y)]);
+  const redraw = [part("L3609", 0.3908, 0.0482), item("90ohm", 0.3908, 0.0554, 0.0125, 0.0054), part("R3634", 0.3929, 0.1177), item("0ohm", 0.44, 0.1177, 0.01, 0.0054),
+    part("L3611", 0.3912, 0.18), item("90ohm", 0.3912, 0.1872, 0.0125, 0.0054), part("R3632", 0.3917, 0.2496), item("0ohm", 0.44, 0.2496, 0.01, 0.0054),
+    ...[0.4231, 0.4866, 0.5531].flatMap((y, index) => [part(`R36${18 + index * 2}`, 0.7183, y), ni(0.7213, y + 0.0157)])];
+  const changes = k.diffCircuitPartValues([...chokes, ...pulls], redraw);
+  assert.deepEqual(plain(changes.map(change => [change.refdes, change.fitted, Boolean(change.unsure), change.baseItem.str, change.workItem.str])), [["L3609", "base", false, "NOPOP", "L3609"], ["L3611", "base", false, "NOPOP", "L3611"]]);
+  // The only mark of a sheet (sheet 35): nothing to learn from, the Ref Des above it is still the part.
+  assert.deepEqual(plain(k.diffCircuitPartValues(chokes.slice(0, 4), redraw.slice(0, 4)).map(change => [change.refdes, change.fitted])), [["L3609", "base"]]);
+  // The redraw marks the chokes too, right under their Ref Des (sheet 45): the same parts, nothing changed.
+  assert.deepEqual(plain(k.diffCircuitPartValues([...chokes, ...pulls], [...redraw, ni(0.3942, 0.0626), ni(0.3946, 0.1944)]).filter(change => !change.unsure)), []);
+});
+
+test("a mark that overlaps the next part's upright value still belongs to the Ref Des it lies under (sheets 23 to 26)", () => {
+  const k = diffs();
+  const part = (name, x, y) => item(name, x, y, 0.0114, 0.0054);
+  const before = [part("R2304", 0.5623, 0.2115), item("4K7R2F-GP", 0.5767, 0.2056, 0.0038, 0.0298), item("NOPOP", 0.5537, 0.2236, 0.0137, 0.0054),
+    part("R2305", 0.5837, 0.2175), item("4K7R2F-GP", 0.5981, 0.2056, 0.0038, 0.0298), item("NOPOP", 0.5794, 0.2236, 0.0137, 0.0054),
+    part("R2306", 0.605, 0.2175), item("4K7R2F-GP", 0.6195, 0.2056, 0.0038, 0.0298)];
+  const after = [part("R2304", 0.5648, 0.1988), item("4.7Kohm", 0.5648, 0.206, 0.0155, 0.0054), item("NI", 0.5678, 0.2145, 0.0038, 0.0054),
+    part("R2305", 0.5901, 0.2), item("4.7Kohm", 0.5901, 0.2072, 0.0155, 0.0054), item("NI", 0.5931, 0.2157, 0.0038, 0.0054),
+    part("R2306", 0.8663, 0.2072), item("4.7Kohm", 0.8663, 0.2144, 0.0155, 0.0054)];
+  const result = k.matchCircuitPartValues(before, after);
+  assert.deepEqual(plain(result.changes.filter(change => !change.unsure)), [], "R2304 and R2305 are marked on both sides");
+  assert.deepEqual(plain(result.leftovers), { base: [], work: [] });
+});
+
+test("every value or fitted difference is marked on the drawing, and one named part never hides another label", () => {
+  const k = diffs();
+  const page = extra => ({ textComparable: true, graphicsComparable: true, sizeChanged: false, textChanges: [], regions: [], valueChanges: [], valueLeftovers: { base: [], work: [] }, ...extra });
+  const old = item("9K1R2F-1-GP", 0.5, 0.5), now = item("4.7Kohm", 0.5, 0.5), old2 = item("9K1R2F-1-GP", 0.7, 0.5), now2 = item("4.7Kohm", 0.7, 0.5);
+  // Two values rewritten in place and one part named: the other keeps its own finding, and is not counted a second time.
+  const named = k.summarizeCircuitLocalDiff(page({ textChanges: [{ kind: "changed", before: old, after: now }, { kind: "changed", before: old2, after: now2 }],
+    valueChanges: [{ refdes: "R1", before: ["R:9100"], after: ["R:4700"], baseItem: old, workItem: now }], valueLeftovers: { base: [{ key: "R:9100", item: old2 }], work: [{ key: "R:4700", item: now2 }] } }));
+  assert.deepEqual(plain(named.findings.map(finding => finding.title)), ["字改了：9K1R2F-1-GP → 4.7Kohm", "R1 的數值不一樣：9.1KΩ → 4.7KΩ"]);
+  assert.equal(named.own, 2);
+  assert.equal(named.findings[0].workingBox.x > 0.6, true, "the finding that stays is the label nobody named");
+  // Marks no part explains: one finding per mark, each boxed where it is.
+  const marks = k.summarizeCircuitLocalDiff(page({ valueLeftovers: { base: [{ key: "DNP", item: item("NOPOP", 0.2, 0.2) }, { key: "DNP", item: item("NOPOP", 0.4, 0.6) }], work: [] } }));
+  assert.equal(marks.own, 2);
+  assert.ok(marks.findings.every(finding => finding.title.startsWith("1 顆零件的上件狀態不一樣：基準版這裡多 1 個不上件標示") && finding.officialBox && !finding.workingBox));
+  // A swap no part explains: one finding per pair of labels, in the order they lie on the sheet.
+  const swap = k.summarizeCircuitLocalDiff(page({ valueLeftovers: { base: [{ key: "R:9100", item: old2 }, { key: "R:9100", item: old }], work: [{ key: "R:4700", item: now }, { key: "R:4700", item: now2 }] } }));
+  assert.deepEqual(plain(swap.findings.map(finding => [finding.title, finding.officialBox.x < 0.6, finding.workingBox.x < 0.6])),
+    [["1 顆電阻的數值不一樣：9.1KΩ → 4.7KΩ（旁邊對不到零件編號）", true, true], ["1 顆電阻的數值不一樣：9.1KΩ → 4.7KΩ（旁邊對不到零件編號）", false, false]]);
+  // The same part marked on both sides, the marks placed differently: one line for reference, never counted.
+  const placed = k.summarizeCircuitLocalDiff(page({ valueChanges: [{ refdes: "R2701", before: ["DNP"], after: ["DNP"], fitted: "base", unsure: true, baseItem: item("NOPOP", 0.5, 0.118), workItem: item("NI", 0.5, 0.1175) }] }));
+  assert.equal(placed.own, 0);
+  assert.match(placed.findings[0].title, /^參考：1 個不上件標示（NOPOP／NI）放的位置和另一版不一樣，應該是同一顆：R2701/);
+});

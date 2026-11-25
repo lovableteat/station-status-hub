@@ -45,6 +45,8 @@ export interface CircuitLocalPageDiff {
   valueChanges?: CircuitValueChange[];
   /** Values printed more often on one side (how many parts carry each), whichever way the page was compared. */
   valueCounts?: CircuitContentChange[];
+  /** The value labels and not-fitted marks of each side that no part explains (matchCircuitPartValues), with where they are. */
+  valueLeftovers?: CircuitValueLeftovers;
   /** Page numbers compared, for looking up a Ref Des or net that moved to another sheet. */
   pages?: { base: number; work: number };
   /** The Ref Des and net names of each side, for the same look-up across sheets. */
@@ -52,6 +54,8 @@ export interface CircuitLocalPageDiff {
   /** Where each side's title block is (findCircuitTitleBlock); absent: only the far corner counts. */
   titleBlock?: { base: CircuitCropRect | null; work: CircuitCropRect | null };
 }
+/** Value labels and not-fitted marks left without an explanation on each side: `key` as circuitLabelKey writes it. */
+export interface CircuitValueLeftovers { base: Array<{ key: string; item: CircuitDiffText }>; work: Array<{ key: string; item: CircuitDiffText }> }
 export type CircuitContentType = "refdes" | "net" | "other";
 /** One word one side has more often than the other; `item` is where it is on the side that has it. */
 export interface CircuitContentChange {
@@ -260,8 +264,8 @@ export interface CircuitValueChange {
   /** Fitted or not changed: the side that marks the part(s) not fitted (`refdes` may name two parts a mark lies between). */
   fitted?: "base" | "work";
   /**
-   * The parts are a best guess (a mark far from its part, or the other drawing places its marks so loosely that "no mark
-   * beside it" cannot be sure): named as "maybe" in the count of not-fitted marks, never a finding of its own.
+   * Not a change that counts: both sides mark a part not fitted here, each mark nearest another Ref Des (`refdes` names
+   * both), so it is most likely the same part. Listed for reference with both marks shown, never a finding of its own.
    */
   unsure?: boolean;
 }
@@ -269,145 +273,331 @@ export interface CircuitValueChange {
 const VALUE_PART: Record<string, RegExp> = { R: /^(P?R|RN|RA|RP|RT|PR)\d/, C: /^(P?C|EC|CE|PC)\d/, F: /^(X|Y|OSC)\d/, D: /^[A-Z]{1,4}\d/ };
 /** How near (page fractions, box to box) a value label must be to the Ref Des it belongs to: labels sit right beside their part. */
 const VALUE_REACH = 0.015;
+/** How much being out of line with a Ref Des counts against a label, next to the gap between them. */
+const OUT_OF_LINE = 3;
+/** A not-fitted mark this near a value label belongs to that value's part (the redraw prints NI right under the value). */
+const MARK_BY_VALUE = 0.012;
 /**
- * The values of the parts on two sheets, part by part (2026-11-25, the real E1.S pair: four resistors 2.21KΩ → 100KΩ,
- * two capacitors 25 V → 16 V, four pull-ups 9.1K → 4.7K, whatever the sheet or block was redrawn). Each value label
- * (written one way, see circuitLabelKey) belongs to the nearest Ref Des of a matching kind on the same sheet; a part that
- * has values on both sides and different ones is a change. A part with no value found on one side is left out: a label
- * placed far away is not proof that the value is missing.
+ * How far a label is from a Ref Des: the gap between the two boxes, and that gap plus how far they are out of line. A
+ * label belongs to the Ref Des of its own row or column (2026-11-25, the real E1.S pair, sheet 22: the redraw stacks four
+ * pull-ups 0.65 % apart with each value in the same row 2.7 % to the right; by the gap alone every value was as near to
+ * the next resistor, so three of the four 9.1K → 4.7K were counted but never marked, while sheet 21 marked all four:
+ * 「明明上一頁同一的地方有標但下一頁卻沒掃出來」).
  */
-export function diffCircuitPartValues(beforeItems: readonly CircuitDiffText[], afterItems: readonly CircuitDiffText[]): CircuitValueChange[] {
-  const read = (items: readonly CircuitDiffText[]) => {
-    const parts: Array<{ refdes: string; item: CircuitDiffText; at: { x: number; y: number } }> = [], values: Array<{ key: string; item: CircuitDiffText; at: { x: number; y: number } }> = [];
-    for (const item of items) {
-      const at = center(item);
-      for (const word of collapse(item.str).split(" ")) {
-        const name = circuitNameKey(word);
-        if (!name) continue;
-        if (name.type === "refdes") parts.push({ refdes: name.key, item, at });
-        else if (isValueKey(name.key)) values.push({ key: name.key, item, at });
-      }
-    }
-    // A label and a part belong together only when each is the other's nearest of its kind (a value and a not-fitted mark
-    // are separate kinds): a label between two parts is left out rather than given to the wrong one (2026-11-25: C4602 got
-    // its neighbour's 100nF on the real E1.S pair).
-    const slot = (key: string) => key === "DNP" ? "DNP" : "value";
-    // Box to box: a value printed as a long vertical string under its part is near it at one end, not at its middle.
-    const gap = (a: CircuitDiffText, b: CircuitDiffText) => Math.hypot(Math.max(0, b.x - (a.x + a.width), a.x - (b.x + b.width)), Math.max(0, b.y - (a.y + a.height), a.y - (b.y + b.height)));
-    // How far this drawing prints labels from their parts, measured on the sheet (2026-11-25: the reference prints them
-    // 0.8 % away, the redraw 3–5 % away on some sheets): twice and a half the usual gap, within 1.5–6 % of the page.
-    const usual = values.map(value => { const fits = VALUE_PART[value.key[0]] ?? VALUE_PART.D; return Math.min(...parts.filter(part => fits.test(part.refdes)).map(part => gap(part.item, value.item))); }).filter(distance => distance < 0.08).sort((left, right) => left - right);
-    const reach = Math.min(0.06, Math.max(VALUE_REACH, (usual[Math.floor(usual.length / 2)] ?? 0.006) * 2.5));
-    // Not-fitted marks have their own place (the redraw prints NI under the value, 4–5 % from the part): measured apart.
-    const markGaps = values.filter(value => value.key === "DNP").map(value => Math.min(...parts.map(part => gap(part.item, value.item)))).filter(distance => distance < 0.08).sort((left, right) => left - right);
-    const markReach = Math.min(0.07, Math.max(VALUE_REACH, (markGaps[Math.floor(markGaps.length / 2)] ?? 0.006) * 1.6));
-    // Clearly nearest: a label about as near to a second part (two resistors stacked, one NOPOP between them) is left out.
-    const nearestPart = values.map(value => {
-      const fits = VALUE_PART[value.key[0]] ?? VALUE_PART.D;
-      let best = -1, distance = Infinity, second = Infinity;
-      parts.forEach((part, index) => { if (!fits.test(part.refdes)) return; const d = gap(part.item, value.item); if (d < distance) { second = distance; distance = d; best = index; } else if (d < second) second = d; });
-      return distance < reach && second >= Math.max(distance * 1.5, distance + 0.003) ? best : -1;
-    });
-    const map = new Map<string, { values: Map<string, string>; item: CircuitDiffText; part: CircuitDiffText; markNear: boolean }>();
-    parts.forEach((part, p) => {
-      for (const kind of ["value", "DNP"]) {
-        let best = -1, distance = Infinity;
-        values.forEach((value, v) => { if (slot(value.key) !== kind || nearestPart[v] !== p) return; const d = gap(part.item, value.item); if (d < distance) { distance = d; best = v; } });
-        if (best < 0) continue;
-        // Mutual: no other label of this kind is nearer to the part (one that chose another part included).
-        const closer = values.some((value, v) => v !== best && slot(value.key) === kind && (VALUE_PART[value.key[0]] ?? VALUE_PART.D).test(part.refdes) && gap(part.item, value.item) < distance);
-        if (closer) continue;
-        const entry = map.get(part.refdes) ?? { values: new Map<string, string>(), item: values[best].item, part: part.item, markNear: false };
-        entry.values.set(kind, values[best].key); map.set(part.refdes, entry);
-      }
-      // Any not-fitted mark beside the part, whoever it was given to: without one, the part is certainly fitted on this side.
-      const entry = map.get(part.refdes);
-      if (entry) entry.markNear = values.some(value => value.key === "DNP" && gap(part.item, value.item) < markReach);
-    });
-    // Every not-fitted mark with the parts it lies beside: the nearest, and any about as near (two resistors stacked).
-    const marks = values.map((mark, index) => ({ mark, index })).filter(({ mark }) => mark.key === "DNP").map(({ mark }) => {
-      // A mark printed right under a value belongs to that value's part (the redraw prints NI below the value).
-      let owner = -1, closest = 0.012;
-      values.forEach((value, v) => { if (value.key === "DNP" || nearestPart[v] < 0) return; const d = gap(value.item, mark.item); if (d < closest) { closest = d; owner = nearestPart[v]; } });
-      if (owner >= 0) return { item: mark.item, candidates: [parts[owner].refdes], sure: true };
-      const near = parts.map(part => ({ refdes: part.refdes, d: gap(part.item, mark.item) })).filter(entry => entry.d < markReach).sort((left, right) => left.d - right.d);
-      const nearest = near[0]?.d ?? Infinity;
-      return { item: mark.item, candidates: [...new Set(near.filter(entry => entry.d < Math.max(nearest * 1.5, nearest + 0.003)).map(entry => entry.refdes))].slice(0, 3), sure: nearest <= VALUE_REACH };
-    }).filter(mark => mark.candidates.length);
-    const named = new Map(parts.map(part => [part.refdes, part.item]));
-    // Marked: a mark that may belong to the part (an unclear one counts for each part it lies between), or one right beside it.
-    const markedNear = (refdes: string) => { const item = named.get(refdes); return Boolean(item) && (marks.some(mark => mark.candidates.includes(refdes)) || values.some(value => value.key === "DNP" && gap(item!, value.item) < VALUE_REACH)); };
-    // Every mark on this side surely belongs to its part(s): only then is "no mark beside that part" sure here.
-    return { map, marks, named, markedNear, marking: values.some(value => value.key === "DNP"), certain: marks.every(mark => mark.sure), markCount: values.filter(value => value.key === "DNP").length };
-  };
-  const before = read(beforeItems), after = read(afterItems), changes: CircuitValueChange[] = [];
-  // Values where both sides print one for the same part.
-  for (const [refdes, old] of before.map) {
-    const now = after.map.get(refdes);
-    const oldValue = old.values.get("value"), newValue = now?.values.get("value");
-    if (now && oldValue && newValue && oldValue !== newValue) changes.push({ refdes, before: [oldValue], after: [newValue], baseItem: old.item, workItem: now.item });
-  }
-  // Fitted or not: a mark beside a part (or between two) on one side, and none beside the same parts on the other, which
-  // does mark parts not fitted elsewhere on the sheet (2026-11-25, the real E1.S pair: beads and a choke NOPOP in the
-  // reference, printed 120Ω / 90Ω with no NI in the redraw; a NOPOP between two stacked resistors). An NI about as near to
-  // the transistor next door is still a mark beside the part, so that part did not change.
-  for (const [side, own, other] of [["base", before, after], ["work", after, before]] as const) {
-    if (!other.marking) continue;
-    const groups = new Map<string, { parts: string[]; marks: number; item: CircuitDiffText; sure: boolean }>();
-    for (const mark of own.marks) {
-      if (!mark.candidates.every(refdes => other.named.has(refdes)) || mark.candidates.some(refdes => other.markedNear(refdes))) continue;
-      const parts = [...mark.candidates].sort((left, right) => left.localeCompare(right, undefined, { numeric: true })), key = parts.join("|");
-      const group = groups.get(key) ?? { parts, marks: 0, item: mark.item, sure: true };
-      group.marks++; group.sure &&= mark.sure; groups.set(key, group);
-    }
-    for (const group of groups.values()) {
-      // As many marks as parts between them: every one of them is marked (R1418 and R1419, each with its NOPOP).
-      const refdes = group.marks >= group.parts.length ? group.parts.join("、") : group.parts.join(" 或 ");
-      const count = Math.min(group.marks, group.parts.length);
-      const unsure = !group.sure || !other.certain;
-      changes.push({ refdes, before: side === "base" ? Array(count).fill("DNP") : [], after: side === "work" ? Array(count).fill("DNP") : [], fitted: side, ...(unsure ? { unsure: true } : {}),
-        ...(side === "base" ? { baseItem: group.item, workItem: other.named.get(group.parts[0]) } : { workItem: group.item, baseItem: other.named.get(group.parts[0]) }) });
-    }
-  }
-  // The parts named for sure must add up to how many more marks one side prints; otherwise a mark was given to the wrong
-  // part (the redraw's NI for R3001 was nearer a neighbour), and every fitted change is only a guess.
-  const named = (side: "base" | "work") => changes.filter(change => change.fitted === side && !change.unsure).reduce((sum, change) => sum + (side === "base" ? change.before.length : change.after.length), 0);
-  if (named("base") - named("work") !== before.markCount - after.markCount) for (const change of changes) if (change.fitted) change.unsure = true;
-  return changes.sort((left, right) => left.refdes.localeCompare(right.refdes, undefined, { numeric: true }));
+function labelDistance(a: CircuitDiffText, b: CircuitDiffText) {
+  const gx = Math.max(0, b.x - (a.x + a.width), a.x - (b.x + b.width)), gy = Math.max(0, b.y - (a.y + a.height), a.y - (b.y + b.height));
+  // In line: starts, middles or ends level (a value left-aligned, centred or right-aligned under its Ref Des).
+  const off = (a0: number, a1: number, b0: number, b1: number) => Math.min(Math.abs(a0 - b0), Math.abs((a0 + a1) / 2 - (b0 + b1) / 2), Math.abs(a1 - b1));
+  const gap = Math.hypot(gx, gy), out = gx > gy ? off(a.y, a.y + a.height, b.y, b.y + b.height) : off(a.x, a.x + a.width, b.x, b.x + b.width);
+  return { gap, out, cost: gap + OUT_OF_LINE * out };
 }
+
+/** Every row given a column of its own at the least total cost (rows ≤ columns): the Hungarian method. */
+function assignLeastCost(cost: ReadonlyArray<ReadonlyArray<number>>): number[] {
+  const rows = cost.length, columns = cost[0]?.length ?? 0;
+  const u = new Float64Array(rows + 1), v = new Float64Array(columns + 1), owner = new Int32Array(columns + 1), way = new Int32Array(columns + 1);
+  for (let row = 1; row <= rows; row++) {
+    owner[0] = row;
+    let column = 0;
+    const least = new Float64Array(columns + 1).fill(Infinity), used = new Uint8Array(columns + 1);
+    do {
+      used[column] = 1;
+      const current = owner[column];
+      let delta = Infinity, next = 0;
+      for (let j = 1; j <= columns; j++) {
+        if (used[j]) continue;
+        const reduced = cost[current - 1][j - 1] - u[current] - v[j];
+        if (reduced < least[j]) { least[j] = reduced; way[j] = column; }
+        if (least[j] < delta) { delta = least[j]; next = j; }
+      }
+      for (let j = 0; j <= columns; j++) { if (used[j]) { u[owner[j]] += delta; v[j] -= delta; } else least[j] -= delta; }
+      column = next;
+    } while (owner[column] !== 0);
+    do { const previous = way[column]; owner[column] = owner[previous]; column = previous; } while (column);
+  }
+  const assigned = new Array<number>(rows).fill(-1);
+  for (let j = 1; j <= columns; j++) if (owner[j]) assigned[owner[j] - 1] = j - 1;
+  return assigned;
+}
+
+interface LabelEdge { part: number; cost: number; usable: boolean }
+/** The labels of one kind on one sheet: the parts around each (`usable`: within reach), what each label says, each part's Ref Des. */
+interface LabelSide { seen: LabelEdge[][]; keys: string[]; refdes: string[] }
+interface LabelMatch { owner: number[]; tight: boolean[]; cost: number[]; swayed: boolean[] }
 /**
- * The values no part-by-part change explains (see diffCircuitPartValues): a clean swap of one value for another, as many
- * parts each way (four 9.1K for four 4.7K, one of them too far from its Ref Des to pair), is a change of those parts and
- * counted; anything else (a part code not read as a value, labels missing on one side) is listed for reference.
+ * Gives each label of both sheets a part, in four steps (2026-11-25, the real E1.S pair):
+ * 1. Every label that is clearly one part's own: its least-cost part by a clear margin, within reach, and no other label
+ *    as near to that part (`tight`).
+ * 2. Labels not settled yet go to parts the other sheet clearly gives the same label, as many as possible: most parts did
+ *    not change, and the two drawings place labels differently (the reference prints NOPOP under a choke, 5.5 % below
+ *    its Ref Des and nearer to the resistor and to the next choke under it; the redraw prints NI right under the Ref
+ *    Des). `swayed` when another part left is clearly nearer.
+ * 3. Two labels not settled yet, one on each sheet, that say the same and can both be the same part's, are that part's.
+ * 4. The rest, group by group, so that as many as possible get a part within reach at the least total cost: a stack of
+ *    parts with their labels pairs up one to one, and a label left over when its neighbours are settled goes to the
+ *    part left over.
  */
-function valueCountFindings(diff: CircuitLocalPageDiff): Array<CircuitLocalFinding & { rank: number; own: boolean }> {
+function matchLabelSides(base: LabelSide, work: LabelSide): { base: LabelMatch; work: LabelMatch } {
+  const sides = [base, work];
+  const state = sides.map(side => ({ owner: side.seen.map(() => -1), tight: side.seen.map(() => false), cost: side.seen.map(() => 0), swayed: side.seen.map(() => false), taken: side.refdes.map(() => false) }));
+  const give = (s: number, label: number, edge: LabelEdge) => { state[s].owner[label] = edge.part; state[s].cost[label] = edge.cost; state[s].taken[edge.part] = true; };
+  const nearestLeft = (s: number, label: number) => Math.min(Infinity, ...sides[s].seen[label].filter(edge => !state[s].taken[edge.part]).map(edge => edge.cost));
+  // A label may stay without a part (UNMATCHED) rather than take one that is not among its choices (FORBIDDEN).
+  const UNMATCHED = 1, FORBIDDEN = 1000;
+  /** As many of these labels as possible each given one of its `choices`, at the least total cost; labels that share a part are settled together. */
+  const settle = (s: number, choices: LabelEdge[][], then?: (label: number, edge: LabelEdge) => void) => {
+    const parent = choices.map((_, index) => index);
+    const root = (index: number) => { while (parent[index] !== index) { parent[index] = parent[parent[index]]; index = parent[index]; } return index; };
+    const first = new Map<number, number>();
+    choices.forEach((edges, label) => { for (const edge of edges) { const known = first.get(edge.part); if (known === undefined) first.set(edge.part, label); else parent[root(label)] = root(known); } });
+    const groups = new Map<number, number[]>();
+    choices.forEach((edges, label) => { if (!edges.length) return; const key = root(label), list = groups.get(key); if (list) list.push(label); else groups.set(key, [label]); });
+    for (const labels of groups.values()) {
+      const parts = [...new Set(labels.flatMap(label => choices[label].map(edge => edge.part)))], column = new Map(parts.map((part, index) => [part, index]));
+      const matrix = labels.map(label => { const row = new Array<number>(parts.length + labels.length).fill(FORBIDDEN); for (const edge of choices[label]) row[column.get(edge.part)!] = edge.cost; return row.fill(UNMATCHED, parts.length); });
+      assignLeastCost(matrix).forEach((chosen, index) => {
+        if (chosen < 0 || chosen >= parts.length || matrix[index][chosen] >= UNMATCHED) return;
+        const edge = { part: parts[chosen], cost: matrix[index][chosen], usable: true };
+        then?.(labels[index], edge); give(s, labels[index], edge);
+      });
+    }
+  };
+  sides.forEach((side, s) => {
+    const least = side.refdes.map(() => Infinity), rivals = side.refdes.map(() => 0);
+    for (const edges of side.seen) for (const edge of edges) {
+      if (edge.cost < least[edge.part] - 1e-9) { least[edge.part] = edge.cost; rivals[edge.part] = 1; }
+      else if (Math.abs(edge.cost - least[edge.part]) <= 1e-9) rivals[edge.part]++;
+    }
+    side.seen.forEach((edges, label) => {
+      const sorted = [...edges].sort((left, right) => left.cost - right.cost), first = sorted[0], second = sorted[1];
+      if (!first?.usable || (second && second.cost < Math.max(first.cost * 1.5, first.cost + 0.003))) return;
+      if (first.cost > least[first.part] + 1e-9 || rivals[first.part] > 1) return;
+      give(s, label, first); state[s].tight[label] = true;
+    });
+  });
+  sides.forEach((side, s) => {
+    const other = sides[1 - s], theirs = state[1 - s], clear = new Set<string>();
+    theirs.owner.forEach((part, label) => { if (part >= 0 && theirs.tight[label]) clear.add(`${other.refdes[part]}|${other.keys[label]}`); });
+    const choices = side.seen.map((edges, label) => state[s].owner[label] >= 0 ? [] : edges.filter(edge => !state[s].taken[edge.part] && clear.has(`${side.refdes[edge.part]}|${side.keys[label]}`)));
+    const nearest = side.seen.map((_, label) => nearestLeft(s, label));
+    settle(s, choices, (label, edge) => { state[s].swayed[label] = edge.cost > Math.max(nearest[label] * 1.5, nearest[label] + 0.003); });
+  });
+  const open = (s: number) => sides[s].seen.map((edges, label) => state[s].owner[label] >= 0 ? [] : edges.filter(edge => edge.usable && !state[s].taken[edge.part]));
+  const theirs = new Map<string, Array<{ label: number; edge: LabelEdge }>>();
+  open(1).forEach((edges, label) => { for (const edge of edges) { const key = `${work.refdes[edge.part]}|${work.keys[label]}`, list = theirs.get(key); if (list) list.push({ label, edge }); else theirs.set(key, [{ label, edge }]); } });
+  const pairs = open(0).flatMap((edges, label) => edges.flatMap(edge => (theirs.get(`${base.refdes[edge.part]}|${base.keys[label]}`) ?? []).map(other => ({ label, edge, other, cost: edge.cost + other.edge.cost }))))
+    .sort((left, right) => left.cost - right.cost);
+  for (const pair of pairs) {
+    if (state[0].owner[pair.label] >= 0 || state[1].owner[pair.other.label] >= 0 || state[0].taken[pair.edge.part] || state[1].taken[pair.other.edge.part]) continue;
+    const near = [nearestLeft(0, pair.label), nearestLeft(1, pair.other.label)];
+    state[0].swayed[pair.label] = pair.edge.cost > Math.max(near[0] * 1.5, near[0] + 0.003); state[1].swayed[pair.other.label] = pair.other.edge.cost > Math.max(near[1] * 1.5, near[1] + 0.003);
+    give(0, pair.label, pair.edge); give(1, pair.other.label, pair.other.edge);
+  }
+  sides.forEach((_, s) => settle(s, open(s)));
+  return { base: state[0], work: state[1] };
+}
+
+interface PartLabel { key: string; item: CircuitDiffText }
+interface HeldLabel { key: string; item: CircuitDiffText; tight: boolean; swayed: boolean; cost: number; label: number; near: string[] }
+/** How far around a label a part is looked at at all (page fractions). */
+const LABEL_SIGHT = 0.08;
+/** The parts, value labels and not-fitted marks of one sheet, with the parts around each label. */
+function readPartLabels(items: readonly CircuitDiffText[]) {
+  const parts: Array<{ refdes: string; item: CircuitDiffText }> = [], values: PartLabel[] = [], marks: PartLabel[] = [];
+  for (const item of items) for (const word of collapse(item.str).split(" ")) {
+    const name = circuitNameKey(word);
+    if (!name) continue;
+    if (name.type === "refdes") parts.push({ refdes: name.key, item });
+    else if (name.key === "DNP") marks.push({ key: name.key, item });
+    else if (isValueKey(name.key)) values.push({ key: name.key, item });
+  }
+  const around = (label: PartLabel) => parts.flatMap((part, index) => {
+    if (!(VALUE_PART[label.key[0]] ?? VALUE_PART.D).test(part.refdes)) return [];
+    const distance = labelDistance(part.item, label.item);
+    return distance.gap < LABEL_SIGHT ? [{ part: index, ...distance }] : [];
+  });
+  const valueAround = values.map(around), markAround = marks.map(around);
+  // How far this drawing prints labels from their parts, measured on the sheet (2026-11-25: the reference prints them
+  // 0.8 % away, the redraw 3–5 % away on some sheets): two and a half times the usual gap, and room beyond the farthest
+  // ordinary one (sheet 21 of the real E1.S pair: sixteen pull-ups with their values 2.66–2.80 % away, a reach of 2.79 %
+  // from the usual gap alone kept three and dropped one), within 1.5–6 % of the page. Not-fitted marks have their own
+  // place (the redraw prints NI under the value, 4–5 % from the part): measured apart.
+  const usual = (lists: typeof valueAround, times: number) => {
+    const gaps = lists.map(list => Math.min(Infinity, ...list.map(edge => edge.gap))).filter(gap => gap < LABEL_SIGHT).sort((left, right) => left - right);
+    return Math.max((gaps[Math.floor(gaps.length / 2)] ?? 0.006) * times, (gaps[Math.floor(gaps.length * 0.9)] ?? 0) * 1.3);
+  };
+  const reach = Math.min(0.06, Math.max(VALUE_REACH, usual(valueAround, 2.5))), markReach = Math.min(0.07, Math.max(VALUE_REACH, usual(markAround, 1.6)));
+  const refdes = parts.map(part => part.refdes);
+  // Where this drawing prints a not-fitted mark: after its Ref Des (under it, or right of it in the same row) or before it,
+  // learned from the marks that clearly belong to one part. A mark on the other side of a Ref Des counts as twice as far, and a
+  // mark exactly in line with a Ref Des on the usual side is that part's even far away, when no other is nearer (sheet 36
+  // of the real E1.S pair: the reference prints NOPOP under a choke, 5.5 % below its Ref Des, in line with it; the
+  // resistor under the choke is 1.4 % away and was named instead of the choke, on four of seven parts).
+  const after = (part: CircuitDiffText, mark: CircuitDiffText) => { const down = center(mark).y - center(part).y; return down > 0.003 || (down >= -0.003 && center(mark).x > center(part).x); };
+  const beside = markAround.flatMap((list, index) => {
+    const [first, second] = [...list].sort((left, right) => left.cost - right.cost);
+    return first && first.gap < markReach && (!second || second.cost >= Math.max(first.cost * 1.5, first.cost + 0.003)) ? [after(parts[first.part].item, marks[index].item)] : [];
+  });
+  // With too few marks to learn from, after is taken unless one says otherwise: a Ref Des is the first label of its part
+  // (sheet 35: its only mark is the NOPOP under a choke, 1.4 % above the resistor that was named instead).
+  const afterShare = beside.filter(Boolean).length / (beside.length || 1), habit = beside.length < 3 ? (beside.every(Boolean) ? "after" : "") : afterShare >= 0.8 ? "after" : afterShare <= 0.2 ? "before" : "";
+  const against = (part: CircuitDiffText, mark: CircuitDiffText) => habit !== "" && after(part, mark) !== (habit === "after");
+  const valueSide: LabelSide = { seen: valueAround.map(list => list.map(edge => ({ part: edge.part, cost: edge.cost, usable: edge.gap < reach }))), keys: values.map(value => value.key), refdes };
+  /** The marks, once the values have their parts: a mark right beside a value may be that value's part's (the redraw prints NI under the value). */
+  const markSide = (valueOwner: readonly number[]): LabelSide => ({ keys: marks.map(mark => mark.key), refdes, seen: marks.map((mark, index) => {
+    const edges = new Map<number, LabelEdge>();
+    const inLine = habit ? markAround[index].filter(edge => edge.gap >= markReach && edge.out < 0.0008 && !against(parts[edge.part].item, mark.item)).sort((left, right) => left.gap - right.gap)[0] : undefined;
+    for (const edge of markAround[index]) edges.set(edge.part, { part: edge.part, cost: edge.cost * (against(parts[edge.part].item, mark.item) ? 2 : 1), usable: edge.gap < markReach || edge === inLine });
+    values.forEach((value, v) => {
+      const part = valueOwner[v];
+      if (part < 0) return;
+      const distance = labelDistance(value.item, mark.item), known = edges.get(part);
+      if (distance.gap < MARK_BY_VALUE && (!known || distance.cost < known.cost || !known.usable)) edges.set(part, { part, cost: known ? Math.min(distance.cost, known.cost) : distance.cost, usable: true });
+    });
+    return [...edges.values()];
+  }) });
+  const named = new Map<string, CircuitDiffText>();
+  for (const part of parts) if (!named.has(part.refdes)) named.set(part.refdes, part.item);
+  /** What each Ref Des carries (a part drawn in sections is one part: its nearest label), and the Ref Des of each label. */
+  const held = (labels: readonly PartLabel[], side: LabelSide, match: LabelMatch) => {
+    const map = new Map<string, HeldLabel>(), owners = labels.map((_, index) => match.owner[index] < 0 ? "" : refdes[match.owner[index]]);
+    labels.forEach((label, index) => {
+      const known = map.get(owners[index]);
+      if (!owners[index] || (known && known.cost <= match.cost[index])) return;
+      map.set(owners[index], { key: label.key, item: label.item, tight: match.tight[index], swayed: match.swayed[index], cost: match.cost[index], label: index, near: [...new Set(side.seen[index].filter(edge => edge.usable).map(edge => refdes[edge.part]))] });
+    });
+    return { map, owners };
+  };
+  return { named, values, marks, valueSide, markSide, held };
+}
+
+/**
+ * The values and not-fitted marks of the parts on two sheets, part by part (2026-11-25, the real E1.S pair: four
+ * resistors 2.21KΩ → 100KΩ, two capacitors 25 V → 16 V, four pull-ups 9.1K → 4.7K, whatever the sheet or block was
+ * redrawn). Each label (written one way, see circuitLabelKey) is given to a Ref Des of a matching kind on its own sheet
+ * (matchLabelSides); a part whose label differs between the sides is a change, marked on both drawings.
+ *
+ * A change both sides pair clearly is certain. One that needed the looser pairing must be borne out by the sheet: for a
+ * value, one side has to print that value more often and the other the new one (two labels the pairing crossed are not two
+ * changes); for a mark, the other side's nearest mark must not be one that could be this part's (then the two are listed
+ * together for reference, `unsure`). `leftovers` are the labels nothing above explains; valueCountFindings lists them.
+ */
+export function matchCircuitPartValues(beforeItems: readonly CircuitDiffText[], afterItems: readonly CircuitDiffText[]): { changes: CircuitValueChange[]; leftovers: CircuitValueLeftovers } {
+  const sheets = [readPartLabels(beforeItems), readPartLabels(afterItems)], changes: CircuitValueChange[] = [];
+  const valueMatch = matchLabelSides(sheets[0].valueSide, sheets[1].valueSide);
+  const markSides = [sheets[0].markSide(valueMatch.base.owner), sheets[1].markSide(valueMatch.work.owner)], markMatch = matchLabelSides(markSides[0], markSides[1]);
+  const read = (index: number, value: LabelMatch, mark: LabelMatch) => ({ named: sheets[index].named, values: sheets[index].values, marks: sheets[index].marks,
+    value: sheets[index].held(sheets[index].values, sheets[index].valueSide, value), mark: sheets[index].held(sheets[index].marks, markSides[index], mark) });
+  const base = read(0, valueMatch.base, markMatch.base), work = read(1, valueMatch.work, markMatch.work);
+  const sides = [["base", base, work], ["work", work, base]] as const;
+  // Labels that need no explaining: those of parts only one side has (that part is listed by name), and those of parts
+  // that carry the same on both sides.
+  const settled = { base: { value: new Set<number>(), mark: new Set<number>() }, work: { value: new Set<number>(), mark: new Set<number>() } };
+  for (const [side, own, other] of sides) for (const kind of ["value", "mark"] as const) own[kind].owners.forEach((refdes, index) => {
+    if (!refdes) return;
+    const theirs = other[kind].map.get(refdes);
+    if (!other.named.has(refdes) || (theirs && theirs.key === (kind === "value" ? own.values : own.marks)[index].key)) settled[side][kind].add(index);
+  });
+  // Values: how many more of each one side prints among the labels still open.
+  const net = new Map<string, number>();
+  base.values.forEach((label, index) => { if (!settled.base.value.has(index)) net.set(label.key, (net.get(label.key) ?? 0) + 1); });
+  work.values.forEach((label, index) => { if (!settled.work.value.has(index)) net.set(label.key, (net.get(label.key) ?? 0) - 1); });
+  const candidates = [...base.value.map].flatMap(([refdes, old]) => { const now = work.value.map.get(refdes); return now && now.key !== old.key ? [{ refdes, old, now, tight: old.tight && now.tight, cost: old.cost + now.cost }] : []; });
+  const take = (candidate: (typeof candidates)[number]) => {
+    net.set(candidate.old.key, (net.get(candidate.old.key) ?? 0) - 1); net.set(candidate.now.key, (net.get(candidate.now.key) ?? 0) + 1);
+    settled.base.value.add(candidate.old.label); settled.work.value.add(candidate.now.label);
+    changes.push({ refdes: candidate.refdes, before: [candidate.old.key], after: [candidate.now.key], baseItem: candidate.old.item, workItem: candidate.now.item });
+  };
+  for (const candidate of candidates) if (candidate.tight) take(candidate);
+  for (const candidate of candidates.filter(entry => !entry.tight).sort((left, right) => left.cost - right.cost)) if ((net.get(candidate.old.key) ?? 0) > 0 && (net.get(candidate.now.key) ?? 0) < 0) take(candidate);
+  // Fitted or not: a mark on a part one side, none on the same part the other side.
+  const lone = sides.flatMap(([side, own, other]) => [...own.mark.map].filter(([refdes]) => other.named.has(refdes) && !other.mark.map.has(refdes)).map(([refdes, held]) => ({ side, refdes, held })));
+  const paired = new Set<(typeof lone)[number]>();
+  for (const left of lone.filter(entry => entry.side === "base")) {
+    // The other side's lone mark could be this part's (or this one that part's): the same part marked, placed differently.
+    const right = lone.find(entry => entry.side === "work" && !paired.has(entry) && !(left.held.tight && entry.held.tight) && (left.held.near.includes(entry.refdes) || entry.held.near.includes(left.refdes)));
+    if (!right) continue;
+    paired.add(left); paired.add(right);
+    settled.base.mark.add(left.held.label); settled.work.mark.add(right.held.label);
+    changes.push({ refdes: left.refdes === right.refdes ? left.refdes : `${left.refdes} 或 ${right.refdes}`, before: ["DNP"], after: ["DNP"], fitted: "base", unsure: true, baseItem: left.held.item, workItem: right.held.item });
+  }
+  for (const entry of lone) {
+    if (paired.has(entry)) continue;
+    settled[entry.side].mark.add(entry.held.label);
+    const there = (entry.side === "base" ? work : base).named.get(entry.refdes);
+    changes.push({ refdes: entry.refdes, before: entry.side === "base" ? ["DNP"] : [], after: entry.side === "work" ? ["DNP"] : [], fitted: entry.side,
+      ...(entry.side === "base" ? { baseItem: entry.held.item, workItem: there } : { workItem: entry.held.item, baseItem: there }) });
+  }
+  // Marked on both sides, one of the marks given to the part only because the other side marks it there: for a look.
+  for (const [refdes, old] of base.mark.map) { const now = work.mark.map.get(refdes); if (now && (old.swayed || now.swayed)) changes.push({ refdes, before: ["DNP"], after: ["DNP"], fitted: "base", unsure: true, baseItem: old.item, workItem: now.item }); }
+  // Every mark of a part listed above is explained by it (a part drawn in sections may carry two).
+  for (const [side, own] of sides) own.mark.owners.forEach((refdes, index) => { if (refdes && lone.some(entry => entry.side === side && entry.refdes === refdes)) settled[side].mark.add(index); });
+  const open = (side: "base" | "work", own: typeof base) => [...own.values.filter((_, index) => !settled[side].value.has(index)), ...own.marks.filter((_, index) => !settled[side].mark.has(index))].map(label => ({ key: label.key, item: label.item }));
+  changes.sort((left, right) => left.refdes.localeCompare(right.refdes, undefined, { numeric: true }));
+  return { changes, leftovers: { base: open("base", base), work: open("work", work) } };
+}
+/** The part-by-part changes alone (see matchCircuitPartValues). */
+export const diffCircuitPartValues = (beforeItems: readonly CircuitDiffText[], afterItems: readonly CircuitDiffText[]): CircuitValueChange[] => matchCircuitPartValues(beforeItems, afterItems).changes;
+
+/**
+ * The values no part-by-part change explains (see matchCircuitPartValues), from the labels left over on each side: a clean
+ * swap of one value for another, as many labels each way, is a change of those parts and counted, each pair marked where
+ * its labels are; a not-fitted mark with no part is counted and marked where it is. Anything else (a part code not read as
+ * a value, a label missing on one side) is listed for reference. `listed` are labels a text finding of the page already
+ * shows. A page read before 2026-11-25 has no leftovers: its counts (valueCounts) less its part-by-part changes are used.
+ */
+function valueCountFindings(diff: CircuitLocalPageDiff, listed: (item: CircuitDiffText) => boolean = () => false): Array<CircuitLocalFinding & { rank: number; own: boolean }> {
   const left = new Map<string, number>();
   const add = (key: string, by: number) => left.set(key, (left.get(key) ?? 0) + by);
-  for (const change of diff.valueCounts ?? []) add(change.token, change.side === "base" ? change.count : -change.count);
-  // Each part-by-part change already says one part each way (a guess does not: it only names parts below).
-  for (const change of diff.valueChanges ?? []) { if (change.unsure) continue; for (const key of change.before) add(key, -1); for (const key of change.after) add(key, 1); }
-  const guesses = (side: "base" | "work") => [...new Set((diff.valueChanges ?? []).filter(change => change.unsure && change.fitted === side).map(change => change.refdes))];
+  const open = { base: (diff.valueLeftovers?.base ?? []).filter(label => !listed(label.item)), work: (diff.valueLeftovers?.work ?? []).filter(label => !listed(label.item)) };
+  if (diff.valueLeftovers) { for (const label of open.base) add(label.key, 1); for (const label of open.work) add(label.key, -1); }
+  else {
+    for (const change of diff.valueCounts ?? []) add(change.token, change.side === "base" ? change.count : -change.count);
+    // Each part-by-part change already says one part each way (a guess does not: it only names parts below).
+    for (const change of diff.valueChanges ?? []) { if (change.unsure) continue; for (const key of change.before) add(key, -1); for (const key of change.after) add(key, 1); }
+  }
+  const guesses = (side: "base" | "work") => diff.valueLeftovers ? [] : [...new Set((diff.valueChanges ?? []).filter(change => change.unsure && change.fitted === side).map(change => change.refdes))];
   const kinds: Record<string, string> = { R: "電阻", C: "電容", F: "晶振", D: "不上件標示" };
   const findings: Array<CircuitLocalFinding & { rank: number; own: boolean }> = [];
+  const byPlace = (labels: Array<{ key: string; item: CircuitDiffText }>) => [...labels].sort((a, b) => Math.abs(a.item.y - b.item.y) > 0.01 ? a.item.y - b.item.y : a.item.x - b.item.x);
   for (const [kind, words] of Object.entries(kinds)) {
     const entries = [...left].filter(([key, count]) => key[0] === kind && count !== 0);
     if (!entries.length) continue;
     const base = entries.filter(([, count]) => count > 0), work = entries.filter(([, count]) => count < 0);
-    const item = (key: string, side: "base" | "work") => (diff.valueCounts ?? []).find(change => change.token === key && change.side === side)?.item;
+    const item = (key: string, side: "base" | "work") => open[side].find(label => label.key === key)?.item ?? (diff.valueCounts ?? []).find(change => change.token === key && change.side === side)?.item;
     if (kind === "D") {
       // Not-fitted marks: one per part, so how many more one side prints is how many parts differ, sure even when which
       // ones is not (2026-11-25, the real E1.S pair: every page where the counts differed had that many parts changed).
       const total = entries.reduce((sum, [, count]) => sum + count, 0);
       if (!total) continue;
-      const side = total > 0 ? "base" : "work", count = Math.abs(total), maybe = guesses(side);
+      const side = total > 0 ? "base" : "work", count = Math.abs(total), maybe = guesses(side), label = side === "base" ? "基準版" : "比對版";
+      const marks = byPlace(open[side].filter(mark => mark.key === "DNP"));
+      if (marks.length === count && !open[side === "base" ? "work" : "base"].some(mark => mark.key === "DNP")) {
+        // Each mark is shown where it is, one finding per mark.
+        for (const mark of marks) findings.push({ rank: 0, own: true, category: "label-name", priority: "high", certainty: "unclear",
+          title: clip(`1 顆零件的上件狀態不一樣：${label}這裡多 1 個不上件標示（NOPOP／NI），旁邊對不到零件編號`, 280), location: describeCircuitDiffPlace(mark.item),
+          officialEvidence: side === "base" ? `基準版這裡標了不上件（${mark.item.str}）` : "基準版沒有對應的不上件標示", workingEvidence: side === "work" ? `比對版這裡標了不上件（${mark.item.str}）` : "比對版沒有對應的不上件標示",
+          suggestion: `${label}這裡多標了一個不上件（NOPOP／NI），另一版對應的零件沒有標，裝不裝會不一樣。請看框起來的標示旁邊是哪一顆零件。`, officialBox: side === "base" ? textBox(mark.item) : null, workingBox: side === "work" ? textBox(mark.item) : null });
+        continue;
+      }
       findings.push({ rank: 0, own: true, category: "label-name", priority: "high", certainty: "unclear",
-        title: clip(`${count} 顆零件的上件狀態不一樣：${side === "base" ? "基準版" : "比對版"}多 ${count} 個不上件標示（NOPOP／NI）${maybe.length ? `，可能是 ${maybe.slice(0, 6).join("、")}` : ""}`, 280), location: "這一頁的零件標示",
+        title: clip(`${count} 顆零件的上件狀態不一樣：${label}多 ${count} 個不上件標示（NOPOP／NI）${maybe.length ? `，可能是 ${maybe.slice(0, 6).join("、")}` : ""}`, 280), location: marks[0] ? describeCircuitDiffPlace(marks[0].item) : "這一頁的零件標示",
         officialEvidence: side === "base" ? `基準版這一頁多 ${count} 個不上件標示` : "基準版這一頁的不上件標示比較少", workingEvidence: side === "work" ? `比對版這一頁多 ${count} 個不上件標示` : "比對版這一頁的不上件標示比較少",
-        suggestion: `${side === "base" ? "基準版" : "比對版"}這一頁多標了 ${count} 個不上件（NOPOP／NI），另一版對應的零件沒有標，裝不裝會不一樣。${maybe.length ? `最可能是 ${maybe.slice(0, 6).join("、")}，` : ""}請在圖上核對。`, officialBox: null, workingBox: null });
+        suggestion: `${label}這一頁多標了 ${count} 個不上件（NOPOP／NI），另一版對應的零件沒有標，裝不裝會不一樣。${maybe.length ? `最可能是 ${maybe.slice(0, 6).join("、")}，` : ""}請在圖上核對。`,
+        officialBox: side === "base" && marks[0] ? textBox(marks[0].item) : null, workingBox: side === "work" && marks[0] ? textBox(marks[0].item) : null });
       continue;
     }
     if (base.length === 1 && work.length === 1 && base[0][1] === -work[0][1]) {
       const count = base[0][1], from = describeCircuitValue(base[0][0]), to = describeCircuitValue(work[0][0]);
+      const olds = byPlace(open.base.filter(label => label.key === base[0][0])), news = byPlace(open.work.filter(label => label.key === work[0][0]));
+      if (olds.length === count && news.length === count) {
+        // Every label of the swap is shown where it is: one finding per pair, in the order they lie on the sheet.
+        olds.forEach((old, index) => findings.push({ rank: 0, own: true, category: "label-name", priority: "high", certainty: "suspected",
+          title: clip(`1 顆${words}的數值不一樣：${from} → ${to}（旁邊對不到零件編號）`, 280), location: describeCircuitDiffPlace(news[index].item),
+          officialEvidence: `基準版這裡標 ${from}（${old.item.str}）`, workingEvidence: `比對版這裡標 ${to}（${news[index].item.str}）`,
+          suggestion: `兩版這一頁剛好有 ${count} 個 ${from} 換成 ${to}，但標示旁邊對不到零件編號。請看框起來的標示是哪一顆零件。`, officialBox: textBox(old.item), workingBox: textBox(news[index].item) }));
+        continue;
+      }
       findings.push({ rank: 0, own: true, category: "label-name", priority: "high", certainty: "suspected",
         title: clip(`${count} 顆${words}的數值不一樣：${from} → ${to}（標示離零件編號太遠，沒有逐顆對到）`, 280), location: "這一頁的零件標示",
         officialEvidence: `基準版這一頁多 ${count} 個 ${from}`, workingEvidence: `比對版這一頁多 ${count} 個 ${to}`,
@@ -420,6 +610,12 @@ function valueCountFindings(diff: CircuitLocalPageDiff): Array<CircuitLocalFindi
       officialEvidence: base.length ? `基準版這一頁 ${side(base)}` : "基準版沒有多出來的數值", workingEvidence: work.length ? `比對版這一頁 ${side(work)}` : "比對版沒有多出來的數值",
       suggestion: "這些數值在兩版的數量不一樣，但沒有對到同一個零件編號（可能是料號寫法沒換算成數值，例如磁珠、共模電感，或標示離零件太遠）。逐顆比對得到的差異已經另外列出。", officialBox: null, workingBox: null });
   }
+  // The same part marked not fitted on both sides, the marks placed differently: one line for a look, never counted.
+  const placed = diff.valueLeftovers ? (diff.valueChanges ?? []).filter(change => change.unsure && change.fitted && change.baseItem && change.workItem) : [];
+  if (placed.length) findings.push({ rank: 7, own: false, category: "label-name", priority: "low", certainty: "unclear",
+    title: clip(`${CIRCUIT_FOR_REFERENCE}${placed.length} 個不上件標示（NOPOP／NI）放的位置和另一版不一樣，應該是同一顆：${placed.slice(0, 8).map(change => change.refdes).join("、")}`, 280), location: describeCircuitDiffPlace(placed[0].workItem!),
+    officialEvidence: clip(`基準版的標示：${placed.map(change => `${change.refdes}（${describeCircuitDiffPlace(change.baseItem!)}）`).join("、")}`, 1900), workingEvidence: clip(`比對版的標示：${placed.map(change => `${change.refdes}（${describeCircuitDiffPlace(change.workItem!)}）`).join("、")}`, 1900),
+    suggestion: "兩版在這些零件旁邊各有一個不上件標示，只是放的位置不同（離別的零件編號比較近）。看一眼標的是不是同一顆就好。", officialBox: textBox(placed[0].baseItem), workingBox: textBox(placed[0].workItem) });
   return findings;
 }
 /** The findings of value changes: one per part, most telling (a value, not only fitted or not) first. */
@@ -960,10 +1156,11 @@ export function summarizeCircuitLocalDiff(diff: CircuitLocalPageDiff, common?: C
   const nudged = diff.regions.filter(region => !titleRegions.includes(region) && region.kind === "nudged");
   const textChanges = diff.textChanges.filter(change => !titleChanges.includes(change)), regions = diff.regions.filter(region => !titleRegions.includes(region) && !region.kind);
   const counts = { changed: 0, removed: 0, added: 0, moved: 0, graphic: regions.length };
-  // A value label rewritten, removed or added where a part's value is compared part by part is said once, by that part.
-  const valueText = (item?: CircuitDiffText) => Boolean(item) && collapse(item!.str).split(" ").every(word => isValueKey(circuitLabelKey(word).toUpperCase()) || CIRCUIT_PART_NUMBER_LINE.test(word));
-  const valueKeys = (item?: CircuitDiffText) => item ? collapse(item.str).split(" ").map(word => circuitLabelKey(word).toUpperCase()).filter(isValueKey) : [];
-  const explainedText = (change: CircuitTextChange) => (valueText(change.before) || valueText(change.after)) && (diff.valueChanges ?? []).some(value => valueKeys(change.before).some(key => value.before.includes(key)) || valueKeys(change.after).some(key => value.after.includes(key)));
+  // A value label or not-fitted mark that a part-by-part change already shows (the same label, at the same place) is said
+  // once, by that part. Only that label: the same value changed on a part nobody could name keeps its own finding
+  // (2026-11-25: one named 9.1K → 4.7K hid the other three of sheet 22).
+  const sameLabel = (left?: CircuitDiffText, right?: CircuitDiffText) => Boolean(left && right) && Math.abs(left!.x - right!.x) < 1e-6 && Math.abs(left!.y - right!.y) < 1e-6 && collapse(left!.str) === collapse(right!.str);
+  const explainedText = (change: CircuitTextChange) => change.kind !== "moved" && (diff.valueChanges ?? []).some(value => sameLabel(change.before, value.baseItem) || sameLabel(change.after, value.workItem));
   // Blocks moved or redrawn as a whole: one finding each, compared by name (summarizeArea), counted like any text change.
   const grouping = findCircuitChangeAreas(textChanges.filter(change => change.kind === "moved" || !explainedText(change)), regions, change => isCircuitCommonChange(change, common));
   for (const change of grouping.areas.flatMap(area => area.changes)) counts[change.kind]++;
@@ -996,7 +1193,9 @@ export function summarizeCircuitLocalDiff(diff: CircuitLocalPageDiff, common?: C
       officialEvidence: `${clip(change.before!.str, 1800)}（${describeCircuitDiffPlace(change.before!)}）`, workingEvidence: `${clip(change.after!.str, 1800)}（${place}）`, suggestion: shared ? COMMON_NOTE : "字一樣，只是換了位置（通常是圖重新排過）。看看旁邊的線有沒有一起接好。", officialBox: textBox(change.before), workingBox: textBox(change.after) };
   });
   for (const finding of valueFindings(diff.valueChanges ?? [])) { counts.changed++; findings.push({ ...finding, shared: false }); }
-  for (const { own, ...finding } of valueCountFindings(diff)) { if (own) counts.changed++; findings.push({ ...finding, shared: !own }); }
+  // A label a text finding above already shows (rewritten, removed or added in place) is not counted a second time.
+  const shown = grouping.rest.filter(change => change.kind !== "moved" && !movedOnly.includes(change)).flatMap(change => [change.before, change.after]);
+  for (const { own, ...finding } of valueCountFindings(diff, item => shown.some(other => sameLabel(other, item)))) { if (own) counts.changed++; findings.push({ ...finding, shared: !own }); }
   if (movedOnly.length) {
     counts.moved += movedOnly.length;
     const sample = movedOnly.slice(0, 12).map(change => (change.after ?? change.before)!.str);

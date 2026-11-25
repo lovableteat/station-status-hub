@@ -176,8 +176,10 @@ export const isCircuitReportIdentical = (report: CircuitPdfAiReviewReport) => re
  * (specks gone, boxes someone drew and a frame the content moved against not counted, a symbol 1–2 px off for reference),
  * text that only moved and AI additions for reference (2026-11-25, checked against the real E1.S pair page by page);
  * 6: the summary counts only what the page counts, by kind, and names what is listed for reference apart (2026-11-25).
+ * 7: every value and not-fitted difference is named part by part and marked where it is (the labels of both sheets are
+ * paired together, in line first), none left as a count without a place (2026-11-25, 「上一頁同一的地方有標但下一頁卻沒掃出來」).
  */
-export const CIRCUIT_LOCAL_METHOD = 6;
+export const CIRCUIT_LOCAL_METHOD = 7;
 /**
  * A page 本機比對 listed with an older method and nobody has judged yet: comparing it again costs nothing (no AI) and lists
  * it the current way, so a batch does it again instead of keeping it (2026-11-24: the old method put 40 marks on one
