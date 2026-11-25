@@ -5,7 +5,7 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { CircuitCropRect } from "./circuitPdf";
 import {
-  circuitInkDifferenceShare, circuitTextChangeBoxes, diffCircuitInkMasks, diffCircuitPageContents, diffCircuitPageTexts, findCircuitTitleBlock, isCircuitLayoutRedrawn, matchCircuitPartValues, REDRAW_STYLE_SHARE,
+  circuitInkDifferenceShare, circuitRefdesWords, circuitTextChangeBoxes, diffCircuitInkMasks, diffCircuitPageContents, diffCircuitPageTexts, findCircuitTitleBlock, isCircuitLayoutRedrawn, matchCircuitPartValues, REDRAW_STYLE_SHARE, splitCircuitLabels,
   type CircuitDiffText, type CircuitGraphicRegion, type CircuitLocalPageDiff,
 } from "./circuitPdfLocalDiff";
 
@@ -247,7 +247,9 @@ export async function compareCircuitPdfPages(base: CircuitDiffPageSource, work: 
   const [basePage, workPage] = await Promise.all([base.pdf.getPage(base.page), work.pdf.getPage(work.page)]);
   try {
     const baseSize = basePage.getViewport({ scale: 1 }), workSize = workPage.getViewport({ scale: 1 });
-    const [baseTexts, workTexts] = await Promise.all([readCircuitPageTexts(base, signal), readCircuitPageTexts(work, signal)]);
+    const [baseRead, workRead] = await Promise.all([readCircuitPageTexts(base, signal), readCircuitPageTexts(work, signal)]);
+    // Labels typed against each other are one word in the PDF: read apart, each drawing by the Ref Des the other one has.
+    const baseTexts = splitCircuitLabels(baseRead, circuitRefdesWords(workRead)), workTexts = splitCircuitLabels(workRead, circuitRefdesWords(baseRead));
     const textComparable = baseTexts.length > 0 && workTexts.length > 0;
     // One version with text and the other without is itself a difference of the whole page, found by the drawings.
     const matched = textComparable ? diffCircuitPageTexts(baseTexts, workTexts) : { changes: [], shift: { dx: 0, dy: 0 }, unchanged: 0, totals: { before: 0, after: 0 } };

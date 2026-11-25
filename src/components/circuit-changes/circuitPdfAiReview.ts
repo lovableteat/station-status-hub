@@ -178,8 +178,10 @@ export const isCircuitReportIdentical = (report: CircuitPdfAiReviewReport) => re
  * 6: the summary counts only what the page counts, by kind, and names what is listed for reference apart (2026-11-25).
  * 7: every value and not-fitted difference is named part by part and marked where it is (the labels of both sheets are
  * paired together, in line first), none left as a count without a place (2026-11-25, 「上一頁同一的地方有標但下一頁卻沒掃出來」).
+ * 8: labels typed against each other are read apart (4.7KohmNI, X450150MHZ) and E-Pad pins are pin names (2026-11-25, the
+ * user's 0001.pdf).
  */
-export const CIRCUIT_LOCAL_METHOD = 7;
+export const CIRCUIT_LOCAL_METHOD = 8;
 /**
  * A page 本機比對 listed with an older method and nobody has judged yet: comparing it again costs nothing (no AI) and lists
  * it the current way, so a batch does it again instead of keeping it (2026-11-24: the old method put 40 marks on one

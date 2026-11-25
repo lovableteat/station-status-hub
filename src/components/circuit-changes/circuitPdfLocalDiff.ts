@@ -179,9 +179,10 @@ const NOT_REFDES = new Set(["GPIO", "GPI", "GPO", "ADC", "DAC", "AIN", "AOUT", "
 /**
  * Pin and part names that look like net names, as one library or another writes them (the real E1.S redraw, 2026-11-24):
  * a pin with two functions (GND/PG, A0/NC, OE3#/SMB_CLK), a pin with a note (VDD(I2C-bus)), a pin number in front
- * (9_THM), no-connect pins (NC#35, NC_1), the exposed pad (THERMAL_PAD) and a part body with its pin count (WAFER_HD_2P).
+ * (9_THM), no-connect pins (NC#35, NC_1), the exposed pad (THERMAL_PAD; E-Pad_1 … E-Pad_17 on the user's 0001.pdf were
+ * listed as 17 new nets, 2026-11-25) and a part body with its pin count (WAFER_HD_2P).
  */
-const PIN_NAME = /[/()]|^\d+_|^NC([#_.]?\d+)?$|^(THERMAL|EXPOSED)_?PAD|_\d+P$/;
+const PIN_NAME = /[/()]|^\d+_|^NC([#_.]?\d+)?$|^(THERMAL|EXPOSED)_?PAD|^E-?PAD(_\d+)?$|_\d+P$/;
 /** What a word on a sheet is: a reference designator (location), a net name, or another word (value, pin name, note). */
 export function circuitTokenType(token: string): CircuitContentType | null {
   const word = token.trim().toUpperCase();
@@ -257,6 +258,38 @@ export function describeCircuitValue(key: string): string {
   return match ? match[1] : key;
 }
 const isValueKey = (key: string) => /^(R:|C:|F:)|^DNP$/.test(key);
+
+const NOT_FITTED_TAIL = /^(.+?)(NOPOP|DNP|DNI|NI)$/i;
+const readsAsValue = (word: string) => /^(R:|C:|F:)/.test(circuitLabelKey(word));
+/** The Ref Des a sheet prints, in capitals (see circuitTokenType). */
+export const circuitRefdesWords = (items: readonly CircuitDiffText[]): Set<string> => new Set(items.flatMap(item => collapse(item.str).split(" ")).map(word => word.toUpperCase()).filter(word => circuitTokenType(word) === "refdes"));
+/**
+ * Labels typed right against each other come out of the PDF as one word (2026-11-25, the user's 0001.pdf: 「4.7KohmNI」,
+ * 「0ohmNI」, and 「X450150MHZ」 for X4501 with 50MHZ; R3629 was listed as fitted on one side only and X4501 as a missing
+ * part). A value with a not-fitted mark behind it is read as the two, and a Ref Des the other drawing has (`known`) with a
+ * value behind it as the two. Each piece gets its share of the box, so both are marked where they are.
+ */
+export function splitCircuitLabels(items: readonly CircuitDiffText[], known: ReadonlySet<string> = new Set()): CircuitDiffText[] {
+  const cut = (word: string): string[] | null => {
+    const tail = NOT_FITTED_TAIL.exec(word);
+    if (tail && readsAsValue(tail[1])) return [tail[1], tail[2]];
+    if (known.has(word.toUpperCase())) return null;
+    for (let at = 2; at < word.length - 1; at++) if (known.has(word.slice(0, at).toUpperCase()) && readsAsValue(word.slice(at))) return [word.slice(0, at), word.slice(at)];
+    return null;
+  };
+  return items.flatMap(item => {
+    const words = collapse(item.str).split(" ");
+    if (!words.some(word => cut(word))) return [item];
+    // Every word its own piece of the box, along its longer side.
+    const pieces = words.flatMap(word => cut(word) ?? [word]), total = pieces.reduce((sum, piece) => sum + piece.length, 0), wide = item.width >= item.height;
+    let done = 0;
+    return pieces.map(piece => {
+      const from = done / total, share = piece.length / total;
+      done += piece.length;
+      return wide ? { ...item, str: piece, x: item.x + item.width * from, width: item.width * share } : { ...item, str: piece, y: item.y + item.height * from, height: item.height * share };
+    });
+  });
+}
 
 /** A part whose value label differs between the two drawings: what each side prints next to the same Ref Des. */
 export interface CircuitValueChange {

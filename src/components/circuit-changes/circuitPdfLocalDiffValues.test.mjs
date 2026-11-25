@@ -186,3 +186,25 @@ test("every value or fitted difference is marked on the drawing, and one named p
   assert.equal(placed.own, 0);
   assert.match(placed.findings[0].title, /^參考：1 個不上件標示（NOPOP／NI）放的位置和另一版不一樣，應該是同一顆：R2701/);
 });
+
+test("labels typed against each other are read apart: a value with its not-fitted mark, a Ref Des with its value (the user's 0001.pdf)", () => {
+  const k = diffs();
+  const words = (items, known) => plain(k.splitCircuitLabels(items, new Set(known ?? [])).map(piece => piece.str));
+  assert.deepEqual(words([item("4.7KohmNI", 0.8774, 0.3608, 0.0188, 0.0054), item("0ohmNI", 0.5, 0.5), item("0.1uF/16VNOPOP", 0.6, 0.6)]), ["4.7Kohm", "NI", "0ohm", "NI", "0.1uF/16V", "NOPOP"]);
+  assert.deepEqual(words([item("X450150MHZ", 0.4755, 0.7497, 0.0238, 0.0054)], ["X4501"]), ["X4501", "50MHZ"], "split where the other drawing has that Ref Des");
+  // Names that only start like a part, a mark on its own, a value with a space before the mark, and an unknown Ref Des stay as they are.
+  for (const text of ["P12V_STBY", "NI", "DNI", "MINI", "4.7Kohm NI", "X450150MHZ", "N1_I2C_MCU_R_SCL"]) assert.deepEqual(words([item(text, 0.1, 0.1)], ["P12V", "N1"]), [text]);
+  // Each piece has its share of the box, so the mark is boxed where it is.
+  const [value, mark] = k.splitCircuitLabels([item("4.7KohmNI", 0.8, 0.3, 0.018, 0.0054)]);
+  assert.deepEqual(plain([value.x, Number(value.width.toFixed(4)), Number(mark.x.toFixed(4)), Number(mark.width.toFixed(4))]), [0.8, 0.014, 0.814, 0.004]);
+  // R3629 on sheet 36: NOPOP in the reference, 「4.7KohmNI」 in the redraw. The same part, not fitted on both sides.
+  const part = (name, x, y) => item(name, x, y, 0.0114, 0.0054);
+  const before = [part("R3629", 0.8402, 0.275), item("4K7R2F-GP", 0.8766, 0.275, 0.0211, 0.0054), item("NOPOP", 0.8573, 0.281, 0.0137, 0.0054)];
+  const after = [part("R3629", 0.8406, 0.3614), item("4.7KohmNI", 0.8774, 0.3608, 0.0188, 0.0054)];
+  assert.equal(k.diffCircuitPartValues(before, after).filter(change => !change.unsure).length, 1, "unread, the glued label hides both the value and the mark");
+  const result = k.matchCircuitPartValues(k.splitCircuitLabels(before, k.circuitRefdesWords(after)), k.splitCircuitLabels(after, k.circuitRefdesWords(before)));
+  assert.deepEqual(plain(result.changes.filter(change => !change.unsure)), []);
+  assert.deepEqual(plain(result.leftovers), { base: [], work: [] });
+  // The exposed pad pins of a library symbol are pin names, never nets.
+  assert.deepEqual(["E-Pad_1", "E-PAD_17", "EPAD"].map(k.circuitTokenType), ["other", "other", "other"]);
+});
