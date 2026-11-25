@@ -325,7 +325,10 @@ async function runMovedBlock(browser,origin,width) {
     assert.ok(titles.some(title=>/不算錯：標題欄不一樣（公司、作者、日期等 1 處）/.test(title)),titles.join(' | '));
     assert.ok(titles.some(title=>/字改了：R910 → R920/.test(title)),titles.join(' | '));
     assert.ok(titles.some(title=>/這一塊整個搬走或重畫了：32 段字的位置不一樣，零件和線路名稱都一樣/.test(title)),titles.join(' | '));
-    assert.match(await dialog.locator('.circuit-pdf-ai-results > header p').innerText(),/1 塊整個搬走或重畫的地方，每一塊只列一項/);
+    // 2026-11-25: the moved block is listed for reference (a layout change, like a redrawn sheet); the summary counts only
+    // the rename and says what is listed apart.
+    assert.match(await dialog.locator('.circuit-pdf-ai-results > header p').innerText(),/這一頁有 1 個地方不一樣（字改了 1 個）。另外 2 項只是參考或不算錯/);
+    assert.ok(titles.some(title=>/^參考：這一塊整個搬走或重畫了/.test(title.replace(/^S+ · /,'').replace(/^(一般提醒|需要注意|優先核對)s*Fd+ · /,'')) || /參考：這一塊整個搬走或重畫了/.test(title)),titles.join(' | '));
     await dialog.locator('.circuit-pdf-ai-annotation-box').first().waitFor();
     assert.deepEqual(await tagsApart(dialog),[]);
     await page.screenshot({path:path.join(evidence,`moved-block-${width}.png`)});
@@ -363,7 +366,7 @@ async function runRedrawn(browser,origin,width) {
     assert.deepEqual(await page.evaluate(()=>window.__circuitAiQA.saveRecords.map(row=>[row.workingPage,row.source]).sort()),[[1,'local'],[2,'local'],[3,'local'],[4,'local']]);
     const labels=[];
     for(const number of [1,2,3,4]) labels.push([await chip(number).getAttribute('data-outcome'),(await chip(number).locator('strong').innerText()).trim()]);
-    assert.deepEqual(labels,[['clean','重畫的圖：零件和線路名稱都一樣'],['different','重畫的圖：1 個零件或線路名稱不一樣'],['clean','重畫的圖：零件和線路名稱都一樣'],['clean','重畫的圖：零件和線路名稱都一樣']]);
+    assert.deepEqual(labels,[['clean','重畫的圖：零件、線路名稱和數值都一樣'],['different','重畫的圖：1 處不一樣（零件、線路名稱或數值）'],['clean','重畫的圖：零件、線路名稱和數值都一樣'],['clean','重畫的圖：零件、線路名稱和數值都一樣']]);
     assert.match(await progress.getByRole('status').innerText(),/有差異 1 頁/);
     await page.screenshot({path:path.join(evidence,`redrawn-${width}.png`)});
 

@@ -64,7 +64,7 @@ test("a redrawn sheet is labelled by its parts and nets, not by every word that 
   const value = { side: "work", token: "4.7K", type: "other", count: 1, item: item("4.7K", 0.4, 0.4) };
   const frame = { side: "work", token: "REV", type: "other", count: 1, item: item("REV", 0.9, 0.95), frame: true };
   const clean = local(7, redrawn([value, frame]));
-  assert.deepEqual(plain(k.describeCircuitAiPage({ workingPage: 7, officialPage: 7, report: clean })), { outcome: "clean", label: "重畫的圖：零件和線路名稱都一樣", method: "本機比對" });
+  assert.deepEqual(plain(k.describeCircuitAiPage({ workingPage: 7, officialPage: 7, report: clean })), { outcome: "clean", label: "重畫的圖：零件、線路名稱和數值都一樣", method: "本機比對" });
   const missing = local(7, redrawn([{ side: "base", token: "R99", type: "refdes", count: 1, item: item("R99", 0.5, 0.5) }, value, frame]));
-  assert.deepEqual(plain(k.describeCircuitAiPage({ workingPage: 7, officialPage: 7, report: missing })), { outcome: "different", label: "重畫的圖：1 個零件或線路名稱不一樣", method: "本機比對" });
+  assert.deepEqual(plain(k.describeCircuitAiPage({ workingPage: 7, officialPage: 7, report: missing })), { outcome: "different", label: "重畫的圖：1 處不一樣（零件、線路名稱或數值）", method: "本機比對" });
 });

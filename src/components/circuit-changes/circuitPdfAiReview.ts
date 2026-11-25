@@ -174,9 +174,10 @@ export const isCircuitReportIdentical = (report: CircuitPdfAiReviewReport) => re
  * GND_1 is GND, ^OE3# is OE3#, pin names are never parts or nets) and ignores how often a name is drawn (2026-11-25).
  * 5: values part by part (R3410: 2.21KΩ → 100KΩ) and not-fitted marks by count, every drawing difference drawn again sharp
  * (specks gone, boxes someone drew and a frame the content moved against not counted, a symbol 1–2 px off for reference),
- * text that only moved and AI additions for reference (2026-11-25, checked against the real E1.S pair page by page).
+ * text that only moved and AI additions for reference (2026-11-25, checked against the real E1.S pair page by page);
+ * 6: the summary counts only what the page counts, by kind, and names what is listed for reference apart (2026-11-25).
  */
-export const CIRCUIT_LOCAL_METHOD = 5;
+export const CIRCUIT_LOCAL_METHOD = 6;
 /**
  * A page 本機比對 listed with an older method and nobody has judged yet: comparing it again costs nothing (no AI) and lists
  * it the current way, so a batch does it again instead of keeping it (2026-11-24: the old method put 40 marks on one
@@ -189,30 +190,45 @@ const localInfo = (diff: CircuitLocalPageDiff, summary: CircuitLocalSummary): Ci
   changed: summary.counts.changed, removed: summary.counts.removed, added: summary.counts.added, moved: summary.counts.moved, graphic: summary.counts.graphic, omitted: summary.omitted, common: summary.common,
   ...(diff.redrawn ? { redrawn: diff.redrawn } : {}), method: CIRCUIT_LOCAL_METHOD });
 
+/**
+ * What the counted findings of a page are, by kind, in the words the list uses (2026-11-25: the summary said 37 places
+ * while the page counted 9, because it also counted text that only moved and blocks that only moved).
+ */
+function countedKinds(summary: CircuitLocalSummary) {
+  const counted = summary.findings.filter(finding => !isCircuitReferenceFinding(finding));
+  const kinds: Array<[RegExp, (count: number) => string]> = [
+    [/^字改了/, count => `字改了 ${count} 個`], [/^比對版少了/, count => `少了 ${count} 個`], [/^比對版多了/, count => `多了 ${count} 個`],
+    [/(沒有的|多出來的)(零件編號|線路名稱)/, count => `零件編號或線路名稱只在一邊 ${count} 個`], [/數值不一樣/, count => `數值不一樣 ${count} 項`],
+    [/上件狀態不一樣/, count => `上件狀態不一樣 ${count} 項`], [/線或符號|線有一點點/, count => `線不一樣 ${count} 處`],
+  ];
+  const matched = kinds.map(([pattern, words]) => { const count = counted.filter(finding => pattern.test(finding.title)).length; return { count, words: count ? words(count) : "" }; });
+  const parts = matched.map(item => item.words).filter(Boolean);
+  const other = counted.length - matched.reduce((sum, item) => sum + item.count, 0);
+  if (other > 0) parts.push(`其他 ${other} 項`);
+  return { total: counted.length + summary.omitted, parts: parts.join("、"), references: summary.findings.length - counted.length };
+}
+
 function describeLocal(diff: CircuitLocalPageDiff, summary: CircuitLocalSummary, common?: CircuitCommonChanges | null) {
-  const { counts } = summary, total = counts.changed + counts.removed + counts.added + counts.moved + counts.graphic;
+  const kinds = countedKinds(summary), total = kinds.total;
   if (diff.redrawn && diff.contentChanges) {
     // A redrawn sheet (公版 vs one's own drawing, or another line style): no lines or places compared, only what is on it.
     const moved = summary.findings.filter(finding => /換頁：| 畫到(基準|比對)版第 /.test(finding.title)).length;
     const head = diff.redrawn === "layout"
       ? "電腦比對（沒用 AI）：這一頁兩版是重新畫過的（重畫的圖），位置都不一樣，所以只比零件編號和線路名稱，不比位置和線。"
       : "電腦比對（沒用 AI）：兩版的線畫法不一樣（粗細、顏色或存成 PDF 的方式），整頁的線都會不同，所以只比零件編號和線路名稱。";
-    const body = summary.own
-      ? `有 ${summary.own} 個只在一邊（基準版多 ${counts.removed} 個、比對版多 ${counts.added} 個）。`
-      : "兩版的零件編號和線路名稱都一樣。";
+    const body = total
+      ? `有 ${total} 個地方不一樣（${kinds.parts}）。`
+      : "兩版的零件編號、線路名稱和數值都一樣。";
     return `${head}${body}${moved ? `另外有 ${moved} 個畫到別頁，不算少。` : ""}這種頁不送 AI（AI 看圖判斷接線不準）。電腦只比名字：名字一樣的線有沒有接到同一個腳位，還是要放大看。`.slice(0, 3900);
   }
-  const example = common?.examples[0] ? `，例如${common.examples[0].slice(0, 80)}` : "";
-  const shared = summary.common ? `另外 ${summary.common} 項是標題欄或很多頁都一樣的改變（公司、作者、日期、版次${example}），不算錯，放在清單最後。` : "";
+  // What is listed but never counted, said once; the same title-block change on many sheets gets one example.
+  const example = common?.examples[0] ? `（很多頁都有的例子：${common.examples[0].slice(0, 80)}）` : "";
+  const shared = kinds.references ? `另外 ${kinds.references} 項只是參考或不算錯（例如字只換了位置、整塊搬動但名稱一樣、標題欄、有人畫的框），放在清單最後，不算在裡面${example}。` : "";
   const unlaid = diff.graphicsComparable ? "" : "兩版的紙張大小不一樣，沒辦法把線疊在一起比，線請自己看。";
   let words: string;
   if (!diff.textComparable && !diff.graphicsComparable) words = "電腦比對（沒用 AI）：這一頁的字選不起來（可能是圖片），兩版紙張大小也不一樣，電腦沒辦法比，請自己看或改用 AI。";
   else if (!total) words = `電腦比對（沒用 AI）：這一頁${[diff.textComparable && "字一個一個比", diff.graphicsComparable && "線疊在一起比"].filter(Boolean).join("、")}，${summary.common ? "除了不算錯的地方，" : ""}兩版都一樣，沒有送 AI。${shared}${unlaid}`;
-  else {
-    const parts = [counts.changed && `字改了 ${counts.changed} 個`, counts.removed && `少了 ${counts.removed} 個`, counts.added && `多了 ${counts.added} 個`, counts.moved && `換位置 ${counts.moved} 個`, counts.graphic && `線不一樣 ${counts.graphic} 處`].filter(Boolean).join("、");
-    const blocks = summary.areas ? `其中大部分在 ${summary.areas} 塊整個搬走或重畫的地方，每一塊只列一項（裡面只在一邊的零件和線路名稱另外列出）。` : "";
-    words = `電腦比對（沒用 AI）：這一頁有 ${total} 個地方不一樣（${parts}）。${blocks}${summary.omitted ? `還有 ${summary.omitted} 個太多了沒有一個一個列出，請把兩版放大看整頁。` : ""}${shared}${unlaid}`;
-  }
+  else words = `電腦比對（沒用 AI）：這一頁有 ${total} 個地方不一樣（${kinds.parts}）。${summary.omitted ? `還有 ${summary.omitted} 個太多了沒有一個一個列出，請把兩版放大看整頁。` : ""}${shared}${unlaid}`;
   return words.slice(0, 3900).trim();
 }
 

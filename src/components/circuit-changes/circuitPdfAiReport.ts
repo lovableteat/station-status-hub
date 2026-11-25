@@ -34,8 +34,8 @@ export function describeCircuitAiPage(page: CircuitAiReportPage): { outcome: Cir
     const own = report.findings.filter(finding => finding.priority !== "low").length;
     const count = own + (own === report.findings.length ? report.local.omitted : 0);
     return count
-      ? { outcome: "different", label: `重畫的圖：${count} 個零件或線路名稱不一樣`, method }
-      : { outcome: "clean", label: "重畫的圖：零件和線路名稱都一樣", method };
+      ? { outcome: "different", label: `重畫的圖：${count} 處不一樣（零件、線路名稱或數值）`, method }
+      : { outcome: "clean", label: "重畫的圖：零件、線路名稱和數值都一樣", method };
   }
   // The title block (company, author, date) and a change on every sheet are listed but are not an error (2026-11-24).
   const aside = report.findings.filter(isCircuitReferenceFinding).length;
