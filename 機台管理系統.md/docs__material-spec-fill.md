@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/material-spec-fill.md`；程式參考基準：`377b0cb36d78586f829cfb92bf4afa1c7ce6eca1`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/material-spec-fill.md`；程式參考基準：`62532e14070afbe296bef6e3e7eb4a4fad21a86e`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 依照片填表
 
