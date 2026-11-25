@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-12-comparison-workspace.md`；程式參考基準：`ff3d6fbc9144e7d039cf2710a9fa37545e14117d`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-12-comparison-workspace.md`；程式參考基準：`e1ebd194ec6d30d06a82b4b008f1d181d1582b4f`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Comparison Workspace Implementation Plan
 
