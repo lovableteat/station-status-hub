@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-31-file-folder-browser-history.md`；程式參考基準：`62532e14070afbe296bef6e3e7eb4a4fad21a86e`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/superpowers/plans/2026-10-31-file-folder-browser-history.md`；程式參考基準：`ff3d6fbc9144e7d039cf2710a9fa37545e14117d`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # 檔案資料夾返回紀錄修正
 

@@ -1,4 +1,4 @@
-> 集中副本；原始路徑：`docs/security/applied-delete-rpc-cutover-20261112.md`；程式參考基準：`62532e14070afbe296bef6e3e7eb4a4fad21a86e`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
+> 集中副本；原始路徑：`docs/security/applied-delete-rpc-cutover-20261112.md`；程式參考基準：`ff3d6fbc9144e7d039cf2710a9fa37545e14117d`。歷史文件保留當時語意，先以 00_閱讀指南.md 與現行手冊判定適用範圍。
 
 # Applied anonymous machine-delete containment
 
@@ -17,7 +17,7 @@ Fresh preflight at 01:35:28 UTC matched exact definitions, owner and ACLs and fo
 
 ## Exact history reconciliation
 
-The [repository SQL](https://github.com/lovableteat/station-status-hub/blob/62532e14070afbe296bef6e3e7eb4a4fad21a86e/supabase/migrations/20261112013540_restrict_anonymous_delete_test_system_execution.sql) was copied from the existing server `supabase_migrations.schema_migrations` record. An independent read matched the retained cutover SQL byte-for-byte:
+The [repository SQL](https://github.com/lovableteat/station-status-hub/blob/ff3d6fbc9144e7d039cf2710a9fa37545e14117d/supabase/migrations/20261112013540_restrict_anonymous_delete_test_system_execution.sql) was copied from the existing server `supabase_migrations.schema_migrations` record. An independent read matched the retained cutover SQL byte-for-byte:
 
 - Version: `20261112013540`
 - Name: `restrict_anonymous_delete_test_system_execution`
